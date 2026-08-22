@@ -16,7 +16,7 @@ Two producers, one schema:
 | Producer | Command | Arrives with |
 |---|---|---|
 | A human noticing something | `/backlog-item {slug}` | a hypothesis, `evidence: none-yet` |
-| A measured sweep | `/discover --sweep {domain}` | evidence already attached, `status: triaged` |
+| A measured sweep | `/discover --sweep {domain}` | evidence already attached, `status: planned` |
 
 Intake deliberately requires **no** evidence. Requiring it would collapse intake into
 measurement and silence the most valuable signal a maintenance team has — the hunch.
@@ -49,18 +49,19 @@ own quality gates.
 
 ## Index
 
-4 items — **Open** 2 · **In flight** 0 · **Closed** 2
+4 items — **Open** 1 · **In flight** 1 · **Closed** 2
 
-### Open (2)
+### Open (1)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
-| [`B-001`](#b-001--measure-what-the-whatsapp-webjs-backend-costs-and-give-it-a-rival----) | Measure what the whatsapp-web.js backend costs, and give it a rival | `triaged` | — |
 | [`B-004`](#b-004--five-packages-publish-a-dts-that-does-not-compile----) | Five packages publish a `.d.ts` that does not compile | `triaged` | — |
 
-### In flight (0)
+### In flight (1)
 
-_None._
+| Item | Title | Status | Severity |
+|---|---|---|---|
+| [`B-001`](#b-001--measure-what-the-whatsapp-webjs-backend-costs-and-give-it-a-rival----) | Measure what the whatsapp-web.js backend costs, and give it a rival | `planned` | — |
 
 ### Closed (2)
 
@@ -82,13 +83,19 @@ actual_mode: bug (reclassified by /discover — the hypothesis was about cost; t
 source: human
 evidence: .claude/knowledge-base/discoveries/opportunities/whatsapp-baileys-backend-opportunity.md
 why_now: the `web` backend launches a headless Chromium per session with `--no-sandbox` (`src/bridge/whatsapp-web-bridge.mjs:47`) and nothing here states what that costs — no memory figure, no startup time, no record of who disabled the sandbox. It also has zero live coverage and no path to any, since pairing needs a QR scan. A second unofficial backend is about to be added with no baseline to compare it against.
-status: triaged
+status: planned
 dod:
   - the web backend's resident memory and time-to-ready are stated as measured numbers with the command that produced them, or the item records why they could not be measured here
   - the `--no-sandbox` decision is justified in writing at the line that makes it, or recorded as an open risk with its blast radius
   - a second backend exists implementing `WhatsAppBackend`, compared against the incumbent's measured figures
 
 > Registered 2026-08-22 by `/backlog-item` (slug: `whatsapp-baileys-backend`).
+> Plan: `.claude/knowledge-base/plans/whatsapp-baileys-backend-impl-plan.md`. Implemented,
+> audited (`/code-quality` PASS, cap 100) and through three independent review rounds, which
+> found 11 defects — all closed, each with a test that fails when its fix alone is reverted.
+> The third DoD bullet ships half-open by design: the backend exists, and the comparison
+> against the incumbent's figures stays open in `## Unresolved Questions` rather than being
+> asserted. Adding rather than replacing is what makes it measurable later.
 
 ## B-002 — The whatsapp-web.js bridge cannot start at all   [x]
 
@@ -130,6 +137,7 @@ domain: theokit-gateways
 repo: packages/gateway-slack, packages/gateway-sms, packages/gateway-teams, packages/gateway-whatsapp, packages/gateway-matrix
 suggested_mode: bug
 source: discover-review
+issue: #50
 evidence: `pnpm quality:dts-typechecks` → `FAIL — 5 package(s) publish a declaration that does not compile without skipLibCheck`. Two shapes, one root cause — the dts rollup emits a type reference and drops the import that would resolve it. A dropped builtin: `packages/gateway-whatsapp/dist/index.d.ts:674` says `readonly child: ChildProcess` and `grep -c ChildProcess` on that file returns 1, so the name is used once and imported never. A dropped rename: `packages/gateway-sms/dist/index.d.ts:103` says `type ConfigurationErrorOptions = GatewayConfigurationErrorOptions` and `:112` extends `GatewayConfigurationError` — the rollup renamed the core symbols to avoid colliding with the package's own, then emitted no import for the new names. Same at `gateway-slack/dist/index.d.ts:118` (`SlackMessageEvent`) and `gateway-teams/dist/index.d.ts:95` (`TeamsMessageEvent`).
 why_now: pre-existing, not introduced by B-001 — measured on a worktree at `bae5b0c`, before any Baileys work, and it fails identically there. It surfaced because B-001's Definition of Done runs this gate, so the gate has been red under at least three plans that recorded G4 as met. A consumer compiling with `skipLibCheck: false` — the default for a strict TypeScript project — cannot build against these five packages at all. `tools/repair-dts-imports.mjs` exists to repair exactly this and does not cover either shape.
 status: triaged
@@ -139,3 +147,4 @@ dod:
   - the gate is proven non-vacuous: it must go red on a declaration crafted to carry an unresolvable reference
 
 > Registered 2026-08-22 while verifying B-001's Global DoD (G4). Evidence measured, not assumed.
+> Filed as issue #50.
