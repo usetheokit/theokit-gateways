@@ -156,7 +156,12 @@ describe("cross-adapter contract", () => {
     // discarded promise at a platform boundary must carry its own `.catch`.
     const offenders: string[] = [];
     for (const { pkg, source } of await adapterPackageSources()) {
-      for (const statement of withoutComments(source).matchAll(/\bvoid\s+this\.[\s\S]{0,600}?;/g)) {
+      // `void this.…` was the shape the first two offenders had. A third backend floated a
+      // callback held in a local — `void handler(event)` — and the gate did not see it, while
+      // a test in that package asserted this invariant covered it. Any floated call counts.
+      for (const statement of withoutComments(source).matchAll(
+        /\bvoid\s+[A-Za-z_$][\w$.?]*\([\s\S]{0,600}?;/g,
+      )) {
         if (!statement[0].includes(".catch("))
           offenders.push(`${pkg}: ${statement[0].slice(0, 60)}`);
       }

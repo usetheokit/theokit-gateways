@@ -20,6 +20,17 @@ import type { WhatsAppInboundEvent } from "../../backend-types.js";
 /** WhatsApp's status feed. Never a conversation, always noise for a bot. */
 const STATUS_BROADCAST_JID = "status@broadcast";
 
+/** Envelopes that carry the real message one level down. */
+const WRAPPER_KEYS = [
+  "ephemeralMessage",
+  "viewOnceMessage",
+  "viewOnceMessageV2",
+  "documentWithCaptionMessage",
+] as const;
+
+/** How deep to follow nested wrappers before giving up. Hostile input must not recurse forever. */
+const MAX_WRAPPER_DEPTH = 3;
+
 /** The subset of a Baileys `WAMessage` this normaliser reads. */
 interface RawEnvelope {
   key?: {
@@ -52,29 +63,54 @@ function asText(value: unknown): string | undefined {
  * reply, a link preview, a mention. v1 is text-only, like the two sibling backends, so any
  * other content type yields undefined and the message is dropped.
  */
-function extractText(message: Record<string, unknown> | undefined): string | undefined {
-  if (message === undefined) return undefined;
+function extractText(message: Record<string, unknown> | undefined, depth = 0): string | undefined {
+  if (message === undefined || depth > MAX_WRAPPER_DEPTH) return undefined;
+
   const direct = asText(message.conversation);
   if (direct !== undefined) return direct;
+
   const extended = asObject(message.extendedTextMessage);
-  return extended === undefined ? undefined : asText(extended.text);
+  const fromExtended = extended === undefined ? undefined : asText(extended.text);
+  if (fromExtended !== undefined) return fromExtended;
+
+  // Baileys nests the real message inside a wrapper for disappearing messages and view-once.
+  // Without unwrapping, every text sent in a chat with disappearing messages turned on was
+  // dropped in silence — indistinguishable from an image, which the "v1 is text-only"
+  // rationale was covering for.
+  for (const wrapper of WRAPPER_KEYS) {
+    const inner = asObject(message[wrapper]);
+    const nested = inner === undefined ? undefined : asObject(inner.message);
+    const text = extractText(nested, depth + 1);
+    if (text !== undefined) return text;
+  }
+  return undefined;
 }
 
 /**
- * Seconds since the epoch, as Baileys reports them, in milliseconds.
+ * The message's timestamp in seconds, or `undefined` when it cannot be read.
  *
- * Every other backend here reports milliseconds, and `receivedAt` feeds the freshness window
- * that stops a restarting bot answering history it can still see. A thousand-fold error there
- * would place every message in 1970 and make the window admit everything.
+ * Baileys reports seconds; every other backend here reports milliseconds, and `receivedAt`
+ * feeds the freshness window that stops a restarting bot answering history it can still see.
+ *
+ * Returning `undefined` rather than the current time is the point. "Unparseable" resolving to
+ * "fresh" is the answer that defeats the window — a replayed message would arrive stamped now
+ * and pass any check. The caller drops the message instead.
  */
-function toMillis(timestamp: unknown): number {
-  const seconds =
-    typeof timestamp === "number"
-      ? timestamp
-      : typeof timestamp === "string"
-        ? Number(timestamp)
-        : Number.NaN;
-  return Number.isFinite(seconds) ? seconds * 1_000 : Date.now();
+function toSeconds(timestamp: unknown): number | undefined {
+  if (typeof timestamp === "number") return timestamp;
+  if (typeof timestamp === "string") {
+    const parsed = Number(timestamp);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  // Baileys' generated protobuf types permit a `Long`. Reading it as unparseable and
+  // substituting the current time would stamp a stale message "now" and walk it straight
+  // through the freshness window this value exists to feed.
+  const asLong = asObject(timestamp);
+  if (asLong !== undefined && typeof asLong.toNumber === "function") {
+    const parsed = (asLong.toNumber as () => unknown)();
+    return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
 }
 
 /**
@@ -136,6 +172,9 @@ export function normalizeBaileysMessage(raw: unknown): WhatsAppInboundEvent | un
   const parties = resolveParties(key, remoteJid);
   if (parties === undefined) return undefined;
 
+  const seconds = toSeconds(envelope?.messageTimestamp);
+  if (seconds === undefined) return undefined;
+
   const contactName = asText(envelope?.pushName);
 
   return {
@@ -144,7 +183,7 @@ export function normalizeBaileysMessage(raw: unknown): WhatsAppInboundEvent | un
     conversationType: parties.isGroup ? "group" : "dm",
     channelId: parties.channelId,
     text,
-    receivedAt: toMillis(envelope?.messageTimestamp),
+    receivedAt: seconds * 1_000,
     backend: "baileys",
     raw,
     ...(contactName !== undefined ? { contactName } : {}),

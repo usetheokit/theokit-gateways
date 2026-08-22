@@ -16,7 +16,7 @@ no ban concept, and everything below stops being your problem.
 
 ## What the test suite proves, and what it does not
 
-27 tests drive an injected fake socket, and they pass with `baileys` **not installed** —
+36 tests drive an injected fake socket, and they pass with `baileys` **not installed** —
 deliberately, because it is an optional peer dependency and CI does not install it.
 
 They prove our logic: that a group message resolves its sender from `participant` rather
@@ -67,7 +67,7 @@ const runner = new GatewayRunner({
 await runner.start();
 ```
 
-The first run prints a QR code to pair. Scan it from the throwaway number's WhatsApp:
+The first run prints a QR code to **stderr** to pair (pass `onQr` to `fromBaileys` to route it elsewhere — a web UI, a log, a file). Scan it from the throwaway number's WhatsApp:
 **Settings → Linked devices → Link a device**. The pairing lands in `sessionDir` and
 survives a restart, so this is a one-time cost.
 

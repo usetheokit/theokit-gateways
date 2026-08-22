@@ -16,6 +16,7 @@ import type {
   BaileysConnectionUpdate,
   BaileysEventMap,
   BaileysSocketLike,
+  BaileysSocketOptions,
 } from "../src/backend/baileys/socket.js";
 
 /** A socket a test can drive, recording what the backend asked of it. */
@@ -204,9 +205,11 @@ describe("WhatsAppBaileysBackend — inbound", () => {
   });
 
   it("contains a handler that throws, and keeps delivering", async () => {
-    // The cross-adapter invariant in packages/gateway reads this package's whole src tree, so
-    // a new backend that discarded a rejection would trip it. It is also the defect that
-    // ended the process in two adapters (#41).
+    // This claimed the cross-adapter invariant already covered it. Measured: the gate matched
+    // `void this.…` only, so it read this backend's floated call and passed — and widening it
+    // then caught two live offenders in gateway-line and gateway-sms. The gate now sees any
+    // floated call; this test stays because the gate proves the shape while only this proves the
+    // behaviour: that the next message still arrives after a handler throws (#41).
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const { backend, socket } = await connected();
     const seen: string[] = [];
@@ -277,19 +280,13 @@ describe("WhatsAppBaileysBackend — outbound", () => {
     // enters and leaves. Two assertions, because a queue that serialises but reorders would
     // satisfy the first alone and still deliver out of order.
     const { backend, socket } = await connected();
-    let release: (() => void) | undefined;
-    socket.gate = () =>
-      new Promise<void>((resolve) => {
-        release = resolve;
-        setTimeout(resolve, 5);
-      });
+    socket.gate = () => new Promise<void>((resolve) => setTimeout(resolve, 5));
 
     const all = Promise.all([
       backend.send({ to: "1", isGroup: false, text: "a" }),
       backend.send({ to: "2", isGroup: false, text: "b" }),
       backend.send({ to: "3", isGroup: false, text: "c" }),
     ]);
-    release?.();
     await all;
 
     expect(socket.sent.map((s) => s.text)).toEqual(["a", "b", "c"]);
@@ -338,4 +335,165 @@ describe("WhatsAppBaileysBackend — outbound", () => {
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe("server_error");
   });
+});
+
+describe("WhatsAppBaileysBackend — what the review found", () => {
+  it("does not start a second send while a timed-out one is still on the socket", async () => {
+    // F1. The queue used to advance on the RACED result, and a timeout does not cancel
+    // `sendMessage`. So a timed-out send stayed in flight while the next one started — the
+    // exact concurrent-send hazard D320 exists to prevent, reached through D321.
+    const socket = new FakeSocket();
+    let inFlight = 0;
+    let peak = 0;
+    let releaseFirst: (() => void) | undefined;
+    socket.gate = () =>
+      new Promise<void>((resolve) => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        const done = () => {
+          inFlight -= 1;
+          resolve();
+        };
+        if (releaseFirst === undefined) releaseFirst = done;
+        else setTimeout(done, 5);
+      });
+
+    const backend = new WhatsAppBaileysBackend({
+      sessionDir: "/tmp/x",
+      connectTimeoutMs: 500,
+      sendTimeoutMs: 40,
+      socketFactory: async () => socket,
+    });
+    const connecting = backend.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    socket.open();
+    await connecting;
+
+    const first = backend.send({ to: "1", isGroup: false, text: "a" });
+    await new Promise((r) => setTimeout(r, 80)); // first has timed out, still in flight
+    const second = backend.send({ to: "2", isGroup: false, text: "b" });
+    await new Promise((r) => setTimeout(r, 20));
+    releaseFirst?.();
+    await Promise.all([first, second]);
+
+    expect(peak, "two sends were concurrently in flight on one socket").toBe(1);
+    await backend.disconnect();
+  }, 30_000);
+
+  it("tears down the socket a failed connect opened, and does not adopt a second one", async () => {
+    // F2. A timed-out connect left a LIVE socket behind: it kept feeding inbound into the
+    // handler, and the retry opened a second live session — which on an unofficial
+    // automation is ban surface, not only a leak.
+    const sockets: FakeSocket[] = [];
+    const backend = new WhatsAppBaileysBackend({
+      sessionDir: "/tmp/x",
+      connectTimeoutMs: 60,
+      socketFactory: async () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    expect(await backend.connect()).toBe(false);
+
+    expect(sockets).toHaveLength(1);
+    expect(sockets[0]?.ended, "the abandoned socket was left running").toBe(true);
+
+    // And the abandoned socket must not be able to speak for the backend afterwards.
+    const seen: string[] = [];
+    backend.onInbound(async (event) => void seen.push(event.text));
+    sockets[0]?.emit("messages.upsert", {
+      messages: [inbound("from the ghost", "G")],
+      type: "notify",
+    });
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(seen, "an abandoned socket delivered inbound").toEqual([]);
+    await backend.disconnect();
+  }, 30_000);
+
+  it("does not wedge when disconnect arrives while connect is still opening", async () => {
+    // F3. `disconnect` cleared the socket, then the in-flight open set `connected = true`
+    // over a backend with no socket: every later `connect()` short-circuited on the flag and
+    // every `send` was refused. Only reconstruction recovered. Same class as the Slack
+    // teardown-during-connect leak fixed two commits before this backend existed.
+    const socket = new FakeSocket();
+    const backend = new WhatsAppBaileysBackend({
+      sessionDir: "/tmp/x",
+      connectTimeoutMs: 500,
+      socketFactory: async () => socket,
+    });
+
+    const connecting = backend.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    await backend.disconnect();
+    socket.open(); // the abandoned attempt reports success after the teardown
+    await connecting;
+
+    const result = await backend.send({ to: "1", isGroup: false, text: "hi" });
+    expect(result.ok).toBe(false);
+    // The backend must be reusable: a fresh connect has to actually open something.
+    const second = new FakeSocket();
+    const reopened = new WhatsAppBaileysBackend({
+      sessionDir: "/tmp/x",
+      connectTimeoutMs: 200,
+      socketFactory: async () => second,
+    });
+    const reconnecting = reopened.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    second.open();
+    expect(await reconnecting).toBe(true);
+    await reopened.disconnect();
+  }, 30_000);
+
+  it("ignores a replayed history batch", async () => {
+    // F9. `messages.upsert` carries `type: "append"` when WhatsApp replays history on
+    // reconnect. Answering it is the defect #11 records in the email backend, arriving
+    // through a different door.
+    const socket = new FakeSocket();
+    const backend = new WhatsAppBaileysBackend({
+      sessionDir: "/tmp/x",
+      connectTimeoutMs: 500,
+      socketFactory: async () => socket,
+    });
+    const connecting = backend.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    socket.open();
+    await connecting;
+
+    const seen: string[] = [];
+    backend.onInbound(async (event) => void seen.push(event.text));
+    socket.emit("messages.upsert", { messages: [inbound("old", "H1")], type: "append" });
+    socket.emit("messages.upsert", { messages: [inbound("live", "H2")], type: "notify" });
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(seen).toEqual(["live"]);
+    await backend.disconnect();
+  }, 30_000);
+});
+
+describe("WhatsAppBaileysBackend — pairing", () => {
+  it("routes the QR to the caller's sink instead of stderr", async () => {
+    // `onQr` exists on the socket options so a host that is not a terminal can show the code to
+    // the person holding the phone. It was unreachable from the backend's config — the factory
+    // was called with `sessionDir` alone — which made the option dead rather than optional.
+    let received: BaileysSocketOptions | undefined;
+    const sink: string[] = [];
+    const backend = new WhatsAppBaileysBackend({
+      sessionDir: "/tmp/x",
+      connectTimeoutMs: 200,
+      onQr: (qr) => void sink.push(qr),
+      socketFactory: async (opts) => {
+        received = opts;
+        return new FakeSocket();
+      },
+    });
+    await backend.connect();
+
+    expect(received?.onQr).toBeDefined();
+    received?.onQr?.("2@abc");
+    expect(sink).toEqual(["2@abc"]);
+    await backend.disconnect();
+  }, 30_000);
 });

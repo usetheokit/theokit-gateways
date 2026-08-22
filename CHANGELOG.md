@@ -9,13 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A webhook dispatch that rejects no longer ends the process in `gateway-line` and `gateway-sms`.
+  Both answer the provider before running the handler — deliberately, since both retry a webhook
+  they did not see a 200 for — which leaves the dispatch floated, and a floated rejection is an
+  unhandled one. Same defect fixed across the other adapters in #41; these two were missed because
+  the cross-adapter gate only recognised the shape `void this.…` and both float through a local.
+  The gate now matches any floated call, which is how they surfaced
+
+- The `tools` suite no longer fails when the whole monorepo runs at once. Several of its tests
+  drive the TypeScript compiler in-process, and the one-time lib-loading cost exceeds vitest's 5s
+  default under twelve competing package suites — so the gate reported machine load as a code
+  failure. The timeout now states what the work costs
+
 ### Added
 
 - A third WhatsApp backend, on Baileys — the multi-device protocol over a WebSocket, with no
   browser (B-001). Added rather than replacing the `whatsapp-web.js` one, so nobody loses a paired
   session, the comparison between them becomes measurable instead of asserted, and retreat stays
-  cheap. `baileys` is an optional peer dependency loaded lazily at connect; all 27 tests drive an
-  injected fake socket and pass with it absent. What none of them prove is that any of it speaks
+  cheap. `baileys` is an optional peer dependency loaded lazily at connect; 36 tests drive an
+  injected fake socket and pass with it absent — nine of them written after a review found four
+  defects reachable in normal operation: a timed-out send that stayed on the socket while the next
+  one started, a failed connect that left a live socket delivering inbound, a `disconnect()` during
+  connect that wedged the backend until it was rebuilt, and a QR code with nowhere to go, which
+  made pairing a fresh session impossible. Each has a test that fails if that fix alone is
+  reverted. What none of them prove is that any of it speaks
   WhatsApp: pairing needs a QR scan by a human, so protocol conformance, delivery and ban behaviour
   are unproven here and by every gate in this repository
 

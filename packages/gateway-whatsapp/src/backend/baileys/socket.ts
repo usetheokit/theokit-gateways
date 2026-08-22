@@ -67,6 +67,16 @@ export interface BaileysSocketOptions {
   readonly sessionDir: string;
   /** Overrides the module the factory loads. Tests point it at a stub; production never sets it. */
   readonly specifier?: string;
+  /**
+   * Called with the pairing QR, as often as WhatsApp reissues it.
+   *
+   * Without somewhere for this to go, a fresh `sessionDir` can only ever time out: there is
+   * no other way to pair, and `printQRInTerminal` is off because a library writing to stdout
+   * is a library deciding where a host application's output goes. Defaults to writing the
+   * code to **stderr**, which is what the `web` bridge does and what keeps stdout free for a
+   * host that is using it for something.
+   */
+  readonly onQr?: (qr: string) => void;
 }
 
 /** Shape of the `baileys` module surface this factory uses. */
@@ -161,6 +171,20 @@ export async function createBaileysSocket(opts: BaileysSocketOptions): Promise<B
     syncFullHistory: false,
     browser: ["theokit-gateway", "chrome", "1.0.0"],
     ...(version !== undefined ? { version } : {}),
+  });
+
+  // The pairing surface (F4). `printQRInTerminal` stays false — a library writing to stdout
+  // decides where a host's output goes — so the code is handed to the caller, defaulting to
+  // stderr. Without this a fresh session directory has no path to a pairing at all.
+  const onQr =
+    opts.onQr ??
+    ((qr: string) => {
+      process.stderr.write(
+        `\n[whatsapp-baileys] Scan this QR with WhatsApp — Settings, Linked devices, Link a device:\n${qr}\n\n`,
+      );
+    });
+  socket.ev.on("connection.update", (update) => {
+    if (typeof update.qr === "string" && update.qr.length > 0) onQr(update.qr);
   });
 
   socket.ev.on("creds.update", () => {

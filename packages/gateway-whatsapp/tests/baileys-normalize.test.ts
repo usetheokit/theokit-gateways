@@ -133,3 +133,50 @@ describe("normalizeBaileysMessage", () => {
     expect(normalizeBaileysMessage(envelope({ message: { conversation: "" } }))).toBeUndefined();
   });
 });
+
+describe("normalizeBaileysMessage — envelope shapes a review found", () => {
+  it("reads text out of a disappearing-messages wrapper", () => {
+    // Baileys nests the real message inside `ephemeralMessage`. Without unwrapping, every
+    // text in a chat with disappearing messages on was dropped in silence — indistinguishable
+    // from an image, which the "v1 is text-only" rationale was covering for.
+    const event = normalizeBaileysMessage(
+      envelope({ message: { ephemeralMessage: { message: { conversation: "vanishing" } } } }),
+    );
+
+    expect(event?.text).toBe("vanishing");
+  });
+
+  it("reads text out of a view-once wrapper", () => {
+    const event = normalizeBaileysMessage(
+      envelope({
+        message: { viewOnceMessageV2: { message: { extendedTextMessage: { text: "once" } } } },
+      }),
+    );
+
+    expect(event?.text).toBe("once");
+  });
+
+  it("stops unwrapping rather than recursing forever on hostile nesting", () => {
+    // The input arrives off a socket from a library with a message-spoofing advisory. A
+    // deeply self-nested envelope must exhaust the depth limit, not the stack.
+    let nested: Record<string, unknown> = { conversation: "deep" };
+    for (let i = 0; i < 12; i += 1) nested = { ephemeralMessage: { message: nested } };
+
+    expect(normalizeBaileysMessage(envelope({ message: nested }))).toBeUndefined();
+  });
+
+  it("reads a protobuf Long timestamp instead of stamping it now", () => {
+    // Baileys' generated types permit a Long. Treating it as unparseable and substituting the
+    // current time would stamp a stale message "now" and walk it through any freshness window.
+    const asLong = { low: 1_700_000_000, high: 0, unsigned: false, toNumber: () => 1_700_000_000 };
+    const event = normalizeBaileysMessage(envelope({ messageTimestamp: asLong }));
+
+    expect(event?.receivedAt).toBe(1_700_000_000_000);
+  });
+
+  it("drops a message whose timestamp cannot be read at all", () => {
+    // "Unparseable" must not resolve to "fresh". Dropping is the honest answer.
+    expect(normalizeBaileysMessage(envelope({ messageTimestamp: {} }))).toBeUndefined();
+    expect(normalizeBaileysMessage(envelope({ messageTimestamp: undefined }))).toBeUndefined();
+  });
+});

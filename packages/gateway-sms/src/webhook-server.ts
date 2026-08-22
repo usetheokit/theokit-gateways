@@ -123,7 +123,13 @@ export async function createWebhookServer(opts: WebhookServerOptions): Promise<W
       res.status(400).type("text/plain").send(`parse failed: ${msg}`);
       return;
     }
-    void opts.adapter.dispatchEvent(event);
+    // Same contract as the LINE server: the provider is answered before the handler runs, so a
+    // slow handler cannot become a provider retry. That makes the dispatch floated, and a floated
+    // rejection ends the process — so it is caught here rather than left to the runtime (#41).
+    void opts.adapter.dispatchEvent(event).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[gateway-sms] webhook dispatch failed: ${message}\n`);
+    });
     // Twilio expects either TwiML or 204; 204 keeps things simple
     // and avoids accidentally double-replying.
     res.status(204).end();
