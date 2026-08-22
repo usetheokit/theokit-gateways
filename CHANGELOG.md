@@ -18,7 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   This is the exact defect the cross-adapter contract exists to catch, and WhatsApp was exempt
   from it — by a comment asserting its mechanism gave "the same guarantee", when that mechanism
   had no guard at all. The exemption is gone; the one adapter the gate excused was the one
-  carrying the defect
+  carrying the defect. The Cloud and web backends carried it too, and are fixed alongside: both
+  are public exports of the exported `WhatsAppBackend` interface, so a consumer holding one
+  directly reached the defect without going through the adapter.
+
+- The unsubscribe invariant is now checked per DECLARATION, not per package. Checked per package,
+  one compliant sibling covered the rest — which is how three WhatsApp backends came to have one
+  guard between them. Getting there took three attempts, and the first two could not fail: one
+  regex matched zero declarations (every one types its parameter as a function, so `[^)]*` stops
+  at the inner signature), and the next read a fixed window that reached into the neighbouring
+  method and accepted ITS guard. The check now brace-matches the method body and requires the
+  guard to name the same field that body stores the handler in, and it asserts a floor on how
+  many declarations it found — a gate that silently checks nothing is worse than no gate
 
 - The cross-adapter contract gate stopped accepting a comment as a guard. Two of its invariants
   read source with comments intact, so commenting a guard out passed while deleting it failed —

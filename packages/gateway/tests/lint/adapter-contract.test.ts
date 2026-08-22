@@ -27,7 +27,7 @@
  */
 
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const PACKAGES_DIR = join(__dirname, "..", "..", "..");
@@ -46,6 +46,47 @@ async function adapterSources(): Promise<Array<{ pkg: string; source: string }>>
     }
   }
   return out.sort((a, b) => a.pkg.localeCompare(b.pkg));
+}
+
+/**
+ * The `{ … }` block starting at `open`, by brace matching.
+ *
+ * A fixed-size window was tried first and could not fail: 700 characters from `onInbound`
+ * reaches into the NEXT method, and that method's own guard satisfied the check. Every
+ * masking defect in this repository has had this shape — one construct passing on the
+ * strength of a neighbour.
+ */
+function blockAt(code: string, open: number): string {
+  let depth = 0;
+  for (let i = open; i < code.length; i += 1) {
+    if (code[i] === "{") depth += 1;
+    else if (code[i] === "}") {
+      depth -= 1;
+      if (depth === 0) return code.slice(open, i + 1);
+    }
+  }
+  return code.slice(open);
+}
+
+/**
+ * Every `.ts` under each adapter package's `src/`, kept SEPARATE by path.
+ *
+ * `adapterPackageSources()` concatenates a package's tree into one string, which is right for
+ * asking "does this package do X somewhere" and wrong for asking "does every declaration of X do
+ * it" — one compliant sibling makes the whole package pass. That is how three WhatsApp backends
+ * came to have one guard between them.
+ */
+async function adapterSourceFiles(): Promise<Array<{ path: string; source: string }>> {
+  const out: Array<{ path: string; source: string }> = [];
+  for (const { pkg } of await adapterSources()) {
+    const root = join(PACKAGES_DIR, pkg, "src");
+    for (const file of await readdir(root, { recursive: true, withFileTypes: true })) {
+      if (!file.isFile() || !file.name.endsWith(".ts")) continue;
+      const full = join(file.parentPath, file.name);
+      out.push({ path: `${pkg}/${relative(root, full)}`, source: await readFile(full, "utf8") });
+    }
+  }
+  return out.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 /**
@@ -103,6 +144,46 @@ function emptyTextGuardVerdict(source: string): string | undefined {
 }
 
 describe("cross-adapter contract", () => {
+  it("identity-guards EVERY handler unsubscribe, in every file that declares one", async () => {
+    // Per-declaration, not per-package. The package-level version of this check passed
+    // `gateway-whatsapp` on the strength of its adapter while two of its three backends —
+    // both public exports of the exported `WhatsAppBackend` interface — returned unsubscribes
+    // with no guard at all. A consumer holding one directly hit `onInbound(A)` →
+    // `onInbound(B)` → `A.off()` and went silent, with no error and nothing in a log.
+    // `[^)]*` was the first attempt and matched NOTHING: every one of these declarations types
+    // its parameter as a function, so the first `)` belongs to the inner signature. The gate ran
+    // green over zero declarations — which is why it is verified below by counting them.
+    const declaration =
+      /on(?:Inbound|StatusReceipt)\s*\(\s*handler\s*:[\s\S]{0,200}?\)\s*:\s*\(\)\s*=>\s*void\s*\{/g;
+    const offenders: string[] = [];
+    let declarations = 0;
+    for (const { path, source } of await adapterSourceFiles()) {
+      const code = withoutComments(source);
+      for (const found of code.matchAll(declaration)) {
+        declarations += 1;
+        const body = blockAt(code, found.index + found[0].length - 1);
+        // Which field this method stores the handler in — read from the code rather than
+        // assumed, so the guard is checked against the SAME field and a sibling's guard on a
+        // different one cannot stand in for it.
+        const stored = /this\.(\w+)\s*=\s*handler\s*;/.exec(body)?.[1];
+        const guarded =
+          stored !== undefined &&
+          new RegExp(`if\\s*\\(\\s*this\\.${stored}\\s*===\\s*handler\\s*\\)`).test(body);
+        if (!guarded) offenders.push(`${path}: ${found[0].slice(0, 24)}…`);
+      }
+    }
+    // Counted, not guessed: 17 implementations across the ten adapters and WhatsApp's three
+    // backends. A looser scan finds 19 — the extra two are the `WhatsAppBackend` interface's own
+    // declarations, which end in `;` and correctly have no body to guard.
+    //
+    // The floor exists because the first version of this regex used `[^)]*` and matched ZERO:
+    // every one of these types its parameter as a function, so the first `)` closes the inner
+    // signature. The test ran green over an empty set and reported a contract it never checked.
+    // Adding an adapter should make someone look here; that is the right kind of friction.
+    expect(declarations).toBeGreaterThanOrEqual(17);
+    expect(offenders).toEqual([]);
+  });
+
   it("finds every adapter package", async () => {
     // If this drops to a handful, the glob broke and the assertions below became
     // vacuous — the failure mode a tree-scanning gate has to guard against.
