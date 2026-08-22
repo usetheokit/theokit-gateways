@@ -180,6 +180,33 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
     return run;
   }
 
+  /**
+   * Race one send against the send timeout.
+   *
+   * Separated so `sendNow` reads as the three outcomes it has — delivered, undetermined,
+   * refused — rather than as promise plumbing.
+   *
+   * @internal
+   */
+  private async raceSend(
+    socket: BaileysSocketLike,
+    jid: string,
+    text: string,
+    timeoutMs: number,
+  ): Promise<{ key?: { id?: string } } | undefined | "timeout"> {
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<"timeout">((resolve) => {
+      timer = setTimeout(() => resolve("timeout"), timeoutMs);
+    });
+    try {
+      return await Promise.race([socket.sendMessage(jid, { text }), timeout]);
+    } finally {
+      // The loser of the race stays scheduled otherwise, and a scheduled timer keeps Node's
+      // event loop alive — the defect fixed in the core runner (#37).
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  }
+
   /** @internal */
   private async sendNow(message: WhatsAppOutboundMessage): Promise<WhatsAppSendResult> {
     const socket = this.socket;
@@ -192,16 +219,9 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
 
     const jid = `${message.to}@${message.isGroup ? "g.us" : "s.whatsapp.net"}`;
     const timeoutMs = this.opts.sendTimeoutMs ?? DEFAULT_SEND_TIMEOUT_MS;
-    let timer: NodeJS.Timeout | undefined;
-    const timeout = new Promise<"timeout">((resolve) => {
-      timer = setTimeout(() => resolve("timeout"), timeoutMs);
-    });
 
     try {
-      const outcome = await Promise.race([
-        socket.sendMessage(jid, { text: message.text }),
-        timeout,
-      ]);
+      const outcome = await this.raceSend(socket, jid, message.text, timeoutMs);
       if (outcome === "timeout") {
         return {
           ok: false,
@@ -218,13 +238,8 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
     } catch (err) {
       return {
         ok: false,
-        error: {
-          code: "server_error",
-          message: err instanceof Error ? err.message : String(err),
-        },
+        error: { code: "server_error", message: err instanceof Error ? err.message : String(err) },
       };
-    } finally {
-      if (timer !== undefined) clearTimeout(timer);
     }
   }
 

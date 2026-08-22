@@ -32,7 +32,9 @@ class FakeSocket implements BaileysSocketLike {
       event: K,
       listener: (payload: BaileysEventMap[K]) => void,
     ): void => {
-      (this.listeners[event] ??= []).push(listener as never);
+      const existing = this.listeners[event] ?? [];
+      existing.push(listener as never);
+      this.listeners[event] = existing;
     },
   };
 

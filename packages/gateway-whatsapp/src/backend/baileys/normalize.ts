@@ -78,45 +78,71 @@ function toMillis(timestamp: unknown): number {
 }
 
 /**
- * Normalise one inbound envelope, or refuse it.
+ * Who sent this, and where does it belong?
  *
- * Refused: anything we sent (`fromMe`), the status feed, any content that is not text, and
- * anything whose sender cannot be identified. That last one matters most — an event with an
- * unidentifiable sender would reach an allowlist that has nothing to match against, and the
- * safe reading of "we do not know who sent this" is not "let it through".
+ * In a group the channel is the group and the sender is the participant; in a DM both are
+ * `remoteJid`. Reading `remoteJid` as the sender in a group would attribute every group
+ * message to the group itself, which breaks the allowlist and any per-sender session key at
+ * once. Returns `undefined` when either cannot be identified — and "we do not know who sent
+ * this" must never resolve to "let it through".
  */
-export function normalizeBaileysMessage(raw: unknown): WhatsAppInboundEvent | undefined {
-  const envelope = asObject(raw) as RawEnvelope | undefined;
-  const key = envelope === undefined ? undefined : asObject(envelope.key);
-  if (key === undefined) return undefined;
-  if (key.fromMe === true) return undefined;
-
-  const remoteJid = asText(key.remoteJid);
-  const wamid = asText(key.id);
-  if (remoteJid === undefined || wamid === undefined) return undefined;
-  if (remoteJid === STATUS_BROADCAST_JID) return undefined;
-
-  const text = extractText(envelope?.message);
-  if (text === undefined) return undefined;
-
+function resolveParties(
+  key: Record<string, unknown>,
+  remoteJid: string,
+): { fromPhone: string; channelId: string; isGroup: boolean } | undefined {
   const isGroup = remoteJid.endsWith("@g.us");
-  // In a group the channel is the group and the sender is the participant. Reading remoteJid
-  // as the sender would attribute every group message to the group, which breaks the
-  // allowlist and any per-sender session key at once.
   const senderJid = isGroup ? asText(key.participant) : remoteJid;
   if (senderJid === undefined) return undefined;
 
   const fromPhone = normalizeWhatsAppId(senderJid);
   const channelId = normalizeWhatsAppId(remoteJid);
   if (fromPhone.length === 0 || channelId.length === 0) return undefined;
+  return { fromPhone, channelId, isGroup };
+}
+
+/**
+ * Should this envelope reach a handler at all?
+ *
+ * Refused: anything we sent (or the bot answers its own replies, forever — a lesson every
+ * backend in this package learned separately), and the status feed, which is never a
+ * conversation.
+ */
+function isDispatchable(key: Record<string, unknown>, remoteJid: string): boolean {
+  if (key.fromMe === true) return false;
+  return remoteJid !== STATUS_BROADCAST_JID;
+}
+
+/**
+ * Normalise one inbound envelope, or refuse it.
+ *
+ * Refused: anything we sent (`fromMe`), the status feed, any content that is not text, and
+ * anything whose sender cannot be identified. That last one matters most — an event with an
+ * unidentifiable sender would reach an allowlist with nothing to match against, and the safe
+ * reading of "we do not know who sent this" is not "let it through".
+ */
+export function normalizeBaileysMessage(raw: unknown): WhatsAppInboundEvent | undefined {
+  const envelope = asObject(raw) as RawEnvelope | undefined;
+  const key = envelope === undefined ? undefined : asObject(envelope.key);
+  if (key === undefined) return undefined;
+
+  const remoteJid = asText(key.remoteJid);
+  const wamid = asText(key.id);
+  if (remoteJid === undefined || wamid === undefined) return undefined;
+  if (!isDispatchable(key, remoteJid)) return undefined;
+
+  const text = extractText(envelope?.message);
+  if (text === undefined) return undefined;
+
+  const parties = resolveParties(key, remoteJid);
+  if (parties === undefined) return undefined;
 
   const contactName = asText(envelope?.pushName);
 
   return {
     wamid,
-    fromPhone,
-    conversationType: isGroup ? "group" : "dm",
-    channelId,
+    fromPhone: parties.fromPhone,
+    conversationType: parties.isGroup ? "group" : "dm",
+    channelId: parties.channelId,
     text,
     receivedAt: toMillis(envelope?.messageTimestamp),
     backend: "baileys",
