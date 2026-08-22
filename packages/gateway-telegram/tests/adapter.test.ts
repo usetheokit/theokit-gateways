@@ -119,3 +119,22 @@ describe("TelegramAdapter (T5.1)", () => {
     expect(adapter.platform).toBe("telegram");
   });
 });
+
+describe("TelegramAdapter — a throwing handler", () => {
+  it("names the handler as the source, not the platform client", async () => {
+    // The rejection used to escape into the platform's own error channel, and the adapter reported
+    // it as a client/bot error — so a bug in the consumer's handler read as a fault in
+    // telegram.js/grammy, sending whoever debugged it to the wrong repository (#41).
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const adapter = new TelegramAdapter({ token: "fake:token" });
+    adapter.onInbound(async () => {
+      throw new Error("user handler blew up");
+    });
+
+    await expect(adapter.dispatchEvent(makeEvent())).resolves.toBe("handler_threw");
+
+    const written = stderr.mock.calls.map((c) => String(c[0])).join("");
+    expect(written).toContain("[telegram] handler threw: user handler blew up");
+    stderr.mockRestore();
+  });
+});

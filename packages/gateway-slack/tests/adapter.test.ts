@@ -388,3 +388,94 @@ describe("SlackAdapter — onInbound (D276 / EC-H)", () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 });
+
+describe("SlackAdapter — teardown races connect (#31)", () => {
+  it("stops a half-connected App when disconnect races an in-flight connect", async () => {
+    // The leak #31 describes. `disconnect()` guarded on `!this.connected`, but
+    // `connected` only flips AFTER start() and auth.test() both resolve. A
+    // disconnect arriving in that window returned immediately and stopped
+    // nothing, so the socket stayed open with no reference able to close it —
+    // which is how a test process ends up with a live Slack socket at teardown.
+    let releaseStart: (() => void) | undefined;
+    startMock.mockImplementation(
+      () =>
+        new Promise<undefined>((resolve) => {
+          releaseStart = () => resolve(undefined);
+        }),
+    );
+
+    const a = new SlackAdapter({ botToken: "xoxb-x", appToken: "xapp-x" });
+    const connecting = a.connect();
+    // Let connect() reach `await app.start()` before racing it.
+    await Promise.resolve();
+
+    const disconnecting = a.disconnect();
+    releaseStart?.();
+    await connecting;
+    await disconnecting;
+
+    expect(stopMock).toHaveBeenCalled();
+  });
+
+  it("disconnect awaits the in-flight connect instead of returning early", async () => {
+    // Ordering, not just the call: returning before connect() settles would
+    // report the adapter as shut down while the socket was still opening.
+    let releaseStart: (() => void) | undefined;
+    let connectSettled = false;
+    startMock.mockImplementation(
+      () =>
+        new Promise<undefined>((resolve) => {
+          releaseStart = () => resolve(undefined);
+        }),
+    );
+
+    const a = new SlackAdapter({ botToken: "xoxb-x", appToken: "xapp-x" });
+    const connecting = a.connect().then(() => {
+      connectSettled = true;
+    });
+    await Promise.resolve();
+
+    const disconnecting = a.disconnect().then(() => {
+      expect(connectSettled, "disconnect resolved before connect settled").toBe(true);
+    });
+
+    releaseStart?.();
+    await Promise.all([connecting, disconnecting]);
+  });
+
+  it("stays idempotent and safe when never connected", async () => {
+    // D278 must survive the fix: disconnect() before any connect() is a no-op,
+    // and calling it twice must not throw or double-stop.
+    const a = new SlackAdapter({ botToken: "xoxb-x", appToken: "xapp-x" });
+
+    await a.disconnect();
+    await a.disconnect();
+
+    expect(stopMock).not.toHaveBeenCalled();
+  });
+
+  it("still tears down exactly once after a normal connect", async () => {
+    const a = new SlackAdapter({ botToken: "xoxb-x", appToken: "xapp-x" });
+    await a.connect();
+
+    await a.disconnect();
+    await a.disconnect();
+
+    expect(stopMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe("SlackAdapter — sendMessage guard order", () => {
+  it("reports empty text as empty_text even before the adapter is connected", async () => {
+    // The contract states it without a condition: empty text returns `empty_text`. Slack checked
+    // the connection first, so the same call that answered `empty_text` on the other nine adapters
+    // answered `not_connected` here — and code branching on the code to tell a caller's bad input
+    // from an unavailable transport took the wrong branch on exactly one platform (#42).
+    const adapter = new SlackAdapter({ botToken: "xoxb-t", appToken: "xapp-t" });
+
+    const r = await adapter.sendMessage({ channel: { id: "c", type: "dm" }, text: "" });
+
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe("empty_text");
+  });
+});

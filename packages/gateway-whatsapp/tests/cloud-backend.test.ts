@@ -134,3 +134,133 @@ describe("WhatsAppCloudBackend", () => {
     expect((firstCall as unknown[])[0]).toMatchObject({ status: "delivered" });
   });
 });
+
+describe("WhatsAppCloudBackend — a throwing handler", () => {
+  /** Two inbound messages plus a delivery receipt, all in one webhook — Meta batches. */
+  const BATCH_ENVELOPE = JSON.stringify({
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: "e",
+        changes: [
+          {
+            field: "messages",
+            value: {
+              messaging_product: "whatsapp",
+              metadata: { display_phone_number: "5511", phone_number_id: "PNID" },
+              messages: [
+                {
+                  from: "5511888",
+                  id: "wamid.in.1",
+                  timestamp: "1700",
+                  type: "text",
+                  text: { body: "first" },
+                },
+                {
+                  from: "5511888",
+                  id: "wamid.in.2",
+                  timestamp: "1701",
+                  type: "text",
+                  text: { body: "second" },
+                },
+              ],
+              statuses: [
+                {
+                  id: "wamid.out.1",
+                  status: "delivered",
+                  timestamp: "1702",
+                  recipient_id: "5511888",
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  it("does not abandon the rest of the batch when one message's handler throws", async () => {
+    // Meta delivers several messages in one webhook. The loop awaited the handler with nothing
+    // around it, so a throw on the first message skipped every message after it AND every status
+    // receipt in the same payload (#41).
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const b = makeBackend();
+    const seen: string[] = [];
+    const receipts: string[] = [];
+    b.onInbound(async (event) => {
+      seen.push(event.text);
+      throw new Error("user handler blew up");
+    });
+    b.onStatusReceipt(async (receipt) => {
+      receipts.push(receipt.status);
+    });
+
+    await b.handleWebhookPayload(BATCH_ENVELOPE, signedHeader(BATCH_ENVELOPE));
+
+    expect(seen).toEqual(["first", "second"]);
+    expect(receipts).toEqual(["delivered"]);
+    stderr.mockRestore();
+  });
+
+  it("still answers the webhook, so the platform does not redeliver what already succeeded", async () => {
+    // The user returns this boolean as their HTTP status. Rejecting makes the route 500, Meta
+    // retries the whole payload, and every message that HAD been handled is handled again — the
+    // duplicate-reply failure, arriving through a different door than #11.
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const b = makeBackend();
+    b.onInbound(async () => {
+      throw new Error("user handler blew up");
+    });
+
+    await expect(
+      b.handleWebhookPayload(BATCH_ENVELOPE, signedHeader(BATCH_ENVELOPE)),
+    ).resolves.toBe(true);
+    stderr.mockRestore();
+  });
+
+  it("answers false on a signed body that is not JSON, instead of rejecting", async () => {
+    // `handleWebhookPayload` documents true/false; a throw is outside its contract, and the route
+    // that called it has no reason to expect one.
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const b = makeBackend();
+    const notJson = "this is not json";
+
+    await expect(b.handleWebhookPayload(notJson, signedHeader(notJson))).resolves.toBe(false);
+    stderr.mockRestore();
+  });
+});
+
+describe("WhatsAppCloudBackend — sendTemplate", () => {
+  it("reaches a recipient who never wrote first, which text cannot", async () => {
+    // Pillar (a) of the wiring triad: sendTemplate on the client is unreachable
+    // unless something a consumer can hold delegates to it. The backend is that
+    // thing — WhatsAppCloudClient is @internal and not exported.
+    const fakeFetch = makeFetchOk();
+    const b = makeBackend(fakeFetch);
+
+    const result = await b.sendTemplate("5511", "hello_world", "en_US");
+
+    expect(result.ok).toBe(true);
+    const init = (fakeFetch as ReturnType<typeof vi.fn>).mock.calls[0]![1] as RequestInit;
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    expect(body.type).toBe("template");
+    expect(body.template).toEqual({ name: "hello_world", language: { code: "en_US" } });
+  });
+
+  it("surfaces a template rejection as a structured error, never a throw", async () => {
+    const b = makeBackend(
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: { code: 132001, message: "no such template" } }), {
+            status: 400,
+            headers: { "content-type": "application/json" },
+          }),
+      ) as typeof fetch,
+    );
+
+    const result = await b.sendTemplate("5511", "nope", "en_US");
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.message).toContain("no such template");
+  });
+});

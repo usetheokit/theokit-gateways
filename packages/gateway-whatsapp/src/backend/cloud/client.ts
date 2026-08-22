@@ -11,7 +11,9 @@ import type {
   MetaErrorEnvelope,
   MetaMarkReadRequest,
   MetaSendResponse,
+  MetaSendTemplateRequest,
   MetaSendTextRequest,
+  MetaTemplateComponent,
 } from "./types.js";
 
 interface WhatsAppCloudClientOptions {
@@ -49,6 +51,53 @@ export class WhatsAppCloudClient {
           text: { body, preview_url: false },
         };
 
+    return this.postMessage(req);
+  }
+
+  /**
+   * Send an approved template.
+   *
+   * The only message type Meta accepts outside the 24-hour service window, and so the only way to
+   * reach someone who has not written first — every notification, and every unattended check of
+   * whether this integration still works. Free-form text to a cold recipient is refused with
+   * `131047`, which the error mapper now surfaces as `session_window_expired`.
+   *
+   * `components` is omitted from the payload when absent rather than sent empty: Meta rejects
+   * `components: []` on a template that declares no variables, so the two are not equivalent.
+   *
+   * Deliberately NOT on the `WhatsAppBackend` interface. The web backend drives WhatsApp Web,
+   * which has no concept of templates, and widening the shared contract would hand it a method it
+   * can only throw from.
+   */
+  async sendTemplate(
+    to: string,
+    templateName: string,
+    languageCode: string,
+    components?: ReadonlyArray<MetaTemplateComponent>,
+  ): Promise<WhatsAppSendResult> {
+    const req: MetaSendTemplateRequest = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "template",
+      template: {
+        name: templateName,
+        language: { code: languageCode },
+        ...(components !== undefined && components.length > 0 ? { components } : {}),
+      },
+    };
+    return this.postMessage(req);
+  }
+
+  /**
+   * POST one message envelope and turn Meta's answer into a `WhatsAppSendResult`.
+   *
+   * Shared by every send: how to reach the endpoint, how to authenticate, and how to read the
+   * reply is one piece of knowledge, and it was about to have a second copy.
+   */
+  private async postMessage(
+    req: MetaSendTextRequest | MetaSendTemplateRequest,
+  ): Promise<WhatsAppSendResult> {
     let response: Response;
     try {
       response = await this.fetchImpl(`${this.baseUrl}/messages`, {

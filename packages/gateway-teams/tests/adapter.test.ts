@@ -260,6 +260,69 @@ describe("TeamsAdapter — onInbound + dispatch", () => {
   });
 });
 
+describe("TeamsAdapter — a throwing handler", () => {
+  it("is contained and logged, instead of taking the process down", async () => {
+    // `this.app.on("activity", (event) => { void this._dispatchActivity(event); })` discarded the
+    // promise. `void` says "I am not waiting"; what it tells the runtime is "I am not handling the
+    // error". Under Node 22's default that rejection is unhandled and the process dies — measured:
+    // one message with a throwing handler ended the run with exit code 1 (#41). Eight of the ten
+    // adapters already contained it; this one and whatsapp-web did not.
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const { adapter, fakeApp } = makeAdapter();
+    await adapter.connect();
+    adapter.onInbound(async () => {
+      throw new Error("user handler blew up");
+    });
+
+    await fakeApp._emit("activity", {
+      activity: {
+        type: "message",
+        id: "act-throw",
+        text: "hi",
+        conversation: { id: "conv-1", conversationType: "personal" },
+        from: { id: "u1" },
+      },
+    });
+    // The dispatch is deliberately not awaited by the platform callback, so give the rejection a
+    // turn to surface before asking whether it was contained.
+    await new Promise((r) => setTimeout(r, 0));
+
+    const written = stderr.mock.calls.map((c) => String(c[0])).join("");
+    expect(written).toContain("[teams] handler threw: user handler blew up");
+    stderr.mockRestore();
+  });
+
+  it("keeps delivering after a handler throws", async () => {
+    // Containment is only worth anything if the next message still arrives.
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const { adapter, fakeApp } = makeAdapter();
+    await adapter.connect();
+    const seen: string[] = [];
+    adapter.onInbound(async (event) => {
+      seen.push(event.text);
+      if (event.text === "boom") throw new Error("user handler blew up");
+    });
+
+    const emit = (text: string) =>
+      fakeApp._emit("activity", {
+        activity: {
+          type: "message",
+          id: `act-${text}`,
+          text,
+          conversation: { id: "conv-1", conversationType: "personal" },
+          from: { id: "u1" },
+        },
+      });
+    await emit("boom");
+    await new Promise((r) => setTimeout(r, 0));
+    await emit("after");
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(seen).toEqual(["boom", "after"]);
+    stderr.mockRestore();
+  });
+});
+
 describe("TeamsAdapter — sendMessage", () => {
   it("test_adapter_send_with_empty_text_returns_error", async () => {
     const { adapter } = makeAdapter();

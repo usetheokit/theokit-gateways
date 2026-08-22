@@ -150,6 +150,14 @@ describeLiveInbound(TELEGRAM, "inbound round trip", () => {
       // assertion on a platform whose auth and outbound are already covered —
       // the owner chose the gap. Set TELEGRAM_TEST_SESSION on a THROWAWAY
       // account (see integration/README.md) if that trade ever changes.
+      //
+      // Until 2026-08-22 this comment was the ONLY thing carrying that decision,
+      // while `.github/workflows/integration.yml` had TELEGRAM_TEST_SESSION
+      // declared and piped into both steps. A comment cannot stop anything: the
+      // sole barrier was that nobody had filled the secret in, and whoever did
+      // would have shipped an account credential into CI with no review. The
+      // workflow no longer references it, so the decision is now enforced by the
+      // absence of a wire rather than by someone reading this paragraph first.
       expect
         .soft(session, "Telegram inbound is intentionally uncovered — see the comment above")
         .toBeUndefined();

@@ -22,6 +22,7 @@ export interface TwilioOptions {
   readonly defaultCountry?: string;
 }
 
+/** Construction options for the Plivo backend. */
 export interface PlivoOptions {
   readonly backend: "plivo";
   readonly authId: string;
@@ -32,6 +33,7 @@ export interface PlivoOptions {
   readonly defaultCountry?: string;
 }
 
+/** Construction options for the Vonage backend. */
 export interface VonageOptions {
   readonly backend: "vonage";
   readonly apiKey: string;
@@ -43,4 +45,10 @@ export interface VonageOptions {
   readonly defaultCountry?: string;
 }
 
+/**
+ * Construction options for the SMS adapter — one variant per supported provider.
+ *
+ * Discriminated by `backend`, so choosing a provider narrows the object to exactly the credentials
+ * that provider needs; a Twilio account SID cannot be passed to Vonage by accident.
+ */
 export type SMSAdapterOptions = TwilioOptions | PlivoOptions | VonageOptions;

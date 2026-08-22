@@ -30,6 +30,12 @@ interface ErrorPayload {
 
 const NETWORK_ERR_RE = /ECONN|ENOTFOUND|ETIMEDOUT|EHOSTUNREACH|EAI_AGAIN|fetch failed/i;
 
+/**
+ * Map anything thrown by SMTP or IMAP into the canonical `{ code, message }` payload.
+ *
+ * Total by construction: `null`, `undefined`, a string and an unrecognised object each map to an
+ * `unknown`-coded payload rather than propagating.
+ */
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: error-translation ladder is exhaustive — each branch maps one nodemailer/imapflow/SMTP-response class to one typed canonical code; splitting hurts traceability.
 export function mapEmailError(err: unknown): ErrorPayload {
   if (err === null || err === undefined) {

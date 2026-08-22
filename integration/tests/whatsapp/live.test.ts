@@ -65,9 +65,43 @@ describeLive(
 );
 
 describeLive(WHATSAPP, "outbound", () => {
-  it("delivers a message to the test recipient", async () => {
-    // Expect this to fail on policy rather than code if the recipient has not
-    // messaged the number within 24 hours. That is Meta's rule, not a defect.
+  it("delivers a template, the send that does not depend on a 24-hour window", async () => {
+    // THE outbound check. Free-form text only reaches someone who wrote in the
+    // last 24 hours, which cannot be arranged unattended — so a suite built on it
+    // reports a policy refusal as a red build and answers "is WhatsApp working?"
+    // with "nobody can tell". A template has no such condition.
+    //
+    // `hello_world` is pre-approved on every WhatsApp Business account, so this
+    // needs no template of our own. Override with WHATSAPP_TEMPLATE_NAME /
+    // WHATSAPP_TEMPLATE_LANGUAGE if the account uses a different one.
+    const backend = new WhatsAppCloudBackend({
+      accessToken: required("WHATSAPP_ACCESS_TOKEN"),
+      phoneNumberId: required("WHATSAPP_PHONE_NUMBER_ID"),
+      appSecret: optional("WHATSAPP_APP_SECRET") ?? "",
+    });
+
+    const result = await backend.sendTemplate(
+      required("WHATSAPP_TEST_RECIPIENT"),
+      optional("WHATSAPP_TEMPLATE_NAME") ?? "hello_world",
+      optional("WHATSAPP_TEMPLATE_LANGUAGE") ?? "en_US",
+    );
+
+    expect(result.ok, `template send failed: ${result.error?.code} ${result.error?.message}`).toBe(
+      true,
+    );
+    expect(result.wamid).toBeDefined();
+  }, 45_000);
+
+  it("either delivers free-form text or names the 24-hour window as the reason", async () => {
+    // Text CAN legitimately be refused here, and the previous version of this test
+    // asserted `ok === true` while its own comment admitted that. A red that means
+    // "the recipient has not written recently" is a red nobody can act on, and it
+    // trains people to ignore the suite.
+    //
+    // So the assertion is on the pair: either it went out, or Meta refused it for
+    // the one documented policy reason and our mapper said so. Anything else — an
+    // auth failure, a malformed payload, a code we do not recognise — is a defect,
+    // and this now distinguishes them.
     const adapter = makeAdapter();
     const marker = runMarker();
     try {
@@ -76,7 +110,14 @@ describeLive(WHATSAPP, "outbound", () => {
         channel: { id: required("WHATSAPP_TEST_RECIPIENT"), type: "dm" },
         text: `${marker} outbound ok`,
       });
-      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.messageId).toBeDefined();
+        return;
+      }
+      expect(
+        result.error?.code,
+        `text was refused for something other than the service window: ${result.error?.message}`,
+      ).toBe("session_window_expired");
     } finally {
       await adapter.disconnect();
     }

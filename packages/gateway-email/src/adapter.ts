@@ -27,6 +27,18 @@ import type { EmailAdapterOptions } from "./types.js";
 
 const DEFAULT_POLL_INTERVAL_MS = 15_000;
 
+/**
+ * Last-resort report for a drain that rejected.
+ *
+ * `_drainUnseen` is written never to reject — it contains the fetch failure, and dispatch failures
+ * are contained one level down. But both launch sites discard the promise, so that property is the
+ * only thing standing between a future edit and an unhandled rejection, which under Node 22's
+ * default ends the process. Nothing enforced it; this does, at the site that would pay for it (#41).
+ */
+function reportDrainFailure(err: unknown): void {
+  console.error("[email] drain failed:", err instanceof Error ? err.message : err);
+}
+
 export class EmailAdapter extends BasePlatformAdapter {
   readonly platform = "email" as const;
   private readonly options: EmailAdapterOptions;
@@ -95,7 +107,7 @@ export class EmailAdapter extends BasePlatformAdapter {
       // Start inbound dispatch loop — IDLE if supported, poll otherwise.
       if (this.imap.supportsIdle()) {
         await this.imap.startIdle(() => {
-          void this._drainUnseen();
+          void this._drainUnseen().catch(reportDrainFailure);
         });
         // Drain anything already UNSEEN before IDLE started.
         await this._drainUnseen();
@@ -104,7 +116,7 @@ export class EmailAdapter extends BasePlatformAdapter {
         await this._drainUnseen();
         const intervalMs = this.options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
         this.pollTimer = setInterval(() => {
-          void this._drainUnseen();
+          void this._drainUnseen().catch(reportDrainFailure);
         }, intervalMs);
       }
 

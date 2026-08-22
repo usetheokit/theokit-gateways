@@ -45,7 +45,16 @@ export type IpcEvent =
       readonly recipient: string;
       readonly timestamp: number;
     }
-  | { readonly event: "error"; readonly message: string };
+  | {
+      readonly event: "error";
+      readonly message: string;
+      /**
+       * Machine-readable cause, when the bridge could name one. Absent on older bridges and
+       * on failures it cannot classify, which is why every consumer must tolerate it being
+       * undefined rather than switching exhaustively.
+       */
+      readonly code?: string;
+    };
 
 /** Parse one JSON-line. Returns null on malformed. */
 export function parseEvent(line: string): IpcEvent | null {

@@ -17,6 +17,10 @@ export {
   GatewayConfigurationError,
   type GatewayConfigurationErrorOptions,
 } from "./errors/config-error.js";
+export {
+  GatewayLifecycleError,
+  type GatewayLifecycleErrorOptions,
+} from "./errors/lifecycle-error.js";
 // Hooks
 export { HookExecutor } from "./hooks/executor.js";
 export type {

@@ -27,6 +27,13 @@ export interface ShouldRespondOptions {
   readonly requireMention: boolean;
 }
 
+/**
+ * Decide whether the bot should answer a post.
+ *
+ * Three rules in order: never answer itself (the loop guard), always answer a direct message, and in
+ * a channel answer only when mentioned unless `requireMention` is turned off. The mention default
+ * is what keeps a bot added to a busy channel from replying to every message in it.
+ */
 export function shouldRespond(opts: ShouldRespondOptions): boolean {
   const { post, channelType, botUserId, botUsername, requireMention } = opts;
   // 1. Loop guard.

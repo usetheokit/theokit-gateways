@@ -62,6 +62,13 @@ export interface ConnectOptions {
   readonly accessToken: string;
 }
 
+/**
+ * Authenticate against a Mattermost server and open the websocket that carries inbound posts.
+ *
+ * The SDK is loaded lazily, so a project that installs this package without using it never pays for
+ * the dependency. Returns the handle every other function here takes — client, websocket and the
+ * channel cache, kept together because they share a lifetime.
+ */
 export async function connectMattermost(opts: ConnectOptions): Promise<MattermostClientHandle> {
   const mod = await loadMattermost();
   const client = new mod.Client4();
@@ -94,6 +101,13 @@ export function wsUrlFromBase(baseUrl: string): string {
   return `${wsScheme}${hostPart}/api/v4/websocket`;
 }
 
+/**
+ * Fetch a channel by id, remembering the answer on the handle.
+ *
+ * Normalising an inbound post needs the channel's type, and a busy channel would otherwise cost one
+ * API call per message. Returns `undefined` rather than throwing when the channel cannot be read —
+ * a post from a channel the bot cannot see is a normal event, not a failure.
+ */
 export async function getChannelCached(
   handle: MattermostClientHandle,
   channelId: string,

@@ -17,12 +17,24 @@ export function normalizeMattermostType(
   return channel?.type ?? "O";
 }
 
+/**
+ * Map Mattermost's channel type to the gateway's conversation kind.
+ *
+ * A post carrying a root id is a threaded reply whatever channel it sits in, so that wins over the
+ * channel's own type; `"D"` is a direct message, and everything else is treated as a group.
+ */
 export function mapChannelType(rawType: string, hasRootId: boolean): "dm" | "group" | "thread" {
   if (hasRootId) return "thread";
   if (rawType === "D") return "dm";
   return "group";
 }
 
+/**
+ * Turn a Mattermost post into a `MattermostMessageEvent`.
+ *
+ * `channel` and `senderUsername` are optional because both are fetched separately and either can be
+ * unavailable; the event is still produced, with the conversation kind falling back to a group.
+ */
 export function postToMessageEvent(
   post: MattermostPost,
   channel: MattermostChannel | undefined,

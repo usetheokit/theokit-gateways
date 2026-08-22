@@ -32,6 +32,93 @@ on:
         description: "Single platform id. Empty runs all."
         required: false
         type: string
+    # Declared one by one instead of taking `secrets: inherit` from the caller.
+    # `inherit` hands the called workflow EVERY secret the caller holds — including
+    # the registry credential the release job uses, which these live tests must
+    # never see. Listing them keeps the blast radius of this workflow to the
+    # platform credentials it actually talks to.
+    secrets:
+      DISCORD_BOT_TOKEN:
+        required: false
+      DISCORD_TEST_CHANNEL_ID:
+        required: false
+      DISCORD_TEST_SENDER_TOKEN:
+        required: false
+      EMAIL_ADDRESS:
+        required: false
+      EMAIL_IMAP_HOST:
+        required: false
+      EMAIL_PASSWORD:
+        required: false
+      EMAIL_SMTP_HOST:
+        required: false
+      EMAIL_TEST_RECIPIENT:
+        required: false
+      EMAIL_TEST_SENDER_ADDRESS:
+        required: false
+      EMAIL_TEST_SENDER_PASSWORD:
+        required: false
+      EMAIL_TEST_SENDER_SMTP_HOST:
+        required: false
+      LINE_CHANNEL_ACCESS_TOKEN:
+        required: false
+      LINE_CHANNEL_SECRET:
+        required: false
+      LINE_TEST_USER_ID:
+        required: false
+      MATRIX_ACCESS_TOKEN:
+        required: false
+      MATRIX_HOMESERVER_URL:
+        required: false
+      MATRIX_TEST_ROOM_ID:
+        required: false
+      MATRIX_USER_ID:
+        required: false
+      MATTERMOST_ACCESS_TOKEN:
+        required: false
+      MATTERMOST_BASE_URL:
+        required: false
+      MATTERMOST_TEST_CHANNEL_ID:
+        required: false
+      SLACK_APP_TOKEN:
+        required: false
+      SLACK_BOT_TOKEN:
+        required: false
+      SLACK_TEST_CHANNEL_ID:
+        required: false
+      SLACK_TEST_USER_TOKEN:
+        required: false
+      SMS_ACCOUNT_ID:
+        required: false
+      SMS_AUTH_TOKEN:
+        required: false
+      SMS_BACKEND:
+        required: false
+      SMS_FROM_NUMBER:
+        required: false
+      SMS_TEST_RECIPIENT:
+        required: false
+      TEAMS_CLIENT_ID:
+        required: false
+      TEAMS_CLIENT_SECRET:
+        required: false
+      TEAMS_TENANT_ID:
+        required: false
+      TEAMS_TEST_CONVERSATION_ID:
+        required: false
+      TELEGRAM_BOT_TOKEN:
+        required: false
+      TELEGRAM_TEST_CHAT_ID:
+        required: false
+      # TELEGRAM_TEST_SESSION / TELEGRAM_API_ID / TELEGRAM_API_HASH are ABSENT
+      # by decision, not by oversight — see the block above the Telegram
+      # variables in the `Live suites` step.
+      WHATSAPP_ACCESS_TOKEN:
+        required: false
+      WHATSAPP_PHONE_NUMBER_ID:
+        required: false
+      WHATSAPP_TEST_RECIPIENT:
+        required: false
 
 permissions:
   contents: read
@@ -57,14 +144,27 @@ jobs:
     # and risks a green run that tested nothing.
     environment: e2e
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          version: 9.15.0
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        # No `version:` here on purpose. The action reads `packageManager` from
+        # package.json, which is already the single authority on the pnpm version.
+        # Pinning it a second time in this file creates two places to update, and
+        # once they disagree action-setup aborts with ERR_PNPM_BAD_PM_VERSION.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       - run: pnpm install --frozen-lockfile
       # The adapters import @theokit/gateway, whose types come from its build.
       - run: pnpm build
@@ -79,11 +179,22 @@ jobs:
           # Same names as `integration/.env`, so a suite never knows which source it got.
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_TEST_CHAT_ID: ${{ secrets.TELEGRAM_TEST_CHAT_ID }}
-          # A USER identity, not a second bot: Telegram never delivers bot
-          # messages to another bot, so only this can drive inbound.
-          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
-          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
-          TELEGRAM_TEST_SESSION: ${{ secrets.TELEGRAM_TEST_SESSION }}
+          # Telegram inbound is NOT wired here, deliberately (decided 2026-08-17,
+          # re-affirmed 2026-08-22). Driving it needs TELEGRAM_TEST_SESSION — an
+          # MTProto session string, which is full access to a Telegram ACCOUNT
+          # rather than a scoped token — plus the TELEGRAM_API_ID / API_HASH that
+          # are useless without it.
+          #
+          # The decision used to live only in a comment in
+          # `integration/tests/telegram/live.test.ts`, while these three lines sat
+          # here fully wired. That made the decision conventional: the only thing
+          # enforcing it was nobody having filled the secret in, and whoever did
+          # would have started shipping an account credential into CI with no
+          # review and no signal. Not referencing them is what makes it structural.
+          #
+          # Restoring this is three lines, on the day the trade changes and against
+          # a THROWAWAY account. See `integration/README.md § Running with nobody
+          # watching`.
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_TEST_CHANNEL_ID: ${{ secrets.DISCORD_TEST_CHANNEL_ID }}
           # A SECOND bot in the same server. normalizeEvent drops messages
@@ -140,21 +251,56 @@ jobs:
         run: pnpm --filter @theokit/gateway-integration mattermost:up
 
       - name: Live suites
+        # The dispatch input reaches the shell as an environment variable, never as
+        # text spliced into the script. `${{ inputs.x }}` inside a run block is
+        # substituted before bash sees the line, so a value containing a shell
+        # metacharacter executes as code with whatever secrets this step holds.
         run: |
-          if [ -n "${{ inputs.platform }}" ]; then
-            pnpm --filter @theokit/gateway-integration exec vitest run "tests/${{ inputs.platform }}"
+          if [ -n "$PLATFORM" ]; then
+            pnpm --filter @theokit/gateway-integration exec vitest run "tests/$PLATFORM"
           else
             pnpm --filter @theokit/gateway-integration integration
           fi
         env:
+          PLATFORM: ${{ inputs.platform }}
           INTEGRATION_LIVE: "1"
+          # The platforms this job is expected to actually exercise. A skipped
+          # suite is as green as a passing one, and this workflow gates release
+          # (`release.yml` → `live-contracts`) — so without this, a secret that
+          # gets deleted, renamed or emptied turns its platform off and lets a
+          # publish through on a signal that verified nothing.
+          #
+          # An EXPIRED credential was never the risk: the positive connect()
+          # test runs and fails loudly. This covers the credential that stops
+          # being PRESENT.
+          #
+          # The list is what run 32446907954 measured as ready, not a wish:
+          # Teams, WhatsApp and SMS have no credentials in this environment and
+          # are deliberately absent — requiring them would make the gate red
+          # about a gap that is already known and documented in the registry.
+          #
+          # Set only on this step. The readiness report above runs BEFORE the
+          # Matrix and Mattermost servers boot, so those two are legitimately
+          # unconfigured at that point.
+          INTEGRATION_REQUIRE_PLATFORMS: "discord,email,line,matrix,mattermost,slack,telegram"
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_TEST_CHAT_ID: ${{ secrets.TELEGRAM_TEST_CHAT_ID }}
-          # A USER identity, not a second bot: Telegram never delivers bot
-          # messages to another bot, so only this can drive inbound.
-          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
-          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
-          TELEGRAM_TEST_SESSION: ${{ secrets.TELEGRAM_TEST_SESSION }}
+          # Telegram inbound is NOT wired here, deliberately (decided 2026-08-17,
+          # re-affirmed 2026-08-22). Driving it needs TELEGRAM_TEST_SESSION — an
+          # MTProto session string, which is full access to a Telegram ACCOUNT
+          # rather than a scoped token — plus the TELEGRAM_API_ID / API_HASH that
+          # are useless without it.
+          #
+          # The decision used to live only in a comment in
+          # `integration/tests/telegram/live.test.ts`, while these three lines sat
+          # here fully wired. That made the decision conventional: the only thing
+          # enforcing it was nobody having filled the secret in, and whoever did
+          # would have started shipping an account credential into CI with no
+          # review and no signal. Not referencing them is what makes it structural.
+          #
+          # Restoring this is three lines, on the day the trade changes and against
+          # a THROWAWAY account. See `integration/README.md § Running with nobody
+          # watching`.
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_TEST_CHANNEL_ID: ${{ secrets.DISCORD_TEST_CHANNEL_ID }}
           # A SECOND bot in the same server. normalizeEvent drops messages

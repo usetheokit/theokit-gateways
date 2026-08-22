@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "pnpm",
+  "testRunner": "vitest",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "vitest": {
+    "configFile": "vitest.mutation.config.ts",
+    "related": false
+  },
+  "reporters": ["json", "html", "clear-text", "progress"],
+  "mutate": ["src/text/chunk.ts", "src/hooks/executor.ts"],
+  "concurrency": 2,
+  "coverageAnalysis": "perTest",
+  "disableTypeChecks": true,
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "thresholds": {
+    "high": 80,
+    "low": 60,
+    "break": 75
+  },
+  "_comment": "Run from packages/gateway (pnpm --filter @theokit/gateway run test:mutation); deliberately NOT wired into `test`, so `pnpm -r run test` in CI never pays for it. configFile points at vitest.mutation.config.ts, which drops tests/lint/** — those suites walk the monorepo tree from the repo root (__dirname/../../../..) and break inside Stryker's sandbox, and they READ source text rather than executing it, so they could never kill a mutant of these two files anyway. related:false because tests live in a mirror tree (tests/**) and vitest --related cannot map a source file back to them. inPlace is deliberately unset: the sandbox works once the lint suites are excluded, and the working tree is never mutated in place. mutate is scoped to the two files with real branching logic that only unit tests cover — both chunkers and the hook chain; src/hooks/types.ts is types-only and has nothing to mutate. thresholds.break=75 is the MEASURED baseline rounded down (75.71%, identical across three runs on 2026-08-20), not a guess. It makes the score a ratchet: a real regression fails the run, with roughly one mutant of headroom. Only the killed/timeout split moved between runs, and a timeout scores as killed. Raise break when the score rises; never lower it to make a red run green."
+}

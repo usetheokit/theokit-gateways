@@ -20,7 +20,7 @@ pnpm add @theokit/gateway-slack @theokit/gateway @theokit/sdk @slack/bolt @slack
 
 ```typescript
 import { SlackAdapter } from "@theokit/gateway-slack";
-import type { GatewayMessageEvent } from "@theokit/gateway";
+import type { MessageEvent } from "@theokit/gateway";
 
 const adapter = new SlackAdapter({
   botToken: process.env.SLACK_BOT_TOKEN!,    // xoxb-...
@@ -31,7 +31,7 @@ const adapter = new SlackAdapter({
 
 await adapter.connect();
 
-adapter.onInbound(async (event: GatewayMessageEvent) => {
+adapter.onInbound(async (event: MessageEvent) => {
   if (event.platform !== "slack") return;
   await adapter.sendMessage({
     channel: event.channel,

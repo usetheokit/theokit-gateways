@@ -66,6 +66,14 @@ export abstract class BasePlatformAdapter {
   /**
    * Subscribe to inbound events. Returns an unsubscribe function.
    * EC-H: second call REPLACES the previous handler (does not stack).
+   *
+   * The handler is user code and may throw. An adapter MUST contain that throw, report it as the
+   * HANDLER's failure — not the platform's — and keep delivering: one bad message never ends the
+   * process nor the connection. Two adapters used to discard the rejection with `void`, which under
+   * Node's default ends the process, and two more reported it as a platform-client error, sending
+   * whoever debugged their own handler to the wrong repository. Eight had converged on the right
+   * behaviour without anything writing it down; `tests/lint/adapter-contract.test.ts` now holds all
+   * ten to it.
    */
   abstract onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void;
 

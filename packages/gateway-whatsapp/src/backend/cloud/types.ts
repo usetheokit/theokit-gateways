@@ -81,3 +81,27 @@ export interface MetaStatusUpdate {
   readonly timestamp: string;
   readonly recipient_id: string;
 }
+
+/** One component of a template — header, body or button — with its parameters. */
+export interface MetaTemplateComponent {
+  readonly type: string;
+  readonly parameters?: ReadonlyArray<Record<string, unknown>>;
+  readonly sub_type?: string;
+  readonly index?: string;
+}
+
+/**
+ * A template send. The only message type Meta accepts outside the 24-hour service
+ * window, and therefore the only way to reach a recipient who has not written first.
+ */
+export interface MetaSendTemplateRequest {
+  readonly messaging_product: "whatsapp";
+  readonly recipient_type: "individual";
+  readonly to: string;
+  readonly type: "template";
+  readonly template: {
+    readonly name: string;
+    readonly language: { readonly code: string };
+    readonly components?: ReadonlyArray<MetaTemplateComponent>;
+  };
+}

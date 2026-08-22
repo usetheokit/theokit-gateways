@@ -19,6 +19,7 @@ import { simpleParser } from "mailparser";
  */
 export const __normalizeMarker: unique symbol = Symbol("email-normalize");
 
+/** Options for {@link normalizeEmail}. */
 export interface NormalizeOptions {
   readonly botAddress: string;
   /** EC-2: cap body length. Default 50000. */
@@ -60,6 +61,13 @@ function addressesFrom(
   return Array.from((obj as AddressObject).value ?? []);
 }
 
+/**
+ * Parse raw RFC 5322 bytes into an `EmailMessageEvent`.
+ *
+ * The body is capped at `maxBodyChars` (50000 by default) because an inbound mail can carry
+ * megabytes of quoted history, and everything downstream — hooks, the handler, the model — pays for
+ * every character of it.
+ */
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: shape-mapping function — each branch is a small conditional spread for an optional RFC 5322 field; splitting hurts the "one event normalization here" locality.
 export async function normalizeEmail(
   rawBuffer: Buffer | string,

@@ -58,10 +58,6 @@ export function pidBelongsToOurBridge(pid: number): boolean {
   }
 }
 
-/**
- * Acquire the PID lock for a session — kill any stale bridge (cmdline-verified),
- * then return the lock-file path (caller writes its own PID after spawn).
- */
 /** EC-5: kill `stalePid` ONLY if cmdline confirms ownership. */
 function killIfOurBridge(stalePid: number): void {
   if (!Number.isFinite(stalePid) || stalePid <= 0) return;
@@ -83,6 +79,10 @@ function cleanupStaleLock(lockFile: string): void {
   }
 }
 
+/**
+ * Acquire the PID lock for a session — kill any stale bridge (cmdline-verified),
+ * then return the lock-file path (caller writes its own PID after spawn).
+ */
 export function acquirePidLock(sessionId: string, theokitHome?: string): string {
   const home = theokitHome ?? defaultTheokitHome();
   fs.mkdirSync(home, { recursive: true });

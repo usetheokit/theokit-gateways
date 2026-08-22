@@ -82,6 +82,13 @@ function channelMapping(
   }
 }
 
+/**
+ * Turn a Teams activity payload into a `TeamsMessageEvent`.
+ *
+ * Accepts `unknown` and tolerates a malformed or partial activity: missing conversation data yields
+ * an event with `"unknown"` in place of the id rather than a throw. Pass `botDisplayName` to have
+ * the bot's own mention stripped from the text.
+ */
 export function normalizeTeamsActivity(
   activity: unknown,
   botDisplayName?: string,

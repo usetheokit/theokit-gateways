@@ -34,7 +34,7 @@ export interface WhatsAppInboundEvent {
   /** Receipt timestamp (ms since epoch). */
   readonly receivedAt: number;
   /** Backend that emitted this event. */
-  readonly backend: "cloud" | "web";
+  readonly backend: "cloud" | "web" | "baileys";
   /** Raw envelope for the escape hatch. */
   readonly raw: unknown;
 }
@@ -71,6 +71,21 @@ export interface WhatsAppSendResult {
       | "auth_failed"
       | "rate_limit"
       | "invalid_request"
+      /**
+       * More than 24 hours since the recipient last replied. The payload was
+       * fine and the credential is fine; WhatsApp policy refuses free-form text
+       * outside that window. The remedy is specific and different from every
+       * other error here — resend as an approved template — which is why it is
+       * its own code rather than one more `invalid_request`.
+       */
+      | "session_window_expired"
+      /**
+       * The recipient cannot receive this message, and no retry changes that:
+       * no WhatsApp account, terms not accepted, an outdated client, or the
+       * business having blocked them. Terminal by nature; the cause is in the
+       * message.
+       */
+      | "undeliverable"
       | "server_error"
       | "timeout"
       | "unknown";
@@ -83,7 +98,7 @@ export interface WhatsAppSendResult {
  * `WhatsAppAdapter` delegates lifecycle + send + subscribe through this seam.
  */
 export interface WhatsAppBackend {
-  readonly kind: "cloud" | "web";
+  readonly kind: "cloud" | "web" | "baileys";
   connect(): Promise<boolean>;
   disconnect(): Promise<void>;
   send(message: WhatsAppOutboundMessage): Promise<WhatsAppSendResult>;

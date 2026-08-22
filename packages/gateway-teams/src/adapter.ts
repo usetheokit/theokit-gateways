@@ -130,7 +130,15 @@ export class TeamsAdapter extends BasePlatformAdapter {
         }),
       );
       this.app.on("activity", (event) => {
-        void this._dispatchActivity(event);
+        // The SDK does not await this callback, so the promise has to be terminated here. `void`
+        // alone left the rejection unhandled, and under Node 22's default that ends the process —
+        // one message with a throwing handler killed the bot (#41).
+        void this._dispatchActivity(event).catch((err: unknown) => {
+          // Reached only by a failure in normalization or tracking: the handler's own throw is
+          // caught inside, and named as the handler's, so the two are never confused.
+          const m = err instanceof Error ? err.message : String(err);
+          process.stderr.write(`[teams] inbound dispatch failed: ${m}\n`);
+        });
       });
       await this.app.initialize();
       this.connected = true;
@@ -224,7 +232,14 @@ export class TeamsAdapter extends BasePlatformAdapter {
 
     const event = normalizeTeamsActivity(activity, this.opts.botDisplayName);
     this.trackConversation(activity.conversation?.id);
-    await this.handler(event);
+    try {
+      await this.handler(event);
+    } catch (err) {
+      // A handler is user code: it may throw, and that is not the adapter's failure nor the
+      // platform's. Contain it, name it, and keep the connection delivering.
+      const m = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[teams] handler threw: ${m}\n`);
+    }
   }
 
   /** Test seam — current seen-conversation count. @internal */

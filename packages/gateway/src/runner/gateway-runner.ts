@@ -10,7 +10,8 @@
  *   failure rolls back: connected adapters get `disconnect()`, then the
  *   aggregate error rethrows.
  * - `stop()` drains in-flight handlers up to `drainTimeoutMs` (default 10s)
- *   BEFORE disconnecting (EC-E). Idempotent.
+ *   BEFORE disconnecting (EC-E). Idempotent, and terminal: a stopped runner
+ *   cannot be restarted, and `start()` on one throws `GatewayLifecycleError`.
  *
  * **Hook chain on inbound:**
  * 1. `firePreInbound({ event })`
@@ -19,12 +20,18 @@
  * 4. Otherwise: call user handler.
  * 5. On handler throw: fire `on_error`, log via `Security.redact` (EC-F).
  *
+ * Every reply — the handler's `ctx.reply` and the EC-D auto-reply alike — fires
+ * `post_outbound` with the event, the outbound and the adapter's result, once
+ * per attempt. The hook observes the delivery; it cannot change what the caller
+ * of `reply` receives.
+ *
  * @public
  */
 
 import { Security } from "@theokit/sdk";
 
-import type { BasePlatformAdapter, SendResult } from "../adapter/base.js";
+import type { BasePlatformAdapter, OutboundMessage, SendResult } from "../adapter/base.js";
+import { GatewayLifecycleError } from "../errors/lifecycle-error.js";
 import { HookExecutor } from "../hooks/executor.js";
 import type { GatewayHook } from "../hooks/types.js";
 import type { MessageEvent as GatewayMessageEvent, PlatformName } from "../types/message-event.js";
@@ -92,8 +99,24 @@ export class GatewayRunner {
     this.commands.set(name, handler);
   }
 
-  /** Connect all adapters and wire inbound dispatch. */
+  /**
+   * Connect all adapters and wire inbound dispatch.
+   *
+   * @throws {GatewayLifecycleError} `runner_stopped` — the runner was already
+   * stopped. A stopped runner is spent; construct a new one.
+   */
   async start(): Promise<void> {
+    if (this.stopped) {
+      // Silently reconnecting here is what produced the unstoppable runner:
+      // `stop()` cleared `connected` but never `stopped`, so a second start()
+      // passed the guard below and rewired everything, while the next stop()
+      // returned at its own guard without disconnecting anything (#39).
+      throw new GatewayLifecycleError({
+        code: "runner_stopped",
+        message:
+          "GatewayRunner.start(): this runner has already been stopped and cannot be restarted. Construct a new GatewayRunner instead.",
+      });
+    }
     if (this.connected) return;
     const connected: BasePlatformAdapter[] = [];
     try {
@@ -148,10 +171,23 @@ export class GatewayRunner {
 
     const drainMs = this.opts.drainTimeoutMs ?? DEFAULT_DRAIN_MS;
     if (this.inflight.size > 0) {
-      await Promise.race([
-        Promise.all([...this.inflight]).then(() => undefined),
-        new Promise<void>((r) => setTimeout(r, drainMs)),
-      ]);
+      // The loser of the race has to be cancelled explicitly. `Promise.race`
+      // settles on the first branch and abandons the other, but an abandoned
+      // `setTimeout` is still a scheduled timer, and a scheduled timer keeps
+      // Node's event loop alive: `stop()` returned in 0ms while the process
+      // only exited `drainMs` later, so a bot stopping on SIGINT hung for the
+      // whole drain window before dying (#37).
+      let timer: NodeJS.Timeout | undefined;
+      try {
+        await Promise.race([
+          Promise.all([...this.inflight]).then(() => undefined),
+          new Promise<void>((r) => {
+            timer = setTimeout(r, drainMs);
+          }),
+        ]);
+      } finally {
+        if (timer !== undefined) clearTimeout(timer);
+      }
     }
 
     await Promise.all(
@@ -226,22 +262,42 @@ export class GatewayRunner {
 
   /** EC-G: per-event ctx whose reply routes to the matching adapter. */
   private buildContext(event: GatewayMessageEvent): GatewayContext {
-    const adapter = this.adaptersByPlatform.get(event.platform);
     return {
       event,
-      reply: async (text, opts) => {
-        if (adapter === undefined) {
-          return {
-            ok: false,
-            error: { code: "no_adapter", message: `no adapter for ${event.platform}` },
-          };
-        }
-        return adapter.sendMessage({
+      reply: async (text, opts) =>
+        this.deliver(event, {
           channel: event.channel,
           text,
           ...(opts?.format !== undefined ? { format: opts.format } : {}),
-        });
-      },
+        }),
     };
+  }
+
+  /**
+   * Send one outbound on behalf of `event` and report it to `post_outbound`.
+   *
+   * Every reply leaves through here so the hook fires exactly once per attempt —
+   * including the EC-D auto-reply, and including the attempt that finds no
+   * adapter for the platform. An audit hook that counted only the deliveries
+   * which reached a transport would omit precisely the ones that went nowhere.
+   *
+   * `post_outbound` observes; it does not intercept. The adapter's `SendResult`
+   * is returned to the caller unchanged, and `HookExecutor` already contains a
+   * throwing hook, so a broken observer cannot turn a delivered reply into a
+   * failed one.
+   *
+   * @internal
+   */
+  private async deliver(
+    event: GatewayMessageEvent,
+    outbound: OutboundMessage,
+  ): Promise<SendResult> {
+    const adapter = this.adaptersByPlatform.get(event.platform);
+    const result: SendResult =
+      adapter === undefined
+        ? { ok: false, error: { code: "no_adapter", message: `no adapter for ${event.platform}` } }
+        : await adapter.sendMessage(outbound);
+    await this.hookExecutor.firePostOutbound({ event, outbound, result });
+    return result;
   }
 }

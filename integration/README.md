@@ -16,28 +16,46 @@ return**.
 
 ## These are integration tests, whatever the folder is called
 
-Worth being exact, because the name claims more than the tests deliver. By the
-pyramid in `rules/testing.md`, integration is "clients against APIs" and E2E is
-"critical flows from the user's point of view". Every suite here constructs **one
-adapter** and drives it against **one real API** — the first definition,
-literally. Check the imports: not one test imports `@theokit/gateway`.
+Worth being exact, because the name claims more than most of the tests deliver.
+By the pyramid in `rules/testing.md`, integration is "clients against APIs" and
+E2E is "critical flows from the user's point of view". Every **per-platform**
+suite here constructs **one adapter** and drives it against **one real API** —
+the first definition, literally. None of them imports `@theokit/gateway`.
 
-A true end-to-end test would exercise the flow a consumer actually builds: a
-message arrives, the core runs its hooks, a handler replies, and the reply lands
-back on the platform. **No test does that**, against a real platform or a fake
-one. The core — `HookExecutor`, `chunkText`, `chunkByGrapheme` — is covered by
-unit tests only, and `@theokit/gateway` sits in this package's `package.json` as
-a dependency that nothing here imports.
+So read a green per-platform run as: *every adapter still speaks its platform's
+current protocol*. That is what those suites prove, and it is not the same thing
+as proving the gateway works.
 
-So read a green run as: *every adapter still speaks its platform's current
-protocol*. That is what the per-platform suites prove.
+`tests/gateway-e2e.test.ts` is the one that earns the other name, and the only
+file here that imports `@theokit/gateway`. It drives the flow a consumer actually
+builds — a real person posts, the adapter normalises, `GatewayRunner` runs the
+hook chain, the handler answers through `ctx.reply()`, and the reply is read back
+from the room by the sender. It runs on Matrix because `pnpm matrix:up` boots a
+homeserver in Docker, so it needs no credential from anybody and costs nothing.
 
-The one exception is `tests/gateway-e2e.test.ts`, which IS end to end and is the
-only file here that imports `@theokit/gateway`: a real person posts, the adapter
-normalises, `GatewayRunner` runs the hook chain, the handler answers through
-`ctx.reply()`, and the reply is read back from the room by the sender. It runs on
-Matrix because `pnpm matrix:up` boots a homeserver in Docker, so it needs no
-credential from anybody and costs nothing.
+### Which core capabilities are proven live
+
+The e2e suite drives, over a real homeserver: the full inbound→handler→reply
+round trip; a `pre_inbound` hook observing, and a second one blocking with a
+message that reaches the room; a handler that **throws**, after which the next
+message is still answered; `on_error` receiving that failure; `post_outbound`
+receiving the platform's real acknowledgement; `runner.command()` slash dispatch;
+`stop()` draining a handler still running when it is called; a stopped runner
+refusing to restart; and `DeliveryRouter` delivering on the outbound-only path
+that never begins with an inbound event.
+
+What is deliberately **not** driven live is written down rather than left to be
+noticed: `readiness.test.ts` fails when a runtime export of `@theokit/gateway`
+is neither named by a live test nor listed with a reason. Today the reasons are
+all the same one — `chunkText`, `chunkByGrapheme`, `defaultStrategy` and
+`SessionRouter` are pure functions, so a live run would prove nothing a unit test
+does not. (The *splitting* they perform is still proven over the wire, by the
+five adapter suites that send past their platform's cap.)
+
+That gate exists because the honest number was invisible: measured 2026-08-22,
+this package drove **one** of the core's ten runtime exports, and nothing said so.
+`post_outbound` could not have been observed live even in principle — it had no
+production caller at all until #38.
 
 ---
 
@@ -95,6 +113,13 @@ To run the webhook inbound suites, point `INTEGRATION_PUBLIC_URL` at a tunnel th
 reaches this process (`ngrok http 3000`, `cloudflared tunnel`), and register that
 URL in the provider console.
 
+`pnpm capture:line`, which captures `LINE_TEST_USER_ID` from one delivery, needs
+`cloudflared` **already installed** — `brew install cloudflared`, Cloudflare's apt
+repository, or `winget install Cloudflare.cloudflared`. It used to download the
+binary itself and run it unverified (#35); a package manager checks a signature,
+and this script runs on the machine holding every credential in `.env`. Point
+`CLOUDFLARED_PATH` at it if it lives somewhere unusual.
+
 ---
 
 ## Running with nobody watching
@@ -142,6 +167,13 @@ outbound are already verified. The gap is the cheaper side of that trade, so the
 suite skips with a comment saying it is a decision rather than an oversight.
 Revisit it with a throwaway account, never a personal one.
 
+**Enforced 2026-08-22.** Until then the decision lived only in comments, while
+`.github/workflows/integration.yml` declared `TELEGRAM_TEST_SESSION` and piped it
+into both steps. The only thing standing between that comment and an account
+credential in CI was nobody having filled the secret in — which is a habit, not a
+control. The workflow no longer references the variable, so restoring the
+capability is a deliberate three-line edit that shows up in a diff.
+
 ---
 
 ## Layout
@@ -151,18 +183,31 @@ integration/
 ├── src/
 │   ├── platforms.ts     the registry — every credential, what it is, where to get it
 │   ├── credentials.ts   .env locally, repository secrets in CI; identical names
-│   └── harness.ts       describeLive() — skips with a NAMED reason, never silently
+│   ├── harness.ts       describeLive() — skips with a NAMED reason, never silently
+│   ├── line-capture.ts  who may set LINE_TEST_USER_ID: verify HMAC, then parse
+│   ├── tunnel-binary.ts finds cloudflared; never downloads one
+│   └── env-file.ts      writes one variable into .env without reformatting it
 ├── tests/
 │   ├── readiness.test.ts   always runs; reports the gap across all ten
+│   ├── unit/               offline units for the modules above; run on every PR
 │   └── <platform>/         one directory per registry id
 └── scripts/
     ├── env-example.ts        regenerates .env.example from the registry
+    ├── capture-line-user.ts  captures LINE_TEST_USER_ID from one signed delivery
     └── discover-telegram.ts  finds a chat id the bot can see
 ```
 
 One directory per platform id, and `readiness.test.ts` fails if those two ever
 disagree — a platform in the registry with no suite, or a suite for a platform
-nobody registered.
+nobody registered. `tests/unit/` is the single named exception, listed in that
+test rather than pattern-matched.
+
+**`tests/unit/` runs on every PR, unlike everything else here.** Those modules
+decide whether a webhook delivery may write to `.env` and which binary the
+capture script executes; they touch no network, so gating them on a nightly live
+run would be leaving security logic unverified for a day at a time. They hang off
+`test:unit` — a name `pnpm -r run test` cannot reach, which is what keeps the
+no-`test`-script invariant intact.
 
 ---
 
@@ -172,6 +217,18 @@ nobody registered.
 same absence of red. Every skip here names the exact variable that was missing,
 because "9 skipped, 1 passed" otherwise reads at a glance like ten platforms
 passing.
+
+**And in CI, skips are not allowed to be silent.** Naming the gap is enough for a
+human reading output; it is not enough for a gate. This workflow gates release,
+so `INTEGRATION_REQUIRE_PLATFORMS` lists the platforms a run is expected to
+actually exercise, and the readiness suite FAILS when one of them is not
+configured. Without it, a secret that gets deleted, renamed or emptied turns its
+platform off and a publish goes through on a signal that verified nothing.
+
+An expired credential never had this problem — the positive `connect()` test
+runs and fails. This covers the credential that stops being *present*. The
+variable is opt-in and unset locally, so a laptop with two credentials keeps
+working unchanged.
 
 **Targets are throwaway.** Every `*_TEST_*` variable must point at a chat,
 channel, room or number created for this and nothing else. A credential says who

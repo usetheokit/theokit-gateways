@@ -18,6 +18,13 @@ export function mapSourceType(sourceType: string): "dm" | "group" | "thread" {
   return "group";
 }
 
+/**
+ * Turn one LINE webhook event into a `LineMessageEvent`, or `undefined` when it is not a text
+ * message.
+ *
+ * A LINE delivery carries a batch of heterogeneous events — follows, joins, stickers, images.
+ * Returning `undefined` for the ones this adapter does not handle is the normal path, not an error.
+ */
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: EC-4 event-type filter + source-shape narrowing + mentionee extraction are intentionally co-located so the dispatch contract stays linear.
 export function lineEventToMessageEvent(event: LineWebhookEvent): LineMessageEvent | undefined {
   // EC-4: filter at the top — non-message events have undefined fields downstream.

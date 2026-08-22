@@ -40,6 +40,12 @@ function codeForTeamsStatus(status: number): ErrorPayload["code"] | undefined {
   return undefined;
 }
 
+/**
+ * Map anything thrown by the Teams SDK into the canonical `{ code, message }` payload.
+ *
+ * Total by construction: `null`, `undefined`, a string and an unrecognised object each map to a
+ * `unknown`-coded payload rather than propagating. Callers get a structured error, never a throw.
+ */
 export function mapTeamsError(err: unknown): ErrorPayload {
   if (err === null || err === undefined) {
     return { code: "unknown", message: "Unknown error" };

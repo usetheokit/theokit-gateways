@@ -34,14 +34,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          version: 9.15.0
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        # No `version:` here on purpose. The action reads `packageManager` from
+        # package.json, which is already the single authority on the pnpm version.
+        # Pinning it a second time in this file creates two places to update, and
+        # once they disagree action-setup aborts with ERR_PNPM_BAD_PM_VERSION.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       - run: pnpm install --frozen-lockfile
 
       # Every step is a hard gate: no `continue-on-error`, because a step that
@@ -60,11 +73,42 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # The typecheck below reads our SOURCE, which was green on all eleven packages while five of
+      # them published a declaration that does not compile (#29). `skipLibCheck` is on in most
+      # consumer projects, so the damage only surfaces in someone else's type-aware lint. This asks
+      # the compiler about the artifact we actually ship.
+      - name: Published declarations compile without skipLibCheck
+        run: pnpm quality:dts-typechecks
+
+      # The declaration and the runtime are emitted by two different tsup pipelines from one source,
+      # and #29 was those pipelines disagreeing. A value declared but absent from the `.js` compiles
+      # and is `undefined` when the program runs — past every other gate, into a consumer's
+      # production. Nothing else here can see it.
+      - name: Declarations and runtime export the same values
+        run: pnpm quality:dts-parity
+
+      # Three questions the source typecheck cannot answer: do the imports our READMEs tell a reader
+      # to write actually resolve, is any docblock stranded above another (attaching to nothing), and
+      # does every published export carry documentation a consumer's editor will render.
+      - name: API documentation
+        run: pnpm quality:docs
+
       - name: Typecheck
         run: pnpm -r run typecheck
 
       - name: Unit and contract tests
         run: pnpm -r run test
+
+      # `integration` deliberately has no `test` script, so the line above cannot
+      # reach it — that is what stops `pnpm -r run test` from spending money and
+      # posting into real chats. But the package is not all live tests: the
+      # modules under `integration/src/` decide whether a webhook delivery may
+      # write to `.env` and which binary the capture script executes, and those
+      # are offline, fast, and exactly the kind of thing that must be verified on
+      # every PR rather than nightly. `test:unit` runs those and the readiness
+      # report; neither opens a socket to a platform.
+      - name: Integration package — offline units
+        run: pnpm --filter @theokit/gateway-integration test:unit
 
       # Guards this workflow against itself. If someone renames the root `test`
       # script or drops a package's test script, the suite would silently stop
@@ -73,10 +117,28 @@ jobs:
       - name: Assert every package still runs tests
         run: |
           missing=0
-          for pkg in packages/*/package.json; do
+          # `tools/` is a workspace member too, and its gates now carry the logic that decides
+          # whether the other checks mean anything. It sits outside `packages/*`, so it would have
+          # been the one member able to lose its test script unnoticed — which is the exact hole
+          # this assertion exists to close.
+          for pkg in packages/*/package.json tools/package.json; do
             if ! node -e "process.exit(require('./$pkg').scripts?.test ? 0 : 1)"; then
               echo "::error file=$pkg::no \"test\" script — this package is not covered by CI"
               missing=1
             fi
           done
+          # `integration` is the one member that must NOT have a `test` script, and
+          # is therefore the one whose coverage cannot be asserted by the loop
+          # above. Its offline units hang off `test:unit` instead, so that name is
+          # what gets pinned here — otherwise the step added for them can be
+          # deleted and every job stays green, which is the hole this whole
+          # assertion exists to close.
+          if ! node -e "process.exit(require('./integration/package.json').scripts?.['test:unit'] ? 0 : 1)"; then
+            echo "::error file=integration/package.json::no \"test:unit\" script — the offline units are not covered by CI"
+            missing=1
+          fi
+          if node -e "process.exit(require('./integration/package.json').scripts?.test ? 0 : 1)"; then
+            echo "::error file=integration/package.json::integration must NOT declare a \"test\" script — pnpm -r run test would spend money and post into real chats"
+            missing=1
+          fi
           exit $missing

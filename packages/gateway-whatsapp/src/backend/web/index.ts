@@ -8,7 +8,9 @@
  * @public
  */
 
+import { existsSync } from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
   WhatsAppBackend,
   WhatsAppInboundEvent,
@@ -16,7 +18,11 @@ import type {
   WhatsAppSendResult,
   WhatsAppStatusReceipt,
 } from "../../backend-types.js";
-import { mapWhatsAppWebError, WhatsAppConnectTimeoutError } from "../../errors.js";
+import {
+  mapWhatsAppWebError,
+  WhatsAppBridgeError,
+  WhatsAppConnectTimeoutError,
+} from "../../errors.js";
 import { formatCommand, type IpcEvent, LineBuffer, parseEvent } from "./ipc.js";
 import { type BridgeHandle, spawnBridge, terminateBridge } from "./lifecycle.js";
 
@@ -42,6 +48,14 @@ interface PendingSend {
 const DEFAULT_CONNECT_TIMEOUT_MS = 120_000;
 const DEFAULT_SEND_TIMEOUT_MS = 30_000;
 
+/**
+ * WhatsApp backend driving `whatsapp-web.js` in a child process.
+ *
+ * Unofficial: it automates a WhatsApp Web session, which Meta's terms do not sanction and which can
+ * get a number banned. It exists for a personal number that has no Cloud API access. The browser
+ * runs out-of-process behind a PID lock so a crashed or orphaned bridge cannot be left holding the
+ * session.
+ */
 export class WhatsAppWebBackend implements WhatsAppBackend {
   readonly kind = "web" as const;
   private handle?: BridgeHandle;
@@ -49,6 +63,8 @@ export class WhatsAppWebBackend implements WhatsAppBackend {
   private inboundHandler?: (event: WhatsAppInboundEvent) => Promise<void>;
   private statusHandler?: (receipt: WhatsAppStatusReceipt) => Promise<void>;
   private readonly pending = new Map<string, PendingSend>();
+  /** Rejects an in-flight `connect()` when the bridge reports it cannot start. */
+  private connectRejectors: Array<(reason: Error) => void> = [];
   private msgIdCounter = 0;
   private botPhone?: string;
   private connected = false;
@@ -90,7 +106,12 @@ export class WhatsAppWebBackend implements WhatsAppBackend {
     this.wireStdout();
 
     const timeoutMs = this.opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
-    const ready = new Promise<string>((resolve) => this.readyResolvers.push(resolve));
+    const ready = new Promise<string>((resolve, reject) => {
+      this.readyResolvers.push(resolve);
+      // The bridge reporting a startup failure resolves the race immediately, so the caller
+      // learns the cause instead of waiting out the timeout.
+      this.connectRejectors.push(reject);
+    });
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => reject(new WhatsAppConnectTimeoutError(timeoutMs)), timeoutMs);
@@ -98,14 +119,21 @@ export class WhatsAppWebBackend implements WhatsAppBackend {
 
     try {
       const phone = await Promise.race([ready, timeout]);
-      if (timer !== undefined) clearTimeout(timer);
       this.botPhone = phone;
       this.connected = true;
       return true;
     } catch (err) {
-      if (timer !== undefined) clearTimeout(timer);
       await this.cleanupHandle();
       throw err;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      // Both arrays hold settled callbacks once the race is decided, and neither was cleared
+      // on the path that fails by timeout — `handleBridgeError` never ran, and `disconnect()`
+      // returns early while `connected` is false. A reconnect loop therefore grew them by one
+      // per attempt forever. `readyResolvers` had the same leak before this method learned to
+      // reject; clearing them together is the whole fix.
+      this.readyResolvers = [];
+      this.connectRejectors = [];
     }
   }
 
@@ -128,6 +156,7 @@ export class WhatsAppWebBackend implements WhatsAppBackend {
     }
     this.pending.clear();
     this.readyResolvers = [];
+    this.connectRejectors = [];
   }
 
   async send(message: WhatsAppOutboundMessage): Promise<WhatsAppSendResult> {
@@ -163,14 +192,19 @@ export class WhatsAppWebBackend implements WhatsAppBackend {
   onInbound(handler: (event: WhatsAppInboundEvent) => Promise<void>): () => void {
     this.inboundHandler = handler;
     return () => {
-      this.inboundHandler = undefined;
+      // Identity-guarded: a stale unsubscribe must be a no-op. Without it,
+      // `onInbound(A)` → `onInbound(B)` → `A.off()` clears B's handler and the backend goes
+      // silent with no error — nothing to see in a log, nothing to alert on. This is a public
+      // export implementing an exported interface, so a consumer holding the backend directly
+      // reaches it without going through `WhatsAppAdapter`.
+      if (this.inboundHandler === handler) this.inboundHandler = undefined;
     };
   }
 
   onStatusReceipt(handler: (receipt: WhatsAppStatusReceipt) => Promise<void>): () => void {
     this.statusHandler = handler;
     return () => {
-      this.statusHandler = undefined;
+      if (this.statusHandler === handler) this.statusHandler = undefined;
     };
   }
 
@@ -192,7 +226,31 @@ export class WhatsAppWebBackend implements WhatsAppBackend {
       backend: "web",
       raw: event,
     };
-    void this.inboundHandler(normalized);
+    // The bridge's stdout listener is synchronous and does not await this, so the promise has to be
+    // terminated here. `void` alone left the rejection unhandled, and under Node 22's default that
+    // ends the process — one message with a throwing handler killed the bot (#41). A handler is
+    // user code; its failure is contained and named, and the bridge keeps delivering.
+    void this.inboundHandler(normalized).catch((err: unknown) => {
+      const m = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[whatsapp-web] handler threw: ${m}\n`);
+    });
+  }
+
+  /**
+   * A bridge that reported a failure has failed — say so now, not in two minutes.
+   *
+   * This used to write the message to stderr and return. `connect()` races only the `ready`
+   * promise against the timeout, so a bridge that told us exactly what was wrong and exited
+   * still cost the caller the full `connectTimeoutMs` and surfaced as a timeout — the one
+   * error that carries no information. The diagnosis was printed where nothing could act on
+   * it, which is the swallowing `rules/error-handling.md` § 5 names.
+   */
+  private handleBridgeError(event: Extract<IpcEvent, { event: "error" }>): void {
+    process.stderr.write(`[whatsapp-web bridge] ${event.message}\n`);
+    const failure = new WhatsAppBridgeError(event.message, event.code);
+    // Unblocks an in-flight connect(). Harmless once connected: nobody is waiting.
+    for (const reject of this.connectRejectors) reject(failure);
+    this.connectRejectors = [];
   }
 
   private handleSendAck(event: Extract<IpcEvent, { event: "send_ack" }>): void {
@@ -209,11 +267,15 @@ export class WhatsAppWebBackend implements WhatsAppBackend {
 
   private handleStatus(event: Extract<IpcEvent, { event: "status" }>): void {
     if (this.statusHandler === undefined) return;
+    // Same boundary as handleMessage: nothing awaits this, so an unhandled rejection here is fatal.
     void this.statusHandler({
       wamid: event.msgId,
       status: event.status,
       recipient: event.recipient,
       timestamp: event.timestamp || Date.now(),
+    }).catch((err: unknown) => {
+      const m = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[whatsapp-web] status handler threw: ${m}\n`);
     });
   }
 
@@ -232,17 +294,41 @@ export class WhatsAppWebBackend implements WhatsAppBackend {
         this.handleStatus(event);
         return;
       case "error":
-        process.stderr.write(`[whatsapp-web bridge] ${event.message}\n`);
+        this.handleBridgeError(event);
         return;
     }
   }
 }
 
-function defaultBridgeScriptPath(): string {
-  // Points to the bundled script at `dist/bridge/whatsapp-web-bridge.mjs` once
-  // the build copies it. Until then, callers can pass `bridgeScriptPath` directly.
-  return path.resolve(
-    path.dirname(new URL(import.meta.url).pathname),
-    "../../bridge/whatsapp-web-bridge.mjs",
-  );
+/**
+ * Where the bridge script lives, for the layout this module is running from.
+ *
+ * The single hard-coded `../../bridge/...` this replaced was written against the SOURCE
+ * tree — `src/backend/web/` up two is `src/`, which is right. The bundle is one flat file
+ * at `dist/index.js`, so the same relative path resolved to `packages/bridge/...`, one
+ * directory above the package. Nothing caught it: every test injects `spawnFactory`, so the
+ * real spawn had never run, and when it did the child died with `MODULE_NOT_FOUND` and
+ * `connect()` reported a 120-second timeout — the one error carrying no information about
+ * what actually happened.
+ *
+ * Both layouts are checked, and neither existing is an error rather than a guess: a path
+ * that does not exist can only fail later, further from the cause.
+ */
+export function defaultBridgeScriptPath(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    // Bundled: dist/index.js beside dist/bridge/
+    path.resolve(here, "bridge/whatsapp-web-bridge.mjs"),
+    // Source: src/backend/web/index.ts up two to src/
+    path.resolve(here, "../../bridge/whatsapp-web-bridge.mjs"),
+  ];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (found === undefined) {
+    throw new WhatsAppBridgeError(
+      `bridge script not found. Looked in: ${candidates.join(", ")}. ` +
+        "Pass `bridgeScriptPath` explicitly if the package layout differs.",
+      "bridge_script_missing",
+    );
+  }
+  return found;
 }

@@ -28,7 +28,14 @@
  */
 
 import type { MessageEvent as GatewayMessageEvent } from "@theokit/gateway";
-import { type GatewayContext, type GatewayHook, GatewayRunner } from "@theokit/gateway";
+import {
+  DeliveryRouter,
+  type GatewayContext,
+  type GatewayHook,
+  GatewayLifecycleError,
+  GatewayRunner,
+  type PostOutboundContext,
+} from "@theokit/gateway";
 import { MatrixAdapter } from "@theokit/gateway-matrix";
 import { expect, it } from "vitest";
 
@@ -167,4 +174,236 @@ describeLive(MATRIX, "gateway end to end", () => {
       await runner.stop();
     }
   }, 180_000);
+
+  it("keeps answering after a handler throws, instead of dying with it", async () => {
+    // The capability the whole chain rests on: user code is allowed to be wrong.
+    // A handler that throws must not take the runner, the connection or the
+    // process with it, and the NEXT message must still be answered — which is
+    // the half a "did not crash" assertion misses.
+    //
+    // Scope, stated because it is easy to overclaim: this proves the CORE path
+    // (GatewayRunner's EC-F catch) over a real transport. The adapter-side half
+    // of the same contract — two adapters that used to discard the rejection
+    // and end the process (#41) — cannot be shown here, because Teams and
+    // WhatsApp have no Docker host. That half is held by their package tests
+    // and by the cross-adapter invariants in packages/gateway.
+    const roomId = required("MATRIX_TEST_ROOM_ID");
+    const marker = runMarker();
+
+    const runner = new GatewayRunner({
+      adapters: [makeAdapter()],
+      handler: async (event: GatewayMessageEvent, ctx: GatewayContext) => {
+        if (event.text === `${marker} boom`) throw new Error(`${marker} handler exploded`);
+        if (event.text === `${marker} after`) await ctx.reply(`${marker} still alive`);
+      },
+    });
+
+    try {
+      await runner.start();
+      await postAsProbe(roomId, `${marker} boom`);
+      await postAsProbe(roomId, `${marker} after`);
+
+      await waitFor(
+        async () => (await roomBodiesAsProbe(roomId)).find((b) => b === `${marker} still alive`),
+        { timeoutMs: 60_000, intervalMs: 2_000, label: `the reply after the throw, for ${marker}` },
+      );
+    } finally {
+      await runner.stop();
+    }
+  }, 180_000);
+
+  it("fires on_error with the handler's failure", async () => {
+    // The third hook fire point. Until this ran, the live suite exercised one of
+    // the three: a consumer wiring on_error to their error tracker had no
+    // evidence it was ever reached over a real transport.
+    const roomId = required("MATRIX_TEST_ROOM_ID");
+    const marker = runMarker();
+    const errors: string[] = [];
+
+    const trackerHook: GatewayHook = {
+      name: "tracker",
+      async on_error({ event, error }) {
+        if (event.text.includes(marker)) errors.push(error.message);
+      },
+    };
+
+    const runner = new GatewayRunner({
+      adapters: [makeAdapter()],
+      hooks: [trackerHook],
+      handler: async (event: GatewayMessageEvent) => {
+        if (event.text.includes(marker)) throw new Error(`${marker} handler exploded`);
+      },
+    });
+
+    try {
+      await runner.start();
+      await postAsProbe(roomId, `${marker} please fail`);
+
+      const seen = await waitFor(() => errors.find((m) => m.includes(marker)), {
+        timeoutMs: 60_000,
+        intervalMs: 1_000,
+        label: `on_error to observe ${marker}`,
+      });
+      expect(seen).toBe(`${marker} handler exploded`);
+    } finally {
+      await runner.stop();
+    }
+  }, 180_000);
+
+  it("fires post_outbound with the result the platform actually returned", async () => {
+    // This hook had no production caller at all until #38 — documented,
+    // exported, typed, and never invoked. A unit test proves it is wired; only
+    // this proves the `result` it carries is a real platform acknowledgement
+    // rather than a shape the runner made up.
+    const roomId = required("MATRIX_TEST_ROOM_ID");
+    const marker = runMarker();
+    const delivered: PostOutboundContext[] = [];
+
+    const auditHook: GatewayHook = {
+      name: "audit",
+      async post_outbound(ctx) {
+        if (ctx.outbound.text.includes(marker)) delivered.push(ctx);
+      },
+    };
+
+    const runner = new GatewayRunner({
+      adapters: [makeAdapter()],
+      hooks: [auditHook],
+      handler: async (event: GatewayMessageEvent, ctx: GatewayContext) => {
+        if (event.text === `${marker} ping`) await ctx.reply(`${marker} pong`);
+      },
+    });
+
+    try {
+      await runner.start();
+      await postAsProbe(roomId, `${marker} ping`);
+
+      const seen = await waitFor(() => delivered[0], {
+        timeoutMs: 60_000,
+        intervalMs: 1_000,
+        label: `post_outbound to observe the reply to ${marker}`,
+      });
+      expect(seen.event.text).toBe(`${marker} ping`);
+      expect(seen.outbound.text).toBe(`${marker} pong`);
+      expect(seen.result.ok, "the hook was handed a failed send").toBe(true);
+      // A real Matrix event id, not a placeholder: this is the value that proves
+      // the hook observed the platform's answer and not the runner's optimism.
+      expect(seen.result.messageId ?? "").toMatch(/^\$/);
+    } finally {
+      await runner.stop();
+    }
+  }, 180_000);
+
+  it("routes a slash command to its own handler, over a real transport", async () => {
+    // `runner.command()` is the sugar most consumers reach for first, and it had
+    // no live coverage: word-boundary matching (EC-A) was proven only against
+    // synthesised events.
+    const roomId = required("MATRIX_TEST_ROOM_ID");
+    const marker = runMarker();
+    let defaultHandlerRan = false;
+
+    const runner = new GatewayRunner({
+      adapters: [makeAdapter()],
+      handler: async (event: GatewayMessageEvent) => {
+        if (event.text.includes(marker)) defaultHandlerRan = true;
+      },
+    });
+    runner.command("ping", async (event: GatewayMessageEvent, ctx: GatewayContext) => {
+      if (event.text.includes(marker)) await ctx.reply(`${marker} pong from command`);
+    });
+
+    try {
+      await runner.start();
+      await postAsProbe(roomId, `/ping ${marker}`);
+
+      await waitFor(
+        async () =>
+          (await roomBodiesAsProbe(roomId)).find((b) => b === `${marker} pong from command`),
+        { timeoutMs: 60_000, intervalMs: 2_000, label: `the command reply for ${marker}` },
+      );
+      expect(defaultHandlerRan, "the default handler ran for a registered command").toBe(false);
+    } finally {
+      await runner.stop();
+    }
+  }, 180_000);
+
+  it("drains a handler that is still running when stop() is called (EC-E)", async () => {
+    // The drain is what separates a clean shutdown from a truncated one: a reply
+    // half-written when SIGINT arrives either lands or does not, and which one
+    // is a property of stop(), not of luck.
+    const roomId = required("MATRIX_TEST_ROOM_ID");
+    const marker = runMarker();
+    let started = false;
+
+    const runner = new GatewayRunner({
+      adapters: [makeAdapter()],
+      handler: async (event: GatewayMessageEvent, ctx: GatewayContext) => {
+        if (event.text !== `${marker} slow`) return;
+        started = true;
+        await new Promise((r) => setTimeout(r, 3_000));
+        await ctx.reply(`${marker} finished during drain`);
+      },
+    });
+
+    await runner.start();
+    await postAsProbe(roomId, `${marker} slow`);
+    await waitFor(() => (started ? true : undefined), {
+      timeoutMs: 60_000,
+      intervalMs: 500,
+      label: `the slow handler for ${marker} to start`,
+    });
+
+    // stop() while the handler is mid-flight. It must wait for it.
+    await runner.stop();
+
+    await waitFor(
+      async () =>
+        (await roomBodiesAsProbe(roomId)).find((b) => b === `${marker} finished during drain`),
+      { timeoutMs: 30_000, intervalMs: 2_000, label: `the drained reply for ${marker}` },
+    );
+  }, 180_000);
+
+  it("refuses to restart a stopped runner, against a real connection", async () => {
+    // stop() is terminal (#39). Before, a second start() reconnected the adapter
+    // and the next stop() did nothing — a live socket nothing could close. The
+    // guard is unit-tested against a fake; this asserts it holds when the
+    // adapter is a real client with a real session behind it.
+    const runner = new GatewayRunner({
+      adapters: [makeAdapter()],
+      handler: async () => {},
+    });
+    await runner.start();
+    await runner.stop();
+
+    await expect(runner.start()).rejects.toBeInstanceOf(GatewayLifecycleError);
+  }, 120_000);
+
+  it("delivers through DeliveryRouter, the outbound half of the public API", async () => {
+    // The router is exported for scheduled and fan-out sends — the path that
+    // does NOT begin with an inbound event, so no other test here reaches it. It
+    // had zero live coverage: of the core's ten runtime exports, only
+    // GatewayRunner was driven by this package at all.
+    const roomId = required("MATRIX_TEST_ROOM_ID");
+    const marker = runMarker();
+    const adapter = makeAdapter();
+    const router = new DeliveryRouter();
+    router.register(adapter);
+
+    try {
+      expect(await adapter.connect()).toBe(true);
+      const result = await router.send({
+        platform: "matrix",
+        channel: { id: roomId, type: "group" },
+        text: `${marker} via router`,
+      });
+
+      expect(result.ok, `router send failed: ${result.error?.code}`).toBe(true);
+      await waitFor(
+        async () => (await roomBodiesAsProbe(roomId)).find((b) => b === `${marker} via router`),
+        { timeoutMs: 30_000, intervalMs: 2_000, label: `the router delivery for ${marker}` },
+      );
+    } finally {
+      await adapter.disconnect();
+    }
+  }, 120_000);
 });

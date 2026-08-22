@@ -20,6 +20,14 @@ import { GatewayConfigurationError, type GatewayConfigurationErrorOptions } from
 /** @knipignore — public input shape for `ConfigurationError` constructor (caller-extensible). */
 export type ConfigurationErrorOptions = GatewayConfigurationErrorOptions;
 
+/**
+ * Misconfiguration of this adapter, raised before any network call.
+ *
+ * Extends the shared core base so every gateway package reports configuration faults in one shape:
+ * a structured `code` the caller can branch on, tagged with `"gateway-sms"` as the origin. A
+ * missing credential or an unsupported option is a programmer error, not a transient failure —
+ * these are never retried.
+ */
 export class ConfigurationError extends GatewayConfigurationError {
   override readonly name = "ConfigurationError";
   constructor(opts: ConfigurationErrorOptions) {
@@ -27,6 +35,13 @@ export class ConfigurationError extends GatewayConfigurationError {
   }
 }
 
+/**
+ * The provider SDK for the selected backend is not installed.
+ *
+ * `gateway-sms` speaks to Twilio, Plivo or Vonage, and declares all three as optional peers — a
+ * project installs only the one it uses. Selecting a backend whose SDK is absent is caught here, at
+ * connect time, with the package name and the command that installs it.
+ */
 export class BackendNotInstalledError extends ConfigurationError {
   constructor(backend: "twilio" | "plivo" | "vonage", pkgName: string) {
     super({

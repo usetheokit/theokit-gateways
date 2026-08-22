@@ -5,11 +5,17 @@
   "type": "module",
   "engines": {
     "node": ">=22.12.0",
-    "pnpm": ">=9.15.0"
+    "pnpm": ">=10.34.1"
   },
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@10.34.1+sha512.b58fbde6dca66a929538021581f648b4570b6ca19b18e7cbd7f2c07a7b24454155388dacdf08f2af3678e88a6d1fe04f9d609df24bf51735a060ea041b374ab7",
   "scripts": {
-    "build": "pnpm -r run build",
+    "build": "pnpm -r run build && node tools/repair-dts-imports.mjs",
+    "quality:dts-typechecks": "node tools/check-dts-typechecks.mjs",
+    "quality:dts-parity": "node tools/check-dts-export-parity.mjs",
+    "quality:doc-api": "node tools/check-doc-api-drift.mjs",
+    "quality:doc-orphans": "node tools/check-orphan-docblocks.mjs",
+    "quality:doc-coverage": "node tools/check-doc-coverage.mjs",
+    "quality:docs": "pnpm quality:doc-api && pnpm quality:doc-orphans && pnpm quality:doc-coverage",
     "test": "pnpm -r run test",
     "integration": "pnpm --filter @theokit/gateway-integration integration",
     "integration:readiness": "pnpm --filter @theokit/gateway-integration readiness",
@@ -26,5 +32,12 @@
     "@changesets/cli": "^2.31.0",
     "@types/node": "^22.10.0",
     "typescript": "^5.8.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "bufferutil",
+      "esbuild",
+      "utf-8-validate"
+    ]
   }
 }

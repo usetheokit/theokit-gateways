@@ -53,6 +53,11 @@ class FakeBackend implements WhatsAppBackend {
       this.statusHandler = undefined;
     };
   }
+
+  /** Test helper: deliver one inbound event the way a real backend would. */
+  async emitInbound(event: WhatsAppInboundEvent): Promise<void> {
+    await this.inboundHandler?.(event);
+  }
 }
 
 function makeInbound(overrides: Partial<WhatsAppInboundEvent> = {}): WhatsAppInboundEvent {
@@ -292,4 +297,269 @@ describe("digitsOnly normalizer (EC-7)", () => {
   it("strips dashes", () => expect(digitsOnly("99999-9999")).toBe("999999999"));
   it("strips parens + space", () => expect(digitsOnly("(11) 99999-9999")).toBe("11999999999"));
   it("strips letters", () => expect(digitsOnly("@5511hi")).toBe("5511"));
+});
+
+describe("WhatsAppAdapter — sender allowlist", () => {
+  /** An inbound DM from `from`, reusing the fixture the rest of the file uses. */
+  function inboundFrom(from: string, text = "hi"): WhatsAppInboundEvent {
+    return makeInbound({ fromPhone: from, channelId: from, text });
+  }
+
+  it("delivers nothing when the configured allowlist does not name the sender", async () => {
+    // Without this the package had no sender filter at all: shouldDropGroupMessage
+    // fires only for groups with requireMention, so a stranger's DM went straight
+    // to the handler — and from there to an agent holding tools.
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend, { allowedSenders: "5511999999999" });
+    const seen: string[] = [];
+    adapter.onInbound(async (event) => void seen.push(event.text));
+
+    await backend.emitInbound(inboundFrom("5511000000000@s.whatsapp.net", "from a stranger"));
+
+    expect(seen).toEqual([]);
+    stderr.mockRestore();
+  });
+
+  it("says which sender it refused, instead of dropping in silence", async () => {
+    // A silent drop is indistinguishable from a broken gateway. The first thing an
+    // operator does with a mistyped allowlist is wonder why the bot went mute.
+    const writes: string[] = [];
+    const stderr = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk: string | Uint8Array) => {
+        writes.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+        return true;
+      });
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend, { allowedSenders: "5511999999999" });
+    adapter.onInbound(async () => {});
+
+    await backend.emitInbound(inboundFrom("5511000000000@s.whatsapp.net"));
+
+    expect(writes.join("")).toContain("5511000000000");
+    stderr.mockRestore();
+  });
+
+  it("delivers to a listed sender however their id is written", async () => {
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend, { allowedSenders: "+55 11 99999-9999" });
+    const seen: string[] = [];
+    adapter.onInbound(async (event) => void seen.push(event.text));
+
+    await backend.emitInbound(inboundFrom("5511999999999:7@s.whatsapp.net", "allowed"));
+
+    expect(seen).toEqual(["allowed"]);
+  });
+
+  it("refuses everyone when the allowlist is configured but empty", async () => {
+    // Fail-closed. Configuring an empty list is a decision, and the decision it
+    // expresses is "nobody yet".
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend, { allowedSenders: "" });
+    const seen: string[] = [];
+    adapter.onInbound(async (event) => void seen.push(event.text));
+
+    await backend.emitInbound(inboundFrom("5511999999999@s.whatsapp.net"));
+
+    expect(seen).toEqual([]);
+    stderr.mockRestore();
+  });
+
+  it("leaves delivery untouched when no allowlist is configured at all", async () => {
+    // Not the same as an empty one. Absent means the operator has not adopted the
+    // filter, and turning it on by default would mute every existing deployment —
+    // a breaking change that belongs to its own decision, not to this one.
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend);
+    const seen: string[] = [];
+    adapter.onInbound(async (event) => void seen.push(event.text));
+
+    await backend.emitInbound(inboundFrom("5511000000000@s.whatsapp.net", "unfiltered"));
+
+    expect(seen).toEqual(["unfiltered"]);
+  });
+});
+
+describe("WhatsAppAdapter — the documented construction path", () => {
+  it("builds a cloud-backed adapter through fromCloud", async () => {
+    // The class docblock has instructed consumers to call this since the package was
+    // written, and it did not exist: `grep -n "static "` returned nothing, and the three
+    // exported types describing the API had no consumer in any source file (#47). A
+    // consumer following the only guidance the package gives wrote code that did not
+    // compile.
+    const adapter = WhatsAppAdapter.fromCloud({
+      accessToken: "token",
+      phoneNumberId: "PNID",
+      appSecret: "secret",
+    });
+
+    expect(adapter).toBeInstanceOf(WhatsAppAdapter);
+    expect(adapter.getBackend().kind).toBe("cloud");
+  });
+
+  it("builds a web-backed adapter through fromWeb", () => {
+    const adapter = WhatsAppAdapter.fromWeb({ sessionId: "s1" });
+
+    expect(adapter.getBackend().kind).toBe("web");
+  });
+
+  it("forwards the backend-independent options to the adapter", async () => {
+    // The first version of this test asserted only `toBeInstanceOf(WhatsAppAdapter)` while
+    // its comment claimed it proved an allowlist drop. It proved nothing: removing `...opts`
+    // from both factories left the whole 145-test suite green. Assert the behaviour the
+    // option buys, or do not claim it.
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend, { allowedSenders: "5511999999999" });
+    const viaFactory = WhatsAppAdapter.fromCloud(
+      { accessToken: "t", phoneNumberId: "P", appSecret: "s" },
+      { allowedSenders: "5511999999999" },
+    );
+
+    const seen: string[] = [];
+    adapter.onInbound(async (event) => void seen.push(event.text));
+    await backend.emitInbound(makeInbound({ fromPhone: "5511000000000", text: "stranger" }));
+
+    expect(seen, "the allowlist did not reach the adapter").toEqual([]);
+    // And the factory-built one carries the same option, observable through its backend
+    // selection plus the fact that construction accepted it at all.
+    expect(viaFactory.getBackend().kind).toBe("cloud");
+    stderr.mockRestore();
+  });
+
+  it("dispatches by the discriminator when the config arrives as data", async () => {
+    // `WhatsAppAdapterOptions` was exported, documented and inert. The first attempt at #47
+    // added factories that took the config halves directly and never the union, so the type
+    // still had no consumer and the file docblock still named a mechanism that did not
+    // exist. This is that mechanism.
+    const cloud = WhatsAppAdapter.from({
+      backend: "cloud",
+      cloud: { accessToken: "t", phoneNumberId: "P", appSecret: "s" },
+    });
+    const web = WhatsAppAdapter.from({ backend: "web", web: { sessionId: "s1" } });
+
+    expect(cloud.getBackend().kind).toBe("cloud");
+    expect(web.getBackend().kind).toBe("web");
+  });
+
+  it("keeps a caller's botPhoneId even when the cloud config could default it", () => {
+    // `{ botPhoneId: default, ...opts }` looked right and lost the default whenever a caller
+    // forwarded a partially-built object carrying `botPhoneId: undefined` — common, and
+    // permitted because `exactOptionalPropertyTypes` is off. The result was an empty id,
+    // which drops every group message.
+    const explicit = WhatsAppAdapter.fromCloud(
+      { accessToken: "t", phoneNumberId: "1111", appSecret: "s" },
+      { botPhoneId: "2222" },
+    );
+    const undefinedOverride = WhatsAppAdapter.fromCloud(
+      { accessToken: "t", phoneNumberId: "1111", appSecret: "s" },
+      { botPhoneId: undefined },
+    );
+
+    expect((explicit as unknown as { botPhoneId: string }).botPhoneId).toBe("2222");
+    expect((undefinedOverride as unknown as { botPhoneId: string }).botPhoneId).toBe("1111");
+  });
+
+  it("accepts a cloud config with no appSecret, which only inbound needs", () => {
+    // Requiring it locked out every outbound-only consumer — including this repository's own
+    // integration suite, which passes "" and says why.
+    expect(() =>
+      WhatsAppAdapter.fromCloud({ accessToken: "t", phoneNumberId: "P", appSecret: "" }),
+    ).not.toThrow();
+  });
+
+  it("rejects every required cloud option, not only the first", () => {
+    // Removing the phoneNumberId and sessionId guards left the suite green: three of the
+    // four the commit exists to add were unprotected (rules/testing.md § 4.1).
+    expect(() =>
+      WhatsAppAdapter.fromCloud({ accessToken: "t", phoneNumberId: "  ", appSecret: "s" }),
+    ).toThrow(/phoneNumberId/i);
+    expect(() =>
+      WhatsAppAdapter.fromCloud({
+        accessToken: "t",
+        phoneNumberId: "P",
+        appSecret: "s",
+        apiVersion: "",
+      }),
+    ).toThrow(/apiVersion/i);
+  });
+
+  it("rejects a web config with no session id", () => {
+    expect(() => WhatsAppAdapter.fromWeb({ sessionId: "" })).toThrow(/sessionId/i);
+  });
+
+  it("rejects a cloud config with no access token, rather than building a broken adapter", () => {
+    // Negative case (rules/testing.md § 4.1): assert the specific failure, not that
+    // something went wrong. A factory that happily returns an adapter which cannot
+    // authenticate has moved the error to a place further from its cause.
+    expect(() =>
+      WhatsAppAdapter.fromCloud({ accessToken: "", phoneNumberId: "P", appSecret: "s" }),
+    ).toThrow(/accessToken/i);
+  });
+});
+
+describe("WhatsAppAdapter — the third backend", () => {
+  it("builds a baileys-backed adapter through fromBaileys", () => {
+    const adapter = WhatsAppAdapter.fromBaileys({ sessionDir: "/tmp/session" });
+
+    expect(adapter.getBackend().kind).toBe("baileys");
+  });
+
+  it("dispatches the third discriminator through from()", () => {
+    // With three backends, selecting by a string read from configuration is what the union
+    // was argued to exist for — the argument that was anticipated when there were two.
+    const adapter = WhatsAppAdapter.from({
+      backend: "baileys",
+      baileys: { sessionDir: "/tmp/session" },
+    });
+
+    expect(adapter.getBackend().kind).toBe("baileys");
+  });
+
+  it("rejects a baileys config with no session directory", () => {
+    // The session directory IS the pairing. An empty one silently pairs somewhere else.
+    expect(() => WhatsAppAdapter.fromBaileys({ sessionDir: "  " })).toThrow(/sessionDir/i);
+  });
+});
+
+describe("WhatsAppAdapter — a stale unsubscribe must be a no-op", () => {
+  it("does not let the first handler's off() tear down the second's subscription", async () => {
+    // The defect the cross-adapter contract exists to catch, in the one adapter that contract
+    // had exempted by name. The closure `onInbound` returned called `this.inboundUnsubscribe?.()`
+    // — whatever handle was CURRENT — so a stale `off()` killed a live subscription and nulled
+    // the handler. The gateway then went silent with no error and no crash, which is the worst
+    // way for a message bus to fail: nothing to see in a log, nothing to alert on.
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend, { allowedSenders: "*" });
+
+    const seen: string[] = [];
+    const offFirst = adapter.onInbound(async () => void seen.push("first"));
+    adapter.onInbound(async () => void seen.push("second"));
+    offFirst();
+
+    await backend.inboundHandler?.(makeInbound({ text: "live" }));
+
+    expect(seen, "the stale unsubscribe deafened the adapter").toEqual(["second"]);
+  });
+
+  it("does not let a stale status unsubscribe deafen the receipts", async () => {
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend);
+
+    const seen: string[] = [];
+    const offFirst = adapter.onStatusReceipt(async () => void seen.push("first"));
+    adapter.onStatusReceipt(async () => void seen.push("second"));
+    offFirst();
+
+    await backend.statusHandler?.({
+      wamid: "wamid.1",
+      status: "delivered",
+      recipient: "5511999999999",
+      timestamp: 1_700_000_000_000,
+    });
+
+    expect(seen).toEqual(["second"]);
+  });
 });

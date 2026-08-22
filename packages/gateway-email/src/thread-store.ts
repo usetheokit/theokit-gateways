@@ -18,12 +18,20 @@ import type { EmailMessageEvent } from "@theokit/gateway";
  */
 export const __threadStoreMarker: unique symbol = Symbol("thread-store");
 
+/** What a reply needs in order to land in the same mail thread as the message it answers. */
 export interface ThreadContext {
   readonly subject: string;
   readonly references: readonly string[];
   readonly lastMessageId: string;
 }
 
+/**
+ * In-memory map from conversation id to the headers a threaded reply needs.
+ *
+ * Bounded at `MAX_SIZE` entries and evicted oldest-first: a long-running bot would otherwise retain
+ * every thread it ever saw. State is per-process and deliberately not persisted — a restart loses
+ * threading, which degrades a reply to a new thread rather than losing the reply.
+ */
 export class ThreadStore {
   private readonly map = new Map<string, ThreadContext>();
   static readonly MAX_SIZE = 1000;

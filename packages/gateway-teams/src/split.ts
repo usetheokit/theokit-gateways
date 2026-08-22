@@ -22,6 +22,13 @@ export const __splitMarker: unique symbol = Symbol("split");
 
 const TEAMS_MAX_TEXT = 8000;
 
+/**
+ * Split `text` into chunks Teams accepts — a fixed 8000-character window.
+ *
+ * Prefers a paragraph, then a line, then a space boundary; never severs a UTF-16 surrogate pair,
+ * and drops empty parts. A thin wrapper over the core `chunkText`, kept here so the Teams limit
+ * lives beside the Teams adapter.
+ */
 export function splitForTeams(text: string): string[] {
   return chunkText(text, {
     limit: TEAMS_MAX_TEXT,

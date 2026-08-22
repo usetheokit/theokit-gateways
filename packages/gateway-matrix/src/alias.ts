@@ -15,6 +15,13 @@ export interface AliasResolverClient {
   getRoomIdForAlias(alias: string): Promise<{ room_id: string }>;
 }
 
+/**
+ * Resolves a Matrix room alias (`#room:server`) to its room id, remembering the answer.
+ *
+ * An alias resolves through a server round-trip, and the mapping effectively never changes, so
+ * repeating it once per outbound message is pure latency. A value that is already a room id is
+ * returned untouched, which lets callers pass either form.
+ */
 export class AliasCache {
   private readonly cache = new Map<string, string>();
 

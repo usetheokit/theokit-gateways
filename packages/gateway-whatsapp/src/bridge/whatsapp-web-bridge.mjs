@@ -21,26 +21,94 @@ function emit(event) {
   process.stdout.write(`${JSON.stringify(event)}\n`);
 }
 
-function emitError(message) {
-  emit({ event: "error", message });
+/**
+ * Report a failure on the protocol the parent reads.
+ *
+ * `code` is what makes the report actionable by a machine. Without it the backend can only
+ * substring-match the message, which is how `mapWhatsAppWebError` works and why every
+ * startup failure landed on `unknown`.
+ */
+function emitError(message, code) {
+  emit({ event: "error", message, ...(code !== undefined ? { code } : {}) });
 }
+
+const argv = process.argv.slice(2);
+
+/** Value of a `--flag value` pair in argv, or undefined. */
+function argOf(flag) {
+  const i = argv.indexOf(flag);
+  return i >= 0 ? argv[i + 1] : undefined;
+}
+
+/**
+ * Where to load the WhatsApp Web client from.
+ *
+ * Injected as an argument rather than read from the environment. An env var is ambient: the
+ * parent spawns without an explicit `env`, so the child inherits the host application's
+ * whole environment, and any value sitting there would silently control an arbitrary
+ * `import()` inside this process. An argument comes from the one caller that spawns us, and
+ * every other seam in this repository has the same shape — `__appFactory`, `__imapFactory`,
+ * `spawnFactory` — an injection point the parent controls rather than ambient state.
+ */
+const SPECIFIER = argOf("--specifier") ?? "whatsapp-web.js";
 
 let Client;
 let LocalAuth;
 try {
-  const mod = await import("whatsapp-web.js");
-  Client = mod.Client;
-  LocalAuth = mod.LocalAuth;
+  const mod = await import(SPECIFIER);
+  // D315: read the API off the DEFAULT export, not off synthesised named bindings.
+  //
+  // `whatsapp-web.js/index.js` ends its `module.exports` object with a spread
+  // (`...Constants`). `cjs-module-lexer` cannot statically analyse an object built that
+  // way, so Node synthesises only some named exports — measured on 1.34.7, exactly
+  // `Client`, while `LocalAuth`, `NoAuth` and `RemoteAuth` exist only on the default.
+  // Destructuring the namespace therefore yielded `LocalAuth === undefined`, and the
+  // process died at `new LocalAuth(...)` with a TypeError (B-002). The default export is
+  // the whole `module.exports` value at runtime, whatever the lexer could prove.
+  //
+  // The `?? mod` fallback covers a true-ESM module, where there is no default to read.
+  const api = mod.default ?? mod;
+  Client = api.Client ?? mod.Client;
+  LocalAuth = api.LocalAuth ?? mod.LocalAuth;
 } catch (err) {
-  emitError(
-    `whatsapp-web.js not installed in your app. Run \`pnpm add whatsapp-web.js\` to use the web backend. (${err?.message ?? err})`,
-  );
+  // Absent and broken are different problems. Any throw used to yield "not installed", so a
+  // nested missing dependency or a syntax error inside a package that IS installed sent the
+  // consumer to install what they already had.
+  if (err?.code === "ERR_MODULE_NOT_FOUND") {
+    emitError(
+      `${SPECIFIER} not installed in your app. Run \`pnpm add whatsapp-web.js\` to use the web backend. (${err?.message ?? err})`,
+      "peer_missing",
+    );
+  } else {
+    emitError(
+      `${SPECIFIER} is installed but failed to load: ${err?.message ?? err}`,
+      "peer_load_failed",
+    );
+  }
   process.exit(1);
 }
 
-const args = process.argv.slice(2);
-const sessionIdIdx = args.indexOf("--session");
-const sessionId = sessionIdIdx >= 0 ? args[sessionIdIdx + 1] : "default";
+// D316: a package that is PRESENT but does not expose what we need is a different failure
+// from one that is absent, and it needs a different message. The `catch` above only sees an
+// import that threw; a resolved module missing a member sails past it and surfaces thirteen
+// lines later as an unhandled TypeError the parent cannot map to anything. Telling the
+// consumer to run `pnpm add` for a package they already have is worse than saying nothing.
+for (const [name, value] of [
+  ["Client", Client],
+  ["LocalAuth", LocalAuth],
+]) {
+  if (typeof value !== "function") {
+    emitError(
+      `${SPECIFIER} is installed but does not export ${name} as a constructor. ` +
+        `Expected a function, got ${typeof value}. This usually means an incompatible version — ` +
+        `the web backend expects the peer range declared in @theokit/gateway-whatsapp.`,
+      "peer_incompatible",
+    );
+    process.exit(1);
+  }
+}
+
+const sessionId = argOf("--session") ?? "default";
 
 const client = new Client({
   authStrategy: new LocalAuth({ clientId: sessionId }),

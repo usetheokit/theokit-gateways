@@ -1,8 +1,17 @@
 name: Release
 
 # theokit-gateways: gateway core + 10 platform adapters. Changesets-driven
-# per-package release. Auth via NPM_TOKEN (NODE_AUTH_TOKEN), provenance via
-# NPM_CONFIG_PROVENANCE on the publish step.
+# per-package release.
+#
+# AUTHENTICATION IS OIDC, NOT A TOKEN. Each of the eleven packages carries a
+# Trusted Publisher connection on npmjs.com naming this repository and THIS FILE.
+# npm mints a short-lived credential for the individual job, scoped to that
+# package, and it cannot be exported or replayed. Renaming this file, or
+# publishing from any other workflow, breaks the trust and the publish is
+# rejected — that is the point of it.
+#
+# Provenance is declared per package in `publishConfig.provenance`, beside the
+# package it describes, rather than in an environment variable here.
 
 on:
   push:
@@ -10,6 +19,9 @@ on:
   workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: read
 
 jobs:
   # The live suites gate the publish. Unit tests alone were never enough here:
@@ -29,54 +41,137 @@ jobs:
   live-contracts:
     name: Live platform contracts (release gate)
     uses: ./.github/workflows/integration.yml
-    secrets: inherit
+    # Explicit rather than `inherit`: the live suites get the platform
+    # credentials and nothing else — in particular not NPM_TOKEN.
+    secrets:
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+      DISCORD_TEST_CHANNEL_ID: ${{ secrets.DISCORD_TEST_CHANNEL_ID }}
+      DISCORD_TEST_SENDER_TOKEN: ${{ secrets.DISCORD_TEST_SENDER_TOKEN }}
+      EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
+      EMAIL_IMAP_HOST: ${{ secrets.EMAIL_IMAP_HOST }}
+      EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+      EMAIL_SMTP_HOST: ${{ secrets.EMAIL_SMTP_HOST }}
+      EMAIL_TEST_RECIPIENT: ${{ secrets.EMAIL_TEST_RECIPIENT }}
+      EMAIL_TEST_SENDER_ADDRESS: ${{ secrets.EMAIL_TEST_SENDER_ADDRESS }}
+      EMAIL_TEST_SENDER_PASSWORD: ${{ secrets.EMAIL_TEST_SENDER_PASSWORD }}
+      EMAIL_TEST_SENDER_SMTP_HOST: ${{ secrets.EMAIL_TEST_SENDER_SMTP_HOST }}
+      LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+      LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
+      LINE_TEST_USER_ID: ${{ secrets.LINE_TEST_USER_ID }}
+      MATRIX_ACCESS_TOKEN: ${{ secrets.MATRIX_ACCESS_TOKEN }}
+      MATRIX_HOMESERVER_URL: ${{ secrets.MATRIX_HOMESERVER_URL }}
+      MATRIX_TEST_ROOM_ID: ${{ secrets.MATRIX_TEST_ROOM_ID }}
+      MATRIX_USER_ID: ${{ secrets.MATRIX_USER_ID }}
+      MATTERMOST_ACCESS_TOKEN: ${{ secrets.MATTERMOST_ACCESS_TOKEN }}
+      MATTERMOST_BASE_URL: ${{ secrets.MATTERMOST_BASE_URL }}
+      MATTERMOST_TEST_CHANNEL_ID: ${{ secrets.MATTERMOST_TEST_CHANNEL_ID }}
+      SLACK_APP_TOKEN: ${{ secrets.SLACK_APP_TOKEN }}
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_TEST_CHANNEL_ID: ${{ secrets.SLACK_TEST_CHANNEL_ID }}
+      SLACK_TEST_USER_TOKEN: ${{ secrets.SLACK_TEST_USER_TOKEN }}
+      SMS_ACCOUNT_ID: ${{ secrets.SMS_ACCOUNT_ID }}
+      SMS_AUTH_TOKEN: ${{ secrets.SMS_AUTH_TOKEN }}
+      SMS_BACKEND: ${{ secrets.SMS_BACKEND }}
+      SMS_FROM_NUMBER: ${{ secrets.SMS_FROM_NUMBER }}
+      SMS_TEST_RECIPIENT: ${{ secrets.SMS_TEST_RECIPIENT }}
+      TEAMS_CLIENT_ID: ${{ secrets.TEAMS_CLIENT_ID }}
+      TEAMS_CLIENT_SECRET: ${{ secrets.TEAMS_CLIENT_SECRET }}
+      TEAMS_TENANT_ID: ${{ secrets.TEAMS_TENANT_ID }}
+      TEAMS_TEST_CONVERSATION_ID: ${{ secrets.TEAMS_TEST_CONVERSATION_ID }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_TEST_CHAT_ID: ${{ secrets.TELEGRAM_TEST_CHAT_ID }}
+      # TELEGRAM_TEST_SESSION / API_ID / API_HASH are absent by decision — an
+      # MTProto session is full access to a Telegram account, not a scoped token.
+      # `integration.yml` no longer declares them, so passing them here would not
+      # even be valid. See the block above the Telegram variables there.
+      WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+      WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+      WHATSAPP_TEST_RECIPIENT: ${{ secrets.WHATSAPP_TEST_RECIPIENT }}
 
   release:
     name: Release via Changesets (gateways)
     needs: live-contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      # Actions pinned by commit SHA rather than by ref, because this job publishes as this
+      # organization and a moving ref decides what runs here. `changesets/action@v1` was the
+      # sharpest edge: `v1` is not a tag in that repository, it is a BRANCH — the tag lookup
+      # returns 404 and the branch head is what resolves — so any push to it changed the code
+      # running in this job, with no release and no version bump to notice.
+      #
+      # Each pin carries the version it resolved to on 2026-08-21, read from the action's own
+      # tags rather than assumed from the ref name. Majors are deliberately unchanged: pinning
+      # freezes what already runs, upgrading is a separate decision with its own risk.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked]
         with:
+          # The one checkout in this repository that keeps its credential, and not
+          # by oversight: changesets/action pushes the version commit and the
+          # release tags with the git CLI, which authenticates from exactly this
+          # persisted token. `persist-credentials: false` breaks the release.
           fetch-depth: 0
 
-      # Fail before the work, not after it. The run of 2026-08-18 installed,
-      # built, ran the suite, bumped eleven versions, wrote the CHANGELOGs,
-      # committed and pushed a branch — and then died on `npm publish` with
-      # ENEEDAUTH because no NPM_TOKEN existed. Every one of those steps was
-      # wasted, and the cause was only visible at the bottom of the log.
+      # A publish here authenticates with OIDC, not a token: each of the eleven
+      # packages carries a Trusted Publisher connection on npmjs.com naming this
+      # repository and THIS FILE. npm mints a short-lived credential for the job,
+      # scoped to that package; it cannot be exported or replayed. Renaming this
+      # file, or publishing from any other workflow, breaks the trust and the
+      # publish is rejected — that is the point of it.
       #
-      # The token is checked only on the publish path. A run with pending
-      # changesets opens the version PR and needs no npm auth at all, so
-      # demanding one there would block a step that never talks to the registry.
-      - name: Require an npm token before the publish path
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          set -euo pipefail
-          pending=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l)
-          if [ "$pending" -gt 0 ]; then
-            echo "$pending pending changeset(s): this run opens the version PR. npm auth not required."
-            exit 0
-          fi
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "::error::No pending changesets, so this run would publish to npm — but NPM_TOKEN is unset. Create an Automation token at npmjs.com (Access Tokens -> Generate New Token -> Automation, with publish rights on @theokit), then: gh secret set NPM_TOKEN --repo ${{ github.repository }}"
-            exit 1
-          fi
-          echo "npm token present; publish path is authorised."
+      # What this replaced: a pre-flight step that checked NPM_TOKEN was set,
+      # because a run without it went install -> build -> test -> version-bump and
+      # only then died on `npm publish` with ENEEDAUTH, with the cause visible at
+      # the bottom of the log. Under OIDC there is no secret to be missing — the
+      # credential is minted from the job's identity or the publish never starts.
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        # No `version:` here on purpose. The action reads `packageManager` from
+        # package.json, which is already the single authority on the pnpm version.
+        # Pinning it a second time in this file creates two places to update, and
+        # once they disagree action-setup aborts with ERR_PNPM_BAD_PM_VERSION.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          version: 9.15.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
-          registry-url: 'https://registry.npmjs.org'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
+          # NO `registry-url`. It looks harmless and is not: setup-node writes
+          # `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` into an npmrc
+          # UNCONDITIONALLY and points NPM_CONFIG_USERCONFIG at it, then exports
+          # NODE_AUTH_TOKEN only if the caller supplied one — which, under OIDC,
+          # nobody does. The job would publish with a config declaring a credential
+          # that does not exist. registry.npmjs.org is already the default, and
+          # `publishConfig.access: public` in each manifest covers the scope.
+
+      # THE STEP WITHOUT WHICH THE OIDC CONFIGURATION IS CORRECT AND USELESS.
+      # setup-node ships whatever npm the Node release bundles, and Node 22 bundles
+      # npm 10.9.7. OIDC needs npm >= 11.5.1: an older npm does not know what to do
+      # with `id-token: write`, looks for a credential, finds none, and the registry
+      # answers `E404 Not Found - PUT`.
+      #
+      # Pinned exactly, and NOT to 12.x. npm 12 breaks this path in two places, and
+      # the quiet one is the dangerous half:
+      #   1. It rejects the `--no-git-checks` flag changesets passes through, with
+      #      EUNKNOWNCONFIG, where every earlier npm ignored it.
+      #   2. It returns an ARRAY from `npm info --json` where earlier npm returned an
+      #      object. changesets reads `response.pkgInfo.versions || []`; on an array
+      #      that is `undefined`, so every package looks unpublished and it tries to
+      #      publish all eleven. Nothing errors.
+      # 11.9.0 is the newest npm that clears the OIDC floor and avoids both.
+      # Measured in theokit-di; see that repository's release.yml for the numbers.
+      - name: Install an npm that speaks OIDC (>= 11.5.1) but tolerates the publish flags
+        run: npm install -g npm@11.9.0 # zizmor: ignore[adhoc-packages] — bootstrapping npm itself; no lockfile can cover it
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       # Publishing used to be reachable without the suite ever running: this job
@@ -116,25 +211,17 @@ jobs:
       # is a PAT in place of GITHUB_TOKEN, which is worse: a long-lived
       # credential replacing the per-run token this action already gets.
       - name: Create Release Pull Request or Publish
-        uses: changesets/action@v1
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           publish: pnpm changeset publish
           version: pnpm changeset version
         env:
+          # The only credential left, and it is GitHub's own: changesets uses it to
+          # open the version pull request. Nothing here authenticates to npm.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # Signed provenance: npm records which repository, commit and workflow
-          # produced each tarball, and consumers can verify it. Worth having for
-          # packages that hold Slack, Telegram and mailbox credentials — the
-          # attestation is what distinguishes a build from this repo from a
-          # tarball someone else pushed under the same name.
-          #
-          # Set here rather than as `publishConfig.provenance` in eleven
-          # package.json files: changesets reads npm config from the
-          # environment, so one line covers every package and cannot drift
-          # between them.
-          #
-          # Preconditions, both already met: the repository is PUBLIC (npm
-          # answers E422 for a private source), and the job declares
-          # `id-token: write` above.
-          NPM_CONFIG_PROVENANCE: true
+          # NPM_CONFIG_PROVENANCE is gone: `publishConfig.provenance: true` now sits
+          # in all eleven manifests, so provenance is declared beside the package it
+          # describes rather than in an environment variable this file has to
+          # remember. npm also attaches the attestation by default under trusted
+          # publishing, which makes the declaration a belt-and-braces statement of
+          # intent rather than the mechanism.

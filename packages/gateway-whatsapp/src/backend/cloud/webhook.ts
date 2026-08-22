@@ -100,6 +100,12 @@ function processChange(
   }
 }
 
+/**
+ * Extract the inbound messages from one Meta webhook envelope.
+ *
+ * A single delivery batches entries, changes and messages, and may carry none at all — a
+ * status-only delivery is normal. Returns an array, empty when there is nothing to hand on.
+ */
 export function normalizeInboundMessages(envelope: MetaWebhookEnvelope): WhatsAppInboundEvent[] {
   const out: WhatsAppInboundEvent[] = [];
   for (const entry of envelope.entry) {

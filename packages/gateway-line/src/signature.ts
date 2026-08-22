@@ -15,6 +15,13 @@ export function computeLineSignature(channelSecret: string, rawBody: string): st
   return crypto.createHmac("sha256", channelSecret).update(rawBody, "utf8").digest("base64");
 }
 
+/**
+ * Verify LINE's `x-line-signature` header against the raw request body.
+ *
+ * Returns `false` for a missing, malformed or mismatched signature — never throws, so a hostile
+ * header cannot become an unhandled error on the webhook path. Compare against the RAW body: any
+ * re-serialisation of the parsed JSON changes the bytes and invalidates the signature.
+ */
 export function verifyLineSignature(
   channelSecret: string,
   rawBody: string,

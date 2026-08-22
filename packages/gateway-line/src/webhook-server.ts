@@ -24,6 +24,7 @@ export interface WebhookServerOptions {
   readonly app?: Express;
 }
 
+/** A started HTTP listener, with the handle needed to shut it down again. */
 export interface WebhookServer {
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -92,7 +93,15 @@ function handlerFactory(adapter: LineAdapter) {
       res.status(400).type("text/plain").send("missing 'events' array");
       return;
     }
-    void adapter.dispatchWebhookBody(envelope);
+    // Answered before dispatch, on purpose: LINE retries a webhook it did not see a 200 for,
+    // and waiting on the handler turns a slow one into a duplicate delivery. What that costs is
+    // that the dispatch is floated — and a floated rejection is an unhandled one, which ends the
+    // process (the defect fixed across the other adapters in #41). The catch is what makes the
+    // early answer safe rather than merely fast.
+    void adapter.dispatchWebhookBody(envelope).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[gateway-line] webhook dispatch failed: ${message}\n`);
+    });
     // LINE expects a 200 OK quickly to ack the webhook.
     res.status(200).end();
   };
@@ -104,6 +113,13 @@ function headerOf(req: Request, name: string): string | undefined {
   return Array.isArray(v) ? v.join(",") : v;
 }
 
+/**
+ * Build the HTTP listener that receives LINE's webhook deliveries.
+ *
+ * LINE dials in, so this endpoint must be reachable over public HTTPS and registered in the LINE
+ * console — unlike the connection-based adapters, inbound cannot work behind a firewall. `express`
+ * is loaded lazily, so a project that only sends messages never pays for it.
+ */
 export async function createWebhookServer(opts: WebhookServerOptions): Promise<WebhookServer> {
   const expressMod = await loadExpress();
   const app: Express = opts.app ?? expressMod.default();

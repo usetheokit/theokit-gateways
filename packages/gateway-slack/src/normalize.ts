@@ -31,6 +31,7 @@ export interface BoltMessageBody {
   team_id?: string;
 }
 
+/** Options for {@link normalizeSlackEvent}. */
 export interface NormalizeOptions {
   /** D285: when `true` (default), public-channel messages without `@bot` are dropped. */
   readonly requireMention?: boolean;
@@ -67,6 +68,13 @@ function isMentionGated(
   );
 }
 
+/**
+ * Turn a Bolt message body into a `SlackMessageEvent`, or `undefined` when it should be ignored.
+ *
+ * Returns `undefined` rather than throwing for every non-message event, for the bot's own messages,
+ * and — when `requireMention` is left at its default — for public-channel messages that do not
+ * mention the bot. Ignoring is a normal outcome here, not an error.
+ */
 export function normalizeSlackEvent(
   body: BoltMessageBody,
   botUserId: string | undefined,

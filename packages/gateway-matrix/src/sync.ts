@@ -17,6 +17,14 @@ export interface SyncFilterOpts {
   readonly freshnessWindowMs: number;
 }
 
+/**
+ * Decide whether a timeline event should reach the handler.
+ *
+ * Matrix replays room history on sync, so a freshly started bot would otherwise answer every message
+ * it can still see — which is a reply storm in a busy room and an infinite loop in a quiet one. This
+ * drops the bot's own events and anything older than the freshness window. `now` is injectable so
+ * the decision is testable without waiting.
+ */
 export function shouldDispatchSyncEvent(
   event: MatrixEventLike,
   opts: SyncFilterOpts,
@@ -29,15 +37,29 @@ export function shouldDispatchSyncEvent(
   return true;
 }
 
+/** A live timeline listener, with the handle that detaches it again. */
 export interface TimelineSubscription {
   unsubscribe(): void;
 }
 
+/**
+ * The slice of `matrix-js-sdk`'s client this adapter actually uses.
+ *
+ * Narrow on purpose: it is what lets the sync logic be tested against a few lines of fake rather
+ * than a running homeserver, and it states the real coupling to the SDK — two event methods.
+ */
 export interface MatrixClientLike {
   on(event: "Room.timeline", listener: (e: MatrixEventLike, r: MatrixRoomLike) => void): void;
   off(event: "Room.timeline", listener: (e: MatrixEventLike, r: MatrixRoomLike) => void): void;
 }
 
+/**
+ * Attach `handler` to the client's room timeline, filtered by {@link shouldDispatchSyncEvent}.
+ *
+ * Returns the subscription rather than leaving the listener attached forever: an adapter that
+ * reconnects without detaching accumulates listeners, and every inbound message is then handled
+ * once per reconnect.
+ */
 export function subscribeToTimeline(
   client: MatrixClientLike,
   handler: (event: MatrixEventLike, room: MatrixRoomLike) => void,

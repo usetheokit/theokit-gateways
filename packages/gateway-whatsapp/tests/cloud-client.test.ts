@@ -144,3 +144,98 @@ describe("WhatsAppCloudClient — sendText", () => {
     expect(r.error?.code).toBe("server_error");
   });
 });
+
+describe("WhatsAppCloudClient — sendTemplate", () => {
+  /** The body Meta received, parsed. */
+  function sentBody(fakeFetch: typeof fetch): Record<string, unknown> {
+    const init = (fakeFetch as ReturnType<typeof vi.fn>).mock.calls[0]![1] as RequestInit;
+    return JSON.parse(String(init.body)) as Record<string, unknown>;
+  }
+
+  it("sends a template — the only message type that reaches a cold recipient", async () => {
+    // Outside the 24-hour service window Meta refuses free-form text (131047) and
+    // names templates as the remedy. Without this the adapter could only answer
+    // people who had written first, which excludes every notification use case
+    // and makes an unattended live check impossible.
+    const fakeFetch = makeFetchOk("wamid.tpl");
+    const client = new WhatsAppCloudClient({
+      accessToken: "t",
+      phoneNumberId: "PNID123",
+      fetch: fakeFetch,
+    });
+
+    const result = await client.sendTemplate("5511", "hello_world", "en_US");
+
+    expect(result.ok).toBe(true);
+    expect(result.wamid).toBe("wamid.tpl");
+    expect(sentBody(fakeFetch)).toEqual({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: "5511",
+      type: "template",
+      template: { name: "hello_world", language: { code: "en_US" } },
+    });
+  });
+
+  it("passes components through when the template takes variables", async () => {
+    const fakeFetch = makeFetchOk();
+    const client = new WhatsAppCloudClient({
+      accessToken: "t",
+      phoneNumberId: "PNID123",
+      fetch: fakeFetch,
+    });
+    const components = [{ type: "body", parameters: [{ type: "text", text: "Ana" }] }];
+
+    await client.sendTemplate("5511", "greeting", "pt_BR", components);
+
+    expect((sentBody(fakeFetch).template as Record<string, unknown>).components).toEqual(
+      components,
+    );
+  });
+
+  it("omits components entirely when there are none", async () => {
+    // Meta rejects `components: []` on a template that declares no variables, so
+    // an empty array is not the same as the key being absent.
+    const fakeFetch = makeFetchOk();
+    const client = new WhatsAppCloudClient({
+      accessToken: "t",
+      phoneNumberId: "PNID123",
+      fetch: fakeFetch,
+    });
+
+    await client.sendTemplate("5511", "hello_world", "en_US");
+
+    expect(sentBody(fakeFetch).template).not.toHaveProperty("components");
+  });
+
+  it("maps a rejected template through the same error mapper as text", async () => {
+    const fakeFetch = makeFetchError(400, {
+      error: { code: 132001, message: "Template name does not exist" },
+    });
+    const client = new WhatsAppCloudClient({
+      accessToken: "t",
+      phoneNumberId: "PNID123",
+      fetch: fakeFetch,
+    });
+
+    const result = await client.sendTemplate("5511", "nope", "en_US");
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.message).toContain("Template name does not exist");
+  });
+
+  it("returns a network failure as server_error rather than throwing", async () => {
+    const client = new WhatsAppCloudClient({
+      accessToken: "t",
+      phoneNumberId: "PNID123",
+      fetch: (() => {
+        throw new Error("socket hang up");
+      }) as unknown as typeof fetch,
+    });
+
+    const result = await client.sendTemplate("5511", "hello_world", "en_US");
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("server_error");
+  });
+});
