@@ -100,14 +100,19 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
   onInbound(handler: (event: WhatsAppInboundEvent) => Promise<void>): () => void {
     this.inboundHandler = handler;
     return () => {
-      this.inboundHandler = undefined;
+      // Identity-guarded: a stale unsubscribe must be a no-op. Without it,
+      // `onInbound(A)` → `onInbound(B)` → `A.off()` clears B's handler and the backend goes
+      // silent with no error — nothing to see in a log, nothing to alert on. This is a public
+      // export implementing an exported interface, so a consumer holding the backend directly
+      // reaches it without going through `WhatsAppAdapter`.
+      if (this.inboundHandler === handler) this.inboundHandler = undefined;
     };
   }
 
   onStatusReceipt(handler: (receipt: WhatsAppStatusReceipt) => Promise<void>): () => void {
     this.statusHandler = handler;
     return () => {
-      this.statusHandler = undefined;
+      if (this.statusHandler === handler) this.statusHandler = undefined;
     };
   }
 

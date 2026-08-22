@@ -9,7 +9,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A stale unsubscribe no longer deafens the WhatsApp adapter. The closure `onInbound` returned
+  called whichever backend handle was *current*, so `onInbound(A)` → `onInbound(B)` → `A.off()`
+  tore down **B's** subscription and nulled the handler: the gateway went silent with no error
+  and no crash. It is now identity-guarded like every sibling, and so is `onStatusReceipt`.
+  This is the exact defect the cross-adapter contract exists to catch, and WhatsApp was exempt
+  from it — by a comment asserting its mechanism gave "the same guarantee", when that mechanism
+  had no guard at all. The exemption is gone; the one adapter the gate excused was the one
+  carrying the defect. The Cloud and web backends carried it too, and are fixed alongside: both
+  are public exports of the exported `WhatsAppBackend` interface, so a consumer holding one
+  directly reached the defect without going through the adapter.
+
+- The unsubscribe invariant is now checked per DECLARATION, not per package. Checked per package,
+  one compliant sibling covered the rest — which is how three WhatsApp backends came to have one
+  guard between them. Getting there took three attempts, and the first two could not fail: one
+  regex matched zero declarations (every one types its parameter as a function, so `[^)]*` stops
+  at the inner signature), and the next read a fixed window that reached into the neighbouring
+  method and accepted ITS guard. The check now brace-matches the method body and requires the
+  guard to name the same field that body stores the handler in, and it asserts the exact count
+  of declarations it found — a gate that silently checks nothing is worse than no gate. A fifth
+  round then found the brace matcher could still be fooled by an unbalanced `{` inside a string
+  literal, and that the count assertion, written as a floor, caught a declaration disappearing
+  but not one being added. Both closed; reverting the guard in any of nine sites across six
+  files now fails it
+
+- The cross-adapter contract gate stopped accepting a comment as a guard. Two of its invariants
+  read source with comments intact, so commenting a guard out passed while deleting it failed —
+  it detected removal, not disablement, the same shape the file's own history records finding
+  once before. Both were also satisfiable without doing anything: `if (this.handler === handler)
+  {}` passed the unsubscribe check, and the connect check accepted `if (this.<any field>` with no
+  return at all. Measured across all ten adapters, every one guards on `this.connected` and
+  returns, so the gate now requires that — and requires the unsubscribe to actually clear
+
+- A webhook dispatch that rejects no longer ends the process in `gateway-line` and `gateway-sms`.
+  Both answer the provider before running the handler — deliberately, since both retry a webhook
+  they did not see a 200 for — which leaves the dispatch floated, and a floated rejection is an
+  unhandled one. Same defect fixed across the other adapters in #41; these two were missed because
+  the cross-adapter gate only recognised the shape `void this.…` and both float through a local.
+  The gate now matches any floated call, which is how they surfaced
+
+- The `tools` suite no longer fails when the whole monorepo runs at once. Several of its tests
+  drive the TypeScript compiler in-process, and the one-time lib-loading cost exceeds vitest's 5s
+  default under twelve competing package suites — so the gate reported machine load as a code
+  failure. The timeout now states what the work costs
+
 ### Added
+
+- A third WhatsApp backend, on Baileys — the multi-device protocol over a WebSocket, with no
+  browser (B-001). Added rather than replacing the `whatsapp-web.js` one, so nobody loses a paired
+  session, the comparison between them becomes measurable instead of asserted, and retreat stays
+  cheap. `baileys` is an optional peer dependency loaded lazily at connect; 36 tests drive an
+  injected fake socket and pass with it absent — nine of them written after a review found four
+  defects reachable in normal operation: a timed-out send that stayed on the socket while the next
+  one started, a failed connect that left a live socket delivering inbound, a `disconnect()` during
+  connect that wedged the backend until it was rebuilt, and a QR code with nowhere to go, which
+  made pairing a fresh session impossible — then nine more after a second, independent review
+  round found four more: a retired connect attempt that could only be ended by its own timeout,
+  so `disconnect()` during pairing blocked shutdown for 60s with the socket still live; a socket
+  closed by the server that was never ended and became unreachable to any later `disconnect()`;
+  a second sequential `connect()` that opened another live session unguarded by any test; and a
+  failed connect that reported a bare `false`, leaving an unlinked device indistinguishable from
+  a network blip. `createBaileysSocket` — 201 lines, the one place this touches the real library,
+  and the module whose header cites the bridge that shipped unable to start — had no tests at
+  all; it has ten. Each fix has a test that fails when that fix alone is reverted. What none of them prove is that any of it speaks
+  WhatsApp: pairing needs a QR scan by a human, so protocol conformance, delivery and ban behaviour
+  are unproven here and by every gate in this repository
 
 - `WhatsAppAdapter.fromCloud()` and `.fromWeb()`. The class docblock had instructed consumers to
   call them since the package was written and neither existed, so the only construction guidance

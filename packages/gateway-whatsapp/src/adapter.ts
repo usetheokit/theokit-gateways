@@ -18,6 +18,7 @@ import {
 } from "@theokit/gateway";
 
 import { isSenderAllowed, parseAllowedSenders } from "./allowlist.js";
+import { WhatsAppBaileysBackend } from "./backend/baileys/index.js";
 import { WhatsAppCloudBackend } from "./backend/cloud/index.js";
 import { WhatsAppWebBackend } from "./backend/web/index.js";
 import type {
@@ -40,6 +41,36 @@ export interface WhatsAppCloudConfig {
   readonly apiVersion?: string;
 }
 
+/**
+ * Baileys backend config (ADR D319-D322).
+ *
+ * Unofficial, like the `web` backend: it automates a WhatsApp Web session, which Meta's terms
+ * do not sanction and which can get a number banned. Unlike `web` it needs no browser.
+ *
+ * @public
+ */
+export interface WhatsAppBaileysConfig {
+  /**
+   * Directory holding the multi-file auth state — the pairing, persisted.
+   *
+   * Treat it like a credential: it IS the session, and anyone holding it is the account.
+   */
+  readonly sessionDir: string;
+  /** Give up on `connect()` after this long. Default 60s. */
+  readonly connectTimeoutMs?: number;
+  /** Give up on one send after this long. Default 30s. */
+  readonly sendTimeoutMs?: number;
+  /**
+   * Where the pairing QR goes, as often as WhatsApp reissues it. Defaults to stderr.
+   *
+   * The backend has always accepted this; it was reachable only by constructing the backend by
+   * hand, which is the path this class exists to replace. A host that is not a terminal — a
+   * service, a container, a web app — cannot read stderr back to the person holding the phone,
+   * and without a route out the QR a fresh `sessionDir` can only ever time out.
+   */
+  readonly onQr?: (qr: string) => void;
+}
+
 /** Web (whatsapp-web.js subprocess bridge) backend config (ADR D305). */
 export interface WhatsAppWebConfig {
   /** Stable session id used to lock the bridge per-workspace. */
@@ -60,7 +91,8 @@ export interface WhatsAppWebConfig {
  */
 export type WhatsAppAdapterOptions =
   | { readonly backend: "cloud"; readonly cloud: WhatsAppCloudConfig }
-  | { readonly backend: "web"; readonly web: WhatsAppWebConfig };
+  | { readonly backend: "web"; readonly web: WhatsAppWebConfig }
+  | { readonly backend: "baileys"; readonly baileys: WhatsAppBaileysConfig };
 
 /**
  * Options that apply whichever backend is in use.
@@ -175,9 +207,50 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     options: WhatsAppAdapterOptions,
     common: WhatsAppAdapterCommonOptions = {},
   ): WhatsAppAdapter {
-    return options.backend === "cloud"
-      ? WhatsAppAdapter.fromCloud(options.cloud, common)
-      : WhatsAppAdapter.fromWeb(options.web, common);
+    switch (options.backend) {
+      case "cloud":
+        return WhatsAppAdapter.fromCloud(options.cloud, common);
+      case "web":
+        return WhatsAppAdapter.fromWeb(options.web, common);
+      case "baileys":
+        return WhatsAppAdapter.fromBaileys(options.baileys, common);
+    }
+  }
+
+  /**
+   * Build a Baileys adapter.
+   *
+   * Unofficial, and no amount of code changes that: it automates a WhatsApp Web session,
+   * which Meta's terms do not sanction and which can get a number banned. Use a number
+   * created for this, never a personal one. Prefer {@link WhatsAppAdapter.fromCloud} unless
+   * the number has no Cloud API access.
+   *
+   * Unlike {@link WhatsAppAdapter.fromWeb} it embeds no browser — it speaks the multi-device
+   * protocol over a WebSocket. `baileys` is an optional peer dependency; it is loaded lazily
+   * at connect, so a consumer who never calls this never needs it installed.
+   *
+   * `botPhoneId` has nothing to default from here, so leaving it unset while `requireMention`
+   * is on (its default) drops every group message. The adapter logs when it does.
+   *
+   * @throws {ConfigurationError} when `sessionDir` is missing or empty.
+   * @public
+   */
+  static fromBaileys(
+    baileys: WhatsAppBaileysConfig,
+    opts: WhatsAppAdapterCommonOptions = {},
+  ): WhatsAppAdapter {
+    requireNonEmpty([["sessionDir", baileys.sessionDir]]);
+    return new WhatsAppAdapter(
+      new WhatsAppBaileysBackend({
+        sessionDir: baileys.sessionDir,
+        ...(baileys.connectTimeoutMs !== undefined
+          ? { connectTimeoutMs: baileys.connectTimeoutMs }
+          : {}),
+        ...(baileys.sendTimeoutMs !== undefined ? { sendTimeoutMs: baileys.sendTimeoutMs } : {}),
+        ...(baileys.onQr !== undefined ? { onQr: baileys.onQr } : {}),
+      }),
+      opts,
+    );
   }
 
   /**
@@ -368,17 +441,26 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     this.inboundUnsubscribe?.();
     this.handler = handler;
 
-    this.inboundUnsubscribe = this.backendImpl.onInbound(async (inbound) => {
+    const off = this.backendImpl.onInbound(async (inbound) => {
       if (!this.handler) return;
       if (this.isRefusedBySenderAllowlist(inbound)) return;
       if (this.shouldDropGroupMessage(inbound)) return;
       await this.handler(this.toMessageEvent(inbound));
     });
+    this.inboundUnsubscribe = off;
 
     return () => {
-      this.inboundUnsubscribe?.();
-      this.inboundUnsubscribe = undefined;
-      this.handler = undefined;
+      // Identity-guarded, like every sibling adapter. Without the guard this closure tore down
+      // whatever subscription was CURRENT: `onInbound(A)` → `onInbound(B)` → A's stale `off()`
+      // killed B's and nulled the handler, and the gateway went silent with no error. That is
+      // the defect the cross-adapter contract exists to catch, and this adapter was exempted
+      // from it by a comment claiming its mechanism gave "the same guarantee" — it had no
+      // guard at all.
+      if (this.handler === handler) {
+        this.handler = undefined;
+        off();
+        this.inboundUnsubscribe = undefined;
+      }
     };
   }
 
@@ -386,13 +468,17 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
   onStatusReceipt(handler: (receipt: WhatsAppStatusReceipt) => Promise<void>): () => void {
     this.statusUnsubscribe?.();
     this.statusHandler = handler;
-    this.statusUnsubscribe = this.backendImpl.onStatusReceipt(async (r) => {
+    const off = this.backendImpl.onStatusReceipt(async (r) => {
       await this.statusHandler?.(r);
     });
+    this.statusUnsubscribe = off;
     return () => {
-      this.statusUnsubscribe?.();
-      this.statusUnsubscribe = undefined;
-      this.statusHandler = undefined;
+      // Same identity guard, same reason. A stale unsubscribe must be a no-op.
+      if (this.statusHandler === handler) {
+        this.statusHandler = undefined;
+        off();
+        this.statusUnsubscribe = undefined;
+      }
     };
   }
 }
