@@ -11,6 +11,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { normalizeWhatsAppId } from "../src/allowlist.js";
 import { normalizeBaileysMessage } from "../src/backend/baileys/normalize.js";
 
 /** A Baileys `WAMessage`, in the shape the library actually delivers. */
@@ -40,8 +41,8 @@ describe("normalizeBaileysMessage", () => {
   });
 
   it("converts the timestamp to milliseconds", () => {
-    // Baileys reports seconds; every other backend in this package reports milliseconds, and
-    // `receivedAt` feeds the freshness window that stops a bot answering old history.
+    // Baileys reports seconds; every other backend in this package reports milliseconds, so
+    // the conversion is what keeps one field meaning one thing across three backends.
     expect(normalizeBaileysMessage(envelope())?.receivedAt).toBe(1_700_000_000_000);
   });
 
@@ -96,12 +97,22 @@ describe("normalizeBaileysMessage", () => {
     ).toBeUndefined();
   });
 
-  it("drops a status broadcast", () => {
+  it("drops the status feed — by the status rule, and again by id normalisation", () => {
+    // Over-determined, and stated rather than hidden: an audit found this test passing whether
+    // or not the status rule exists, because `normalizeWhatsAppId("status@broadcast")` strips
+    // the domain and then every non-digit, leaving "" — which `resolveParties` refuses anyway.
+    //
+    // No input can isolate the status rule: the only JID it matches is the one that always
+    // normalises to empty. So this asserts both facts instead of claiming an isolation it does
+    // not have. The rule stays because it fires FIRST and says why the message is refused; the
+    // id guard refuses it for an unrelated reason that would stop holding the day
+    // `normalizeWhatsAppId` learns to keep non-digits.
     expect(
       normalizeBaileysMessage(
         envelope({ key: { remoteJid: "status@broadcast", fromMe: false, id: "X" } }),
       ),
     ).toBeUndefined();
+    expect(normalizeWhatsAppId("status@broadcast")).toBe("");
   });
 
   it("drops a message carrying no text — v1 is text-only", () => {
@@ -166,8 +177,8 @@ describe("normalizeBaileysMessage — envelope shapes a review found", () => {
   });
 
   it("reads a protobuf Long timestamp instead of stamping it now", () => {
-    // Baileys' generated types permit a Long. Treating it as unparseable and substituting the
-    // current time would stamp a stale message "now" and walk it through any freshness window.
+    // Baileys' generated types permit a Long. Read as unparseable, a real user's message would
+    // be dropped over a field nobody branches on — so the shape is handled rather than refused.
     const asLong = { low: 1_700_000_000, high: 0, unsigned: false, toNumber: () => 1_700_000_000 };
     const event = normalizeBaileysMessage(envelope({ messageTimestamp: asLong }));
 

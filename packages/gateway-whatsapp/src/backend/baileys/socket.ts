@@ -1,8 +1,13 @@
 /**
  * The socket contract this backend depends on, and the real factory behind it (ADR D319).
  *
- * Four members, not Baileys' whole `WASocket`. Two things follow, and both are the reason
+ * Three members, not Baileys' whole `WASocket`. Two things follow, and both are the reason
  * the contract is ours rather than the library's.
+ *
+ * It was four. `logout()` was declared and called by nothing — and on WhatsApp `logout()`
+ * UNPAIRS the device, which is the opposite of what `disconnect()` means here. A dead member
+ * advertising a destructive capability is worse than an absent one: the next person to need a
+ * teardown finds it, calls it, and loses the session the whole `sessionDir` exists to keep.
  *
  * **The backend is testable with `baileys` absent.** It is an optional peer dependency, so
  * CI does not install it — and a backend that could only be exercised with the real library
@@ -54,7 +59,6 @@ export interface BaileysSocketLike {
     jid: string,
     content: { text: string },
   ): Promise<{ key?: { id?: string } } | undefined>;
-  logout?(): Promise<void>;
   end?(error?: Error): void;
 }
 

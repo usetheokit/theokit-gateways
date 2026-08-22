@@ -89,12 +89,19 @@ function extractText(message: Record<string, unknown> | undefined, depth = 0): s
 /**
  * The message's timestamp in seconds, or `undefined` when it cannot be read.
  *
- * Baileys reports seconds; every other backend here reports milliseconds, and `receivedAt`
- * feeds the freshness window that stops a restarting bot answering history it can still see.
+ * Baileys reports seconds; every other backend here reports milliseconds, which is why the
+ * caller multiplies.
  *
- * Returning `undefined` rather than the current time is the point. "Unparseable" resolving to
- * "fresh" is the answer that defeats the window — a replayed message would arrive stamped now
- * and pass any check. The caller drops the message instead.
+ * Returning `undefined` — which makes the caller drop the envelope — is this module's uniform
+ * contract, not a special rule: it refuses anything it cannot fully read, exactly as it refuses
+ * an unidentifiable sender or a non-text body. An earlier version of this comment justified the
+ * drop by a "freshness window" that would reject stale messages. **No such window exists** —
+ * `receivedAt` is declared in `@theokit/gateway` and read by nothing. A review caught the claim.
+ * The replay defence in this backend is the `type !== "notify"` filter on `messages.upsert`.
+ *
+ * Worth knowing when comparing backends: `backend/cloud/webhook.ts` takes the opposite branch,
+ * substituting the current time for an unreadable stamp. Neither is wrong given that nobody
+ * reads the field; they are inconsistent, and that is recorded rather than quietly aligned.
  */
 function toSeconds(timestamp: unknown): number | undefined {
   if (typeof timestamp === "number") return timestamp;
@@ -102,9 +109,9 @@ function toSeconds(timestamp: unknown): number | undefined {
     const parsed = Number(timestamp);
     return Number.isFinite(parsed) ? parsed : undefined;
   }
-  // Baileys' generated protobuf types permit a `Long`. Reading it as unparseable and
-  // substituting the current time would stamp a stale message "now" and walk it straight
-  // through the freshness window this value exists to feed.
+  // Baileys' generated protobuf types permit a `Long`. Read as unparseable, a perfectly good
+  // message from a real user would be dropped for a field nobody reads — so the shape is
+  // handled rather than refused.
   const asLong = asObject(timestamp);
   if (asLong !== undefined && typeof asLong.toNumber === "function") {
     const parsed = (asLong.toNumber as () => unknown)();

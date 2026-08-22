@@ -111,27 +111,43 @@ describe("cross-adapter contract", () => {
   });
 
   it("guards every returned unsubscribe on handler identity", async () => {
+    // Two weaknesses an audit measured, both fixed here. The source was read with comments
+    // intact, so commenting the guard out passed while deleting it failed — the gate detected
+    // removal, not disablement, which is the shape this file's own docblock says was already
+    // found once in `empty_text`. And the guard alone was enough: an identity check with an
+    // empty body satisfied it. The clearing assignment is now part of the pattern, because a
+    // guard that clears nothing is the defect wearing the fix's shape.
     const offenders: string[] = [];
     for (const { pkg, source } of await adapterSources()) {
+      const code = withoutComments(source);
       // The handler field is named `handler` in some adapters and
       // `inboundHandler` in others; both spellings are accepted.
       const guarded =
-        /if\s*\(\s*this\.(?:inboundH|h)andler\s*===\s*handler\s*\)/.test(source) ||
+        /if\s*\(\s*this\.(inboundH|h)andler\s*===\s*handler\s*\)\s*\{?\s*this\.\1andler\s*=\s*undefined\s*;/.test(
+          code,
+        ) ||
         // WhatsApp unsubscribes through the backend handle instead of nulling a
         // field, which is a different mechanism with the same guarantee.
-        /this\.inboundUnsubscribe\?\.\(\)/.test(source);
+        /this\.inboundUnsubscribe\?\.\(\)/.test(code);
       if (!guarded) offenders.push(pkg);
     }
     expect(offenders).toEqual([]);
   });
 
   it("guards every connect() against opening a second session", async () => {
+    // This accepted `if (this.<anything>` — any field, any body. An adapter could satisfy it
+    // with `if (this.token.length === 0) this.token = this.token;` and open two live sessions.
+    // Measured across all ten: every one guards on `this.connected` and RETURNS. Requiring the
+    // return is what separates a guard from a token sequence, and requiring the real field name
+    // is honest rather than permissive — a new adapter that guards differently should have to
+    // come here and say so.
     const offenders: string[] = [];
     for (const { pkg, source } of await adapterSources()) {
-      const connectBody = source.slice(source.indexOf("async connect("));
-      if (connectBody.length === 0) continue;
-      const head = connectBody.slice(0, 400);
-      if (!/if\s*\(\s*(?:this\.connected|!?this\.\w+)\b/.test(head)) offenders.push(pkg);
+      const code = withoutComments(source);
+      const at = code.indexOf("async connect(");
+      if (at === -1) continue;
+      const head = code.slice(at, at + 400);
+      if (!/if\s*\(\s*this\.connected\b[^)]*\)\s*\{?\s*return\b/.test(head)) offenders.push(pkg);
     }
     expect(offenders).toEqual([]);
   });

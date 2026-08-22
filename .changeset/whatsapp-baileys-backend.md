@@ -21,8 +21,14 @@ Three decisions worth naming:
 
 *The backend depends on a four-member socket contract we declare*, not on Baileys' types. That is what lets every test in this backend drive a fake and run with `baileys` absent — which matters, because a backend that could only be exercised with the real library installed is a backend exercised by nothing, and that is exactly how the `web` backend reached production unable to start.
 
+*A retired connection attempt is ended, not merely silenced.* Retiring by generation made an abandoned attempt's listeners no-ops — including the one that resolves it — so nothing could settle it but the timeout. A `disconnect()` during pairing therefore blocked shutdown for the full 60s default while the socket it asked to close stayed live. And a socket that closed under the backend kept its reference until the next `connect()` overwrote it, so it was never ended and no later `disconnect()` could reach it. Both are fixed; both have a test that fails when the fix alone is reverted.
+
+*A failed connect says why.* `false` with no output cannot distinguish a network blip from a device the operator unlinked from their phone, and only one of those is worth retrying — a supervisor that cannot tell them apart retries forever against a session that can only be re-paired.
+
 *Pairing has somewhere to go.* `printQRInTerminal` stays off — a library writing to stdout decides where a host's output goes — so the QR is handed to an `onQr` callback, defaulting to stderr. Without it a fresh session directory could only ever time out: there is no other way to pair.
 
 **What no test here proves.** Nothing in this repository touches WhatsApp. Pairing needs a QR scan by a human and there is no WhatsApp in Docker, so protocol conformance, delivery, receipts and ban behaviour are unproven by this changeset and by every gate in this repository. A green suite means our logic does what we think — not that WhatsApp agrees.
+
+The socket contract this backend depends on lost a member: `logout()` was declared and called by nothing, and on WhatsApp `logout()` **unpairs the device** — the opposite of what `disconnect()` means here. A dead member advertising a destructive capability is worse than an absent one.
 
 `WhatsAppMessageEvent.whatsapp.backend` and `WhatsAppBackend.kind` gain a third member, so an exhaustive `switch` over either stops compiling until the case is handled. No call site in this repository switches on them.

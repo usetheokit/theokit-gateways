@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The cross-adapter contract gate stopped accepting a comment as a guard. Two of its invariants
+  read source with comments intact, so commenting a guard out passed while deleting it failed —
+  it detected removal, not disablement, the same shape the file's own history records finding
+  once before. Both were also satisfiable without doing anything: `if (this.handler === handler)
+  {}` passed the unsubscribe check, and the connect check accepted `if (this.<any field>` with no
+  return at all. Measured across all ten adapters, every one guards on `this.connected` and
+  returns, so the gate now requires that — and requires the unsubscribe to actually clear
+
 - A webhook dispatch that rejects no longer ends the process in `gateway-line` and `gateway-sms`.
   Both answer the provider before running the handler — deliberately, since both retry a webhook
   they did not see a 200 for — which leaves the dispatch floated, and a floated rejection is an
@@ -33,8 +41,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defects reachable in normal operation: a timed-out send that stayed on the socket while the next
   one started, a failed connect that left a live socket delivering inbound, a `disconnect()` during
   connect that wedged the backend until it was rebuilt, and a QR code with nowhere to go, which
-  made pairing a fresh session impossible. Each has a test that fails if that fix alone is
-  reverted. What none of them prove is that any of it speaks
+  made pairing a fresh session impossible — then nine more after a second, independent review
+  round found four more: a retired connect attempt that could only be ended by its own timeout,
+  so `disconnect()` during pairing blocked shutdown for 60s with the socket still live; a socket
+  closed by the server that was never ended and became unreachable to any later `disconnect()`;
+  a second sequential `connect()` that opened another live session unguarded by any test; and a
+  failed connect that reported a bare `false`, leaving an unlinked device indistinguishable from
+  a network blip. `createBaileysSocket` — 201 lines, the one place this touches the real library,
+  and the module whose header cites the bridge that shipped unable to start — had no tests at
+  all; it has ten. Each fix has a test that fails when that fix alone is reverted. What none of them prove is that any of it speaks
   WhatsApp: pairing needs a QR scan by a human, so protocol conformance, delivery and ban behaviour
   are unproven here and by every gate in this repository
 

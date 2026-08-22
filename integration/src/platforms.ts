@@ -318,7 +318,7 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       },
     ],
     caveat:
-      "Outside the 24-hour customer service window only approved TEMPLATES send — a free-form text will be rejected by Meta, not by this code. The `web` backend is excluded here entirely: it drives a real WhatsApp Web session through a QR scan and cannot run unattended.",
+      "Outside the 24-hour customer service window only approved TEMPLATES send — a free-form text will be rejected by Meta, not by this code. Only the Cloud API backend runs here. The other two — `web`, which drives a browser, and `baileys`, which holds a socket — both pair through a QR scan a human must perform, so neither can run unattended. What that costs is stated rather than hidden: the live suite proves nothing about either, and the manual procedure in `packages/gateway-whatsapp/BAILEYS.md` is the only check they have.",
   },
   {
     id: "sms",

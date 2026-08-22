@@ -60,6 +60,15 @@ export interface WhatsAppBaileysConfig {
   readonly connectTimeoutMs?: number;
   /** Give up on one send after this long. Default 30s. */
   readonly sendTimeoutMs?: number;
+  /**
+   * Where the pairing QR goes, as often as WhatsApp reissues it. Defaults to stderr.
+   *
+   * The backend has always accepted this; it was reachable only by constructing the backend by
+   * hand, which is the path this class exists to replace. A host that is not a terminal — a
+   * service, a container, a web app — cannot read stderr back to the person holding the phone,
+   * and without a route out the QR a fresh `sessionDir` can only ever time out.
+   */
+  readonly onQr?: (qr: string) => void;
 }
 
 /** Web (whatsapp-web.js subprocess bridge) backend config (ADR D305). */
@@ -238,6 +247,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
           ? { connectTimeoutMs: baileys.connectTimeoutMs }
           : {}),
         ...(baileys.sendTimeoutMs !== undefined ? { sendTimeoutMs: baileys.sendTimeoutMs } : {}),
+        ...(baileys.onQr !== undefined ? { onQr: baileys.onQr } : {}),
       }),
       opts,
     );
