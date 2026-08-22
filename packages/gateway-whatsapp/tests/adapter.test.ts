@@ -499,3 +499,27 @@ describe("WhatsAppAdapter — the documented construction path", () => {
     ).toThrow(/accessToken/i);
   });
 });
+
+describe("WhatsAppAdapter — the third backend", () => {
+  it("builds a baileys-backed adapter through fromBaileys", () => {
+    const adapter = WhatsAppAdapter.fromBaileys({ sessionDir: "/tmp/session" });
+
+    expect(adapter.getBackend().kind).toBe("baileys");
+  });
+
+  it("dispatches the third discriminator through from()", () => {
+    // With three backends, selecting by a string read from configuration is what the union
+    // was argued to exist for — the argument that was anticipated when there were two.
+    const adapter = WhatsAppAdapter.from({
+      backend: "baileys",
+      baileys: { sessionDir: "/tmp/session" },
+    });
+
+    expect(adapter.getBackend().kind).toBe("baileys");
+  });
+
+  it("rejects a baileys config with no session directory", () => {
+    // The session directory IS the pairing. An empty one silently pairs somewhere else.
+    expect(() => WhatsAppAdapter.fromBaileys({ sessionDir: "  " })).toThrow(/sessionDir/i);
+  });
+});

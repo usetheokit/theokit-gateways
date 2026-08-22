@@ -37,10 +37,14 @@
   "peerDependencies": {
     "@theokit/gateway": "workspace:^",
     "@theokit/sdk": "^2.18.0",
-    "whatsapp-web.js": "^1.23.0"
+    "whatsapp-web.js": "^1.23.0",
+    "baileys": ">=7.0.0-rc14"
   },
   "peerDependenciesMeta": {
     "whatsapp-web.js": {
+      "optional": true
+    },
+    "baileys": {
       "optional": true
     }
   },

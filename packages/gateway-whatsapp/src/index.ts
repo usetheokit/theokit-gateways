@@ -14,9 +14,21 @@ export {
   WhatsAppAdapter,
   type WhatsAppAdapterCommonOptions,
   type WhatsAppAdapterOptions,
+  type WhatsAppBaileysConfig,
   type WhatsAppCloudConfig,
   type WhatsAppWebConfig,
 } from "./adapter.js";
+// Baileys backend (WhatsApp Web multi-device protocol, no browser).
+export {
+  WhatsAppBaileysBackend,
+  type WhatsAppBaileysBackendOptions,
+} from "./backend/baileys/index.js";
+export {
+  type BaileysSocketFactory,
+  type BaileysSocketLike,
+  type BaileysSocketOptions,
+  createBaileysSocket,
+} from "./backend/baileys/socket.js";
 // Cloud backend (Meta WhatsApp Business Cloud API).
 export {
   WhatsAppCloudBackend,

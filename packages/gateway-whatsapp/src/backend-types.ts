@@ -34,7 +34,7 @@ export interface WhatsAppInboundEvent {
   /** Receipt timestamp (ms since epoch). */
   readonly receivedAt: number;
   /** Backend that emitted this event. */
-  readonly backend: "cloud" | "web";
+  readonly backend: "cloud" | "web" | "baileys";
   /** Raw envelope for the escape hatch. */
   readonly raw: unknown;
 }
@@ -98,7 +98,7 @@ export interface WhatsAppSendResult {
  * `WhatsAppAdapter` delegates lifecycle + send + subscribe through this seam.
  */
 export interface WhatsAppBackend {
-  readonly kind: "cloud" | "web";
+  readonly kind: "cloud" | "web" | "baileys";
   connect(): Promise<boolean>;
   disconnect(): Promise<void>;
   send(message: WhatsAppOutboundMessage): Promise<WhatsAppSendResult>;

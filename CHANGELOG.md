@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A third WhatsApp backend, on Baileys — the multi-device protocol over a WebSocket, with no
+  browser (B-001). Added rather than replacing the `whatsapp-web.js` one, so nobody loses a paired
+  session, the comparison between them becomes measurable instead of asserted, and retreat stays
+  cheap. `baileys` is an optional peer dependency loaded lazily at connect; all 27 tests drive an
+  injected fake socket and pass with it absent. What none of them prove is that any of it speaks
+  WhatsApp: pairing needs a QR scan by a human, so protocol conformance, delivery and ban behaviour
+  are unproven here and by every gate in this repository
+
 - `WhatsAppAdapter.fromCloud()` and `.fromWeb()`. The class docblock had instructed consumers to
   call them since the package was written and neither existed, so the only construction guidance
   the package gave produced code that did not compile (#47). Three exported types described that

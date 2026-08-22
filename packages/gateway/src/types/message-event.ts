@@ -113,8 +113,14 @@ export interface WhatsAppMessageEvent extends BaseMessageEvent {
     readonly phoneNumberId?: string;
     /** Contact's profile name when Meta provides it. */
     readonly contactName?: string;
-    /** Which backend produced this event. */
-    readonly backend: "cloud" | "web";
+    /**
+     * Which backend produced this event.
+     *
+     * `baileys` joined `cloud` and `web` in 0.2: it speaks the WhatsApp Web multi-device
+     * protocol over a WebSocket, where `web` drives a headless browser. Consumers that
+     * switch exhaustively on this must handle the third case.
+     */
+    readonly backend: "cloud" | "web" | "baileys";
     /** Raw envelope — backend-specific, narrowed by the adapter package. */
     readonly raw: unknown;
   };

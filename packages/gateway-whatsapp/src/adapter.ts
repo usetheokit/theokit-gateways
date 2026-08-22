@@ -18,6 +18,7 @@ import {
 } from "@theokit/gateway";
 
 import { isSenderAllowed, parseAllowedSenders } from "./allowlist.js";
+import { WhatsAppBaileysBackend } from "./backend/baileys/index.js";
 import { WhatsAppCloudBackend } from "./backend/cloud/index.js";
 import { WhatsAppWebBackend } from "./backend/web/index.js";
 import type {
@@ -40,6 +41,27 @@ export interface WhatsAppCloudConfig {
   readonly apiVersion?: string;
 }
 
+/**
+ * Baileys backend config (ADR D319-D322).
+ *
+ * Unofficial, like the `web` backend: it automates a WhatsApp Web session, which Meta's terms
+ * do not sanction and which can get a number banned. Unlike `web` it needs no browser.
+ *
+ * @public
+ */
+export interface WhatsAppBaileysConfig {
+  /**
+   * Directory holding the multi-file auth state — the pairing, persisted.
+   *
+   * Treat it like a credential: it IS the session, and anyone holding it is the account.
+   */
+  readonly sessionDir: string;
+  /** Give up on `connect()` after this long. Default 60s. */
+  readonly connectTimeoutMs?: number;
+  /** Give up on one send after this long. Default 30s. */
+  readonly sendTimeoutMs?: number;
+}
+
 /** Web (whatsapp-web.js subprocess bridge) backend config (ADR D305). */
 export interface WhatsAppWebConfig {
   /** Stable session id used to lock the bridge per-workspace. */
@@ -60,7 +82,8 @@ export interface WhatsAppWebConfig {
  */
 export type WhatsAppAdapterOptions =
   | { readonly backend: "cloud"; readonly cloud: WhatsAppCloudConfig }
-  | { readonly backend: "web"; readonly web: WhatsAppWebConfig };
+  | { readonly backend: "web"; readonly web: WhatsAppWebConfig }
+  | { readonly backend: "baileys"; readonly baileys: WhatsAppBaileysConfig };
 
 /**
  * Options that apply whichever backend is in use.
@@ -175,9 +198,49 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     options: WhatsAppAdapterOptions,
     common: WhatsAppAdapterCommonOptions = {},
   ): WhatsAppAdapter {
-    return options.backend === "cloud"
-      ? WhatsAppAdapter.fromCloud(options.cloud, common)
-      : WhatsAppAdapter.fromWeb(options.web, common);
+    switch (options.backend) {
+      case "cloud":
+        return WhatsAppAdapter.fromCloud(options.cloud, common);
+      case "web":
+        return WhatsAppAdapter.fromWeb(options.web, common);
+      case "baileys":
+        return WhatsAppAdapter.fromBaileys(options.baileys, common);
+    }
+  }
+
+  /**
+   * Build a Baileys adapter.
+   *
+   * Unofficial, and no amount of code changes that: it automates a WhatsApp Web session,
+   * which Meta's terms do not sanction and which can get a number banned. Use a number
+   * created for this, never a personal one. Prefer {@link WhatsAppAdapter.fromCloud} unless
+   * the number has no Cloud API access.
+   *
+   * Unlike {@link WhatsAppAdapter.fromWeb} it embeds no browser — it speaks the multi-device
+   * protocol over a WebSocket. `baileys` is an optional peer dependency; it is loaded lazily
+   * at connect, so a consumer who never calls this never needs it installed.
+   *
+   * `botPhoneId` has nothing to default from here, so leaving it unset while `requireMention`
+   * is on (its default) drops every group message. The adapter logs when it does.
+   *
+   * @throws {ConfigurationError} when `sessionDir` is missing or empty.
+   * @public
+   */
+  static fromBaileys(
+    baileys: WhatsAppBaileysConfig,
+    opts: WhatsAppAdapterCommonOptions = {},
+  ): WhatsAppAdapter {
+    requireNonEmpty([["sessionDir", baileys.sessionDir]]);
+    return new WhatsAppAdapter(
+      new WhatsAppBaileysBackend({
+        sessionDir: baileys.sessionDir,
+        ...(baileys.connectTimeoutMs !== undefined
+          ? { connectTimeoutMs: baileys.connectTimeoutMs }
+          : {}),
+        ...(baileys.sendTimeoutMs !== undefined ? { sendTimeoutMs: baileys.sendTimeoutMs } : {}),
+      }),
+      opts,
+    );
   }
 
   /**
