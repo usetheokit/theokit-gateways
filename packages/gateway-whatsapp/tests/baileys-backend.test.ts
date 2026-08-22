@@ -712,3 +712,32 @@ describe("WhatsAppBaileysBackend — the defensive constructs, pinned", () => {
     await backend.disconnect();
   }, 30_000);
 });
+
+describe("WhatsAppBaileysBackend — the window before a socket exists", () => {
+  it("ends a socket the factory delivers after disconnect already ran", async () => {
+    // `disconnect()` cannot see an attempt still parked inside `factory()`: it is not yet in
+    // `pendingAttempts` and `this.socket` is undefined, so the teardown ends nothing. Not a
+    // theoretical window — the real factory awaits a dynamic import, the auth state off disk
+    // and a network round-trip for the protocol version before any socket exists.
+    let deliver: ((socket: FakeSocket) => void) | undefined;
+    const socket = new FakeSocket();
+    const backend = new WhatsAppBaileysBackend({
+      sessionDir: "/tmp/x",
+      connectTimeoutMs: 5_000,
+      socketFactory: () =>
+        new Promise<FakeSocket>((resolve) => {
+          deliver = resolve;
+        }),
+    });
+
+    const connecting = backend.connect();
+    await new Promise((r) => setTimeout(r, 10)); // parked inside the factory
+    await backend.disconnect();
+    deliver?.(socket); // the factory finally returns, into a backend already closed
+
+    const startedAt = Date.now();
+    expect(await connecting).toBe(false);
+    expect(Date.now() - startedAt, "waited out the connect timeout").toBeLessThan(1_000);
+    expect(socket.ended, "a socket delivered after disconnect was left running").toBe(true);
+  }, 30_000);
+});

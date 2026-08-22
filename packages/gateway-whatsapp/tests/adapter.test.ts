@@ -523,3 +523,43 @@ describe("WhatsAppAdapter — the third backend", () => {
     expect(() => WhatsAppAdapter.fromBaileys({ sessionDir: "  " })).toThrow(/sessionDir/i);
   });
 });
+
+describe("WhatsAppAdapter — a stale unsubscribe must be a no-op", () => {
+  it("does not let the first handler's off() tear down the second's subscription", async () => {
+    // The defect the cross-adapter contract exists to catch, in the one adapter that contract
+    // had exempted by name. The closure `onInbound` returned called `this.inboundUnsubscribe?.()`
+    // — whatever handle was CURRENT — so a stale `off()` killed a live subscription and nulled
+    // the handler. The gateway then went silent with no error and no crash, which is the worst
+    // way for a message bus to fail: nothing to see in a log, nothing to alert on.
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend, { allowedSenders: "*" });
+
+    const seen: string[] = [];
+    const offFirst = adapter.onInbound(async () => void seen.push("first"));
+    adapter.onInbound(async () => void seen.push("second"));
+    offFirst();
+
+    await backend.inboundHandler?.(makeInbound({ text: "live" }));
+
+    expect(seen, "the stale unsubscribe deafened the adapter").toEqual(["second"]);
+  });
+
+  it("does not let a stale status unsubscribe deafen the receipts", async () => {
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend);
+
+    const seen: string[] = [];
+    const offFirst = adapter.onStatusReceipt(async () => void seen.push("first"));
+    adapter.onStatusReceipt(async () => void seen.push("second"));
+    offFirst();
+
+    await backend.statusHandler?.({
+      wamid: "wamid.1",
+      status: "delivered",
+      recipient: "5511999999999",
+      timestamp: 1_700_000_000_000,
+    });
+
+    expect(seen).toEqual(["second"]);
+  });
+});

@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A stale unsubscribe no longer deafens the WhatsApp adapter. The closure `onInbound` returned
+  called whichever backend handle was *current*, so `onInbound(A)` → `onInbound(B)` → `A.off()`
+  tore down **B's** subscription and nulled the handler: the gateway went silent with no error
+  and no crash. It is now identity-guarded like every sibling, and so is `onStatusReceipt`.
+  This is the exact defect the cross-adapter contract exists to catch, and WhatsApp was exempt
+  from it — by a comment asserting its mechanism gave "the same guarantee", when that mechanism
+  had no guard at all. The exemption is gone; the one adapter the gate excused was the one
+  carrying the defect
+
 - The cross-adapter contract gate stopped accepting a comment as a guard. Two of its invariants
   read source with comments intact, so commenting a guard out passed while deleting it failed —
   it detected removal, not disablement, the same shape the file's own history records finding

@@ -122,13 +122,16 @@ describe("cross-adapter contract", () => {
       const code = withoutComments(source);
       // The handler field is named `handler` in some adapters and
       // `inboundHandler` in others; both spellings are accepted.
+      // The exemption that used to sit here is gone. It whitelisted WhatsApp on the grounds
+      // that unsubscribing "through the backend handle" was "a different mechanism with the
+      // same guarantee". Measured: that mechanism had NO guard — a stale `off()` tore down
+      // whoever had subscribed last and left the gateway silent. The one adapter the gate
+      // excused was the one adapter carrying the defect, which is what an exemption written
+      // from a reading of the code rather than a test of it will eventually always be.
       const guarded =
         /if\s*\(\s*this\.(inboundH|h)andler\s*===\s*handler\s*\)\s*\{?\s*this\.\1andler\s*=\s*undefined\s*;/.test(
           code,
-        ) ||
-        // WhatsApp unsubscribes through the backend handle instead of nulling a
-        // field, which is a different mechanism with the same guarantee.
-        /this\.inboundUnsubscribe\?\.\(\)/.test(code);
+        );
       if (!guarded) offenders.push(pkg);
     }
     expect(offenders).toEqual([]);

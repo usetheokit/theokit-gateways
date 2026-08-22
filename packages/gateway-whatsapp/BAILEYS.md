@@ -16,8 +16,9 @@ no ban concept, and everything below stops being your problem.
 
 ## What the test suite proves, and what it does not
 
-36 tests drive an injected fake socket, and they pass with `baileys` **not installed** —
-deliberately, because it is an optional peer dependency and CI does not install it.
+57 tests cover this backend — 41 driving an injected fake socket or a stub module, 16 driving
+the pure normaliser — and they pass with `baileys` **not installed**, deliberately, because it is
+an optional peer dependency and CI does not install it.
 
 They prove our logic: that a group message resolves its sender from `participant` rather
 than from the group, that sends do not interleave, that a timeout reports undetermined

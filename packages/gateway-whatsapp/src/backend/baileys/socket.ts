@@ -4,10 +4,12 @@
  * Three members, not Baileys' whole `WASocket`. Two things follow, and both are the reason
  * the contract is ours rather than the library's.
  *
- * It was four. `logout()` was declared and called by nothing — and on WhatsApp `logout()`
- * UNPAIRS the device, which is the opposite of what `disconnect()` means here. A dead member
- * advertising a destructive capability is worse than an absent one: the next person to need a
- * teardown finds it, calls it, and loses the session the whole `sessionDir` exists to keep.
+ * It was five, and two rounds of review took two members off it, both declared and called by
+ * nothing. `logout()` went first and mattered most: on WhatsApp it UNPAIRS the device, the
+ * opposite of what `disconnect()` means here, so the next person needing a teardown would find
+ * it, call it, and lose the session the whole `sessionDir` exists to keep. `ev.off()` went for
+ * the plain reason — nothing removed a listener, because a socket is discarded whole rather
+ * than unsubscribed from. Neither was a capability we had; both read as one.
  *
  * **The backend is testable with `baileys` absent.** It is an optional peer dependency, so
  * CI does not install it — and a backend that could only be exercised with the real library
@@ -16,7 +18,7 @@
  *
  * **The library stays an implementation detail of this file.** A breaking change upstream
  * lands in one place instead of wherever its types had spread. Depending on all of `WASocket`
- * to call four of its members is the interface-segregation problem stated plainly
+ * to call three of its members is the interface-segregation problem stated plainly
  * (`rules/architecture.md`).
  *
  * @internal
@@ -47,10 +49,6 @@ export interface BaileysEventMap {
 export interface BaileysSocketLike {
   readonly ev: {
     on<K extends keyof BaileysEventMap>(
-      event: K,
-      listener: (payload: BaileysEventMap[K]) => void,
-    ): void;
-    off?<K extends keyof BaileysEventMap>(
       event: K,
       listener: (payload: BaileysEventMap[K]) => void,
     ): void;

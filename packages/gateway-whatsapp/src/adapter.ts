@@ -441,17 +441,26 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     this.inboundUnsubscribe?.();
     this.handler = handler;
 
-    this.inboundUnsubscribe = this.backendImpl.onInbound(async (inbound) => {
+    const off = this.backendImpl.onInbound(async (inbound) => {
       if (!this.handler) return;
       if (this.isRefusedBySenderAllowlist(inbound)) return;
       if (this.shouldDropGroupMessage(inbound)) return;
       await this.handler(this.toMessageEvent(inbound));
     });
+    this.inboundUnsubscribe = off;
 
     return () => {
-      this.inboundUnsubscribe?.();
-      this.inboundUnsubscribe = undefined;
-      this.handler = undefined;
+      // Identity-guarded, like every sibling adapter. Without the guard this closure tore down
+      // whatever subscription was CURRENT: `onInbound(A)` → `onInbound(B)` → A's stale `off()`
+      // killed B's and nulled the handler, and the gateway went silent with no error. That is
+      // the defect the cross-adapter contract exists to catch, and this adapter was exempted
+      // from it by a comment claiming its mechanism gave "the same guarantee" — it had no
+      // guard at all.
+      if (this.handler === handler) {
+        this.handler = undefined;
+        off();
+        this.inboundUnsubscribe = undefined;
+      }
     };
   }
 
@@ -459,13 +468,17 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
   onStatusReceipt(handler: (receipt: WhatsAppStatusReceipt) => Promise<void>): () => void {
     this.statusUnsubscribe?.();
     this.statusHandler = handler;
-    this.statusUnsubscribe = this.backendImpl.onStatusReceipt(async (r) => {
+    const off = this.backendImpl.onStatusReceipt(async (r) => {
       await this.statusHandler?.(r);
     });
+    this.statusUnsubscribe = off;
     return () => {
-      this.statusUnsubscribe?.();
-      this.statusUnsubscribe = undefined;
-      this.statusHandler = undefined;
+      // Same identity guard, same reason. A stale unsubscribe must be a no-op.
+      if (this.statusHandler === handler) {
+        this.statusHandler = undefined;
+        off();
+        this.statusUnsubscribe = undefined;
+      }
     };
   }
 }

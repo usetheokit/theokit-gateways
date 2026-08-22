@@ -161,103 +161,46 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
 
   /** @internal */
   private async openSocket(): Promise<boolean> {
-    const factory = this.opts.socketFactory ?? createBaileysSocket;
     // Every attempt carries a generation. A socket from an abandoned attempt must not be able
     // to speak for the backend afterwards — not to deliver inbound, not to flip `connected`,
-    // and not to be left running (F2, F3).
+    // and not to be left running.
     const generation = ++this.generation;
-    const socket = await factory({
-      sessionDir: this.opts.sessionDir,
-      ...(this.opts.onQr !== undefined ? { onQr: this.opts.onQr } : {}),
-    });
-
+    const socket = await this.buildSocket();
     const isCurrent = (): boolean => this.generation === generation;
 
-    socket.ev.on("messages.upsert", (payload) => {
-      // A batch typed anything other than `notify` is history being replayed, not live
-      // traffic. Answering replayed history is the defect #11 records in the email backend.
-      if (payload.type !== undefined && payload.type !== "notify") return;
-      if (!isCurrent()) return;
-      for (const raw of payload.messages ?? []) this.dispatchInbound(raw);
-    });
-
-    const timeoutMs = this.opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
-    // The executor runs synchronously, so `settle` is assigned before the next statement.
-    let settle: (ok: boolean) => void = () => undefined;
-    const opened = new Promise<boolean>((resolve) => {
-      settle = resolve;
-    });
-
-    // Retiring an attempt has to END it, not merely silence it. Bumping the generation alone
-    // made every listener a no-op — including the one that resolves this promise — so the only
-    // thing left able to settle it was the timeout. A `disconnect()` during pairing therefore
-    // blocked shutdown for the full 60s default while the socket it asked to close stayed
-    // live: the same ban surface the failed-connect teardown exists to remove, reached through
-    // the abandonment path instead.
-    const abandon = (): void => settle(false);
-    this.pendingAttempts.add(abandon);
-
-    socket.ev.on("connection.update", (update) => {
-      if (!isCurrent()) return;
-      if (update.connection === "open") {
-        settle(true);
-        return;
-      }
-      if (update.connection === "close") {
-        this.lastCloseError = update.lastDisconnect?.error;
-        this.connected = false;
-        // A closed socket is finished, and Baileys carries its own reconnect machinery: left
-        // alone it keeps dialling under a backend that believes it is disconnected. Clearing
-        // the reference too is what stops the next `connect()` overwriting it and stranding
-        // this one beyond the reach of any later `disconnect()`.
-        if (this.socket === socket) this.socket = undefined;
-        endQuietly(socket);
-        settle(false);
-      }
-    });
-
-    // Never hanging matters more than succeeding: a caller has nothing to time out against
-    // if this promise simply never settles.
-    const timer = setTimeout(() => settle(false), timeoutMs);
-
-    let opened_ok = false;
-    try {
-      opened_ok = await opened;
-    } finally {
-      // The loser of the race stays scheduled otherwise, and a scheduled timer keeps Node's
-      // event loop alive — the defect fixed in the core runner (#37).
-      clearTimeout(timer);
-      this.pendingAttempts.delete(abandon);
-    }
-
-    // A `disconnect()` that arrived while this was opening wins. Adopting the socket now
-    // would leave `connected` true over a backend whose socket was already cleared, and every
-    // later `connect()` would short-circuit on it while every `send` was refused — the
-    // teardown-during-connect wedge fixed in the Slack adapter two commits before this one.
+    // A `disconnect()` that landed while the factory was still resolving cannot see this
+    // attempt: it is not yet in `pendingAttempts` and `this.socket` is still undefined, so the
+    // teardown ends nothing. The window is not theoretical — the real factory awaits a dynamic
+    // import, the auth state off disk and a network round-trip for the protocol version before
+    // a socket exists. Without this check, stop-then-start in that window left a live session
+    // running until the connect timeout fired.
     if (!isCurrent()) {
       endQuietly(socket);
       return false;
     }
 
-    if (!opened_ok) {
-      // A bare `false` tells an operator nothing, and the two causes want opposite responses:
-      // a blip is worth retrying, an unlinked device can only be fixed by re-pairing, and a
-      // supervisor that cannot tell them apart will retry forever against a dead session.
-      const cause =
-        this.lastCloseError === undefined
-          ? `no 'open' within ${timeoutMs}ms`
-          : this.lastCloseError instanceof Error
-            ? this.lastCloseError.message
-            : String(this.lastCloseError);
-      process.stderr.write(`[whatsapp-baileys] connect failed: ${cause}\n`);
+    this.subscribeInbound(socket, isCurrent);
+    const timeoutMs = this.opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
+    const openedOk = await this.raceOpen(socket, isCurrent, timeoutMs);
 
+    // A `disconnect()` that arrived while this was opening wins. Adopting the socket now would
+    // leave `connected` true over a backend whose socket was already cleared, and every later
+    // `connect()` would short-circuit on it while every `send` was refused — the
+    // teardown-during-connect wedge fixed in the Slack adapter.
+    if (!isCurrent()) {
+      endQuietly(socket);
+      return false;
+    }
+
+    if (!openedOk) {
+      this.reportConnectFailure(timeoutMs);
       // A failed attempt must not leave a live socket behind. It would keep feeding inbound
       // into the handler, and the retry would open a SECOND live session — which on an
       // unofficial automation is ban surface, not only a leak.
       //
-      // Bumping the generation is what actually silences it: `end()` asks the socket to
-      // close, and a fake — or a real one mid-teardown — can still emit. Retiring the
-      // generation makes every listener from this attempt a no-op regardless.
+      // Bumping the generation is what actually silences it: `end()` asks the socket to close,
+      // and a socket mid-teardown can still emit. Retiring the generation makes every listener
+      // from this attempt a no-op regardless.
       this.generation += 1;
       endQuietly(socket);
       this.socket = undefined;
@@ -272,6 +215,102 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
     this.socket = socket;
     this.connected = true;
     return true;
+  }
+
+  /** Build a socket through the injected factory, or the real one. @internal */
+  private async buildSocket(): Promise<BaileysSocketLike> {
+    const factory = this.opts.socketFactory ?? createBaileysSocket;
+    return factory({
+      sessionDir: this.opts.sessionDir,
+      ...(this.opts.onQr !== undefined ? { onQr: this.opts.onQr } : {}),
+    });
+  }
+
+  /** Route this socket's inbound batches into the handler, while it is still current. @internal */
+  private subscribeInbound(socket: BaileysSocketLike, isCurrent: () => boolean): void {
+    socket.ev.on("messages.upsert", (payload) => {
+      // A batch typed anything other than `notify` is history being replayed, not live
+      // traffic. Answering replayed history is the defect #11 records in the email backend.
+      if (payload.type !== undefined && payload.type !== "notify") return;
+      if (!isCurrent()) return;
+      for (const raw of payload.messages ?? []) this.dispatchInbound(raw);
+    });
+  }
+
+  /**
+   * Wait for this socket to report `open`, or for something to end the attempt.
+   *
+   * Three things can settle it: the socket opens, the socket closes, or the timeout fires — and
+   * a fourth, `disconnect()`, reaches it through `pendingAttempts`. That last one is why the
+   * resolver is registered rather than merely closed over: retiring an attempt by generation
+   * makes its listeners no-ops, INCLUDING the one that would settle this, so without a way in
+   * from outside the only thing left able to finish it was the timeout.
+   *
+   * @internal
+   */
+  private async raceOpen(
+    socket: BaileysSocketLike,
+    isCurrent: () => boolean,
+    timeoutMs: number,
+  ): Promise<boolean> {
+    // The executor runs synchronously, so `settle` is assigned before the next statement.
+    let settle: (ok: boolean) => void = () => undefined;
+    const opened = new Promise<boolean>((resolve) => {
+      settle = resolve;
+    });
+
+    const abandon = (): void => settle(false);
+    this.pendingAttempts.add(abandon);
+
+    socket.ev.on("connection.update", (update) => {
+      if (!isCurrent()) return;
+      if (update.connection === "open") {
+        settle(true);
+        return;
+      }
+      if (update.connection !== "close") return;
+      this.lastCloseError = update.lastDisconnect?.error;
+      this.connected = false;
+      // A closed socket is finished, and Baileys carries its own reconnect machinery: left
+      // alone it keeps dialling under a backend that believes it is disconnected. Clearing the
+      // reference too is what stops the next `connect()` overwriting it and stranding this one
+      // beyond the reach of any later `disconnect()`.
+      if (this.socket === socket) this.socket = undefined;
+      endQuietly(socket);
+      settle(false);
+    });
+
+    // Never hanging matters more than succeeding: a caller has nothing to time out against if
+    // this promise simply never settles.
+    const timer = setTimeout(() => settle(false), timeoutMs);
+    try {
+      return await opened;
+    } finally {
+      // The loser of the race stays scheduled otherwise, and a scheduled timer keeps Node's
+      // event loop alive — the defect fixed in the core runner (#37).
+      clearTimeout(timer);
+      this.pendingAttempts.delete(abandon);
+    }
+  }
+
+  /**
+   * Say why the connection did not open.
+   *
+   * A bare `false` tells an operator nothing, and the two causes want opposite responses: a
+   * blip is worth retrying, an unlinked device can only be fixed by re-pairing, and a
+   * supervisor that cannot tell them apart retries forever against a dead session.
+   *
+   * @internal
+   */
+  private reportConnectFailure(timeoutMs: number): void {
+    const error = this.lastCloseError;
+    const cause =
+      error === undefined
+        ? `no 'open' within ${timeoutMs}ms`
+        : error instanceof Error
+          ? error.message
+          : String(error);
+    process.stderr.write(`[whatsapp-baileys] connect failed: ${cause}\n`);
   }
 
   /** Close the socket. Idempotent, and safe when never connected. */
