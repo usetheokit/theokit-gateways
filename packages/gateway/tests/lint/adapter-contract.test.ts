@@ -48,6 +48,24 @@ async function adapterSources(): Promise<Array<{ pkg: string; source: string }>>
   return out.sort((a, b) => a.pkg.localeCompare(b.pkg));
 }
 
+/** Index of the closing quote of the string or template literal opening at `start`. */
+function endOfLiteral(code: string, start: number): number {
+  const quote = code[start];
+  for (let i = start + 1; i < code.length; i += 1) {
+    if (code[i] === "\\") {
+      i += 1;
+      continue;
+    }
+    if (code[i] === quote) return i;
+  }
+  return code.length;
+}
+
+/** Is this the start of a string or template literal? */
+function opensLiteral(char: string | undefined): boolean {
+  return char === "'" || char === '"' || char === "`";
+}
+
 /**
  * The `{ … }` block starting at `open`, by brace matching.
  *
@@ -55,15 +73,25 @@ async function adapterSources(): Promise<Array<{ pkg: string; source: string }>>
  * reaches into the NEXT method, and that method's own guard satisfied the check. Every
  * masking defect in this repository has had this shape — one construct passing on the
  * strength of a neighbour.
+ *
+ * The scan skips string and template literals. Comments are already stripped by the caller,
+ * but literals cannot be — another invariant in this file matches on a message string — and an
+ * unbalanced `{` inside one over-extends the block past the method's real closing brace,
+ * letting a same-field guard in whatever it swallows cover an unguarded declaration. That is
+ * the same masking, narrowed rather than removed.
  */
 function blockAt(code: string, open: number): string {
   let depth = 0;
   for (let i = open; i < code.length; i += 1) {
-    if (code[i] === "{") depth += 1;
-    else if (code[i] === "}") {
-      depth -= 1;
-      if (depth === 0) return code.slice(open, i + 1);
+    const char = code[i];
+    if (opensLiteral(char)) {
+      i = endOfLiteral(code, i);
+      continue;
     }
+    if (char === "{") depth += 1;
+    if (char !== "}") continue;
+    depth -= 1;
+    if (depth === 0) return code.slice(open, i + 1);
   }
   return code.slice(open);
 }
@@ -179,8 +207,11 @@ describe("cross-adapter contract", () => {
     // The floor exists because the first version of this regex used `[^)]*` and matched ZERO:
     // every one of these types its parameter as a function, so the first `)` closes the inner
     // signature. The test ran green over an empty set and reported a contract it never checked.
-    // Adding an adapter should make someone look here; that is the right kind of friction.
-    expect(declarations).toBeGreaterThanOrEqual(17);
+    // Exact, not a floor. A floor only fires when the count DROPS, so the sentence this
+    // comment used to carry — that adding an adapter makes someone look here — was false:
+    // an eighteenth declaration slid past in silence. Exact is the friction, in both
+    // directions, and updating one number is the whole cost of adding an adapter.
+    expect(declarations).toBe(17);
     expect(offenders).toEqual([]);
   });
 

@@ -28,8 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regex matched zero declarations (every one types its parameter as a function, so `[^)]*` stops
   at the inner signature), and the next read a fixed window that reached into the neighbouring
   method and accepted ITS guard. The check now brace-matches the method body and requires the
-  guard to name the same field that body stores the handler in, and it asserts a floor on how
-  many declarations it found — a gate that silently checks nothing is worse than no gate
+  guard to name the same field that body stores the handler in, and it asserts the exact count
+  of declarations it found — a gate that silently checks nothing is worse than no gate. A fifth
+  round then found the brace matcher could still be fooled by an unbalanced `{` inside a string
+  literal, and that the count assertion, written as a floor, caught a declaration disappearing
+  but not one being added. Both closed; reverting the guard in any of nine sites across six
+  files now fails it
 
 - The cross-adapter contract gate stopped accepting a comment as a guard. Two of its invariants
   read source with comments intact, so commenting a guard out passed while deleting it failed —
