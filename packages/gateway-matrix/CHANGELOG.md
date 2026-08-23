@@ -4,14 +4,6 @@
 
 ### Patch Changes
 
-- 8cbf136: **Every published export now carries documentation.** Forty-seven public symbols shipped with no docblock at all, so a consumer hovering `DiscordAdapter`, `SlackAdapter`, `WhatsAppCloudBackend`, `ThreadStore` or any of the error classes got an empty tooltip. Coverage across the eleven packages went from 71.2% to 100% (163/163), measured over the published declarations rather than the source, because a docblock is not documentation until it survives the build.
-
-  The text says what each symbol is for and what constrains it, not what its name already says. `TelegramAdapter` records that a bot cannot enumerate its chats nor speak into one that has not spoken first. `DiscordAdapter` records that reading message content needs a privileged intent enabled in the developer portal, without which every `event.text` arrives empty and nothing says why. `WhatsAppWebBackend` records that it is unofficial and can get a number banned. `shouldDispatchSyncEvent` records that Matrix replays history on sync, which is why a freshly started bot would otherwise answer every message it can still see.
-
-  **`gateway-slack`'s README documented a type that does not exist.** Its usage example imported `GatewayMessageEvent` from `@theokit/gateway`. That name is an internal alias inside the Discord and Telegram adapters (`MessageEvent as GatewayMessageEvent`), never an export. A reader who copied the example got code that did not compile. It now imports `MessageEvent`, which is what `onInbound` actually hands the handler.
-
-  Two docblocks that attached to nothing were reattached: `acquirePidLock` in `gateway-whatsapp` had its documentation stranded thirty lines above, over a different function, and shipped undocumented as a result.
-
 - b8ef098: **Every package now ships the licence it declares.** All twelve manifests in this repository declare `Apache-2.0`, and the repository had no `LICENSE` file at all — not at the root, and not in any package directory except `gateway-email`. So each published tarball asserted a licence while carrying none of its terms, and §4(a) of that licence requires a copy to travel with the distribution. Worse than a missing file: with no licence text anywhere, everything outside the manifests fell back to default copyright, which grants a recipient nothing.
 
   The text is now at the repository root and inside every publishable package, byte-identical to the canonical Apache License 2.0 with the appendix filled in (`Copyright 2026 usetheo.dev`). The one pre-existing copy, in `gateway-email`, was replaced along with the rest: it carried the same truncated paragraph 4(d) found across the ecosystem, dropping "reasonable and customary use" from the NOTICE clause — a modified body under an unmodified SPDX identifier.
@@ -35,16 +27,6 @@
   Also: a `pre_inbound` hook that threw put its raw error text into the user's chat, which could expose internal details such as connection strings or tokens. Users now see only which hook failed; the detail goes to the server log, redacted.
 
   WhatsApp additionally stops opening a second session when `connect()` is called twice, and its group mention filter no longer treats unrelated digits scattered through a message as a mention of the bot.
-
-- **Every adapter now declares its core peer as `>=0.6.0 <1.0.0` instead of `workspace:^`.** The range says what is actually true and tested: these adapters run against the core they ship beside, and nothing is expected to break until the core reaches 1.0.
-
-  `workspace:^` publishes as a caret on the current version, and a caret on a `0.x` version pins the minor — `^0.5.0` admits only `0.5.x`. So every core minor put all ten adapters out of range at once, and changesets correctly reads an out-of-range peer as a breaking change for consumers. On a `0.1.1` package that lands on **1.0.0**.
-
-  Ten packages would have been promoted to 1.0.0 by an artifact of caret semantics on `0.x`, not by anyone deciding they were stable. This repository has two rules against making that claim without evidence — `public-copy.md § 3` and `dogfood-golden-rule.md` — and the evidence directory is empty. The WhatsApp backend added in this same release has never exchanged a message with WhatsApp, which its own `BAILEYS.md` states plainly.
-
-  The range is measured rather than assumed. Across all ten adapters the imported surface from the core is 17 symbols; none was removed or narrowed since the last release, no adapter imports anything introduced in 0.6, and the full suite, typecheck, build and declaration gates run green against 0.6.0. The lower bound is `0.6.0` and not `0.5.0` because 0.6.0 is the core actually exercised — claiming compatibility with a version nothing here compiles against would be the kind of untested assertion the range exists to replace.
-
-  Tightening it is cheap if a future core minor does break an adapter: that is a one-line change in the package that broke, made when there is a reason, instead of ten major bumps every release whether or not anything broke.
 
 - 7ccb21b: Two defects that only a real server could show, both found by the live suites.
 
