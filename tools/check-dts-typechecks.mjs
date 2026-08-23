@@ -19,7 +19,9 @@
 // to check" reports absence it never checked.
 
 import { execFileSync } from "node:child_process";
+import { statSync } from "node:fs";
 import { publishedPackages, ROOT } from "./lib/published-entries.mjs";
+import { readRepairStamp, repairRanOverBuild } from "./lib/repair-stamp.mjs";
 
 const LABEL = "dts-typechecks";
 const MAX_SHOWN = 12;
@@ -74,6 +76,8 @@ const packages = publishedPackages();
 let broken = 0;
 let unbuilt = 0;
 let checkedEntries = 0;
+/** When the most recently written declaration was written — the build this gate is reading. */
+let newestDeclarationMs;
 
 for (const pkg of packages) {
   if (!pkg.built) {
@@ -82,6 +86,12 @@ for (const pkg of packages) {
     continue;
   }
   checkedEntries += pkg.entries.length;
+  for (const entry of pkg.entries) {
+    const writtenMs = statSync(entry).mtimeMs;
+    if (newestDeclarationMs === undefined || writtenMs > newestDeclarationMs) {
+      newestDeclarationMs = writtenMs;
+    }
+  }
   const diagnostics = diagnosticsFor(pkg.entries);
   if (diagnostics.length === 0) {
     console.log(
@@ -110,6 +120,19 @@ if (broken > 0 || unbuilt > 0) {
   }
   if (unbuilt > 0) parts.push(`${unbuilt} package(s) have no dist/ and were not checked`);
   console.error(`\n[${LABEL}] FAIL — ${parts.join("; ")}.`);
+  // A third fact, reported only when it is TRUE. An unrepaired build and a broken declaration
+  // produce identical output otherwise, and the message above names the published artifact —
+  // which is not what an unrepaired dist is. Stated as an observation about this tree, never as
+  // an explanation of the failure: the declarations may also be genuinely broken, and a gate
+  // that explains away a real regression is worse than one that is merely unhelpful.
+  if (broken > 0 && !repairRanOverBuild(readRepairStamp(ROOT), newestDeclarationMs)) {
+    console.error(
+      `[${LABEL}] note — tools/repair-dts-imports.mjs has not run over this build. It is the` +
+        ` second half of the ROOT script ("build": "pnpm -r run build && node ...), so` +
+        ` \`pnpm -r build\` skips it and leaves declarations mid-flight. Re-check with` +
+        ` \`pnpm build && pnpm quality:dts-typechecks\` before reading the failure above as a defect.`,
+    );
+  }
   process.exit(1);
 }
 console.log(

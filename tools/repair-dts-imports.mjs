@@ -45,6 +45,7 @@ import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { sweepStaleProbes, withProbe } from "./lib/dts-probe.mjs";
 import { publishedPackages, ROOT } from "./lib/published-entries.mjs";
+import { writeRepairStamp } from "./lib/repair-stamp.mjs";
 
 const LABEL = "dts-repair";
 const ts = createRequire(import.meta.url)("typescript");
@@ -482,6 +483,14 @@ function main() {
     console.error(`[${LABEL}] FAIL — ${unresolved} name(s) could not be bound`);
     process.exit(1);
   }
+  // Record that the repair ran over this build. `check-dts-typechecks.mjs` reads it to tell an
+  // UNREPAIRED declaration from a broken one — the two are indistinguishable in the output
+  // otherwise, and reporting the first as the second names the published artifact for a state
+  // that is never published. Only on the success path: a failed repair has not run over anything.
+  //
+  // Stamped only for a full run. A `--only` pass repairs one package and leaves the rest as they
+  // were, so claiming the build is repaired would be false for every package it skipped.
+  if (only === undefined) writeRepairStamp(ROOT);
   console.log(
     `[${LABEL}] done — ${repaired} binding(s) added across ${packages.length} package(s)`,
   );

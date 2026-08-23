@@ -49,13 +49,11 @@ own quality gates.
 
 ## Index
 
-4 items — **Open** 1 · **In flight** 1 · **Closed** 2
+5 items — **Open** 0 · **In flight** 1 · **Closed** 4
 
-### Open (1)
+### Open (0)
 
-| Item | Title | Status | Severity |
-|---|---|---|---|
-| [`B-004`](#b-004--five-packages-publish-a-dts-that-does-not-compile----) | Five packages publish a `.d.ts` that does not compile | `triaged` | — |
+_None._
 
 ### In flight (1)
 
@@ -63,12 +61,14 @@ own quality gates.
 |---|---|---|---|
 | [`B-001`](#b-001--measure-what-the-whatsapp-webjs-backend-costs-and-give-it-a-rival----) | Measure what the whatsapp-web.js backend costs, and give it a rival | `planned` | — |
 
-### Closed (2)
+### Closed (4)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
 | [`B-002`](#b-002--the-whatsapp-webjs-bridge-cannot-start-at-all---x) | The whatsapp-web.js bridge cannot start at all | `shipped` | — |
 | [`B-003`](#b-003--the-adapters-docblock-promises-factories-that-do-not-exist---x) | The adapter's docblock promises factories that do not exist | `shipped` | — |
+| [`B-004`](#b-004--five-packages-publish-a-dts-that-does-not-compile----) | Five packages publish a `.d.ts` that does not compile | `killed` | — |
+| [`B-005`](#b-005--the-dts-gate-accuses-the-published-artifact-when-the-build-command-was-wrong----) | The dts gate accuses the published artifact when the build command was wrong | `shipped` | — |
 
 <!-- BACKLOG-INDEX:END -->
 
@@ -161,3 +161,20 @@ kill_reason: not a defect — the measurement was wrong. `pnpm quality:dts-typec
 > Registered 2026-08-22 while verifying B-001's Global DoD (G4). Killed the same day by measurement.
 > Issue #50 closed as invalid, with the correction commented on it. Superseded by B-005, which is
 > what was actually wrong here.
+
+
+## B-005 — The dts gate accuses the published artifact when the build command was wrong   [ ]
+
+domain: theokit-gateways
+repo: tools
+suggested_mode: bug
+source: discover-review
+evidence: `tools/check-dts-typechecks.mjs:108` prints `N package(s) publish a declaration that does not compile without skipLibCheck` — a statement about the PUBLISHED artifact. Reproduced: `pnpm -r build && pnpm quality:dts-typechecks` → exit 1, five packages named. `pnpm build && pnpm quality:dts-typechecks` → exit 0. The difference is `package.json:12`, `"build": "pnpm -r run build && node tools/repair-dts-imports.mjs"` — the recursive form runs each package's own script and never reaches the repair, so the gate reads the intermediate state.
+why_now: it cost me a full false issue (#50, closed as invalid) and a backlog item killed by measurement (B-004). The gate already separates "does not compile" from "was never built" at `:102-111`, on the stated grounds that merging different facts "describes a defect that may not exist" — which is exactly what happened here, one category over. The message names the artifact; the artifact is fine.
+status: shipped
+dod:
+  - a run whose declarations are unrepaired says so, distinguishably from a genuinely broken one
+  - the hint does not ASSERT the cause — a declaration can be broken for real, and a gate that explains away a true failure is worse than one that is merely unhelpful
+  - a test fails if the distinction is removed
+
+> Registered 2026-08-23. Supersedes the real half of B-004, which was killed as a mis-measurement.
