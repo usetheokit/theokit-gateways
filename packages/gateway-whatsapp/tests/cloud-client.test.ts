@@ -239,3 +239,75 @@ describe("WhatsAppCloudClient — sendTemplate", () => {
     expect(result.error?.code).toBe("server_error");
   });
 });
+
+describe("WhatsAppCloudClient.verifyCredentials", () => {
+  it("reports failure, with Meta's reason, on a token the API rejects", async () => {
+    // The check `connect()` never made. A token that Meta refuses must be distinguishable from
+    // one it accepts, and the reason has to survive: "auth_failed" and "rate_limit" want opposite
+    // responses from a supervisor, and collapsing them into a boolean throws that away here so
+    // the caller can never recover it.
+    const fetchImpl = makeFetchError(401, {
+      error: { message: "Invalid OAuth access token.", code: 190, type: "OAuthException" },
+    });
+    const client = new WhatsAppCloudClient({
+      accessToken: "definitely-not-a-real-token",
+      phoneNumberId: "123",
+      fetch: fetchImpl,
+    });
+
+    const result = await client.verifyCredentials();
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("auth_failed");
+    expect(result.error?.message).toContain("Invalid OAuth access token");
+  });
+
+  it("asks the API about the phone number itself, with the token attached", async () => {
+    // Not any endpoint: the one that proves BOTH halves of the credential. A token can be valid
+    // and still have no access to this phone number id, which is the misconfiguration a consumer
+    // is most likely to ship — and a check that only validated the token would pass it.
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ id: "123", display_phone_number: "+1 555" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ) as unknown as ReturnType<typeof vi.fn> & typeof fetch;
+    const client = new WhatsAppCloudClient({
+      accessToken: "tok",
+      phoneNumberId: "123",
+      fetch: fetchImpl,
+    });
+
+    expect((await client.verifyCredentials()).ok).toBe(true);
+
+    const [url, init] = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toContain("/123");
+    expect(url).not.toContain("/messages");
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer tok");
+    expect(init.method ?? "GET").toBe("GET");
+  });
+
+  it("reports a network failure as a failure, not as success", async () => {
+    // fetch rejects when the host is unreachable. Letting that escape would make `connect()`
+    // throw, and the contract every sibling adapter is tested against is that it RETURNS false
+    // rather than throwing.
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("getaddrinfo ENOTFOUND graph.facebook.com");
+    }) as unknown as typeof fetch;
+    const client = new WhatsAppCloudClient({
+      accessToken: "tok",
+      phoneNumberId: "123",
+      fetch: fetchImpl,
+    });
+
+    const result = await client.verifyCredentials();
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("server_error");
+    expect(result.error?.message).toContain("ENOTFOUND");
+  });
+});

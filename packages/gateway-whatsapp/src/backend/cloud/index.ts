@@ -45,6 +45,18 @@ export interface WhatsAppCloudBackendOptions {
 export class WhatsAppCloudBackend implements WhatsAppBackend {
   readonly kind = "cloud" as const;
   private readonly client: WhatsAppCloudClient;
+  /** Verified once by `connect()`; cleared by `disconnect()`. */
+  private connected = false;
+  /**
+   * The verification currently in flight, shared by every caller that arrives during it.
+   *
+   * A flag alone only guards callers that arrive AFTER one finished — two simultaneous
+   * `connect()` calls would each ask Meta, which is one wasted round-trip at startup and a
+   * rate-limit source under a supervisor that health-checks on a schedule. Cleared when it
+   * settles, so a failed attempt does not become a permanent refusal: a transient blip must stay
+   * distinguishable from a revoked token.
+   */
+  private connecting?: Promise<boolean>;
   private readonly appSecret: string;
   private inboundHandler?: (event: WhatsAppInboundEvent) => Promise<void>;
   private statusHandler?: (receipt: WhatsAppStatusReceipt) => Promise<void>;
@@ -60,11 +72,54 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
   }
 
   // Cloud has no persistent connection — webhook is push, send is HTTP.
+  /**
+   * Confirm with Meta that this credential can act as this phone number.
+   *
+   * This used to be `return true`. A consumer with a wrong, expired or revoked token got success
+   * at startup and found out from messages that silently never arrived — no error, no log,
+   * nothing to alert on, which is the worst failure mode a gateway has. The first live run of the
+   * WhatsApp suite caught it (#58); no unit test could, because a fake backend always accepts.
+   *
+   * Idempotent, like every sibling: verified once, then cached. Re-asking on every call would
+   * turn a supervisor's health check into a rate-limit source against Meta.
+   *
+   * Returns false rather than throwing — the contract each sibling adapter is tested against,
+   * because a throw at startup takes the whole runner down with it. The reason goes to stderr
+   * first: told only "false", a supervisor cannot tell a revoked token, which needs a human,
+   * from a rate limit, which needs a wait.
+   */
   async connect(): Promise<boolean> {
+    if (this.connected) return true;
+    if (this.connecting !== undefined) return this.connecting;
+
+    const attempt = this.verifyOnce();
+    this.connecting = attempt;
+    try {
+      return await attempt;
+    } finally {
+      // Only clear what is still ours: `disconnect()` clears it too, and a later `connect()` may
+      // already have installed its own.
+      if (this.connecting === attempt) this.connecting = undefined;
+    }
+  }
+
+  /** One credential check, mapped to the boolean `connect()` is contracted to return. @internal */
+  private async verifyOnce(): Promise<boolean> {
+    const check = await this.client.verifyCredentials();
+    if (!check.ok) {
+      process.stderr.write(
+        `[whatsapp-cloud] connect failed: ${check.error?.code ?? "unknown"} — ` +
+          `${check.error?.message ?? "no reason given"}\n`,
+      );
+      return false;
+    }
+    this.connected = true;
     return true;
   }
 
   async disconnect(): Promise<void> {
+    this.connected = false;
+    this.connecting = undefined;
     this.inboundHandler = undefined;
     this.statusHandler = undefined;
   }

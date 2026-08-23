@@ -49,17 +49,18 @@ own quality gates.
 
 ## Index
 
-5 items — **Open** 0 · **In flight** 1 · **Closed** 4
+6 items — **Open** 0 · **In flight** 2 · **Closed** 4
 
 ### Open (0)
 
 _None._
 
-### In flight (1)
+### In flight (2)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
 | [`B-001`](#b-001--measure-what-the-whatsapp-webjs-backend-costs-and-give-it-a-rival----) | Measure what the whatsapp-web.js backend costs, and give it a rival | `planned` | — |
+| [`B-006`](#b-006--whatsappcloudbackendconnect-reports-success-without-authenticating----) | `WhatsAppCloudBackend.connect()` reports success without authenticating | `planned` | — |
 
 ### Closed (4)
 
@@ -178,3 +179,24 @@ dod:
   - a test fails if the distinction is removed
 
 > Registered 2026-08-23. Supersedes the real half of B-004, which was killed as a mis-measurement.
+
+
+## B-006 — `WhatsAppCloudBackend.connect()` reports success without authenticating   [ ]
+
+domain: theokit-gateways
+repo: packages/gateway-whatsapp
+suggested_mode: bug
+source: discover-live-test
+issue: #58
+evidence: `packages/gateway-whatsapp/src/backend/cloud/index.ts:63-65` was `async connect(): Promise<boolean> { return true; }` — no I/O, no validation, no error path. First real run of `integration/tests/whatsapp/live.test.ts` (a file whose own header read `NEVER EXECUTED`): `× returns false rather than throwing on a token Meta rejects — expected true to be false`. Measured across the siblings: all seven adapters with live coverage authenticate inside `connect()` and all pass the equivalent assertion; WhatsApp Cloud was the only one that did not.
+why_now: the package shipped as `0.2.0` carrying this. A consumer with a wrong, expired or revoked token gets `true` at startup and learns otherwise from messages that silently never arrive — no error, no log, nothing to alert on. The package's 209 unit tests could not see it: the fake backend always accepts, so an unconditional `true` is indistinguishable from a successful check.
+status: planned
+dod:
+  - `connect()` with an invalid token returns `false` and says why
+  - `connect()` with a valid token returns `true`, asserted against Meta rather than a fake
+  - the check proves BOTH halves of the credential (token AND access to the phone number id)
+  - every fix has a test that fails when that fix alone is reverted
+  - a cross-adapter gate stops a `connect()` that invokes nothing from coming back
+
+> Registered 2026-08-23 on the first live run of the WhatsApp suite, after Cloud API credentials
+> were provisioned. Fix proven against Meta: the auth assertion now passes live.

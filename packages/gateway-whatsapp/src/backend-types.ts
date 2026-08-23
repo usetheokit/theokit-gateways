@@ -61,36 +61,57 @@ export interface WhatsAppStatusReceipt {
   readonly timestamp: number;
 }
 
+/**
+ * What went wrong, in the vocabulary a caller can branch on.
+ *
+ * Extracted from `WhatsAppSendResult` rather than copied beside it: a credential check and a
+ * send fail for the same reasons, and two declarations of one vocabulary drift the moment
+ * somebody adds a code to one of them.
+ */
+export interface WhatsAppError {
+  readonly code:
+    | "auth_failed"
+    | "rate_limit"
+    | "invalid_request"
+    /**
+     * More than 24 hours since the recipient last replied. The payload was
+     * fine and the credential is fine; WhatsApp policy refuses free-form text
+     * outside that window. The remedy is specific and different from every
+     * other error here — resend as an approved template — which is why it is
+     * its own code rather than one more `invalid_request`.
+     */
+    | "session_window_expired"
+    /**
+     * The recipient cannot receive this message, and no retry changes that:
+     * no WhatsApp account, terms not accepted, an outdated client, or the
+     * business having blocked them. Terminal by nature; the cause is in the
+     * message.
+     */
+    | "undeliverable"
+    | "server_error"
+    | "timeout"
+    | "unknown";
+  readonly message: string;
+}
+
 /** Per-message send result returned by `WhatsAppBackend.send`. */
 export interface WhatsAppSendResult {
   readonly ok: boolean;
   /** Set when ok=true. The wamid Meta / web assigned to the outbound message. */
   readonly wamid?: string;
-  readonly error?: {
-    readonly code:
-      | "auth_failed"
-      | "rate_limit"
-      | "invalid_request"
-      /**
-       * More than 24 hours since the recipient last replied. The payload was
-       * fine and the credential is fine; WhatsApp policy refuses free-form text
-       * outside that window. The remedy is specific and different from every
-       * other error here — resend as an approved template — which is why it is
-       * its own code rather than one more `invalid_request`.
-       */
-      | "session_window_expired"
-      /**
-       * The recipient cannot receive this message, and no retry changes that:
-       * no WhatsApp account, terms not accepted, an outdated client, or the
-       * business having blocked them. Terminal by nature; the cause is in the
-       * message.
-       */
-      | "undeliverable"
-      | "server_error"
-      | "timeout"
-      | "unknown";
-    readonly message: string;
-  };
+  readonly error?: WhatsAppError;
+}
+
+/**
+ * Whether a credential can act as the phone number it claims.
+ *
+ * Deliberately not a boolean. `connect()` collapses it to one because its contract says so, but
+ * it prints the reason first — and a supervisor told only "false" cannot tell a revoked token,
+ * which needs a human, from a rate limit, which needs a wait.
+ */
+export interface WhatsAppCredentialCheck {
+  readonly ok: boolean;
+  readonly error?: WhatsAppError;
 }
 
 /**

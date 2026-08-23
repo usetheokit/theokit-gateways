@@ -264,3 +264,123 @@ describe("WhatsAppCloudBackend — sendTemplate", () => {
     expect(result.error?.message).toContain("no such template");
   });
 });
+
+describe("WhatsAppCloudBackend.connect — the check it never made (#58)", () => {
+  it("returns false on a token Meta rejects, instead of reporting success", async () => {
+    // It was `return true`, unconditionally. A consumer with a wrong, expired or revoked token
+    // got success at startup and learned otherwise from messages that silently never arrived —
+    // no error, no log, nothing to alert on. Found by the first live run of the WhatsApp suite;
+    // 209 unit tests could not see it, because the fake backend always accepts.
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const rejecting = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ error: { message: "Invalid OAuth access token.", code: 190 } }),
+          { status: 401, headers: { "content-type": "application/json" } },
+        ),
+    ) as unknown as typeof fetch;
+
+    expect(await makeBackend(rejecting).connect()).toBe(false);
+
+    // And it says WHY. A supervisor told only "false" cannot tell a revoked token, which needs a
+    // human, from a rate limit, which needs a wait.
+    const written = stderr.mock.calls.map((c) => String(c[0])).join("");
+    expect(written).toContain("auth_failed");
+    expect(written).toContain("Invalid OAuth access token");
+    stderr.mockRestore();
+  });
+
+  it("returns true when Meta confirms the credential", async () => {
+    const accepting = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ id: "PNID", display_phone_number: "+1 555" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ) as unknown as typeof fetch;
+
+    expect(await makeBackend(accepting).connect()).toBe(true);
+  });
+
+  it("returns false rather than throwing when the network is down", async () => {
+    // The contract every sibling adapter is tested against is that connect RETURNS false rather
+    // than throwing — a throw at startup takes the whole runner down with it.
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const offline = vi.fn(async () => {
+      throw new Error("getaddrinfo ENOTFOUND graph.facebook.com");
+    }) as unknown as typeof fetch;
+
+    await expect(makeBackend(offline).connect()).resolves.toBe(false);
+    stderr.mockRestore();
+  });
+
+  it("verifies once and stays connected, instead of asking Meta on every call", async () => {
+    // `connect()` is documented idempotent across this package. A verification per call would
+    // turn a supervisor's health check into a rate-limit source against Meta.
+    const accepting = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ id: "PNID" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ) as unknown as typeof fetch;
+    const backend = makeBackend(accepting);
+
+    expect([await backend.connect(), await backend.connect()]).toEqual([true, true]);
+    expect((accepting as unknown as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+  });
+});
+
+describe("WhatsAppCloudBackend.connect — concurrency", () => {
+  it("verifies once when two callers connect at the same time", async () => {
+    // The same shape fixed twice already in this package: a caller-count guard that only reads a
+    // settled flag lets two simultaneous calls both do the work. Here that is two credential
+    // checks against Meta for one startup — cheap once, and a rate-limit source under a
+    // supervisor that health-checks on a schedule. Slack guards it with an in-flight promise.
+    let resolveCheck: ((r: Response) => void) | undefined;
+    const gated = vi.fn(
+      async () =>
+        new Promise<Response>((resolve) => {
+          resolveCheck = resolve;
+        }),
+    ) as unknown as typeof fetch;
+    const backend = makeBackend(gated);
+
+    const [a, b] = [backend.connect(), backend.connect()];
+    await new Promise((r) => setTimeout(r, 10));
+    resolveCheck?.(
+      new Response(JSON.stringify({ id: "PNID" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect([await a, await b]).toEqual([true, true]);
+    expect(
+      (gated as unknown as ReturnType<typeof vi.fn>).mock.calls,
+      "two concurrent connects each asked Meta",
+    ).toHaveLength(1);
+  }, 30_000);
+
+  it("lets a later connect retry after one failed", async () => {
+    // The in-flight guard must not become a permanent one. A failed check leaves the backend
+    // disconnected, and the next connect has to be able to actually try again — otherwise a
+    // transient network blip at startup is indistinguishable from a revoked token forever.
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    let attempt = 0;
+    const flaky = vi.fn(async () => {
+      attempt += 1;
+      if (attempt === 1) throw new Error("ENOTFOUND");
+      return new Response(JSON.stringify({ id: "PNID" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+    const backend = makeBackend(flaky);
+
+    expect(await backend.connect()).toBe(false);
+    expect(await backend.connect()).toBe(true);
+    expect(attempt).toBe(2);
+    stderr.mockRestore();
+  }, 30_000);
+});

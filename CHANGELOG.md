@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `WhatsAppCloudBackend.connect()` asks Meta before reporting success. It was `return true`,
+  unconditionally, so a wrong, expired or revoked token passed the startup check and surfaced as
+  messages that silently never arrived. It verifies against the phone number rather than `/me` —
+  a token can be valid and still have no access to *this* number, which is the likelier
+  misconfiguration — caches the result, and writes the mapped reason to stderr before returning
+  false, because `auth_failed` and `rate_limit` ask a supervisor for opposite responses (#58)
+
+  Found on the **first ever** run of `integration/tests/whatsapp/live.test.ts`, a file whose own
+  header read `NEVER EXECUTED`, minutes after real Cloud API credentials existed. The package's
+  209 unit tests passed throughout and none could have caught it: the fake backend always
+  accepts, so an unconditional `true` is indistinguishable from a successful check. Of the seven
+  adapters with live coverage, all seven authenticate inside `connect()`; this was the only one
+  that did not. A cross-adapter gate now fails any `connect()` body that invokes nothing
+
 - A stale unsubscribe no longer deafens the WhatsApp adapter. The closure `onInbound` returned
   called whichever backend handle was *current*, so `onInbound(A)` → `onInbound(B)` → `A.off()`
   tore down **B's** subscription and nulled the handler: the gateway went silent with no error

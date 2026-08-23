@@ -5,7 +5,7 @@
  * @internal
  */
 
-import type { WhatsAppSendResult } from "../../backend-types.js";
+import type { WhatsAppCredentialCheck, WhatsAppSendResult } from "../../backend-types.js";
 import { mapWhatsAppCloudError } from "../../errors.js";
 import type {
   MetaErrorEnvelope,
@@ -87,6 +87,47 @@ export class WhatsAppCloudClient {
       },
     };
     return this.postMessage(req);
+  }
+
+  /**
+   * Ask Meta whether this credential can actually act as this phone number.
+   *
+   * `connect()` used to answer that question with `return true`, so a wrong, expired or revoked
+   * token reported success at startup and surfaced as messages that silently never arrived —
+   * the worst failure mode a gateway has, because there is nothing in a log to see. The first
+   * live run of the WhatsApp suite caught it (#58); 209 unit tests could not, because a fake
+   * backend always accepts.
+   *
+   * It reads the phone number itself rather than `/me`, and that choice is the point: a token
+   * can be perfectly valid and still have no access to THIS phone number id, which is the
+   * likelier misconfiguration of the two. Checking only the token would wave it through.
+   *
+   * Returns a result rather than a boolean, and never throws — `connect()` is specified to
+   * return false rather than throw, and the reason has to survive the trip: `auth_failed` and
+   * `rate_limit` ask a supervisor for opposite responses.
+   */
+  async verifyCredentials(): Promise<WhatsAppCredentialCheck> {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(this.baseUrl, {
+        method: "GET",
+        headers: { authorization: `Bearer ${this.opts.accessToken}` },
+      });
+    } catch (cause) {
+      return {
+        ok: false,
+        error: {
+          code: "server_error",
+          message: `Network error: ${cause instanceof Error ? cause.message : String(cause)}`,
+        },
+      };
+    }
+
+    if (!response.ok) {
+      const errBody = (await response.json().catch(() => ({}))) as MetaErrorEnvelope | unknown;
+      return { ok: false, error: mapWhatsAppCloudError(response.status, errBody) };
+    }
+    return { ok: true };
   }
 
   /**
