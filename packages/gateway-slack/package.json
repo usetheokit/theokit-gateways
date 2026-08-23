@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-slack",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Slack (@slack/bolt) platform adapter for @theokit/gateway. ADRs D267-D285.",
   "license": "Apache-2.0",
   "type": "module",
@@ -35,7 +35,7 @@
   },
   "peerDependencies": {
     "@slack/bolt": "^4.0.0 || ^5.0.0",
-    "@theokit/gateway": "workspace:^",
+    "@theokit/gateway": ">=0.6.0 <1.0.0",
     "@theokit/sdk": "^2.18.0"
   },
   "devDependencies": {

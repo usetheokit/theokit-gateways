@@ -49,13 +49,11 @@ own quality gates.
 
 ## Index
 
-4 items — **Open** 1 · **In flight** 1 · **Closed** 2
+5 items — **Open** 0 · **In flight** 1 · **Closed** 4
 
-### Open (1)
+### Open (0)
 
-| Item | Title | Status | Severity |
-|---|---|---|---|
-| [`B-004`](#b-004--five-packages-publish-a-dts-that-does-not-compile----) | Five packages publish a `.d.ts` that does not compile | `triaged` | — |
+_None._
 
 ### In flight (1)
 
@@ -63,12 +61,14 @@ own quality gates.
 |---|---|---|---|
 | [`B-001`](#b-001--measure-what-the-whatsapp-webjs-backend-costs-and-give-it-a-rival----) | Measure what the whatsapp-web.js backend costs, and give it a rival | `planned` | — |
 
-### Closed (2)
+### Closed (4)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
 | [`B-002`](#b-002--the-whatsapp-webjs-bridge-cannot-start-at-all---x) | The whatsapp-web.js bridge cannot start at all | `shipped` | — |
 | [`B-003`](#b-003--the-adapters-docblock-promises-factories-that-do-not-exist---x) | The adapter's docblock promises factories that do not exist | `shipped` | — |
+| [`B-004`](#b-004--five-packages-publish-a-dts-that-does-not-compile----) | Five packages publish a `.d.ts` that does not compile | `killed` | — |
+| [`B-005`](#b-005--the-dts-gate-accuses-the-published-artifact-when-the-build-command-was-wrong----) | The dts gate accuses the published artifact when the build command was wrong | `shipped` | — |
 
 <!-- BACKLOG-INDEX:END -->
 
@@ -140,11 +140,41 @@ source: discover-review
 issue: #50
 evidence: `pnpm quality:dts-typechecks` → `FAIL — 5 package(s) publish a declaration that does not compile without skipLibCheck`. Two shapes, one root cause — the dts rollup emits a type reference and drops the import that would resolve it. A dropped builtin: `packages/gateway-whatsapp/dist/index.d.ts:674` says `readonly child: ChildProcess` and `grep -c ChildProcess` on that file returns 1, so the name is used once and imported never. A dropped rename: `packages/gateway-sms/dist/index.d.ts:103` says `type ConfigurationErrorOptions = GatewayConfigurationErrorOptions` and `:112` extends `GatewayConfigurationError` — the rollup renamed the core symbols to avoid colliding with the package's own, then emitted no import for the new names. Same at `gateway-slack/dist/index.d.ts:118` (`SlackMessageEvent`) and `gateway-teams/dist/index.d.ts:95` (`TeamsMessageEvent`).
 why_now: pre-existing, not introduced by B-001 — measured on a worktree at `bae5b0c`, before any Baileys work, and it fails identically there. It surfaced because B-001's Definition of Done runs this gate, so the gate has been red under at least three plans that recorded G4 as met. A consumer compiling with `skipLibCheck: false` — the default for a strict TypeScript project — cannot build against these five packages at all. `tools/repair-dts-imports.mjs` exists to repair exactly this and does not cover either shape.
-status: triaged
+status: killed
 dod:
   - `pnpm quality:dts-typechecks` exits 0 with no package skipped
   - a test fails when the repair is reverted, for each of the two shapes (dropped builtin, dropped rename)
   - the gate is proven non-vacuous: it must go red on a declaration crafted to carry an unresolvable reference
 
-> Registered 2026-08-22 while verifying B-001's Global DoD (G4). Evidence measured, not assumed.
-> Filed as issue #50.
+kill_reason: not a defect — the measurement was wrong. `pnpm quality:dts-typechecks` was run after
+  `pnpm -r build`, which executes each package's own build script and never reaches the second half of
+  the ROOT script: `"build": "pnpm -r run build && node tools/repair-dts-imports.mjs"`. The repair
+  therefore never ran, and the five failures were the intermediate build state rather than the
+  published artifact. Measured after `pnpm build`: `quality:dts-typechecks` exit 0, `dts-parity`
+  exit 0. `tools/repair-dts-imports.mjs` already handles both shapes I reported — its own header
+  names them and cites #29.
+
+  The worktree run at `bae5b0c` that I offered as corroboration repeated the same mistake, so it
+  corroborated nothing: two runs of one wrong measurement is one wrong measurement. Recorded because
+  a kill whose reasoning is legible is worth more than a clean-looking registry.
+
+> Registered 2026-08-22 while verifying B-001's Global DoD (G4). Killed the same day by measurement.
+> Issue #50 closed as invalid, with the correction commented on it. Superseded by B-005, which is
+> what was actually wrong here.
+
+
+## B-005 — The dts gate accuses the published artifact when the build command was wrong   [ ]
+
+domain: theokit-gateways
+repo: tools
+suggested_mode: bug
+source: discover-review
+evidence: `tools/check-dts-typechecks.mjs:108` prints `N package(s) publish a declaration that does not compile without skipLibCheck` — a statement about the PUBLISHED artifact. Reproduced: `pnpm -r build && pnpm quality:dts-typechecks` → exit 1, five packages named. `pnpm build && pnpm quality:dts-typechecks` → exit 0. The difference is `package.json:12`, `"build": "pnpm -r run build && node tools/repair-dts-imports.mjs"` — the recursive form runs each package's own script and never reaches the repair, so the gate reads the intermediate state.
+why_now: it cost me a full false issue (#50, closed as invalid) and a backlog item killed by measurement (B-004). The gate already separates "does not compile" from "was never built" at `:102-111`, on the stated grounds that merging different facts "describes a defect that may not exist" — which is exactly what happened here, one category over. The message names the artifact; the artifact is fine.
+status: shipped
+dod:
+  - a run whose declarations are unrepaired says so, distinguishably from a genuinely broken one
+  - the hint does not ASSERT the cause — a declaration can be broken for real, and a gate that explains away a true failure is worse than one that is merely unhelpful
+  - a test fails if the distinction is removed
+
+> Registered 2026-08-23. Supersedes the real half of B-004, which was killed as a mis-measurement.
