@@ -87,6 +87,14 @@ jobs:
       - name: Declarations and runtime export the same values
         run: pnpm quality:dts-parity
 
+      # npm verifies the signed provenance bundle against `repository.url`, and every package here
+      # sets `publishConfig.provenance: true`. None of the eleven declared a repository, so a release
+      # spent nine minutes on the build, the suite and the live gate before the registry refused all
+      # eleven at once. Nothing about the packages had changed — npm began enforcing what it used to
+      # tolerate. This asks the question in milliseconds instead of at publish.
+      - name: Published packages declare the repository npm verifies
+        run: pnpm quality:repository-field
+
       # Three questions the source typecheck cannot answer: do the imports our READMEs tell a reader
       # to write actually resolve, is any docblock stranded above another (attaching to nothing), and
       # does every published export carry documentation a consumer's editor will render.

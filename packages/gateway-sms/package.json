@@ -3,6 +3,11 @@
   "version": "0.1.3",
   "description": "SMS platform adapter for @theokit/gateway. Multi-backend (Twilio + Plivo + Vonage). ADRs D389-D396.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usetheokit/theokit-gateways.git",
+    "directory": "packages/gateway-sms"
+  },
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
