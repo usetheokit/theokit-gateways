@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A behavioural conformance suite runs the `PlatformAdapter` contract against all nine
+  credential-based adapters at once, needing no credential and no network. The existing
+  cross-adapter gate reads source text — the right tool for what it catches, and the wrong one for
+  this, since getting it honest took five attempts of which four passed while checking nothing.
+  All nine conform, verified by mutation. One invariant is deliberately absent and says so: it was
+  written, it passed, and mutation showed it could not fail without a dispatch seam the nine do
+  not have
+
 - A second review round closed five more: `verifyCredentials()` threw on a `null` JSON body, which
   broke the very "returns false rather than throwing" clause the work exists to defend;
   `sendTemplate()` still posted an unverified credential because it sits off the shared interface
