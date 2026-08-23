@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.3.0
+
+### Minor Changes
+
+- e0330fe: **The `WhatsAppBackend` contract now says what it requires, and all three implementations are held to it at once.**
+
+  The interface declared bare signatures with no prose, so each backend answered the unasked questions its own way — and they diverged. `send()` on a disconnected backend refused in web (`"Bridge not connected."`) and in Baileys (`"Baileys backend is not connected."`), and **posted anyway** in Cloud. A consumer swapping backends, which is the single thing this seam exists to allow, would have found their unconnected sends leaving the process: for Cloud, a real request carrying a credential nothing had verified, or one `connect()` had already rejected.
+
+  Three changes, in the order that matters:
+
+  - **The contract is written down.** `connect()` is idempotent and returns `false` rather than throwing; `disconnect()` is idempotent and safe on a backend that never connected; `send()` requires a successful `connect()` and refuses without one, without touching the transport.
+  - **`not_connected` is its own error code.** Two backends called this state `server_error` and one had no opinion. A caller branches on the code, and a conformance test can only assert on one — so three descriptions of one state is the divergence, not a detail. **This widens the error union**, so an exhaustive `switch` stops compiling until the case is handled.
+  - **A conformance suite runs the contract against every implementation.** A per-backend test proves one implementation does something; only a shared one proves they do the _same_ thing, and the substitutability is the product. A fourth backend inherits it by being added to the table, which is where someone decides whether it complies rather than discovering later that it does not.
+
+  Verified by mutation: making any one of the three diverge fails the suite.
+
+- b1e5dd3: **Meta's `131030` gets its own error code: `recipient_not_allowlisted`.** It used to collapse into the generic `invalid_request`, which sends a developer to re-read a payload that was correct. The remedy is a console step — register the recipient against the phone number — and it travels with the message now, exactly as `session_window_expired` already does for `131047`.
+
+  This is the error most Cloud API integrations meet first. Every app starts on a free test number whose recipients must be registered one at a time, so it is both the commonest failure and the one where a wrong diagnosis costs the most: the request is fine, so nothing in it explains the refusal.
+
+  **This widens `WhatsAppSendResult["error"]["code"]`**, so an exhaustive `switch` over it stops compiling until the new case is handled. No call site in this repository switches on it.
+
+  The WhatsApp live suite now distinguishes the two, and does so without giving itself a hiding place. An unregistered recipient is incomplete configuration — the same category as a missing credential, which this suite already skips whole platforms for — so it skips, naming the number and the console step. But a recipient _we_ mangled would be refused identically, so the skip is only reached after asserting that the recipient which actually left the process, captured through the `fetch` seam, is the one configured.
+
+  That guard took two attempts. The first compared `digitsOnly(configured)` against `configured` — which reads as a check on our own bytes and is not one, because `digitsOnly` is not on the send path at all. It asserted that the env var contains digits, and was satisfied unconditionally. A reviewer substituted the adapter's own `botPhoneId` for the recipient — a one-token regression, one line away in the same class — and watched a total outbound-routing failure skip as a provisioning gap. The current guard fails that mutation, which was verified by performing it.
+
+### Patch Changes
+
+- 038fa86: **`WhatsAppCloudBackend.connect()` now asks Meta before reporting success.** It was `return true`, unconditionally — no request, no validation, no error path. A consumer with a wrong, expired or revoked token got success at startup and found out from messages that silently never arrived: no error, no log, nothing to alert on, which is the worst way for a message gateway to fail.
+
+  It verifies against the phone number itself rather than `/me`, and that choice is the point: a token can be perfectly valid and still have no access to _this_ phone number id, which is the likelier of the two misconfigurations. Checking only the token would wave it through.
+
+  The reason survives. `connect()` still returns a boolean — every sibling adapter is tested against "returns false rather than **throwing**", because a throw at startup takes the whole runner down — but it writes the mapped cause to stderr first. Told only `false`, a supervisor cannot tell a revoked token, which needs a human, from a rate limit, which needs a wait.
+
+  Verification happens once and is cached, like every sibling: re-asking on each call would turn a health check into a rate-limit source against Meta.
+
+  **How it was found is worth more than the fix.** 209 unit tests in this package passed throughout, and none of them could have caught it — the fake backend always accepts, so `return true` is indistinguishable from a successful check. It surfaced on the _first ever_ execution of `integration/tests/whatsapp/live.test.ts`, a file whose own header read `NEVER EXECUTED`, minutes after real Cloud API credentials existed for the first time. Measured across the ten adapters: the seven with live coverage all authenticate inside `connect()` and all pass the equivalent assertion. WhatsApp Cloud was the only one that did not.
+
+  A cross-adapter gate now fails when any `connect()` body invokes nothing at all. It is deliberately weak — it cannot tell a real check from a pointless one, only that the function does work before claiming the work succeeded — and that is precisely the shape that was missing.
+
+  `WhatsAppError` is now a named export, extracted from the inline type inside `WhatsAppSendResult` rather than duplicated beside it: a credential check and a send fail for the same reasons, and two declarations of one vocabulary drift the moment somebody adds a code to one of them. `WhatsAppCredentialCheck` is new. Neither changes an existing shape.
+
+- 5d40a95: **`connect()` now checks that the credential resolves to the configured phone number, not merely that the request succeeded.** The first version read only the HTTP status, which meant three ways to report a working credential that does not work:
+
+  - a `200` carrying an error envelope, which Meta does send;
+  - an empty or unreadable `200`, which a captive portal or proxy sends;
+  - a `200` describing a **different node** — and this is the live one. Pasting a WhatsApp Business Account id where the phone number id belongs is the commonest Cloud API misconfiguration, and `GET /{waba_id}` with a management-scoped token answers `200`. The check said yes; every send then failed.
+
+  That last case is exactly what the method's own docblock claimed to catch — _"a token can be valid and still have no access to this phone number id"_ — while the code checked access and not identity. The response names the node it reached, so the fix is to compare it, and the refusal now says which node it got and which it expected.
+
+  Also fixed: a `disconnect()` arriving while a verification was in flight left `connected` set to `true` when that verification resolved, so every later `connect()` short-circuited on a flag no live check stood behind — despite the field's own comment promising `disconnect()` cleared it. A generation counter retires the abandoned attempt, the same guard the Baileys backend carries.
+
+- 878c0ee: Five findings from an independent review of the credential-check and conformance work, all closed:
+
+  - **`verifyCredentials()` threw on a `null` body.** `response.json()` resolves `null` for the JSON literal, which is neither `undefined` nor an object, so the guard let it through and the next line dereferenced it — and the throw escaped `connect()` unwrapped. That is precisely the clause this series exists to defend: a throw at startup takes the host down with it. Arrays, strings and numbers were equally unguarded and now are.
+  - **`sendTemplate()` still posted an unverified credential.** The guard went on `send()` and stopped there. Being off the `WhatsAppBackend` interface — WhatsApp Web has no templates — is why the conformance suite structurally cannot see this method, which is a reason it needs its own guard, not a reason to be exempt from the rule.
+  - **The conformance suite asserted three of the five clauses it was written to enforce.** `connect()` idempotency and its failure contract were unasserted, which is exactly why the `null`-body throw above was invisible to the suite added to catch that class. Both are covered now — and writing them exposed that the contract itself was wrong: it demanded `false` absolutely, and two backends "failed" by throwing on a missing browser and a missing peer. They were right. **Misconfiguration throws; operational failure returns `false`**, and the interface says so.
+  - **The `web` conformance row observed nothing.** It carried `reachedNetwork: undefined` and a comment naming the elapsed-time check as its coverage — which a reviewer disproved by mutation, in about a millisecond. It uses the backend's documented `spawnFactory` seam now, so the row counts spawns like the others, and stops writing `.wwebjs_auth` into the package as a side effect.
+  - **A numeric `id` produced a refusal that contradicted itself**: _"resolves to node 12345, not the configured phoneNumberId 12345"_. Compared as strings.
+
 ## 0.2.0
 
 ### Minor Changes
