@@ -38,16 +38,6 @@
 
   **The repository moved to the official `usetheokit` organization.** Existing clones and published URLs keep working through GitHub's permanent redirect; the root manifest now declares `Apache-2.0` explicitly rather than leaving the workspace root silent.
 
-- **Every adapter now declares its core peer as `>=0.6.0 <1.0.0` instead of `workspace:^`.** The range says what is actually true and tested: these adapters run against the core they ship beside, and nothing is expected to break until the core reaches 1.0.
-
-  `workspace:^` publishes as a caret on the current version, and a caret on a `0.x` version pins the minor — `^0.5.0` admits only `0.5.x`. So every core minor put all ten adapters out of range at once, and changesets correctly reads an out-of-range peer as a breaking change for consumers. On a `0.1.1` package that lands on **1.0.0**.
-
-  Ten packages would have been promoted to 1.0.0 by an artifact of caret semantics on `0.x`, not by anyone deciding they were stable. This repository has two rules against making that claim without evidence — `public-copy.md § 3` and `dogfood-golden-rule.md` — and the evidence directory is empty. The WhatsApp backend added in this same release has never exchanged a message with WhatsApp, which its own `BAILEYS.md` states plainly.
-
-  The range is measured rather than assumed. Across all ten adapters the imported surface from the core is 17 symbols; none was removed or narrowed since the last release, no adapter imports anything introduced in 0.6, and the full suite, typecheck, build and declaration gates run green against 0.6.0. The lower bound is `0.6.0` and not `0.5.0` because 0.6.0 is the core actually exercised — claiming compatibility with a version nothing here compiles against would be the kind of untested assertion the range exists to replace.
-
-  Tightening it is cheap if a future core minor does break an adapter: that is a one-line change in the package that broke, made when there is a reason, instead of ten major bumps every release whether or not anything broke.
-
 - 4e6ae26: **The published type declarations now compile.** Five of these packages shipped a `.d.ts` (and matching `.d.cts`) containing type references that resolve to nothing — nine names, replicated across both module formats. `skipLibCheck: true` is on by default in most consumer projects, so the packages installed, imported and looked correct; under type-aware lint, which resolves the real type graph and has no such escape, every type reached through a broken reference degrades to `error`, and ordinary correct calls into these adapters come back flagged `no-unsafe-*`.
 
   The names, all now bound: `EmailMessageEvent` (email), `SendResult` and `SlackMessageEvent` (slack), `GatewayConfigurationError` and `GatewayConfigurationErrorOptions` (sms), `TeamsMessageEvent` (teams), `ChildProcess` and `WhatsAppSendResult` (whatsapp).
@@ -55,6 +45,16 @@
   Nothing was wrong with the source — every package's own `tsc --noEmit` was green throughout, which is exactly why this survived. The defect is in how tsup's declaration rollup emits the bundle: it re-exports a name without binding it locally, drops a type-only import from an external module while inlining the declarations that use it, or renames a declaration to avoid a collision and misses one use site. The `sms` names are the newest instance — the shared `GatewayConfigurationError` base introduced in `@theokit/gateway` 0.5.0 turned a local type into an external one, which is the shape the rollup drops.
 
   The public surface of every package is unchanged: the same names are exported, and the repair that rewrites a re-export verifies that before and after. What changed is where a name is bound inside the declaration file.
+
+## 0.1.2
+
+### Patch Changes
+
+- b8ef098: **Every package now ships the licence it declares.** All twelve manifests in this repository declare `Apache-2.0`, and the repository had no `LICENSE` file at all — not at the root, and not in any package directory except `gateway-email`. So each published tarball asserted a licence while carrying none of its terms, and §4(a) of that licence requires a copy to travel with the distribution. Worse than a missing file: with no licence text anywhere, everything outside the manifests fell back to default copyright, which grants a recipient nothing.
+
+  The text is now at the repository root and inside every publishable package, byte-identical to the canonical Apache License 2.0 with the appendix filled in (`Copyright 2026 usetheo.dev`). The one pre-existing copy, in `gateway-email`, was replaced along with the rest: it carried the same truncated paragraph 4(d) found across the ecosystem, dropping "reasonable and customary use" from the NOTICE clause — a modified body under an unmodified SPDX identifier.
+
+  **The repository moved to the official `usetheokit` organization.** Existing clones and published URLs keep working through GitHub's permanent redirect; the root manifest now declares `Apache-2.0` explicitly rather than leaving the workspace root silent.
 
 ## 0.1.1
 

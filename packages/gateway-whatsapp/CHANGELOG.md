@@ -160,16 +160,6 @@
 
   WhatsApp additionally stops opening a second session when `connect()` is called twice, and its group mention filter no longer treats unrelated digits scattered through a message as a mention of the bot.
 
-- **Every adapter now declares its core peer as `>=0.6.0 <1.0.0` instead of `workspace:^`.** The range says what is actually true and tested: these adapters run against the core they ship beside, and nothing is expected to break until the core reaches 1.0.
-
-  `workspace:^` publishes as a caret on the current version, and a caret on a `0.x` version pins the minor — `^0.5.0` admits only `0.5.x`. So every core minor put all ten adapters out of range at once, and changesets correctly reads an out-of-range peer as a breaking change for consumers. On a `0.1.1` package that lands on **1.0.0**.
-
-  Ten packages would have been promoted to 1.0.0 by an artifact of caret semantics on `0.x`, not by anyone deciding they were stable. This repository has two rules against making that claim without evidence — `public-copy.md § 3` and `dogfood-golden-rule.md` — and the evidence directory is empty. The WhatsApp backend added in this same release has never exchanged a message with WhatsApp, which its own `BAILEYS.md` states plainly.
-
-  The range is measured rather than assumed. Across all ten adapters the imported surface from the core is 17 symbols; none was removed or narrowed since the last release, no adapter imports anything introduced in 0.6, and the full suite, typecheck, build and declaration gates run green against 0.6.0. The lower bound is `0.6.0` and not `0.5.0` because 0.6.0 is the core actually exercised — claiming compatibility with a version nothing here compiles against would be the kind of untested assertion the range exists to replace.
-
-  Tightening it is cheap if a future core minor does break an adapter: that is a one-line change in the package that broke, made when there is a reason, instead of ten major bumps every release whether or not anything broke.
-
 - 4e6ae26: **The published type declarations now compile.** Five of these packages shipped a `.d.ts` (and matching `.d.cts`) containing type references that resolve to nothing — nine names, replicated across both module formats. `skipLibCheck: true` is on by default in most consumer projects, so the packages installed, imported and looked correct; under type-aware lint, which resolves the real type graph and has no such escape, every type reached through a broken reference degrades to `error`, and ordinary correct calls into these adapters come back flagged `no-unsafe-*`.
 
   The names, all now bound: `EmailMessageEvent` (email), `SendResult` and `SlackMessageEvent` (slack), `GatewayConfigurationError` and `GatewayConfigurationErrorOptions` (sms), `TeamsMessageEvent` (teams), `ChildProcess` and `WhatsAppSendResult` (whatsapp).
@@ -181,6 +171,34 @@
 - 9e7384e: **A stale unsubscribe no longer deafens the adapter.** The function `onInbound` returned called whichever backend handle was _current_ rather than the one it owned, so `onInbound(A)` → `onInbound(B)` → `A.off()` tore down **B's** subscription and nulled the handler. The adapter then received nothing, with no error and no crash — the worst way for a message bus to fail, because there is nothing in a log to see and nothing to alert on. It is now identity-guarded, and so is `onStatusReceipt`.
 
   Worth naming: this is precisely the defect the cross-adapter contract test exists to catch, and this adapter was exempted from it by a comment asserting its mechanism was "a different mechanism with the same guarantee". It had no guard at all. The exemption is removed — the one adapter the gate excused turned out to be the one carrying the defect, which is what an exemption written from a reading of the code rather than a test of it eventually becomes.
+
+## 0.1.2
+
+### Patch Changes
+
+- b8ef098: **Every package now ships the licence it declares.** All twelve manifests in this repository declare `Apache-2.0`, and the repository had no `LICENSE` file at all — not at the root, and not in any package directory except `gateway-email`. So each published tarball asserted a licence while carrying none of its terms, and §4(a) of that licence requires a copy to travel with the distribution. Worse than a missing file: with no licence text anywhere, everything outside the manifests fell back to default copyright, which grants a recipient nothing.
+
+  The text is now at the repository root and inside every publishable package, byte-identical to the canonical Apache License 2.0 with the appendix filled in (`Copyright 2026 usetheo.dev`). The one pre-existing copy, in `gateway-email`, was replaced along with the rest: it carried the same truncated paragraph 4(d) found across the ecosystem, dropping "reasonable and customary use" from the NOTICE clause — a modified body under an unmodified SPDX identifier.
+
+  **The repository moved to the official `usetheokit` organization.** Existing clones and published URLs keep working through GitHub's permanent redirect; the root manifest now declares `Apache-2.0` explicitly rather than leaving the workspace root silent.
+
+- 5bae032: Six defects that broke real conversations, found by testing the adapters against the live platforms instead of against fakes.
+
+  **LINE — no outbound message was ever delivered.** The adapter called the v9 SDK client with positional arguments while that client takes a single request object, so LINE received an empty request and rejected every send with a 400. Upgrade if you use this adapter at all: nothing it sent reached anyone.
+
+  **Telegram — the bot froze on long replies.** Any message over 4096 characters that began with an unclosed code span (a stray backtick) put the splitter into an infinite loop, hanging the process until it ran out of memory. Long agent answers now split correctly whatever markdown they contain.
+
+  **Mattermost — long messages silently vanished.** The adapter never split anything, so any reply over 16,383 characters was rejected by the server and the user simply saw nothing. Long replies are now split into parts Mattermost accepts.
+
+  **SMS — long messages were rejected from the hundredth part onward.** The `(i/N)` prefix outgrew the space reserved for it, pushing every later part past the provider's limit.
+
+  **Matrix and LINE — `connect()` reported success with an invalid token.** Both now verify the credential with the server before returning `true`, so a wrong token fails at startup instead of silently receiving nothing forever.
+
+  **Email and Teams — the bot could go permanently deaf.** Replacing an inbound handler and then disposing of the previous one removed the new handler as well, and the gateway stopped receiving messages with nothing logged.
+
+  Also: a `pre_inbound` hook that threw put its raw error text into the user's chat, which could expose internal details such as connection strings or tokens. Users now see only which hook failed; the detail goes to the server log, redacted.
+
+  WhatsApp additionally stops opening a second session when `connect()` is called twice, and its group mention filter no longer treats unrelated digits scattered through a message as a mention of the bot.
 
 ## 0.1.1
 

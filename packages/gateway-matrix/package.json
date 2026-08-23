@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-matrix",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Matrix protocol platform adapter for @theokit/gateway. ADRs D413-D421.",
   "license": "Apache-2.0",
   "type": "module",

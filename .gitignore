@@ -35,3 +35,4 @@ reports/
 # at the start of the next run — but a hard kill runs neither, and the leftover is a `.ts` file in
 # a published package's directory that a `git add -A` would happily commit.
 .dts-probe-*.ts
+.dts-repair-stamp
