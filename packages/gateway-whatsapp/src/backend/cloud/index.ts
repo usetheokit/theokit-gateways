@@ -1,10 +1,16 @@
 /**
  * `WhatsAppCloudBackend` — Meta WhatsApp Business Cloud API backend (ADR D304).
  *
- * `connect()` / `disconnect()` are no-ops (HTTP push via webhook is the only
- * inbound channel). Outbound delegates to `WhatsAppCloudClient`. Inbound
- * dispatch is driven by the user calling `handleWebhookPayload(rawBody, sig)`
- * from inside their HTTP route.
+ * `connect()` verifies the credential against Meta and caches the result; `disconnect()` clears
+ * it. This header used to say both were no-ops, which is what the code did and what the first
+ * live run of the WhatsApp suite refuted (#58): a wrong or revoked token reported success at
+ * startup and surfaced as messages that silently never arrived.
+ *
+ * There is still no session to open — HTTP push via webhook is the only inbound channel, and
+ * outbound is a stateless POST. What `connect()` buys is the startup answer to "can this
+ * credential act as this number?", which is the question every sibling adapter answers and this
+ * one did not. Outbound delegates to `WhatsAppCloudClient`. Inbound dispatch is driven by the
+ * user calling `handleWebhookPayload(rawBody, sig)` from inside their HTTP route.
  *
  * @public
  */
@@ -45,6 +51,28 @@ export interface WhatsAppCloudBackendOptions {
 export class WhatsAppCloudBackend implements WhatsAppBackend {
   readonly kind = "cloud" as const;
   private readonly client: WhatsAppCloudClient;
+  /** Verified once by `connect()`; cleared by `disconnect()`. */
+  private connected = false;
+  /**
+   * The verification currently in flight, shared by every caller that arrives during it.
+   *
+   * A flag alone only guards callers that arrive AFTER one finished — two simultaneous
+   * `connect()` calls would each ask Meta, which is one wasted round-trip at startup and a
+   * rate-limit source under a supervisor that health-checks on a schedule. Cleared when it
+   * settles, so a failed attempt does not become a permanent refusal: a transient blip must stay
+   * distinguishable from a revoked token.
+   */
+  private connecting?: Promise<boolean>;
+  /**
+   * Which connection attempt is current.
+   *
+   * Bumped by every `connect()` and every `disconnect()`. Without it a verify that was still in
+   * flight when `disconnect()` ran would set `connected` back to true as it resolved, and every
+   * later `connect()` would short-circuit on a flag no live check stands behind — the field's own
+   * comment claims `disconnect()` clears it, and it did not. Same guard the Baileys backend
+   * carries, for the same reason.
+   */
+  private generation = 0;
   private readonly appSecret: string;
   private inboundHandler?: (event: WhatsAppInboundEvent) => Promise<void>;
   private statusHandler?: (receipt: WhatsAppStatusReceipt) => Promise<void>;
@@ -60,16 +88,77 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
   }
 
   // Cloud has no persistent connection — webhook is push, send is HTTP.
+  /**
+   * Confirm with Meta that this credential can act as this phone number.
+   *
+   * This used to be `return true`. A consumer with a wrong, expired or revoked token got success
+   * at startup and found out from messages that silently never arrived — no error, no log,
+   * nothing to alert on, which is the worst failure mode a gateway has. The first live run of the
+   * WhatsApp suite caught it (#58); no unit test could, because a fake backend always accepts.
+   *
+   * Idempotent, like every sibling: verified once, then cached. Re-asking on every call would
+   * turn a supervisor's health check into a rate-limit source against Meta.
+   *
+   * Returns false rather than throwing — the contract each sibling adapter is tested against,
+   * because a throw at startup takes the whole runner down with it. The reason goes to stderr
+   * first: told only "false", a supervisor cannot tell a revoked token, which needs a human,
+   * from a rate limit, which needs a wait.
+   */
   async connect(): Promise<boolean> {
+    if (this.connected) return true;
+    if (this.connecting !== undefined) return this.connecting;
+
+    const attempt = this.verifyOnce(++this.generation);
+    this.connecting = attempt;
+    try {
+      return await attempt;
+    } finally {
+      // Only clear what is still ours: `disconnect()` clears it too, and a later `connect()` may
+      // already have installed its own.
+      if (this.connecting === attempt) this.connecting = undefined;
+    }
+  }
+
+  /** One credential check, mapped to the boolean `connect()` is contracted to return. @internal */
+  private async verifyOnce(generation: number): Promise<boolean> {
+    const check = await this.client.verifyCredentials();
+    if (!check.ok) {
+      process.stderr.write(
+        `[whatsapp-cloud] connect failed: ${check.error?.code ?? "unknown"} — ` +
+          `${check.error?.message ?? "no reason given"}\n`,
+      );
+      return false;
+    }
+    // A `disconnect()` that arrived while this was in flight wins: adopting now would leave a
+    // flag standing over a backend the caller has already closed.
+    if (this.generation !== generation) return false;
+    this.connected = true;
     return true;
   }
 
   async disconnect(): Promise<void> {
+    this.generation += 1;
+    this.connected = false;
+    this.connecting = undefined;
     this.inboundHandler = undefined;
     this.statusHandler = undefined;
   }
 
   async send(message: WhatsAppOutboundMessage): Promise<WhatsAppSendResult> {
+    // Cloud is stateless HTTP, so there is no session to be outside of — and that was the reason
+    // this posted regardless while web and Baileys refused. It was the wrong reason. Since
+    // `connect()` started verifying the credential, `connected === false` means the credential
+    // was rejected or never checked, and sending anyway spends a request that cannot succeed
+    // while making this backend behave differently from its siblings under one interface.
+    if (!this.connected) {
+      return {
+        ok: false,
+        error: {
+          code: "not_connected",
+          message: "Cloud backend is not connected — call connect().",
+        },
+      };
+    }
     return this.client.sendText(message.to, message.text, message.isGroup);
   }
 
@@ -94,6 +183,19 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
     languageCode: string,
     components?: ReadonlyArray<MetaTemplateComponent>,
   ): Promise<WhatsAppSendResult> {
+    // Same rule as `send()`, and it needs saying separately because this method is off the
+    // `WhatsAppBackend` interface — WhatsApp Web has no templates — so the conformance suite that
+    // enforces it there structurally cannot see it here. Being outside the shared contract is
+    // why it needs its own guard, not a reason to be exempt from the rule.
+    if (!this.connected) {
+      return {
+        ok: false,
+        error: {
+          code: "not_connected",
+          message: "Cloud backend is not connected — call connect().",
+        },
+      };
+    }
     return this.client.sendTemplate(to, templateName, languageCode, components);
   }
 

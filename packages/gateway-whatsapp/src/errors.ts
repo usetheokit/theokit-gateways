@@ -9,7 +9,7 @@
 
 import { GatewayConfigurationError, type GatewayConfigurationErrorOptions } from "@theokit/gateway";
 
-import type { WhatsAppSendResult } from "./backend-types.js";
+import type { WhatsAppError, WhatsAppSendResult } from "./backend-types.js";
 
 type ErrorPayload = Required<WhatsAppSendResult>["error"];
 
@@ -103,24 +103,32 @@ const UNDELIVERABLE_CODES = new Set([
 ]);
 /** More than 24h since the recipient last replied. Remedy: resend as a template. */
 const SESSION_WINDOW_EXPIRED_CODE = 131047;
+/**
+ * The recipient was never registered against this number. Remedy: a console step, not a payload.
+ *
+ * Its own code for the same reason 131047 has one — the remedy is specific and different from
+ * every other error here. And it is the error most Cloud API integrations meet first: every app
+ * starts on a free test number whose recipients must be registered one by one, so a developer
+ * whose payload is correct gets told `invalid_request` and goes to re-read the payload.
+ */
+const RECIPIENT_NOT_ALLOWLISTED_CODE = 131030;
 
-function cloudErrorCode(
-  status: number,
-  errCode: number,
-):
-  | "auth_failed"
-  | "rate_limit"
-  | "invalid_request"
-  | "session_window_expired"
-  | "undeliverable"
-  | "server_error"
-  | "unknown" {
+/**
+ * Which canonical code this failure is, derived from Meta's status and error number.
+ *
+ * The return type is `WhatsAppError["code"]` rather than a hand-listed union. It WAS hand-listed,
+ * and a review caught that: the commit extracting `WhatsAppError` claimed to have removed the
+ * second declaration that would "drift the moment somebody adds a code to one of them", and left
+ * this one — already drifted, missing `timeout`. One vocabulary, one declaration.
+ */
+function cloudErrorCode(status: number, errCode: number): WhatsAppError["code"] {
   if (errCode === 190 || status === 401) return "auth_failed";
   if (RATE_LIMIT_CODES.has(errCode) || status === 429) return "rate_limit";
   // Ordered before the generic 400 branch: all three arrive as HTTP 400, and the
   // specific code is the only thing separating "fix your payload" from "send a
   // template" and from "this recipient will never receive it".
   if (errCode === SESSION_WINDOW_EXPIRED_CODE) return "session_window_expired";
+  if (errCode === RECIPIENT_NOT_ALLOWLISTED_CODE) return "recipient_not_allowlisted";
   if (UNDELIVERABLE_CODES.has(errCode)) return "undeliverable";
   if (status === 400 || errCode === 100) return "invalid_request";
   if (status >= 500) return "server_error";
@@ -140,6 +148,16 @@ export function mapWhatsAppCloudError(status: number, body: unknown): ErrorPaylo
   const code = cloudErrorCode(status, errCode);
   if (code === "auth_failed") return { code, message: `Bearer token rejected: ${errMsg}` };
   if (code === "rate_limit") return { code, message: `Throttled: ${errMsg}` };
+  if (code === "recipient_not_allowlisted") {
+    // The remedy travels with the error, like its sibling above. Naming where the list lives is
+    // the difference between a one-minute fix and an afternoon spent on a correct payload.
+    return {
+      code,
+      message:
+        `Recipient is not on this number's allowed list — register it under the phone number in ` +
+        `the app's WhatsApp API setup before sending: ${errMsg}`,
+    };
+  }
   if (code === "session_window_expired") {
     // The remedy travels with the error. A caller reading only the code knows to
     // switch to a template; a human reading a log should not have to look it up.

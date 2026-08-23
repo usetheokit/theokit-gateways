@@ -49,26 +49,26 @@ own quality gates.
 
 ## Index
 
-5 items — **Open** 0 · **In flight** 1 · **Closed** 4
+6 items — **Open** 0 · **In flight** 0 · **Closed** 6
 
 ### Open (0)
 
 _None._
 
-### In flight (1)
+### In flight (0)
+
+_None._
+
+### Closed (6)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
-| [`B-001`](#b-001--measure-what-the-whatsapp-webjs-backend-costs-and-give-it-a-rival----) | Measure what the whatsapp-web.js backend costs, and give it a rival | `planned` | — |
-
-### Closed (4)
-
-| Item | Title | Status | Severity |
-|---|---|---|---|
+| [`B-001`](#b-001--measure-what-the-whatsapp-webjs-backend-costs-and-give-it-a-rival----) | Measure what the whatsapp-web.js backend costs, and give it a rival | `shipped` | — |
 | [`B-002`](#b-002--the-whatsapp-webjs-bridge-cannot-start-at-all---x) | The whatsapp-web.js bridge cannot start at all | `shipped` | — |
 | [`B-003`](#b-003--the-adapters-docblock-promises-factories-that-do-not-exist---x) | The adapter's docblock promises factories that do not exist | `shipped` | — |
 | [`B-004`](#b-004--five-packages-publish-a-dts-that-does-not-compile----) | Five packages publish a `.d.ts` that does not compile | `killed` | — |
 | [`B-005`](#b-005--the-dts-gate-accuses-the-published-artifact-when-the-build-command-was-wrong----) | The dts gate accuses the published artifact when the build command was wrong | `shipped` | — |
+| [`B-006`](#b-006--whatsappcloudbackendconnect-reports-success-without-authenticating----) | `WhatsAppCloudBackend.connect()` reports success without authenticating | `shipped` | — |
 
 <!-- BACKLOG-INDEX:END -->
 
@@ -83,7 +83,7 @@ actual_mode: bug (reclassified by /discover — the hypothesis was about cost; t
 source: human
 evidence: .claude/knowledge-base/discoveries/opportunities/whatsapp-baileys-backend-opportunity.md
 why_now: the `web` backend launches a headless Chromium per session with `--no-sandbox` (`src/bridge/whatsapp-web-bridge.mjs:47`) and nothing here states what that costs — no memory figure, no startup time, no record of who disabled the sandbox. It also has zero live coverage and no path to any, since pairing needs a QR scan. A second unofficial backend is about to be added with no baseline to compare it against.
-status: planned
+status: shipped
 dod:
   - the web backend's resident memory and time-to-ready are stated as measured numbers with the command that produced them, or the item records why they could not be measured here
   - the `--no-sandbox` decision is justified in writing at the line that makes it, or recorded as an open risk with its blast radius
@@ -93,7 +93,8 @@ dod:
 > Plan: `.claude/knowledge-base/plans/whatsapp-baileys-backend-impl-plan.md`. Implemented,
 > audited (`/code-quality` PASS, cap 100) and through three independent review rounds, which
 > found 11 defects — all closed, each with a test that fails when its fix alone is reverted.
-> The third DoD bullet ships half-open by design: the backend exists, and the comparison
+> Released in `@theokit/gateway-whatsapp@0.2.0` (PR #57). The third DoD bullet ships half-open by
+> design: the backend exists, and the comparison
 > against the incumbent's figures stays open in `## Unresolved Questions` rather than being
 > asserted. Adding rather than replacing is what makes it measurable later.
 
@@ -178,3 +179,28 @@ dod:
   - a test fails if the distinction is removed
 
 > Registered 2026-08-23. Supersedes the real half of B-004, which was killed as a mis-measurement.
+
+
+## B-006 — `WhatsAppCloudBackend.connect()` reports success without authenticating   [ ]
+
+domain: theokit-gateways
+repo: packages/gateway-whatsapp
+suggested_mode: bug
+source: discover-live-test
+issue: #58
+evidence: `packages/gateway-whatsapp/src/backend/cloud/index.ts:63-65` was `async connect(): Promise<boolean> { return true; }` — no I/O, no validation, no error path. First real run of `integration/tests/whatsapp/live.test.ts` (a file whose own header read `NEVER EXECUTED`): `× returns false rather than throwing on a token Meta rejects — expected true to be false`. Measured across the siblings: all seven adapters with live coverage authenticate inside `connect()` and all pass the equivalent assertion; WhatsApp Cloud was the only one that did not.
+why_now: the package shipped as `0.2.0` carrying this. A consumer with a wrong, expired or revoked token gets `true` at startup and learns otherwise from messages that silently never arrive — no error, no log, nothing to alert on. The package's 209 unit tests could not see it: the fake backend always accepts, so an unconditional `true` is indistinguishable from a successful check.
+status: shipped
+dod:
+  - `connect()` with an invalid token returns `false` and says why
+  - `connect()` with a valid token returns `true`, asserted against Meta rather than a fake
+  - the check proves BOTH halves of the credential (token AND access to the phone number id)
+  - every fix has a test that fails when that fix alone is reverted
+  - a cross-adapter gate stops a `connect()` that invokes nothing from coming back
+
+> Registered 2026-08-23 on the first live run of the WhatsApp suite, after Cloud API credentials
+> were provisioned. Fix proven against Meta, not against a fake: the auth assertion passes live.
+> Also closed on the way: `connect()` had no in-flight guard, so two simultaneous callers each
+> asked Meta; and `131030` collapsed into `invalid_request`, hiding the one error whose remedy is
+> a console step. Live suite now 128 passed / 0 failed / 11 skipped, every skip naming what it
+> wants.

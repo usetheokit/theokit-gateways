@@ -5,7 +5,7 @@
  * @internal
  */
 
-import type { WhatsAppSendResult } from "../../backend-types.js";
+import type { WhatsAppCredentialCheck, WhatsAppSendResult } from "../../backend-types.js";
 import { mapWhatsAppCloudError } from "../../errors.js";
 import type {
   MetaErrorEnvelope,
@@ -87,6 +87,90 @@ export class WhatsAppCloudClient {
       },
     };
     return this.postMessage(req);
+  }
+
+  /**
+   * Ask Meta whether this credential can actually act as this phone number.
+   *
+   * `connect()` used to answer that question with `return true`, so a wrong, expired or revoked
+   * token reported success at startup and surfaced as messages that silently never arrived —
+   * the worst failure mode a gateway has, because there is nothing in a log to see. The first
+   * live run of the WhatsApp suite caught it (#58); 209 unit tests could not, because a fake
+   * backend always accepts.
+   *
+   * It reads the phone number itself rather than `/me`, and that choice is the point: a token
+   * can be perfectly valid and still have no access to THIS phone number id, which is the
+   * likelier misconfiguration of the two. Checking only the token would wave it through.
+   *
+   * Returns a result rather than a boolean, and never throws — `connect()` is specified to
+   * return false rather than throw, and the reason has to survive the trip: `auth_failed` and
+   * `rate_limit` ask a supervisor for opposite responses.
+   */
+  async verifyCredentials(): Promise<WhatsAppCredentialCheck> {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(this.baseUrl, {
+        method: "GET",
+        headers: { authorization: `Bearer ${this.opts.accessToken}` },
+      });
+    } catch (cause) {
+      return {
+        ok: false,
+        error: {
+          code: "server_error",
+          message: `Network error: ${cause instanceof Error ? cause.message : String(cause)}`,
+        },
+      };
+    }
+
+    const body = (await response.json().catch(() => undefined)) as
+      | (MetaErrorEnvelope & { id?: unknown })
+      | undefined;
+
+    if (!response.ok) {
+      return { ok: false, error: mapWhatsAppCloudError(response.status, body ?? {}) };
+    }
+    // A 200 is not a yes. Meta answers some failures with an error envelope under a 200, and a
+    // captive portal or proxy answers everything with one — so the status line is the weakest
+    // evidence in the response.
+    // `null`, an array, a string and a number are all valid JSON and none of them is a node
+    // description. `response.json()` resolves `null` for the literal, which is neither
+    // `undefined` nor an object — the undefined-only guard let it through and the next line
+    // dereferenced it, so a proxy answering `null` made `connect()` THROW. That is precisely the
+    // clause this method is written to uphold.
+    if (body === null || typeof body !== "object" || Array.isArray(body)) {
+      return {
+        ok: false,
+        error: {
+          code: "unknown",
+          message: `Meta answered ${response.status} with a body this client could not read.`,
+        },
+      };
+    }
+    if (body.error !== undefined) {
+      return { ok: false, error: mapWhatsAppCloudError(response.status, body) };
+    }
+    // IDENTITY, not access — the distinction this method exists for, and the one its first
+    // version claimed while checking only the other. `GET /{waba_id}` with a management-scoped
+    // token also answers 200, so pasting the WABA id where the phone number id belongs sails
+    // through an access check and fails on every send afterwards. It is the likeliest
+    // misconfiguration in Cloud API setup, and the response names the node it actually reached.
+    // Compared as strings: Graph returns ids as strings, but a numeric one under strict `!==`
+    // produced "resolves to node 12345, not the configured phoneNumberId 12345" — a refusal that
+    // contradicts itself and sends someone hunting a mixup its own text rules out.
+    if (String(body.id) !== this.opts.phoneNumberId) {
+      return {
+        ok: false,
+        error: {
+          code: "invalid_request",
+          message:
+            `Credential is valid but resolves to node ${String(body.id)}, not the configured ` +
+            `phoneNumberId ${this.opts.phoneNumberId}. A WhatsApp Business Account id in place ` +
+            `of a phone number id looks exactly like this.`,
+        },
+      };
+    }
+    return { ok: true };
   }
 
   /**

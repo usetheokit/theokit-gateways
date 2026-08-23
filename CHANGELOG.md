@@ -11,6 +11,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A behavioural conformance suite runs the `PlatformAdapter` contract against all nine
+  credential-based adapters at once, needing no credential and no network. The existing
+  cross-adapter gate reads source text — the right tool for what it catches, and the wrong one for
+  this, since getting it honest took five attempts of which four passed while checking nothing.
+  All nine conform, verified by mutation. One invariant is deliberately absent and says so: it was
+  written, it passed, and mutation showed it could not fail without a dispatch seam the nine do
+  not have
+
+- A second review round closed five more: `verifyCredentials()` threw on a `null` JSON body, which
+  broke the very "returns false rather than throwing" clause the work exists to defend;
+  `sendTemplate()` still posted an unverified credential because it sits off the shared interface
+  and the conformance suite cannot see it; that suite asserted three of five contract clauses, and
+  writing the missing two revealed the contract itself was wrong — misconfiguration should throw,
+  operational failure should return `false`, and two backends had been right all along; the `web`
+  conformance row observed nothing and now uses the documented spawn seam; and a numeric node id
+  produced a refusal that contradicted its own text
+
+- The `WhatsAppBackend` contract states what it requires, and a conformance suite holds all three
+  implementations to it together. The interface declared bare signatures, so each backend answered
+  the unasked questions its own way and they diverged: `send()` on a disconnected backend refused
+  in web and Baileys and posted anyway in Cloud — a real request carrying a credential nothing had
+  verified. `not_connected` is now one error code across all three, because a caller branches on
+  the code and a shared test can only assert on one. Verified by mutation: making any single
+  implementation diverge fails the suite
+
+- The WhatsApp credential check verifies identity, not just access. Reading only the HTTP status
+  let three shapes report a working credential that does not work: a `200` carrying an error
+  envelope, an empty `200` from a proxy, and — the live one — a `200` describing a different node,
+  which is what pasting a WhatsApp Business Account id where the phone number id belongs produces.
+  That last case is precisely what the check's own docblock claimed to catch while the code did
+  not. A `disconnect()` racing an in-flight verification also left `connected` set behind it; a
+  generation counter retires the abandoned attempt
+
+- Meta's `131030` has its own WhatsApp error code, `recipient_not_allowlisted`, instead of
+  collapsing into the generic `invalid_request` and sending a developer to re-read a payload that
+  was correct. The remedy is a console step — register the recipient against the phone number —
+  and it travels with the message, as `session_window_expired` already does for `131047`. It is
+  the error most Cloud API integrations meet first, because every app starts on a free test number
+  whose recipients are registered one at a time. Widens the error union, so an exhaustive `switch`
+  stops compiling until the case is handled
+
+  The live suite now separates configuration from defect: an unregistered recipient skips, naming
+  the number and the step, rather than reporting a provisioning gap as a red build forever. The
+  skip is not a hiding place — a recipient the code itself mangled would be refused identically,
+  so it is only reached after proving the configured number survives normalisation unchanged
+
+- The integration bootstrap scripts name reused container state as the cause instead of leaving
+  the reader to guess. Both create a server and then create accounts inside it, so both are
+  idempotent only against a fresh container; against one that outlived the last run they failed in
+  two voices that named neither cause. Matrix's was actively misleading — `Invalid registration
+  token`, for a token read from the log and sent correctly, "invalid" only because the server
+  consumed it at first boot, which sends the reader hunting the one thing that is not wrong. Each
+  failure now prints the remedy, and only when the failure matches a reused-state signature: the
+  advice on every failure would send someone to recreate a container over a network blip and train
+  them to skip the line
+
+- `WhatsAppCloudBackend.connect()` asks Meta before reporting success. It was `return true`,
+  unconditionally, so a wrong, expired or revoked token passed the startup check and surfaced as
+  messages that silently never arrived. It verifies against the phone number rather than `/me` —
+  a token can be valid and still have no access to *this* number, which is the likelier
+  misconfiguration — caches the result, and writes the mapped reason to stderr before returning
+  false, because `auth_failed` and `rate_limit` ask a supervisor for opposite responses (#58)
+
+  Found on the **first ever** run of `integration/tests/whatsapp/live.test.ts`, a file whose own
+  header read `NEVER EXECUTED`, minutes after real Cloud API credentials existed. The package's
+  209 unit tests passed throughout and none could have caught it: the fake backend always
+  accepts, so an unconditional `true` is indistinguishable from a successful check. Of the seven
+  adapters with live coverage, all seven authenticate inside `connect()`; this was the only one
+  that did not. A cross-adapter gate now fails any `connect()` body that invokes nothing
+
 - A stale unsubscribe no longer deafens the WhatsApp adapter. The closure `onInbound` returned
   called whichever backend handle was *current*, so `onInbound(A)` → `onInbound(B)` → `A.off()`
   tore down **B's** subscription and nulled the handler: the gateway went silent with no error

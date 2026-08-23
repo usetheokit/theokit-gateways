@@ -328,7 +328,10 @@ describe("WhatsAppBaileysBackend — outbound", () => {
     const result = await backend.send({ to: "5511888888888", isGroup: false, text: "hi" });
 
     expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe("server_error");
+    // `not_connected` since the backend contract gave this state one code across all three
+    // implementations — see tests/backend-conformance.test.ts. It said `server_error` here and
+    // in the web backend, and nothing in Cloud, which sent anyway.
+    expect(result.error?.code).toBe("not_connected");
   });
 });
 
