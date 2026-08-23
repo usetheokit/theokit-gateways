@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The integration bootstrap scripts name reused container state as the cause instead of leaving
+  the reader to guess. Both create a server and then create accounts inside it, so both are
+  idempotent only against a fresh container; against one that outlived the last run they failed in
+  two voices that named neither cause. Matrix's was actively misleading — `Invalid registration
+  token`, for a token read from the log and sent correctly, "invalid" only because the server
+  consumed it at first boot, which sends the reader hunting the one thing that is not wrong. Each
+  failure now prints the remedy, and only when the failure matches a reused-state signature: the
+  advice on every failure would send someone to recreate a container over a network blip and train
+  them to skip the line
+
 - `WhatsAppCloudBackend.connect()` asks Meta before reporting success. It was `return true`,
   unconditionally, so a wrong, expired or revoked token passed the startup check and surfaced as
   messages that silently never arrived. It verifies against the phone number rather than `/me` —
