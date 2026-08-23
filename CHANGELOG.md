@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The `WhatsAppBackend` contract states what it requires, and a conformance suite holds all three
+  implementations to it together. The interface declared bare signatures, so each backend answered
+  the unasked questions its own way and they diverged: `send()` on a disconnected backend refused
+  in web and Baileys and posted anyway in Cloud — a real request carrying a credential nothing had
+  verified. `not_connected` is now one error code across all three, because a caller branches on
+  the code and a shared test can only assert on one. Verified by mutation: making any single
+  implementation diverge fails the suite
+
 - The WhatsApp credential check verifies identity, not just access. Reading only the HTTP status
   let three shapes report a working credential that does not work: a `200` carrying an error
   envelope, an empty `200` from a proxy, and — the live one — a `200` describing a different node,

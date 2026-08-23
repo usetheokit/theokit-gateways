@@ -412,7 +412,7 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
       return {
         result: Promise.resolve({
           ok: false,
-          error: { code: "server_error", message: "Baileys backend is not connected." },
+          error: { code: "not_connected", message: "Baileys backend is not connected." },
         }),
         inFlight: Promise.resolve(),
       };

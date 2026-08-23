@@ -145,6 +145,20 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
   }
 
   async send(message: WhatsAppOutboundMessage): Promise<WhatsAppSendResult> {
+    // Cloud is stateless HTTP, so there is no session to be outside of — and that was the reason
+    // this posted regardless while web and Baileys refused. It was the wrong reason. Since
+    // `connect()` started verifying the credential, `connected === false` means the credential
+    // was rejected or never checked, and sending anyway spends a request that cannot succeed
+    // while making this backend behave differently from its siblings under one interface.
+    if (!this.connected) {
+      return {
+        ok: false,
+        error: {
+          code: "not_connected",
+          message: "Cloud backend is not connected — call connect().",
+        },
+      };
+    }
     return this.client.sendText(message.to, message.text, message.isGroup);
   }
 

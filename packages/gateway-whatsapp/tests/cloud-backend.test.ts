@@ -10,6 +10,29 @@ import { WhatsAppCloudBackend } from "../src/backend/cloud/index.js";
 
 const APP_SECRET = "test-secret";
 
+/**
+ * A `fetch` that answers both halves of a connected send: the credential check with the
+ * configured node, and the POST with a wamid.
+ *
+ * Needed since `send()` began requiring a successful `connect()`. Routing on the method rather
+ * than the URL keeps it honest about which call is which: a GET is the verification, a POST is
+ * the message.
+ */
+function makeFetchConnectedOk(): typeof fetch {
+  return vi.fn(async (_url: unknown, init?: RequestInit) => {
+    if ((init?.method ?? "GET") === "GET") {
+      return new Response(JSON.stringify({ id: "PNID" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(
+      JSON.stringify({ messaging_product: "whatsapp", messages: [{ id: "wamid.x" }] }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }) as unknown as typeof fetch;
+}
+
 function makeFetchOk(): typeof fetch {
   return vi.fn(
     async () =>
@@ -81,12 +104,18 @@ describe("WhatsAppCloudBackend", () => {
   });
 
   it("test_cloud_backend_send_delegates_to_client", async () => {
-    const fakeFetch = makeFetchOk();
+    // Connects first, because `send()` now requires it — the contract the interface states and
+    // the conformance suite holds all three backends to. The POST is the second call; the first
+    // is the credential check.
+    const fakeFetch = makeFetchConnectedOk();
     const b = makeBackend(fakeFetch);
+    expect(await b.connect()).toBe(true);
+
     const r = await b.send({ to: "5511", isGroup: false, text: "hi" });
+
     expect(r.ok).toBe(true);
     expect(r.wamid).toBe("wamid.x");
-    expect((fakeFetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+    expect((fakeFetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
   });
 
   it("test_cloud_backend_handle_webhook_invalid_signature_no_dispatch", async () => {

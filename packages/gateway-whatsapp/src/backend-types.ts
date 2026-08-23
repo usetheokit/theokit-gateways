@@ -90,6 +90,16 @@ export interface WhatsAppError {
      */
     | "recipient_not_allowlisted"
     /**
+     * `send()` was called without a successful `connect()`, or after `disconnect()`.
+     *
+     * Its own code because all three backends reach this state and used to describe it three
+     * different ways — `server_error` from web and Baileys, nothing at all from Cloud, which
+     * sent regardless. A caller cannot branch on prose, and a conformance test cannot assert on
+     * it either: one code is what makes "the implementations agree" a checkable claim rather
+     * than a hope.
+     */
+    | "not_connected"
+    /**
      * The recipient cannot receive this message, and no retry changes that:
      * no WhatsApp account, terms not accepted, an outdated client, or the
      * business having blocked them. Terminal by nature; the cause is in the
@@ -128,8 +138,35 @@ export interface WhatsAppCredentialCheck {
  */
 export interface WhatsAppBackend {
   readonly kind: "cloud" | "web" | "baileys";
+  /**
+   * Make the backend usable, and report whether it is.
+   *
+   * Idempotent: a second call while connected returns `true` without repeating the work.
+   * Returns `false` rather than throwing — a throw at startup takes the host down with it — and
+   * every implementation writes the reason somewhere a human can read.
+   */
   connect(): Promise<boolean>;
+  /** Release whatever `connect()` took. Idempotent, and safe on a backend that never connected. */
   disconnect(): Promise<void>;
+  /**
+   * Send one message.
+   *
+   * **Requires a successful `connect()` first, and refuses without one** — with
+   * `ok: false, error.code === "not_connected"`, never a throw, and without touching the
+   * transport. One code across every implementation, because a caller branches on the code and
+   * a conformance test can only assert on one.
+   *
+   * That sentence is here because its absence cost something. The interface used to declare bare
+   * signatures, each implementation answered the unasked question its own way, and they diverged:
+   * web and Baileys refused, Cloud posted regardless. A consumer swapping backends — the single
+   * thing this seam exists to allow — found unconnected sends leaving the process, which for
+   * Cloud meant a real request carrying a credential nothing had verified, or one `connect()`
+   * had already rejected.
+   *
+   * Enforced by `tests/backend-conformance.test.ts` against every implementation at once. A
+   * per-backend test proves one of them does something; only a shared one proves they agree, and
+   * the agreement is the product.
+   */
   send(message: WhatsAppOutboundMessage): Promise<WhatsAppSendResult>;
   /** Subscribe to normalized inbound events. Returns unsubscribe. */
   onInbound(handler: (event: WhatsAppInboundEvent) => Promise<void>): () => void;
