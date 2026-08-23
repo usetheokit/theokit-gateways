@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Meta's `131030` has its own WhatsApp error code, `recipient_not_allowlisted`, instead of
+  collapsing into the generic `invalid_request` and sending a developer to re-read a payload that
+  was correct. The remedy is a console step — register the recipient against the phone number —
+  and it travels with the message, as `session_window_expired` already does for `131047`. It is
+  the error most Cloud API integrations meet first, because every app starts on a free test number
+  whose recipients are registered one at a time. Widens the error union, so an exhaustive `switch`
+  stops compiling until the case is handled
+
+  The live suite now separates configuration from defect: an unregistered recipient skips, naming
+  the number and the step, rather than reporting a provisioning gap as a red build forever. The
+  skip is not a hiding place — a recipient the code itself mangled would be refused identically,
+  so it is only reached after proving the configured number survives normalisation unchanged
+
 - The integration bootstrap scripts name reused container state as the cause instead of leaving
   the reader to guess. Both create a server and then create accounts inside it, so both are
   idempotent only against a fresh container; against one that outlived the last run they failed in
