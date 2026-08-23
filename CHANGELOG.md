@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **gateway:** `MessageEvent`'s docblock pointed at `wiki/decisions/adr-0001-…`, a path removed in `b1b3e09` and never restored — a published `.d.ts` sending readers to a file that does not exist. ADR-0001 is restored at `docs/adr/0001-message-event-closed-union.md` and the citation repointed (#B-007)
 
 - A behavioural conformance suite runs the `PlatformAdapter` contract against all nine
   credential-based adapters at once, needing no credential and no network. The existing
@@ -221,6 +222,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   untouched (#35)
 
 ### Changed
+- **gateways:** every package declared a peer on `@theokit/sdk@^2.18.0`, which no adapter imports and which the framework left behind at 4.x — a fresh TheoKit app could not install a gateway at all. The core's peer is widened to `>=2.18.0 <5` (verified green against 4.53.1) and the unused peer dropped from the ten adapters (#B-007)
 
 - `/code-quality` now audits something. `code-quality-languages.txt` shipped empty, and an empty
   file means no language is checked — so the gate returned `PASS` with `languages_audited: []`, a

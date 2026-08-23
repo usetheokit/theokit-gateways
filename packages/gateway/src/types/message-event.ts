@@ -14,7 +14,7 @@
  *
  * This union is intentionally **closed** — adding a platform edits it here
  * rather than extending it externally. The trade-off (exhaustive narrowing over
- * OCP purity) is recorded in `wiki/decisions/adr-0001-message-event-closed-union.md`.
+ * OCP purity) is recorded in `docs/adr/0001-message-event-closed-union.md`.
  *
  * @public
  */
