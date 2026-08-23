@@ -82,6 +82,14 @@ export interface WhatsAppError {
      */
     | "session_window_expired"
     /**
+     * The recipient was never registered against this phone number. The payload
+     * is fine and the credential is fine; the number simply may not message this
+     * person yet. Its own code because the remedy is a console step rather than
+     * anything in the request — and because every Cloud API app starts on a test
+     * number, it is the error most integrations meet first.
+     */
+    | "recipient_not_allowlisted"
+    /**
      * The recipient cannot receive this message, and no retry changes that:
      * no WhatsApp account, terms not accepted, an outdated client, or the
      * business having blocked them. Terminal by nature; the cause is in the

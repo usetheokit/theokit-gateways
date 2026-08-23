@@ -17,7 +17,7 @@
  * same reason as LINE.
  */
 
-import { WhatsAppAdapter, WhatsAppCloudBackend } from "@theokit/gateway-whatsapp";
+import { digitsOnly, WhatsAppAdapter, WhatsAppCloudBackend } from "@theokit/gateway-whatsapp";
 import { expect, it } from "vitest";
 
 import { optional, required, runMarker } from "../../src/credentials.js";
@@ -65,7 +65,7 @@ describeLive(
 );
 
 describeLive(WHATSAPP, "outbound", () => {
-  it("delivers a template, the send that does not depend on a 24-hour window", async () => {
+  it("delivers a template, the send that does not depend on a 24-hour window", async (ctx) => {
     // THE outbound check. Free-form text only reaches someone who wrote in the
     // last 24 hours, which cannot be arranged unattended — so a suite built on it
     // reports a policy refusal as a red build and answers "is WhatsApp working?"
@@ -86,13 +86,35 @@ describeLive(WHATSAPP, "outbound", () => {
       optional("WHATSAPP_TEMPLATE_LANGUAGE") ?? "en_US",
     );
 
+    // A test number may only message recipients registered against it one by one in the app's
+    // API setup, and there is no Graph endpoint for that list — it is a console step. That is
+    // incomplete configuration, exactly like a missing credential, and this suite already skips
+    // whole platforms for those rather than reporting them red. A permanent red for a
+    // provisioning gap blocks the release gate forever or trains people to ignore the suite,
+    // which is the failure the sibling test below was rewritten to avoid.
+    //
+    // The guard against that becoming a hiding place: a recipient WE mangled would be refused
+    // the same way. So this only forgives 131030 after proving the number we were told to send
+    // survives our own normalisation unchanged. If it does not, the fault is ours and stays red.
+    if (result.error?.code === "recipient_not_allowlisted") {
+      const configured = required("WHATSAPP_TEST_RECIPIENT");
+      expect(
+        digitsOnly(configured),
+        "we normalised the recipient into a different number — this refusal is ours, not a gap",
+      ).toBe(configured);
+      ctx.skip(
+        `WHATSAPP_TEST_RECIPIENT (${configured}) is not registered against the test number. ` +
+          "Add it under the phone number in the app's WhatsApp API setup, then re-run.",
+      );
+    }
+
     expect(result.ok, `template send failed: ${result.error?.code} ${result.error?.message}`).toBe(
       true,
     );
     expect(result.wamid).toBeDefined();
   }, 45_000);
 
-  it("either delivers free-form text or names the 24-hour window as the reason", async () => {
+  it("either delivers free-form text or names the 24-hour window as the reason", async (ctx) => {
     // Text CAN legitimately be refused here, and the previous version of this test
     // asserted `ok === true` while its own comment admitted that. A red that means
     // "the recipient has not written recently" is a red nobody can act on, and it
@@ -113,6 +135,17 @@ describeLive(WHATSAPP, "outbound", () => {
       if (result.ok) {
         expect(result.messageId).toBeDefined();
         return;
+      }
+      // Same distinction as the template test above: an unregistered recipient is configuration,
+      // and it is proven to be configuration rather than our own mangling before it is forgiven.
+      if (result.error?.code === "recipient_not_allowlisted") {
+        const configured = required("WHATSAPP_TEST_RECIPIENT");
+        expect(digitsOnly(configured), "we mangled the recipient — this refusal is ours").toBe(
+          configured,
+        );
+        ctx.skip(
+          `WHATSAPP_TEST_RECIPIENT (${configured}) is not registered against the test number.`,
+        );
       }
       expect(
         result.error?.code,
