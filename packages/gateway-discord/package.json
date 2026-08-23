@@ -3,6 +3,11 @@
   "version": "0.1.3",
   "description": "Discord (discord.js) platform adapter for @theokit/gateway. ADRs D171, D179.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usetheokit/theokit-gateways.git",
+    "directory": "packages/gateway-discord"
+  },
   "type": "module",
   "engines": {
     "node": ">=22.12.0"

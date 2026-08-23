@@ -3,6 +3,11 @@
   "version": "0.1.3",
   "description": "LINE Messaging API platform adapter for @theokit/gateway. ADRs D405-D412.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usetheokit/theokit-gateways.git",
+    "directory": "packages/gateway-line"
+  },
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
