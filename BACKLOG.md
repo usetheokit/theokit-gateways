@@ -140,11 +140,24 @@ source: discover-review
 issue: #50
 evidence: `pnpm quality:dts-typechecks` → `FAIL — 5 package(s) publish a declaration that does not compile without skipLibCheck`. Two shapes, one root cause — the dts rollup emits a type reference and drops the import that would resolve it. A dropped builtin: `packages/gateway-whatsapp/dist/index.d.ts:674` says `readonly child: ChildProcess` and `grep -c ChildProcess` on that file returns 1, so the name is used once and imported never. A dropped rename: `packages/gateway-sms/dist/index.d.ts:103` says `type ConfigurationErrorOptions = GatewayConfigurationErrorOptions` and `:112` extends `GatewayConfigurationError` — the rollup renamed the core symbols to avoid colliding with the package's own, then emitted no import for the new names. Same at `gateway-slack/dist/index.d.ts:118` (`SlackMessageEvent`) and `gateway-teams/dist/index.d.ts:95` (`TeamsMessageEvent`).
 why_now: pre-existing, not introduced by B-001 — measured on a worktree at `bae5b0c`, before any Baileys work, and it fails identically there. It surfaced because B-001's Definition of Done runs this gate, so the gate has been red under at least three plans that recorded G4 as met. A consumer compiling with `skipLibCheck: false` — the default for a strict TypeScript project — cannot build against these five packages at all. `tools/repair-dts-imports.mjs` exists to repair exactly this and does not cover either shape.
-status: triaged
+status: killed
 dod:
   - `pnpm quality:dts-typechecks` exits 0 with no package skipped
   - a test fails when the repair is reverted, for each of the two shapes (dropped builtin, dropped rename)
   - the gate is proven non-vacuous: it must go red on a declaration crafted to carry an unresolvable reference
 
-> Registered 2026-08-22 while verifying B-001's Global DoD (G4). Evidence measured, not assumed.
-> Filed as issue #50.
+kill_reason: not a defect — the measurement was wrong. `pnpm quality:dts-typechecks` was run after
+  `pnpm -r build`, which executes each package's own build script and never reaches the second half of
+  the ROOT script: `"build": "pnpm -r run build && node tools/repair-dts-imports.mjs"`. The repair
+  therefore never ran, and the five failures were the intermediate build state rather than the
+  published artifact. Measured after `pnpm build`: `quality:dts-typechecks` exit 0, `dts-parity`
+  exit 0. `tools/repair-dts-imports.mjs` already handles both shapes I reported — its own header
+  names them and cites #29.
+
+  The worktree run at `bae5b0c` that I offered as corroboration repeated the same mistake, so it
+  corroborated nothing: two runs of one wrong measurement is one wrong measurement. Recorded because
+  a kill whose reasoning is legible is worth more than a clean-looking registry.
+
+> Registered 2026-08-22 while verifying B-001's Global DoD (G4). Killed the same day by measurement.
+> Issue #50 closed as invalid, with the correction commented on it. Superseded by B-005, which is
+> what was actually wrong here.
