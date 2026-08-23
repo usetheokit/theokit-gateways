@@ -1,23 +1,30 @@
 /**
  * WhatsApp (Cloud API) — live tests against Meta's Graph API.
  *
- * NEVER EXECUTED. No WhatsApp credentials exist for this project, so every test
- * here skips naming the variable it wants. Read it as a declared gap rather than
- * as coverage; first runs of unexecuted tests find their own bugs.
+ * This header used to open "NEVER EXECUTED", and it earned the prediction that followed it —
+ * "first runs of unexecuted tests find their own bugs". Its first run, once Cloud API
+ * credentials existed, found `connect()` returning an unconditional true (#58): a defect 209
+ * unit tests could not see, because a fake backend always accepts.
+ *
+ * What it proves today: authentication against Meta, and that empty text is refused before any
+ * transport state is touched. What it does not: delivery. The two outbound tests skip while the
+ * recipient is unregistered against the test number — see the guard on each, which forgives that
+ * only after proving the bytes we sent match the number configured.
  *
  * Unlike its siblings the adapter takes a BACKEND rather than credentials, so
  * this constructs `WhatsAppCloudBackend` explicitly. Two consequences worth
- * knowing before someone provisions this: `appSecret` is required by the backend
- * but is not in the registry (it exists for webhook signature verification, which
- * inbound needs and outbound does not), and a Cloud API number can only message
- * someone who messaged it in the last 24 hours unless the message is a template.
- * An outbound test against a cold recipient will fail for policy, not for code.
+ * knowing: `appSecret` is required by the backend but is not in the registry (it
+ * exists for webhook signature verification, which inbound needs and outbound
+ * does not), and a Cloud API number can only message someone who messaged it in
+ * the last 24 hours unless the message is a template — which is why the text
+ * test asserts the pair (delivered, or refused for that one policy reason)
+ * rather than demanding delivery.
  *
  * Webhook-based: inbound needs a public HTTPS endpoint, out of scope here for the
  * same reason as LINE.
  */
 
-import { digitsOnly, WhatsAppAdapter, WhatsAppCloudBackend } from "@theokit/gateway-whatsapp";
+import { WhatsAppAdapter, WhatsAppCloudBackend } from "@theokit/gateway-whatsapp";
 import { expect, it } from "vitest";
 
 import { optional, required, runMarker } from "../../src/credentials.js";
@@ -25,6 +32,32 @@ import { describeLive } from "../../src/harness.js";
 import { platformById } from "../../src/platforms.js";
 
 const WHATSAPP = platformById("whatsapp");
+
+/**
+ * A `fetch` that records the `to` of every message it posts, then behaves normally.
+ *
+ * The seam exists because the only honest guard on a `131030` skip is the number that actually
+ * left this process. A first version asserted `digitsOnly(configured) === configured`, which
+ * reads as a check on our own bytes and is not one: `digitsOnly` is not on the send path at all,
+ * so the assertion only said "the env var contains digits" and was satisfied unconditionally.
+ * A defect substituting a different number — the adapter builds `{ to }` one line from
+ * `botPhoneId`, a same-class field holding a phone number — would be refused with the same
+ * `131030` and skip anyway. A reviewer built exactly that and watched it skip.
+ */
+function recordingFetch(): { fetch: typeof fetch; sentTo: string[] } {
+  const sentTo: string[] = [];
+  const impl = async (
+    input: Parameters<typeof fetch>[0],
+    init?: RequestInit,
+  ): Promise<Response> => {
+    if (typeof init?.body === "string") {
+      const parsed = JSON.parse(init.body) as { to?: unknown };
+      if (typeof parsed.to === "string") sentTo.push(parsed.to);
+    }
+    return fetch(input, init);
+  };
+  return { fetch: impl as typeof fetch, sentTo };
+}
 
 function makeAdapter(overrides: Record<string, unknown> = {}): WhatsAppAdapter {
   const backend = new WhatsAppCloudBackend({
@@ -74,10 +107,12 @@ describeLive(WHATSAPP, "outbound", () => {
     // `hello_world` is pre-approved on every WhatsApp Business account, so this
     // needs no template of our own. Override with WHATSAPP_TEMPLATE_NAME /
     // WHATSAPP_TEMPLATE_LANGUAGE if the account uses a different one.
+    const wire = recordingFetch();
     const backend = new WhatsAppCloudBackend({
       accessToken: required("WHATSAPP_ACCESS_TOKEN"),
       phoneNumberId: required("WHATSAPP_PHONE_NUMBER_ID"),
       appSecret: optional("WHATSAPP_APP_SECRET") ?? "",
+      fetch: wire.fetch,
     });
 
     const result = await backend.sendTemplate(
@@ -98,10 +133,14 @@ describeLive(WHATSAPP, "outbound", () => {
     // survives our own normalisation unchanged. If it does not, the fault is ours and stays red.
     if (result.error?.code === "recipient_not_allowlisted") {
       const configured = required("WHATSAPP_TEST_RECIPIENT");
+      // The guard, and the only version of it that means anything: compare against the bytes
+      // that left this process. If we sent a different number, Meta's refusal is ours and the
+      // test must stay red — a routing defect reported as a provisioning gap is the hiding
+      // place this skip would otherwise be.
       expect(
-        digitsOnly(configured),
-        "we normalised the recipient into a different number — this refusal is ours, not a gap",
-      ).toBe(configured);
+        wire.sentTo,
+        "we sent a different recipient than the one configured — this refusal is ours, not a gap",
+      ).toEqual([configured]);
       ctx.skip(
         `WHATSAPP_TEST_RECIPIENT (${configured}) is not registered against the test number. ` +
           "Add it under the phone number in the app's WhatsApp API setup, then re-run.",
@@ -124,7 +163,8 @@ describeLive(WHATSAPP, "outbound", () => {
     // the one documented policy reason and our mapper said so. Anything else — an
     // auth failure, a malformed payload, a code we do not recognise — is a defect,
     // and this now distinguishes them.
-    const adapter = makeAdapter();
+    const wire = recordingFetch();
+    const adapter = makeAdapter({ fetch: wire.fetch });
     const marker = runMarker();
     try {
       await adapter.connect();
@@ -140,9 +180,12 @@ describeLive(WHATSAPP, "outbound", () => {
       // and it is proven to be configuration rather than our own mangling before it is forgiven.
       if (result.error?.code === "recipient_not_allowlisted") {
         const configured = required("WHATSAPP_TEST_RECIPIENT");
-        expect(digitsOnly(configured), "we mangled the recipient — this refusal is ours").toBe(
-          configured,
-        );
+        // Same guard, same reason: the bytes, not the env var. `connect()` also posts now, so
+        // the recipient is whichever entry carried a `to` — the credential check sends none.
+        expect(
+          wire.sentTo,
+          "we sent a different recipient than the one configured — this refusal is ours",
+        ).toEqual([configured]);
         ctx.skip(
           `WHATSAPP_TEST_RECIPIENT (${configured}) is not registered against the test number.`,
         );

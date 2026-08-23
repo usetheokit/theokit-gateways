@@ -281,7 +281,10 @@ describe("cross-adapter contract", () => {
     // `await` alone was the first attempt and it was wrong: Slack's connect delegates to
     // `_doConnect()` and RETURNS the promise without awaiting it, which is correct and idiomatic.
     // A gate that fails on correct code teaches people to weaken gates.
-    const declaration = /async connect\s*\(\s*\)\s*:\s*Promise<boolean>\s*\{/g;
+    // The return annotation is NOT required by the pattern. Demanding `: Promise<boolean>` let
+    // four bodies leave the gate by being rewritten as `async connect() {` with an inferred
+    // type — a silent exit from a gate whose whole job is to have no silent exits.
+    const declaration = /async connect\s*\(\s*\)\s*(?::\s*Promise<boolean>\s*)?\{/g;
     const offenders: string[] = [];
     let bodies = 0;
     for (const { path, source } of await adapterSourceFiles()) {
@@ -296,9 +299,11 @@ describe("cross-adapter contract", () => {
         if (!works) offenders.push(`${path}: connect() invokes nothing`);
       }
     }
-    // Counted, not guessed. If this collapses, the regex broke and the assertion above became a
-    // statement about an empty set — the failure mode this file has already had twice.
-    expect(bodies).toBeGreaterThanOrEqual(12);
+    // Exact, and counted rather than guessed: 16 connect bodies across the ten adapters and
+    // WhatsApp's three backends. A floor only fires when the count DROPS, which catches the regex
+    // breaking but not a new adapter slipping in unchecked — and this file has already shipped
+    // both failure modes.
+    expect(bodies).toBe(16);
     expect(offenders).toEqual([]);
   });
 

@@ -123,9 +123,44 @@ export class WhatsAppCloudClient {
       };
     }
 
+    const body = (await response.json().catch(() => undefined)) as
+      | (MetaErrorEnvelope & { id?: unknown })
+      | undefined;
+
     if (!response.ok) {
-      const errBody = (await response.json().catch(() => ({}))) as MetaErrorEnvelope | unknown;
-      return { ok: false, error: mapWhatsAppCloudError(response.status, errBody) };
+      return { ok: false, error: mapWhatsAppCloudError(response.status, body ?? {}) };
+    }
+    // A 200 is not a yes. Meta answers some failures with an error envelope under a 200, and a
+    // captive portal or proxy answers everything with one — so the status line is the weakest
+    // evidence in the response.
+    if (body === undefined) {
+      return {
+        ok: false,
+        error: {
+          code: "unknown",
+          message: `Meta answered ${response.status} with a body this client could not read.`,
+        },
+      };
+    }
+    if (body.error !== undefined) {
+      return { ok: false, error: mapWhatsAppCloudError(response.status, body) };
+    }
+    // IDENTITY, not access — the distinction this method exists for, and the one its first
+    // version claimed while checking only the other. `GET /{waba_id}` with a management-scoped
+    // token also answers 200, so pasting the WABA id where the phone number id belongs sails
+    // through an access check and fails on every send afterwards. It is the likeliest
+    // misconfiguration in Cloud API setup, and the response names the node it actually reached.
+    if (body.id !== this.opts.phoneNumberId) {
+      return {
+        ok: false,
+        error: {
+          code: "invalid_request",
+          message:
+            `Credential is valid but resolves to node ${String(body.id)}, not the configured ` +
+            `phoneNumberId ${this.opts.phoneNumberId}. A WhatsApp Business Account id in place ` +
+            `of a phone number id looks exactly like this.`,
+        },
+      };
     }
     return { ok: true };
   }

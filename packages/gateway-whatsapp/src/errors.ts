@@ -9,7 +9,7 @@
 
 import { GatewayConfigurationError, type GatewayConfigurationErrorOptions } from "@theokit/gateway";
 
-import type { WhatsAppSendResult } from "./backend-types.js";
+import type { WhatsAppError, WhatsAppSendResult } from "./backend-types.js";
 
 type ErrorPayload = Required<WhatsAppSendResult>["error"];
 
@@ -113,18 +113,15 @@ const SESSION_WINDOW_EXPIRED_CODE = 131047;
  */
 const RECIPIENT_NOT_ALLOWLISTED_CODE = 131030;
 
-function cloudErrorCode(
-  status: number,
-  errCode: number,
-):
-  | "auth_failed"
-  | "rate_limit"
-  | "invalid_request"
-  | "session_window_expired"
-  | "recipient_not_allowlisted"
-  | "undeliverable"
-  | "server_error"
-  | "unknown" {
+/**
+ * Which canonical code this failure is, derived from Meta's status and error number.
+ *
+ * The return type is `WhatsAppError["code"]` rather than a hand-listed union. It WAS hand-listed,
+ * and a review caught that: the commit extracting `WhatsAppError` claimed to have removed the
+ * second declaration that would "drift the moment somebody adds a code to one of them", and left
+ * this one — already drifted, missing `timeout`. One vocabulary, one declaration.
+ */
+function cloudErrorCode(status: number, errCode: number): WhatsAppError["code"] {
   if (errCode === 190 || status === 401) return "auth_failed";
   if (RATE_LIMIT_CODES.has(errCode) || status === 429) return "rate_limit";
   // Ordered before the generic 400 branch: all three arrive as HTTP 400, and the

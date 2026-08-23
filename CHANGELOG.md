@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The WhatsApp credential check verifies identity, not just access. Reading only the HTTP status
+  let three shapes report a working credential that does not work: a `200` carrying an error
+  envelope, an empty `200` from a proxy, and — the live one — a `200` describing a different node,
+  which is what pasting a WhatsApp Business Account id where the phone number id belongs produces.
+  That last case is precisely what the check's own docblock claimed to catch while the code did
+  not. A `disconnect()` racing an in-flight verification also left `connected` set behind it; a
+  generation counter retires the abandoned attempt
+
 - Meta's `131030` has its own WhatsApp error code, `recipient_not_allowlisted`, instead of
   collapsing into the generic `invalid_request` and sending a developer to re-read a payload that
   was correct. The remedy is a console step — register the recipient against the phone number —

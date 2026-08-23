@@ -1,10 +1,16 @@
 /**
  * `WhatsAppCloudBackend` — Meta WhatsApp Business Cloud API backend (ADR D304).
  *
- * `connect()` / `disconnect()` are no-ops (HTTP push via webhook is the only
- * inbound channel). Outbound delegates to `WhatsAppCloudClient`. Inbound
- * dispatch is driven by the user calling `handleWebhookPayload(rawBody, sig)`
- * from inside their HTTP route.
+ * `connect()` verifies the credential against Meta and caches the result; `disconnect()` clears
+ * it. This header used to say both were no-ops, which is what the code did and what the first
+ * live run of the WhatsApp suite refuted (#58): a wrong or revoked token reported success at
+ * startup and surfaced as messages that silently never arrived.
+ *
+ * There is still no session to open — HTTP push via webhook is the only inbound channel, and
+ * outbound is a stateless POST. What `connect()` buys is the startup answer to "can this
+ * credential act as this number?", which is the question every sibling adapter answers and this
+ * one did not. Outbound delegates to `WhatsAppCloudClient`. Inbound dispatch is driven by the
+ * user calling `handleWebhookPayload(rawBody, sig)` from inside their HTTP route.
  *
  * @public
  */
@@ -57,6 +63,16 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
    * distinguishable from a revoked token.
    */
   private connecting?: Promise<boolean>;
+  /**
+   * Which connection attempt is current.
+   *
+   * Bumped by every `connect()` and every `disconnect()`. Without it a verify that was still in
+   * flight when `disconnect()` ran would set `connected` back to true as it resolved, and every
+   * later `connect()` would short-circuit on a flag no live check stands behind — the field's own
+   * comment claims `disconnect()` clears it, and it did not. Same guard the Baileys backend
+   * carries, for the same reason.
+   */
+  private generation = 0;
   private readonly appSecret: string;
   private inboundHandler?: (event: WhatsAppInboundEvent) => Promise<void>;
   private statusHandler?: (receipt: WhatsAppStatusReceipt) => Promise<void>;
@@ -92,7 +108,7 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
     if (this.connected) return true;
     if (this.connecting !== undefined) return this.connecting;
 
-    const attempt = this.verifyOnce();
+    const attempt = this.verifyOnce(++this.generation);
     this.connecting = attempt;
     try {
       return await attempt;
@@ -104,7 +120,7 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
   }
 
   /** One credential check, mapped to the boolean `connect()` is contracted to return. @internal */
-  private async verifyOnce(): Promise<boolean> {
+  private async verifyOnce(generation: number): Promise<boolean> {
     const check = await this.client.verifyCredentials();
     if (!check.ok) {
       process.stderr.write(
@@ -113,11 +129,15 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
       );
       return false;
     }
+    // A `disconnect()` that arrived while this was in flight wins: adopting now would leave a
+    // flag standing over a backend the caller has already closed.
+    if (this.generation !== generation) return false;
     this.connected = true;
     return true;
   }
 
   async disconnect(): Promise<void> {
+    this.generation += 1;
     this.connected = false;
     this.connecting = undefined;
     this.inboundHandler = undefined;

@@ -311,3 +311,76 @@ describe("WhatsAppCloudClient.verifyCredentials", () => {
     expect(result.error?.message).toContain("ENOTFOUND");
   });
 });
+
+describe("WhatsAppCloudClient.verifyCredentials — identity, not just access", () => {
+  it("refuses a 200 that describes a different node than the one configured", async () => {
+    // The likeliest Cloud API misconfiguration by a distance: pasting the WABA id where the
+    // phone number id belongs. `GET /{waba_id}` with a management-scoped token answers 200, so a
+    // check that only asks "did this succeed?" says yes — and every send then fails.
+    //
+    // The first version of this method did exactly that, while its own docblock claimed the
+    // opposite: "a token can be valid and still have no access to THIS phone number id". It
+    // checked access. Identity is what the claim was about.
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ id: "SOME_OTHER_NODE", name: "a WABA, not a number" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ) as unknown as typeof fetch;
+    const client = new WhatsAppCloudClient({
+      accessToken: "tok",
+      phoneNumberId: "123",
+      fetch: fetchImpl,
+    });
+
+    const result = await client.verifyCredentials();
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.message).toContain("SOME_OTHER_NODE");
+    expect(result.error?.message).toContain("123");
+  });
+
+  it("reads an error envelope under a 200 as the error it is, not as a missing id", async () => {
+    // Meta answers some failures with an envelope under a 200. Both guards refuse it — the
+    // identity check would too, since such a body carries no `id` — so `ok: false` alone cannot
+    // tell which one fired, and removing the envelope branch left this test green.
+    //
+    // The message is what separates them, and it is the whole reason the branch exists: an
+    // expired token diagnosed as "resolves to node undefined" sends someone to check a phone
+    // number id that is perfectly fine.
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: { code: 190, message: "token expired" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ) as unknown as typeof fetch;
+    const client = new WhatsAppCloudClient({
+      accessToken: "tok",
+      phoneNumberId: "123",
+      fetch: fetchImpl,
+    });
+
+    const result = await client.verifyCredentials();
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("auth_failed");
+    expect(result.error?.message).toContain("token expired");
+    expect(result.error?.message).not.toContain("undefined");
+  });
+
+  it("refuses an empty or unreadable 200 body", async () => {
+    // A captive portal or a proxy answering 200 with HTML reads as a valid credential otherwise.
+    const fetchImpl = vi.fn(
+      async () => new Response("", { status: 200 }),
+    ) as unknown as typeof fetch;
+    const client = new WhatsAppCloudClient({
+      accessToken: "tok",
+      phoneNumberId: "123",
+      fetch: fetchImpl,
+    });
+
+    expect((await client.verifyCredentials()).ok).toBe(false);
+  });
+});

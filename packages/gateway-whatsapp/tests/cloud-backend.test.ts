@@ -64,9 +64,20 @@ const TEXT_ENVELOPE = JSON.stringify({
 });
 
 describe("WhatsAppCloudBackend", () => {
-  it("test_cloud_backend_connect_noop_returns_true", async () => {
-    const b = makeBackend();
-    expect(await b.connect()).toBe(true);
+  it("refuses a credential that resolves to a node other than the configured number", async () => {
+    // This test used to be `test_cloud_backend_connect_noop_returns_true` and asserted that
+    // `connect()` is a no-op returning true. It was the defect's own specification: a test
+    // written to describe the shortcut rather than the contract, and green for as long as the
+    // shortcut lived (#58).
+    //
+    // `makeFetchOk()` answers with a message-send envelope, which has no `id` matching the
+    // configured phone number — the same shape a WABA id in the wrong field produces, and now
+    // correctly refused.
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    expect(await makeBackend().connect()).toBe(false);
+
+    stderr.mockRestore();
   });
 
   it("test_cloud_backend_send_delegates_to_client", async () => {
@@ -382,5 +393,58 @@ describe("WhatsAppCloudBackend.connect — concurrency", () => {
     expect(await backend.connect()).toBe(true);
     expect(attempt).toBe(2);
     stderr.mockRestore();
+  }, 30_000);
+});
+
+describe("WhatsAppCloudBackend — disconnect during an in-flight verify", () => {
+  it("does not let a retired attempt mark the backend connected", async () => {
+    // `verifyOnce()` wrote `connected = true` without asking whether its attempt was still the
+    // current one. So: connect starts, disconnect runs and clears the flag, the verify then
+    // resolves and sets it back — and every later connect short-circuits on a flag no live check
+    // stands behind. The field's own comment says "cleared by disconnect()"; it was not.
+    //
+    // The assertion is on THIS backend, not a fresh one. A first version built a second object
+    // and asserted against that — which connects trivially and proves nothing, the exact mistake
+    // a sibling test made two rounds ago and the reason removing the guard left it green.
+    let release: ((r: Response) => void) | undefined;
+    let calls = 0;
+    const gated = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Promise<Response>((resolve) => {
+          release = resolve;
+        });
+      }
+      return new Response(JSON.stringify({ id: "PNID" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+    const backend = makeBackend(gated);
+
+    const connecting = backend.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    await backend.disconnect();
+    release?.(
+      new Response(JSON.stringify({ id: "PNID" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await connecting;
+
+    // The consequence, not the flag: after an explicit disconnect the next connect must ask Meta
+    // again. If the retired attempt was allowed to set `connected`, this short-circuits and the
+    // call count stays at one.
+    expect(await backend.connect()).toBe(true);
+    expect(
+      calls,
+      "a retired verify marked the backend connected; the next connect never asked",
+    ).toBe(2);
+
+    // Deliberately NOT asserted here: that `send()` refuses on a disconnected backend. It does
+    // not — the Cloud backend posts regardless, because Cloud is stateless HTTP and there is no
+    // session to be outside of. Whether that should match Baileys, which does refuse, is a
+    // separate question about the shared contract and not this test's business.
   }, 30_000);
 });
