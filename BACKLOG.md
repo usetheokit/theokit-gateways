@@ -200,6 +200,10 @@ dod:
 
 > Registered 2026-08-23 on the first live run of the WhatsApp suite, after Cloud API credentials
 > were provisioned. Fix proven against Meta, not against a fake: the auth assertion passes live.
+> Two review rounds found nine more on the way, including three tests of mine that passed while
+> unable to fail — each caught by mutating the test rather than reading it. Closed with the
+> contract written onto the interface and a conformance suite over all three backends, plus a
+> second one over the nine credential-based adapters. Released in `@theokit/gateway-whatsapp@0.3.0`.
 > Also closed on the way: `connect()` had no in-flight guard, so two simultaneous callers each
 > asked Meta; and `131030` collapsed into `invalid_request`, hiding the one error whose remedy is
 > a console step. Live suite now 128 passed / 0 failed / 11 skipped, every skip naming what it
