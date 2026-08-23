@@ -115,3 +115,46 @@ describe("mapWhatsAppWebError", () => {
     expect(mapWhatsAppWebError(undefined).code).toBe("unknown");
   });
 });
+
+describe("mapWhatsAppCloudError — the recipient allowlist (131030)", () => {
+  it("gives 131030 its own code, not the generic invalid_request", () => {
+    // Same reasoning that earned 131047 its own code: the remedy is specific and different from
+    // every other error here. "Recipient phone number not in allowed list" means the credential
+    // set is incomplete — nobody registered this recipient against the test number — and the fix
+    // is a console step, not a payload change. Collapsing it into `invalid_request` sends a
+    // developer to re-read a payload that was correct.
+    //
+    // This is not an exotic case. Every Cloud API app starts on a free test number, whose
+    // recipients must be registered one by one, so this is the first error most integrations
+    // meet — and the one where a wrong diagnosis costs the most, because the payload looks fine.
+    const e = mapWhatsAppCloudError(400, {
+      error: {
+        code: 131030,
+        message: "(#131030) Recipient phone number not in allowed list",
+      },
+    });
+
+    expect(e.code).toBe("recipient_not_allowlisted");
+  });
+
+  it("carries the remedy in the message, like the sibling it copies", () => {
+    // A caller reading only the code knows to register the recipient; a human reading a log
+    // should not have to look the number up. `session_window_expired` set that standard here.
+    const e = mapWhatsAppCloudError(400, {
+      error: { code: 131030, message: "(#131030) Recipient phone number not in allowed list" },
+    });
+
+    expect(e.message).toMatch(/allow(ed)? list|allowlist/i);
+    expect(e.message).toContain("131030");
+  });
+
+  it("still maps an ordinary 400 to invalid_request", () => {
+    // The new branch must not swallow the generic one it sits in front of: all of these arrive
+    // as HTTP 400, and the specific code is the only thing separating them.
+    const e = mapWhatsAppCloudError(400, {
+      error: { code: 100, message: "Invalid parameter" },
+    });
+
+    expect(e.code).toBe("invalid_request");
+  });
+});

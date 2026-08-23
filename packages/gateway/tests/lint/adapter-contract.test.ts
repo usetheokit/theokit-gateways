@@ -266,6 +266,47 @@ describe("cross-adapter contract", () => {
     }
     expect(offenders).toEqual([]);
   });
+  it("makes every connect() actually verify, instead of returning a bare true", async () => {
+    // `WhatsAppCloudBackend.connect()` was `async connect() { return true; }` — no I/O, no
+    // validation, no error path. A consumer with a wrong, expired or revoked token got success at
+    // startup and learned otherwise from messages that silently never arrived. Nothing in this
+    // repository could see it: 209 unit tests passed because the fake backend always accepts, and
+    // the live suite that would have caught it had never once been run (#58).
+    //
+    // The rule is deliberately weak and deliberately mechanical: a connect body must INVOKE
+    // something. It cannot tell a real check from a pointless one — only that the function does
+    // work before claiming the work succeeded. That is exactly the shape that was missing, and it
+    // is the strongest thing a text scan can honestly assert.
+    //
+    // `await` alone was the first attempt and it was wrong: Slack's connect delegates to
+    // `_doConnect()` and RETURNS the promise without awaiting it, which is correct and idiomatic.
+    // A gate that fails on correct code teaches people to weaken gates.
+    // The return annotation is NOT required by the pattern. Demanding `: Promise<boolean>` let
+    // four bodies leave the gate by being rewritten as `async connect() {` with an inferred
+    // type — a silent exit from a gate whose whole job is to have no silent exits.
+    const declaration = /async connect\s*\(\s*\)\s*(?::\s*Promise<boolean>\s*)?\{/g;
+    const offenders: string[] = [];
+    let bodies = 0;
+    for (const { path, source } of await adapterSourceFiles()) {
+      const code = withoutComments(source);
+      for (const found of code.matchAll(declaration)) {
+        bodies += 1;
+        const body = blockAt(code, found.index + found[0].length - 1);
+        // Delegating to a helper is fine and common — Slack's `_doConnect`, the web backend's
+        // bridge handshake. What is not fine is a body that invokes nothing at all, which is the
+        // only shape this can distinguish.
+        const works = /\bawait\b/.test(body) || /\bthis\.\w+\s*\(/.test(body);
+        if (!works) offenders.push(`${path}: connect() invokes nothing`);
+      }
+    }
+    // Exact, and counted rather than guessed: 16 connect bodies across the ten adapters and
+    // WhatsApp's three backends. A floor only fires when the count DROPS, which catches the regex
+    // breaking but not a new adapter slipping in unchecked — and this file has already shipped
+    // both failure modes.
+    expect(bodies).toBe(16);
+    expect(offenders).toEqual([]);
+  });
+
   it("names a throwing handler as the handler's failure, in every adapter", async () => {
     // A handler is user code and may throw. Two adapters discarded that rejection with `void`, and
     // under Node 22's default an unhandled rejection ends the process: one message killed the bot

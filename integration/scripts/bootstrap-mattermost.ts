@@ -16,6 +16,8 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { reusedStateAdvice } from "../src/reused-state.js";
+
 const COMPOSE = join(import.meta.dirname, "..", "docker", "mattermost", "docker-compose.yml");
 const ENV_PATH = join(import.meta.dirname, "..", ".env");
 const PORT = process.env.MATTERMOST_HOST_PORT ?? "28065";
@@ -86,9 +88,13 @@ function field(result: ApiResult, name: string, step: string): string {
 }
 
 function fail(step: string, result: ApiResult): never {
-  process.stderr.write(
-    `${step} failed (${result.status}): ${result.body.message ?? JSON.stringify(result.body).slice(0, 160)}\n`,
-  );
+  const detail = result.body.message ?? JSON.stringify(result.body).slice(0, 160);
+  process.stderr.write(`${step} failed (${result.status}): ${detail}\n`);
+  // "An account with that username already exists" describes what the server refused, not why a
+  // fresh bootstrap hit it. Without this line the reader goes looking for a name collision; the
+  // cause is a container that outlived the last run, and the remedy is one command.
+  const advice = reusedStateAdvice("mattermost", detail);
+  if (advice !== undefined) process.stderr.write(`${advice}\n`);
   process.exit(1);
 }
 

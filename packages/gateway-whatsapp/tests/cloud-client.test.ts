@@ -239,3 +239,189 @@ describe("WhatsAppCloudClient — sendTemplate", () => {
     expect(result.error?.code).toBe("server_error");
   });
 });
+
+describe("WhatsAppCloudClient.verifyCredentials", () => {
+  it("reports failure, with Meta's reason, on a token the API rejects", async () => {
+    // The check `connect()` never made. A token that Meta refuses must be distinguishable from
+    // one it accepts, and the reason has to survive: "auth_failed" and "rate_limit" want opposite
+    // responses from a supervisor, and collapsing them into a boolean throws that away here so
+    // the caller can never recover it.
+    const fetchImpl = makeFetchError(401, {
+      error: { message: "Invalid OAuth access token.", code: 190, type: "OAuthException" },
+    });
+    const client = new WhatsAppCloudClient({
+      accessToken: "definitely-not-a-real-token",
+      phoneNumberId: "123",
+      fetch: fetchImpl,
+    });
+
+    const result = await client.verifyCredentials();
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("auth_failed");
+    expect(result.error?.message).toContain("Invalid OAuth access token");
+  });
+
+  it("asks the API about the phone number itself, with the token attached", async () => {
+    // Not any endpoint: the one that proves BOTH halves of the credential. A token can be valid
+    // and still have no access to this phone number id, which is the misconfiguration a consumer
+    // is most likely to ship — and a check that only validated the token would pass it.
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ id: "123", display_phone_number: "+1 555" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ) as unknown as ReturnType<typeof vi.fn> & typeof fetch;
+    const client = new WhatsAppCloudClient({
+      accessToken: "tok",
+      phoneNumberId: "123",
+      fetch: fetchImpl,
+    });
+
+    expect((await client.verifyCredentials()).ok).toBe(true);
+
+    const [url, init] = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toContain("/123");
+    expect(url).not.toContain("/messages");
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer tok");
+    expect(init.method ?? "GET").toBe("GET");
+  });
+
+  it("reports a network failure as a failure, not as success", async () => {
+    // fetch rejects when the host is unreachable. Letting that escape would make `connect()`
+    // throw, and the contract every sibling adapter is tested against is that it RETURNS false
+    // rather than throwing.
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("getaddrinfo ENOTFOUND graph.facebook.com");
+    }) as unknown as typeof fetch;
+    const client = new WhatsAppCloudClient({
+      accessToken: "tok",
+      phoneNumberId: "123",
+      fetch: fetchImpl,
+    });
+
+    const result = await client.verifyCredentials();
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("server_error");
+    expect(result.error?.message).toContain("ENOTFOUND");
+  });
+});
+
+describe("WhatsAppCloudClient.verifyCredentials — identity, not just access", () => {
+  it("refuses a 200 that describes a different node than the one configured", async () => {
+    // The likeliest Cloud API misconfiguration by a distance: pasting the WABA id where the
+    // phone number id belongs. `GET /{waba_id}` with a management-scoped token answers 200, so a
+    // check that only asks "did this succeed?" says yes — and every send then fails.
+    //
+    // The first version of this method did exactly that, while its own docblock claimed the
+    // opposite: "a token can be valid and still have no access to THIS phone number id". It
+    // checked access. Identity is what the claim was about.
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ id: "SOME_OTHER_NODE", name: "a WABA, not a number" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ) as unknown as typeof fetch;
+    const client = new WhatsAppCloudClient({
+      accessToken: "tok",
+      phoneNumberId: "123",
+      fetch: fetchImpl,
+    });
+
+    const result = await client.verifyCredentials();
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.message).toContain("SOME_OTHER_NODE");
+    expect(result.error?.message).toContain("123");
+  });
+
+  it("reads an error envelope under a 200 as the error it is, not as a missing id", async () => {
+    // Meta answers some failures with an envelope under a 200. Both guards refuse it — the
+    // identity check would too, since such a body carries no `id` — so `ok: false` alone cannot
+    // tell which one fired, and removing the envelope branch left this test green.
+    //
+    // The message is what separates them, and it is the whole reason the branch exists: an
+    // expired token diagnosed as "resolves to node undefined" sends someone to check a phone
+    // number id that is perfectly fine.
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: { code: 190, message: "token expired" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ) as unknown as typeof fetch;
+    const client = new WhatsAppCloudClient({
+      accessToken: "tok",
+      phoneNumberId: "123",
+      fetch: fetchImpl,
+    });
+
+    const result = await client.verifyCredentials();
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("auth_failed");
+    expect(result.error?.message).toContain("token expired");
+    expect(result.error?.message).not.toContain("undefined");
+  });
+
+  it("refuses an empty or unreadable 200 body", async () => {
+    // A captive portal or a proxy answering 200 with HTML reads as a valid credential otherwise.
+    const fetchImpl = vi.fn(
+      async () => new Response("", { status: 200 }),
+    ) as unknown as typeof fetch;
+    const client = new WhatsAppCloudClient({
+      accessToken: "tok",
+      phoneNumberId: "123",
+      fetch: fetchImpl,
+    });
+
+    expect((await client.verifyCredentials()).ok).toBe(false);
+  });
+});
+
+describe("WhatsAppCloudClient.verifyCredentials — bodies that are not objects", () => {
+  it("refuses a literal null body instead of throwing on it", async () => {
+    // `response.json()` resolves to `null` for the JSON literal `null`, which is neither
+    // `undefined` nor an object — so the undefined-guard let it through and the next line
+    // dereferenced it. The throw escaped `connect()` unwrapped, breaking the one clause this
+    // whole series exists to defend: a throw at startup takes the host down with it.
+    for (const body of ["null", "[]", '"a string"', "42"]) {
+      const client = new WhatsAppCloudClient({
+        accessToken: "tok",
+        phoneNumberId: "123",
+        fetch: (async () =>
+          new Response(body, {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })) as unknown as typeof fetch,
+      });
+
+      const result = await client.verifyCredentials();
+
+      expect(result.ok, `body ${body} was accepted`).toBe(false);
+    }
+  });
+
+  it("does not accuse the operator of a mixup the message itself disproves", async () => {
+    // Graph returns ids as strings, but a numeric one compared strictly produced "resolves to
+    // node 12345, not the configured phoneNumberId 12345" — a refusal that contradicts itself and
+    // sends someone hunting a WABA-id mistake the text rules out.
+    const client = new WhatsAppCloudClient({
+      accessToken: "tok",
+      phoneNumberId: "12345",
+      fetch: (async () =>
+        new Response(JSON.stringify({ id: 12345 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })) as unknown as typeof fetch,
+    });
+
+    expect((await client.verifyCredentials()).ok).toBe(true);
+  });
+});

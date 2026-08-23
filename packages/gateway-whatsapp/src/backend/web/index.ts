@@ -161,7 +161,7 @@ export class WhatsAppWebBackend implements WhatsAppBackend {
 
   async send(message: WhatsAppOutboundMessage): Promise<WhatsAppSendResult> {
     if (!this.connected || this.handle === undefined || this.handle.child.stdin === null) {
-      return { ok: false, error: { code: "server_error", message: "Bridge not connected." } };
+      return { ok: false, error: { code: "not_connected", message: "Bridge not connected." } };
     }
     const msgId = `out-${++this.msgIdCounter}`;
     const timeoutMs = this.opts.sendTimeoutMs ?? DEFAULT_SEND_TIMEOUT_MS;
