@@ -24,6 +24,8 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { reusedStateAdvice } from "../src/reused-state.js";
+
 const COMPOSE = join(import.meta.dirname, "..", "docker", "matrix", "docker-compose.yml");
 const ENV_PATH = join(import.meta.dirname, "..", ".env");
 const PORT = process.env.MATRIX_HOST_PORT ?? "26167";
@@ -152,7 +154,15 @@ async function register(username: string, token: string) {
   const accessToken = done.body.access_token as string | undefined;
   const userId = done.body.user_id as string | undefined;
   if (accessToken === undefined || userId === undefined) {
-    throw new Error(`register ${username} failed: ${JSON.stringify(done.body).slice(0, 200)}`);
+    const detail = JSON.stringify(done.body).slice(0, 200);
+    // The token WAS found in the log and WAS sent — it is refused because the server already
+    // consumed it at first boot. Left alone, this message sends the reader hunting a wrong token,
+    // which is the one thing that is not wrong. The docblock above covers the neighbouring case
+    // (a log that no longer holds the token) and prints the same remedy; this is the case it did
+    // not cover.
+    const advice = reusedStateAdvice("matrix", detail);
+    if (advice !== undefined) process.stderr.write(`${advice}\n`);
+    throw new Error(`register ${username} failed: ${detail}`);
   }
   return { userId, accessToken };
 }
