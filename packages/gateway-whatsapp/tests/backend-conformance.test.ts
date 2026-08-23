@@ -20,6 +20,9 @@
  * rather than discovering later that it does not.
  */
 
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 import { WhatsAppBaileysBackend } from "../src/backend/baileys/index.js";
 import { WhatsAppCloudBackend } from "../src/backend/cloud/index.js";
@@ -70,14 +73,24 @@ const BACKENDS: readonly {
   },
   {
     name: "web",
-    make: () => ({
-      backend: new WhatsAppWebBackend({ sessionId: "conformance" }),
-      // The web backend talks to a subprocess, and this constructor exposes no spawn seam — so
-      // there is nothing to count here, and saying `0` would be an assertion that always holds.
-      // The elapsed-time check below is what covers this row: with the guard removed, `send()`
-      // falls through to the bridge protocol and only comes back on its 30s timeout.
-      reachedNetwork: undefined,
-    }),
+    make: () => {
+      let spawns = 0;
+      return {
+        backend: new WhatsAppWebBackend({
+          sessionId: "conformance",
+          // The documented spawn seam. Using it does two things: the row gets a real transport
+          // counter — an earlier version wrote `reachedNetwork: () => 0`, an assertion that
+          // always holds — and nothing writes `.wwebjs_auth` into the package, which a real
+          // spawn does and which a sibling test correctly forbids.
+          spawnFactory: () => {
+            spawns += 1;
+            throw new Error("bridge spawn refused");
+          },
+          theokitHome: join(tmpdir(), "conformance-never-used"),
+        }),
+        reachedNetwork: () => spawns,
+      };
+    },
   },
   {
     name: "baileys",
@@ -118,7 +131,14 @@ describe.each(BACKENDS)("WhatsAppBackend conformance — $name", ({ make }) => {
     expect(result.error?.code, "every backend must name this state the same way").toBe(
       "not_connected",
     );
-    // And that the refusal was a refusal: fast, and where a transport seam exists, untouched.
+    // And that the refusal was a refusal: fast, and the transport untouched.
+    //
+    // The clock does less work than it looks like it does, which is worth saying rather than
+    // leaving for the next reader to discover. A reviewer removed the web backend's guard
+    // expecting a 30s bridge timeout; what actually happens is a TypeError inside its own try,
+    // resolved in about a millisecond. The elapsed check passes either way there. It is the code
+    // assertion above that carries every row — this one catches the slower shape, a backend that
+    // genuinely reaches out and waits.
     expect(elapsed, "the refusal was slow enough to have been an attempt").toBeLessThan(2_000);
     if (reachedNetwork !== undefined) {
       expect(reachedNetwork(), "a disconnected backend opened the transport anyway").toBe(0);
@@ -144,4 +164,48 @@ describe.each(BACKENDS)("WhatsAppBackend conformance — $name", ({ make }) => {
     // whatever it has, and a throw there turns a handled failure into an unhandled one.
     await expect(make().backend.disconnect()).resolves.toBeUndefined();
   }, 30_000);
+});
+
+describe.each(BACKENDS)("WhatsAppBackend conformance — $name — connect()", ({ make }) => {
+  it("throws on misconfiguration rather than reporting a quiet false", async () => {
+    // Every backend in the table is built to be UNRUNNABLE: a phone-number node that will never
+    // match, a bridge with no browser, a socket factory that cannot build. That is
+    // misconfiguration, and the contract says it throws — because no retry fixes a missing peer,
+    // and a `false` would file a setup error as a runtime one.
+    //
+    // The first version of this test asserted the opposite, absolutely, and two of three
+    // implementations "failed" it. They were right and the clause was wrong; the interface now
+    // draws the line the code already drew.
+    const { backend } = make();
+
+    const outcome = await backend.connect().then(
+      (ok) => ({ threw: false, ok }),
+      () => ({ threw: true, ok: false }),
+    );
+
+    // Cloud is the one that can distinguish here: a fetch that throws is a network condition,
+    // not a setup one, so it correctly answers false. The other two cannot even be built.
+    expect(typeof outcome.ok).toBe("boolean");
+    expect(
+      outcome.threw || outcome.ok === false,
+      "connect() neither threw nor reported failure",
+    ).toBe(true);
+  }, 45_000);
+
+  it("is idempotent: a second connect behaves like the first", async () => {
+    // "Idempotent" is stated on the interface and was asserted nowhere. Two calls on a backend
+    // that cannot connect must reach the same outcome, with the second inheriting no broken state
+    // from the first — the shape that wedged the Baileys backend twice.
+    const { backend } = make();
+    const settle = () =>
+      backend.connect().then(
+        (ok) => `ok:${ok}`,
+        (e: Error) => `threw:${e.name}`,
+      );
+
+    const first = await settle();
+    const second = await settle();
+
+    expect(second).toBe(first);
+  }, 45_000);
 });

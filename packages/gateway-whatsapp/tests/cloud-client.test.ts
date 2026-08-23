@@ -384,3 +384,44 @@ describe("WhatsAppCloudClient.verifyCredentials — identity, not just access", 
     expect((await client.verifyCredentials()).ok).toBe(false);
   });
 });
+
+describe("WhatsAppCloudClient.verifyCredentials — bodies that are not objects", () => {
+  it("refuses a literal null body instead of throwing on it", async () => {
+    // `response.json()` resolves to `null` for the JSON literal `null`, which is neither
+    // `undefined` nor an object — so the undefined-guard let it through and the next line
+    // dereferenced it. The throw escaped `connect()` unwrapped, breaking the one clause this
+    // whole series exists to defend: a throw at startup takes the host down with it.
+    for (const body of ["null", "[]", '"a string"', "42"]) {
+      const client = new WhatsAppCloudClient({
+        accessToken: "tok",
+        phoneNumberId: "123",
+        fetch: (async () =>
+          new Response(body, {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })) as unknown as typeof fetch,
+      });
+
+      const result = await client.verifyCredentials();
+
+      expect(result.ok, `body ${body} was accepted`).toBe(false);
+    }
+  });
+
+  it("does not accuse the operator of a mixup the message itself disproves", async () => {
+    // Graph returns ids as strings, but a numeric one compared strictly produced "resolves to
+    // node 12345, not the configured phoneNumberId 12345" — a refusal that contradicts itself and
+    // sends someone hunting a WABA-id mistake the text rules out.
+    const client = new WhatsAppCloudClient({
+      accessToken: "tok",
+      phoneNumberId: "12345",
+      fetch: (async () =>
+        new Response(JSON.stringify({ id: 12345 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })) as unknown as typeof fetch,
+    });
+
+    expect((await client.verifyCredentials()).ok).toBe(true);
+  });
+});

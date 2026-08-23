@@ -275,28 +275,43 @@ describe("WhatsAppCloudBackend — sendTemplate", () => {
     // Pillar (a) of the wiring triad: sendTemplate on the client is unreachable
     // unless something a consumer can hold delegates to it. The backend is that
     // thing — WhatsAppCloudClient is @internal and not exported.
-    const fakeFetch = makeFetchOk();
+    // Connects first: `sendTemplate` now refuses an unverified credential, like `send()`.
+    const fakeFetch = makeFetchConnectedOk();
     const b = makeBackend(fakeFetch);
+    expect(await b.connect()).toBe(true);
 
     const result = await b.sendTemplate("5511", "hello_world", "en_US");
 
     expect(result.ok).toBe(true);
-    const init = (fakeFetch as ReturnType<typeof vi.fn>).mock.calls[0]![1] as RequestInit;
+    // Call 0 is the credential check; the template POST is call 1.
+    const init = (fakeFetch as ReturnType<typeof vi.fn>).mock.calls[1]![1] as RequestInit;
     const body = JSON.parse(String(init.body)) as Record<string, unknown>;
     expect(body.type).toBe("template");
     expect(body.template).toEqual({ name: "hello_world", language: { code: "en_US" } });
   });
 
   it("surfaces a template rejection as a structured error, never a throw", async () => {
+    // The credential is fine and the template is not — which is the point of the test, so the
+    // fetch answers the verification and then rejects the template. Routing on the method keeps
+    // the two apart: a GET is the check, a POST is the send.
     const b = makeBackend(
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ error: { code: 132001, message: "no such template" } }), {
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        if ((init?.method ?? "GET") === "GET") {
+          return new Response(JSON.stringify({ id: "PNID" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(
+          JSON.stringify({ error: { code: 132001, message: "no such template" } }),
+          {
             status: 400,
             headers: { "content-type": "application/json" },
-          }),
-      ) as typeof fetch,
+          },
+        );
+      }) as unknown as typeof fetch,
     );
+    expect(await b.connect()).toBe(true);
 
     const result = await b.sendTemplate("5511", "nope", "en_US");
 
@@ -476,4 +491,41 @@ describe("WhatsAppCloudBackend — disconnect during an in-flight verify", () =>
     // session to be outside of. Whether that should match Baileys, which does refuse, is a
     // separate question about the shared contract and not this test's business.
   }, 30_000);
+});
+
+describe("WhatsAppCloudBackend.sendTemplate — the method the contract cannot reach", () => {
+  it("refuses before connect(), like send() does", async () => {
+    // `sendTemplate` is deliberately off the `WhatsAppBackend` interface — WhatsApp Web has no
+    // templates — so the conformance suite structurally cannot see it, and it kept the exact
+    // hazard that suite was written to close: a real request carrying a credential nothing had
+    // verified, or one `connect()` had already rejected.
+    //
+    // Being outside the shared contract is why it needs its own test, not a reason to be exempt
+    // from the rule. It is `@public` and reachable through the adapter's backend handle.
+    let calls = 0;
+    const counting = vi.fn(async () => {
+      calls += 1;
+      throw new Error("network reached");
+    }) as unknown as typeof fetch;
+
+    const result = await makeBackend(counting).sendTemplate(
+      "5511999999999",
+      "hello_world",
+      "en_US",
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("not_connected");
+    expect(calls, "an unconnected sendTemplate reached the network").toBe(0);
+  });
+
+  it("sends once connected", async () => {
+    const backend = makeBackend(makeFetchConnectedOk());
+    expect(await backend.connect()).toBe(true);
+
+    const result = await backend.sendTemplate("5511999999999", "hello_world", "en_US");
+
+    expect(result.ok).toBe(true);
+    expect(result.wamid).toBe("wamid.x");
+  });
 });

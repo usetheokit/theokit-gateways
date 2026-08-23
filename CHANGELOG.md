@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A second review round closed five more: `verifyCredentials()` threw on a `null` JSON body, which
+  broke the very "returns false rather than throwing" clause the work exists to defend;
+  `sendTemplate()` still posted an unverified credential because it sits off the shared interface
+  and the conformance suite cannot see it; that suite asserted three of five contract clauses, and
+  writing the missing two revealed the contract itself was wrong — misconfiguration should throw,
+  operational failure should return `false`, and two backends had been right all along; the `web`
+  conformance row observed nothing and now uses the documented spawn seam; and a numeric node id
+  produced a refusal that contradicted its own text
+
 - The `WhatsAppBackend` contract states what it requires, and a conformance suite holds all three
   implementations to it together. The interface declared bare signatures, so each backend answered
   the unasked questions its own way and they diverged: `send()` on a disconnected backend refused

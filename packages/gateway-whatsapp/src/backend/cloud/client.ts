@@ -133,7 +133,12 @@ export class WhatsAppCloudClient {
     // A 200 is not a yes. Meta answers some failures with an error envelope under a 200, and a
     // captive portal or proxy answers everything with one — so the status line is the weakest
     // evidence in the response.
-    if (body === undefined) {
+    // `null`, an array, a string and a number are all valid JSON and none of them is a node
+    // description. `response.json()` resolves `null` for the literal, which is neither
+    // `undefined` nor an object — the undefined-only guard let it through and the next line
+    // dereferenced it, so a proxy answering `null` made `connect()` THROW. That is precisely the
+    // clause this method is written to uphold.
+    if (body === null || typeof body !== "object" || Array.isArray(body)) {
       return {
         ok: false,
         error: {
@@ -150,7 +155,10 @@ export class WhatsAppCloudClient {
     // token also answers 200, so pasting the WABA id where the phone number id belongs sails
     // through an access check and fails on every send afterwards. It is the likeliest
     // misconfiguration in Cloud API setup, and the response names the node it actually reached.
-    if (body.id !== this.opts.phoneNumberId) {
+    // Compared as strings: Graph returns ids as strings, but a numeric one under strict `!==`
+    // produced "resolves to node 12345, not the configured phoneNumberId 12345" — a refusal that
+    // contradicts itself and sends someone hunting a mixup its own text rules out.
+    if (String(body.id) !== this.opts.phoneNumberId) {
       return {
         ok: false,
         error: {

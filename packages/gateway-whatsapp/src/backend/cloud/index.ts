@@ -183,6 +183,19 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
     languageCode: string,
     components?: ReadonlyArray<MetaTemplateComponent>,
   ): Promise<WhatsAppSendResult> {
+    // Same rule as `send()`, and it needs saying separately because this method is off the
+    // `WhatsAppBackend` interface — WhatsApp Web has no templates — so the conformance suite that
+    // enforces it there structurally cannot see it here. Being outside the shared contract is
+    // why it needs its own guard, not a reason to be exempt from the rule.
+    if (!this.connected) {
+      return {
+        ok: false,
+        error: {
+          code: "not_connected",
+          message: "Cloud backend is not connected — call connect().",
+        },
+      };
+    }
     return this.client.sendTemplate(to, templateName, languageCode, components);
   }
 

@@ -142,8 +142,16 @@ export interface WhatsAppBackend {
    * Make the backend usable, and report whether it is.
    *
    * Idempotent: a second call while connected returns `true` without repeating the work.
-   * Returns `false` rather than throwing — a throw at startup takes the host down with it — and
-   * every implementation writes the reason somewhere a human can read.
+   *
+   * **Operational failure returns `false`; misconfiguration throws.** A rejected credential, an
+   * unreachable server, a session that never opens — those are conditions a supervisor can retry
+   * or report, so they come back as `false` with the reason written where a human can read it. A
+   * missing peer dependency or an absent browser is not: no retry fixes it, and answering `false`
+   * would bury a setup error under a runtime one.
+   *
+   * The line was drawn after the conformance suite asserted the absolute version and two of three
+   * implementations "failed" it — correctly. They throw `ConfigurationError` and
+   * `WhatsAppBridgeError` for exactly the case that should not be swallowed.
    */
   connect(): Promise<boolean>;
   /** Release whatever `connect()` took. Idempotent, and safe on a backend that never connected. */

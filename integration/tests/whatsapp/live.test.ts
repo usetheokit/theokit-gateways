@@ -115,6 +115,11 @@ describeLive(WHATSAPP, "outbound", () => {
       fetch: wire.fetch,
     });
 
+    // `sendTemplate` refuses an unverified credential now, like `send()` — the same rule, stated
+    // separately because this method is off the shared interface and the conformance suite that
+    // enforces it there cannot see it here.
+    expect(await backend.connect(), "the credential did not verify against Meta").toBe(true);
+
     const result = await backend.sendTemplate(
       required("WHATSAPP_TEST_RECIPIENT"),
       optional("WHATSAPP_TEMPLATE_NAME") ?? "hello_world",
@@ -137,8 +142,17 @@ describeLive(WHATSAPP, "outbound", () => {
       // that left this process. If we sent a different number, Meta's refusal is ours and the
       // test must stay red — a routing defect reported as a provisioning gap is the hiding
       // place this skip would otherwise be.
+      // Every recipient we posted, not "exactly one": `sendMessage` splits long text into several
+      // messages, so a count is a property of this test's payload rather than of the code. What
+      // must hold whatever the length is that every one of them went to the configured number —
+      // and that at least one was sent at all, since an empty list would satisfy a per-entry
+      // check while proving nothing.
       expect(
-        wire.sentTo,
+        wire.sentTo.length,
+        "nothing was posted, so 131030 came from somewhere else",
+      ).toBeGreaterThan(0);
+      expect(
+        [...new Set(wire.sentTo)],
         "we sent a different recipient than the one configured — this refusal is ours, not a gap",
       ).toEqual([configured]);
       ctx.skip(
@@ -183,7 +197,11 @@ describeLive(WHATSAPP, "outbound", () => {
         // Same guard, same reason: the bytes, not the env var. `connect()` also posts now, so
         // the recipient is whichever entry carried a `to` — the credential check sends none.
         expect(
-          wire.sentTo,
+          wire.sentTo.length,
+          "nothing was posted, so 131030 came from elsewhere",
+        ).toBeGreaterThan(0);
+        expect(
+          [...new Set(wire.sentTo)],
           "we sent a different recipient than the one configured — this refusal is ours",
         ).toEqual([configured]);
         ctx.skip(
