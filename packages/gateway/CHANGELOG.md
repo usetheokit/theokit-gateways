@@ -1,5 +1,111 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- 08abaed: **`GatewayRunner.stop()` is now terminal, and says so instead of leaving a runner nothing can stop.**
+
+  `start()` and `stop()` were each written to be idempotent, but they guarded on different flags. `stop()` cleared `connected` and set `stopped`; nothing ever cleared `stopped`. So a second `start()` sailed past its `connected` guard, reconnected every adapter and rewired inbound dispatch — while the next `stop()` returned at its own `stopped` guard without disconnecting anything. Measured on the previous release: two connects, one disconnect, and a live inbound handler that no call could take down.
+
+  Nothing reported this. The adapters stayed connected, the events kept arriving, and both methods returned normally. A process that reloads configuration or reconnects after a network failure by restarting the runner leaked a connection every cycle.
+
+  `start()` on a stopped runner now throws `GatewayLifecycleError` with `code: "runner_stopped"`, and the message says to construct a new runner. That is the whole of the behaviour change: a call that previously appeared to succeed while corrupting state now fails at the call that cannot be honoured, which is the only point where a caller can still do something about it.
+
+  Adds `GatewayLifecycleError` and `GatewayLifecycleErrorOptions` to the public API. It is deliberately separate from `GatewayConfigurationError`: that one reports a bad setting, this one reports a fine setting used at an impossible moment.
+
+- 66e08ba: **A third WhatsApp backend: `WhatsAppBaileysBackend`.** It speaks the WhatsApp Web multi-device protocol over a WebSocket. Where the `web` backend drives a headless Chromium through `whatsapp-web.js`, this holds a socket — that is the whole difference in kind.
+
+  Reach it with `WhatsAppAdapter.fromBaileys({ sessionDir })`, or through `WhatsAppAdapter.from({ backend: "baileys", baileys: { … } })` when the choice arrives as configuration rather than as a decision in code. `baileys` is an **optional peer dependency** (`>=7.0.0-rc14`), loaded lazily at connect: a consumer who never constructs this never needs it installed.
+
+  **Added rather than replacing**, for three reasons a substitution would not give. Nobody loses a paired session — a Puppeteer profile and a multi-file auth state are not interchangeable. The comparison against the incumbent becomes measurable rather than asserted, which is the whole point: no comparison has been made yet, and this changeset does not claim one. And retreat stays cheap, because nobody is forced onto it.
+
+  **Unofficial, and no amount of code changes that.** It automates a WhatsApp Web session, which Meta's terms do not sanction and which can get a number banned. Use a number created for this and nothing else, never a personal one.
+
+  Three decisions worth naming:
+
+  _Sends are serialised_ — one `sendMessage` in flight per socket, including when one times out. That last clause was not true when this was first written: the queue advanced on the raced result, and a timeout does not cancel a `sendMessage`, so a timed-out send stayed on the socket while the next one started — reaching the exact hazard the serialisation exists to prevent, through the timeout meant to bound it. A review found it; there is now a test that fails if the queue goes back to advancing on the race. Honest about provenance: both peer gateways studied do this and one records that concurrent sends on a single socket can misdeliver to the wrong chat. **We have not measured that in our own code**, so it is precaution rather than a reproduction of our own bug. Kept because the cost is one promise chain and the failure it guards against is a message reaching the wrong person.
+
+  _A timed-out send reports undetermined delivery, and is never retried._ A local timeout says the acknowledgement did not arrive, not that the message did not; retrying can duplicate — the failure this repository already shipped once, in the email backend re-answering its inbox.
+
+  _A connect that fails or is superseded tears its socket down._ A timed-out connect used to leave a live socket behind: it kept feeding inbound into the handler, and the retry opened a second live session — which on an unofficial automation is ban surface, not merely a leak. The same generation counter makes `disconnect()` during an in-flight `connect()` safe; without it the late success set `connected` over a backend with no socket, and every later send was refused until the object was rebuilt.
+
+  _The backend depends on a three-member socket contract we declare_, not on Baileys' types. That is what lets every test in this backend drive a fake and run with `baileys` absent — which matters, because a backend that could only be exercised with the real library installed is a backend exercised by nothing, and that is exactly how the `web` backend reached production unable to start.
+
+  _A retired connection attempt is ended, not merely silenced._ Retiring by generation made an abandoned attempt's listeners no-ops — including the one that resolves it — so nothing could settle it but the timeout. A `disconnect()` during pairing therefore blocked shutdown for the full 60s default while the socket it asked to close stayed live. And a socket that closed under the backend kept its reference until the next `connect()` overwrote it, so it was never ended and no later `disconnect()` could reach it. Both are fixed, as is a third window a later round found: a `disconnect()` landing while the factory itself was still awaiting — a dynamic import, the auth state off disk, and a network round-trip for the protocol version all happen before a socket exists — could not see an attempt that had no socket yet. Each has a test that fails when its fix alone is reverted.
+
+  _A failed connect says why._ `false` with no output cannot distinguish a network blip from a device the operator unlinked from their phone, and only one of those is worth retrying — a supervisor that cannot tell them apart retries forever against a session that can only be re-paired.
+
+  _Pairing has somewhere to go._ `printQRInTerminal` stays off — a library writing to stdout decides where a host's output goes — so the QR is handed to an `onQr` callback, defaulting to stderr. Without it a fresh session directory could only ever time out: there is no other way to pair.
+
+  **What no test here proves.** Nothing in this repository touches WhatsApp. Pairing needs a QR scan by a human and there is no WhatsApp in Docker, so protocol conformance, delivery, receipts and ban behaviour are unproven by this changeset and by every gate in this repository. A green suite means our logic does what we think — not that WhatsApp agrees.
+
+  The socket contract this backend depends on lost a member: `logout()` was declared and called by nothing, and on WhatsApp `logout()` **unpairs the device** — the opposite of what `disconnect()` means here. A dead member advertising a destructive capability is worse than an absent one.
+
+  `WhatsAppMessageEvent.whatsapp.backend` and `WhatsAppBackend.kind` gain a third member, so an exhaustive `switch` over either stops compiling until the case is handled. No call site in this repository switches on them.
+
+### Patch Changes
+
+- e682180: **A message whose handler throws no longer kills the bot.** On Teams and on WhatsApp's web backend it did — not degraded delivery, an exit code. `Error: ... / Node.js v22.22.2`, and the next message never arrived.
+
+  Both dispatched with `void handler(event)`. `void` reads as "I am not waiting for this"; what it tells the runtime is "I am not handling the error", and under Node 22's default an unhandled rejection ends the process. Measured against both adapters through their own injection seams before the fix, and again after: the throw is now contained, named, and delivery continues.
+
+  **Discord and Telegram contained it but blamed the wrong thing.** The rejection escaped into the platform library's error channel, so a bug in the consumer's own handler surfaced as `[discord] client error` / `[telegram] bot error`. Anyone debugging that went looking in discord.js and grammy for a fault that was in their own code. Both now report `handler threw` and return `"handler_threw"` from the internal dispatch seam.
+
+  **WhatsApp Cloud dropped the rest of the batch, and made the platform resend it.** Meta packs several messages and their delivery receipts into one webhook, and the dispatch loop awaited each handler with nothing around it. One throw skipped every remaining message in the payload, skipped the status receipts, and rejected `handleWebhookPayload` — so the caller's route answered 500 and Meta redelivered the whole batch, replaying the messages that had already been handled. That is a duplicate-reply bug reached through a different door than the one fixed in #11. The same method also now answers `false` on a signed body that is not JSON, instead of throwing out of a method whose contract is `true`/`false`.
+
+  **Email gained a net it did not strictly need.** Its drain is written never to reject, and it does not — but both launch sites discard the promise, so that property was the only thing between a future edit and the same fatal rejection, and nothing enforced it. The catch now lives at the site that would pay for it.
+
+  **The contract is written down, and held to.** `BasePlatformAdapter.onInbound` now states it: a handler may throw, and an adapter must contain that throw, report it as the handler's failure rather than the platform's, and keep delivering. Eight of ten adapters had converged on exactly that with nothing recording it. `tests/lint/adapter-contract.test.ts` gains two invariants — every adapter names a handler throw as the handler's, and no adapter launches a user callback with a bare `void` — and both were checked against a deliberately reverted adapter to confirm they fire rather than pass vacuously.
+
+- 9c35372: **Slack now answers `empty_text` for empty text, like the other nine adapters.** The contract states it without a condition — `sendMessage` with empty text returns `{ ok: false, code: "empty_text" }` — but Slack checked the connection first, so the same call answered `not_connected` there and `empty_text` everywhere else.
+
+  Nobody lost a delivery over it: both results are already `ok: false`. What broke is code that branches on the code — treating a caller's bad input one way and an unavailable transport another, with a retry or an alert behind the second. Written against the contract, that code did the right thing on nine platforms and the wrong thing on the tenth, with nothing to say why.
+
+  The connection guard keeps its reason (`this.app` is set before `app.start()` resolves, so a send in that window would otherwise leak through); only the order changed. Input first, transport second, which is what `rules/error-handling.md` § 2 asks for and what the other nine already did.
+
+  The cross-adapter gate gains the invariant, and it is checked against a deliberately reverted adapter. That check earned its keep immediately: the first version of the invariant read a window of raw source that its own explanatory comment filled, so it passed against the reverted adapter by matching the prose describing the rule. It now strips comments before asking — a gate answered by a comment is worse than no gate, because it reports coverage it does not have.
+
+- b8ef098: **Every package now ships the licence it declares.** All twelve manifests in this repository declare `Apache-2.0`, and the repository had no `LICENSE` file at all — not at the root, and not in any package directory except `gateway-email`. So each published tarball asserted a licence while carrying none of its terms, and §4(a) of that licence requires a copy to travel with the distribution. Worse than a missing file: with no licence text anywhere, everything outside the manifests fell back to default copyright, which grants a recipient nothing.
+
+  The text is now at the repository root and inside every publishable package, byte-identical to the canonical Apache License 2.0 with the appendix filled in (`Copyright 2026 usetheo.dev`). The one pre-existing copy, in `gateway-email`, was replaced along with the rest: it carried the same truncated paragraph 4(d) found across the ecosystem, dropping "reasonable and customary use" from the NOTICE clause — a modified body under an unmodified SPDX identifier.
+
+  **The repository moved to the official `usetheokit` organization.** Existing clones and published URLs keep working through GitHub's permanent redirect; the root manifest now declares `Apache-2.0` explicitly rather than leaving the workspace root silent.
+
+- 5bae032: Six defects that broke real conversations, found by testing the adapters against the live platforms instead of against fakes.
+
+  **LINE — no outbound message was ever delivered.** The adapter called the v9 SDK client with positional arguments while that client takes a single request object, so LINE received an empty request and rejected every send with a 400. Upgrade if you use this adapter at all: nothing it sent reached anyone.
+
+  **Telegram — the bot froze on long replies.** Any message over 4096 characters that began with an unclosed code span (a stray backtick) put the splitter into an infinite loop, hanging the process until it ran out of memory. Long agent answers now split correctly whatever markdown they contain.
+
+  **Mattermost — long messages silently vanished.** The adapter never split anything, so any reply over 16,383 characters was rejected by the server and the user simply saw nothing. Long replies are now split into parts Mattermost accepts.
+
+  **SMS — long messages were rejected from the hundredth part onward.** The `(i/N)` prefix outgrew the space reserved for it, pushing every later part past the provider's limit.
+
+  **Matrix and LINE — `connect()` reported success with an invalid token.** Both now verify the credential with the server before returning `true`, so a wrong token fails at startup instead of silently receiving nothing forever.
+
+  **Email and Teams — the bot could go permanently deaf.** Replacing an inbound handler and then disposing of the previous one removed the new handler as well, and the gateway stopped receiving messages with nothing logged.
+
+  Also: a `pre_inbound` hook that threw put its raw error text into the user's chat, which could expose internal details such as connection strings or tokens. Users now see only which hook failed; the detail goes to the server log, redacted.
+
+  WhatsApp additionally stops opening a second session when `connect()` is called twice, and its group mention filter no longer treats unrelated digits scattered through a message as a mention of the bot.
+
+- 144b2ba: **The `post_outbound` hook now fires.** It is one of the three fire points `GatewayHook` documents and exports, and no production code had ever called it: `HookExecutor.firePostOutbound` existed, was typed, was unit-tested, and had exactly one caller in the repository — its own test.
+
+  That is the worst shape a broken contract can take. Registering a `post_outbound` hook for delivery auditing, outbound metrics or reply logging raised no error and produced no warning. The hook was simply never invoked, and the instrumentation a consumer believed they had did not exist.
+
+  Every reply now leaves through one path that sends and then reports, so the hook fires exactly once per attempt with `{ event, outbound, result }` — including the EC-D auto-reply sent when a `pre_inbound` hook blocks with a message, and including the attempt that finds no adapter registered for the event's platform. That last case matters more than it looks: a hook counting deliveries would otherwise omit precisely the replies that went nowhere.
+
+  The hook observes; it does not intercept. The adapter's `SendResult` reaches the caller of `reply` unchanged, and a hook that throws is contained by `HookExecutor`, so a broken observer cannot turn a delivered reply into a failed one.
+
+- 111f837: **`stop()` no longer holds the process open for the whole drain window.** A bot that stopped on `SIGINT` sat there for ten more seconds before the process exited, with nothing running and nothing to wait for.
+
+  `stop()` drains in-flight handlers by racing them against a `drainTimeoutMs` timer. `Promise.race` settles on whichever branch finishes first and abandons the other — but an abandoned `setTimeout` is still a scheduled timer, and a scheduled timer keeps Node's event loop alive. The drain finished in under a millisecond; the timer it beat kept the process running for the remaining ten seconds. Measured before the fix: `stop()` returned after 0 ms, the process exited after 10 001 ms. After: 1 ms.
+
+  The delay only appeared once at least one event had been dispatched, since the drain branch is guarded on there being something in flight — which is to say, on every real bot rather than on any test that stopped a runner it had never used. Under an orchestrator that sends `SIGTERM` and then `SIGKILL`, the difference is whether shutdown is clean or forced.
+
+  The timer handle is now cleared in a `finally`, so the cleanup does not depend on which branch of the race won.
+
 ## 0.5.0
 
 ### Minor Changes
