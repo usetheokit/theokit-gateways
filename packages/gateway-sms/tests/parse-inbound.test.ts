@@ -9,10 +9,15 @@
  *   - removing the catch made an empty webhook body throw out of `onMessage` — which TheoKit calls
  *     AFTER answering 200, so the throw is an unhandled rejection with no status left to change.
  *
- * `normalizeE164` raises the same `ConfigurationError` for a bad configured number and a bad number
- * in the body, so the two cannot be told apart by type. They are told apart by ORDER: the app's
- * configuration is validated first and allowed to throw; after that line, the same error can only
- * have come from the body.
+ * The design that fixed those two was itself wrong, and review caught it: validating
+ * `options.fromNumber` up front invented a rule stricter than anything else in this package applies
+ * to that field, and rejected four documented configurations — a Vonage alphanumeric sender id, a
+ * Twilio short code, a Messaging Service SID, and a national number with `defaultCountry` set.
+ *
+ * What ships instead: `createBackend` runs OUTSIDE the try, so an unsupported backend surfaces;
+ * everything body-dependent runs inside it and returns `null`. `fromNumber` is validated nowhere,
+ * exactly as the rest of the package treats it. An invalid `defaultCountry` remains
+ * indistinguishable from a bad body and degrades to `null` — stated rather than papered over.
  */
 
 import { describe, expect, it } from "vitest";

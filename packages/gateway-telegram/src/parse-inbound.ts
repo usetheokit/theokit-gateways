@@ -88,7 +88,16 @@ export function buildEvent(
   };
 }
 
-/** True when `value` is a non-null, non-array object — the only shape worth reading fields off. */
+/**
+ * True when `value` is a non-null, non-array object — the only shape worth reading fields off.
+ *
+ * The `!Array.isArray` clause has **no observable effect at any current call site**, verified by
+ * mutation: removing it leaves the whole suite green, because every array that reaches here fails
+ * the field check on the next line anyway (`[].message` is `undefined`, `[].message_id` is
+ * `undefined`). It is kept as a property of the helper rather than of its callers — a future caller
+ * reading a field an array happens to have would need it — and this note exists so nobody reads its
+ * surviving mutant as a coverage gap someone forgot to close.
+ */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -106,7 +115,9 @@ function narrowMessage(msg: Record<string, unknown>, messageId: number, date: nu
     ...(typeof threadId === "number" && Number.isFinite(threadId)
       ? { message_thread_id: threadId }
       : {}),
-    ...(isRecord(replyTo) && typeof replyTo.message_id === "number"
+    ...(isRecord(replyTo) &&
+    typeof replyTo.message_id === "number" &&
+    Number.isFinite(replyTo.message_id)
       ? { reply_to_message: { message_id: replyTo.message_id } }
       : {}),
   };
@@ -157,7 +168,10 @@ export function parseInbound(payload: unknown): TelegramMessageEvent | null {
   const messageId = msg.message_id;
   const date = msg.date;
   if (typeof messageId !== "number" || !Number.isFinite(messageId)) return null;
-  if (typeof date !== "number" || !Number.isFinite(date)) return null;
+  // `Number.isFinite(date)` is not enough: `1e308` passes it and `date * 1000` then overflows to
+  // `Infinity`, which is the same silent poisoning of every downstream ordering decision that
+  // `NaN` produced. The conversion's RESULT is what has to be finite.
+  if (typeof date !== "number" || !Number.isFinite(date * 1000)) return null;
 
   const chat = msg.chat;
   if (!isRecord(chat)) return null;

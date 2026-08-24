@@ -129,10 +129,14 @@ describe("one mapping, two paths", () => {
    * field this assertion compares — and drift begins as an exact duplicate, so the assertion is
    * blind at the moment the risk starts.
    *
-   * Changing the shared `buildEvent` also leaves it green, and the reason given earlier was wrong
-   * too. It is not a property of equality testing: an inline mapping diverging ONLY in `event.id`
-   * turns this test — and only this test — red. The survivor was `event.id` being asserted nowhere
-   * in the package, which is a coverage hole, not a philosophical limit. It is covered now.
+   * Changing the shared `buildEvent` also left it green when this file was first written, and the
+   * reason given then was wrong too: it was presented as a property of equality testing, when the
+   * real cause was `event.id` being asserted nowhere in the package. That is covered now, so
+   * changing `buildEvent`'s `id` turns TWO tests red — this one and the canonical-id test below.
+   *
+   * (A previous version of this note claimed it turns "this test — and only this test — red". That
+   * was false the moment the canonical-id test was added, two describes down, in the same commit.
+   * A correction written to end a false claim reintroduced one, which is worth leaving visible.)
    *
    * What remains true: this assertion is the only one comparing the two paths field by field, so it
    * is where a divergence in any covered field is caught first.
@@ -272,5 +276,55 @@ describe("fields nothing else asserted", () => {
     });
 
     expect(event?.replyTo).toBeUndefined();
+  });
+});
+
+describe("numeric narrows reject the values that survive a typeof check", () => {
+  // Review found four `Number.isFinite` guards droppable with the whole suite green. A `typeof`
+  // check admits NaN and Infinity, and neither throws downstream — they poison silently.
+  it.each([
+    ["message_id", { message_id: Number.NaN }],
+    ["chat.id", { chat: { id: Number.NaN, type: "supergroup" } }],
+  ])("rejects a non-finite %s", (_label, patch) => {
+    expect(parseInbound({ ...UPDATE, message: { ...UPDATE.message, ...patch } })).toBeNull();
+  });
+
+  it("rejects a date whose conversion to milliseconds overflows", () => {
+    // `1e308` is finite; `1e308 * 1000` is not. The guard has to check the result, not the input.
+    expect(parseInbound({ ...UPDATE, message: { ...UPDATE.message, date: 1e308 } })).toBeNull();
+  });
+
+  it("drops a non-finite thread id rather than making it a topic", () => {
+    const event = parseInbound({
+      ...UPDATE,
+      message: { ...UPDATE.message, message_thread_id: Number.POSITIVE_INFINITY },
+    });
+
+    expect(event?.telegram.threadId).toBeUndefined();
+    expect(event?.channel.type).toBe("group");
+  });
+
+  it("drops a sender whose id is not finite", () => {
+    const event = parseInbound({
+      ...UPDATE,
+      message: { ...UPDATE.message, from: { id: Number.NaN, username: "ada" } },
+    });
+
+    expect(event?.sender.id).toBe("anonymous");
+    expect(event?.sender.username).toBeUndefined();
+  });
+
+  it('drops a reply id that is not finite instead of threading against "NaN"', () => {
+    const event = parseInbound({
+      ...UPDATE,
+      message: { ...UPDATE.message, reply_to_message: { message_id: Number.NaN } },
+    });
+
+    expect(event?.replyTo).toBeUndefined();
+  });
+
+  it("rejects a payload that is an array, not merely a non-object", () => {
+    expect(parseInbound([])).toBeNull();
+    expect(parseInbound({ ...UPDATE, message: [] })).toBeNull();
   });
 });
