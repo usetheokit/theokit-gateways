@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.2.1
+
+### Patch Changes
+
+- Every credential field now says what the platform calls it and where it is issued.
+
+  Measured: a developer who wires one adapter and carries its field name to the next gets
+  `error TS2353: … 'token' does not exist in type 'SlackAdapterOptions'`. That names the wrong field
+  and the type, and never the right one — so the answer was always one file away.
+
+  These docblocks are on published option types, so an editor now shows the answer on hover and
+  completion. All 15 credential-bearing fields across the ten packages are covered, including the ones
+  beyond each adapter's primary token: Slack's `appToken`, LINE's `channelSecret`, Vonage's
+  `apiSecret` and `signatureSecret`, WhatsApp's `appSecret`.
+
+  **Nothing was renamed.** Six of the ten primary names are the platform's own key, pinned against the
+  SDK's own declaration — `channelAccessToken` in `@line/bot-sdk`, `clientSecret` in
+  `@microsoft/teams.apps`, `accessToken` in `matrix-js-sdk`, `token` in `grammy` and `discord.js`,
+  `authToken` in `twilio`. Where ours diverges, the docblock says so rather than implying otherwise:
+  `botToken` (deliberate — the adapter also takes an `appToken`), Mattermost's `accessToken` against
+  its client's `token`, and `password` against nodemailer's `pass`.
+
 ## 0.2.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-sms",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "SMS platform adapter for @theokit/gateway. Multi-backend (Twilio + Plivo + Vonage). ADRs D389-D396.",
   "license": "Apache-2.0",
   "repository": {
