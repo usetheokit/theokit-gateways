@@ -49,13 +49,12 @@ own quality gates.
 
 ## Index
 
-16 items — **Open** 9 · **In flight** 0 · **Closed** 7
+16 items — **Open** 8 · **In flight** 0 · **Closed** 8
 
-### Open (9)
+### Open (8)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
-| [`B-008`](#b-008--a-gateway-cannot-be-written-outside-this-repository----) | A gateway cannot be written outside this repository | `triaged` | — |
 | [`B-009`](#b-009--theokits-channel-seam-names-our-packages-as-the-translator-and-no-adapter-can-translate----) | TheoKit's channel seam names our packages as the translator, and no adapter can translate | `raw` | — |
 | [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `raw` | — |
 | [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `raw` | — |
@@ -69,7 +68,7 @@ own quality gates.
 
 _None._
 
-### Closed (7)
+### Closed (8)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -80,6 +79,7 @@ _None._
 | [`B-005`](#b-005--the-dts-gate-accuses-the-published-artifact-when-the-build-command-was-wrong----) | The dts gate accuses the published artifact when the build command was wrong | `shipped` | — |
 | [`B-006`](#b-006--whatsappcloudbackendconnect-reports-success-without-authenticating----) | `WhatsAppCloudBackend.connect()` reports success without authenticating | `shipped` | — |
 | [`B-007`](#b-007--no-theokit-app-can-install-a-gateway-at-all----) | No TheoKit app can install a gateway at all | `shipped` | — |
+| [`B-008`](#b-008--a-gateway-cannot-be-written-outside-this-repository----) | A gateway cannot be written outside this repository | `shipped` | — |
 
 <!-- BACKLOG-INDEX:END -->
 
@@ -248,7 +248,7 @@ source: human
 opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-open-platform-registry-opportunity.md` (SHIPPABLE_WITH_CAVEATS)
 evidence: `packages/gateway/src/types/message-event.ts:22` declares `PlatformName` as a closed union of our ten platforms, and line 223 builds `MessageEvent` from the ten matching variants. A third-party adapter was written and compiled to confirm rather than assume: `error TS2416: Type '"signal"' is not assignable to type 'PlatformName'`. The closure is deliberate and recorded — ADR-0001 (`docs/adr/0001-message-event-closed-union.md`) chose exhaustive narrowing over OCP purity, and names its own revisit trigger: "if third-party or out-of-repo adapters ever become a supported goal, reopen this decision".
 why_now: that trigger has fired — supporting gateways written outside this repo is now a stated goal. The naive fix was prototyped first and FAILED: adding a `platform: string` variant destroys the narrowing the ADR refused to give up (`TS2339: Property 'telegram' does not exist on type 'DiscordEvent'`), so reopening the decision must not mean simply opening the union.
-status: triaged
+status: shipped
 dod:
   - an adapter in a separate package names a platform core has never heard of, and compiles
   - the ten first-party platforms keep exhaustive `switch` narrowing, proven by a test that fails when a case is deleted
@@ -270,6 +270,16 @@ dod:
 > zero of which switch on `event.platform` in production source — runtime dispatch is a string-keyed
 > Map, so the exhaustiveness ADR-0001 protects is a consumer-facing property. Decision recorded in
 > `docs/adr/0002-platform-event-registry.md` (supersedes ADR-0001).
+
+> **SHIPPED 2026-08-24 as `@theokit/gateway@0.7.0`.** Full Squad loop; the review was where the work
+> actually happened. Three reviewers found the first implementation wrong in six ways, two of which
+> shipped into `dist/index.d.ts` alongside a docblock asserting the opposite: an index-signature
+> augmentation annihilated the union to `never`, and an optional entry injected `undefined`. Both
+> lived in the composition rather than in the guard, so no test in this repository could reach them
+> — `tools/check-registry-augmentation.mjs` now compiles twelve hostile shapes in CI, each in its
+> own program, against the published declaration. Accepted against the npm package installed in a
+> real TheoKit app: a third-party gateway compiles with zero errors, and three negatives are
+> rejected. PRs #62, #64, #65.
 
 ## B-009 — TheoKit's channel seam names our packages as the translator, and no adapter can translate   [ ]
 
