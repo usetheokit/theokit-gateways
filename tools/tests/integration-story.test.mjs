@@ -127,9 +127,9 @@ describe("hiding places that defined a phantom section", () => {
 // reopened in the next one; the comment above them says why.
 describe("hiding places a reader never sees", () => {
   const check = (text) => missingFacts(text, { file: "README.md", heading: HEADING, facts: FACTS });
-  const gone = ["README.md: has no `## How this fits with TheoKit` section"];
   const phantom = (open, close) =>
     `# t\n\n${open}\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n${close}\n\n## Install\n\nUnrelated.\n`;
+  const gone = ["README.md: has no `## How this fits with TheoKit` section"];
 
   it("does not accept a heading inside a tilde fence", () => {
     expect(check(phantom("~~~md", "~~~"))).toEqual(gone);
@@ -139,15 +139,23 @@ describe("hiding places a reader never sees", () => {
     expect(check(phantom("   ```md", "   ```"))).toEqual(gone);
   });
 
-  // These two asserted the OPPOSITE one round ago, and the assertion was withdrawn on evidence
-  // rather than deleted. Running an unterminated fence or comment to end of file is what CommonMark
-  // says, and implementing it failed four innocent documents — `<!--` written in prose was enough.
-  // The cost fell on authors who did nothing wrong; the benefit was against an author deliberately
-  // gaming a gate that already states it cannot check whether the section is true.
-  it("accepts a document whose heading follows a fence that is never closed", () => {
+  // This assertion has been fail, then pass, then fail again, and each move had a different measured
+  // reason — recorded because three states look like flip-flopping unless the reasons are visible.
+  //
+  //   1. Unterminated blocks ran to end of file, as CommonMark says. FAIL.
+  //   2. That produced false fails on innocent documents — `<!--` written in prose was enough — so
+  //      both the fence and the comment rule were withdrawn. PASS.
+  //   3. Step 2 blamed the wrong rule. The false fails came from the COMMENT marker appearing in
+  //      ordinary prose; a stray ``` at the start of a line is not something people write by
+  //      accident except as the typo this catches. The rules are asymmetric now, and the fence one
+  //      is back. FAIL.
+  //
+  // The companion assertion below — an unterminated COMMENT — keeps the round-2 answer, because
+  // that is the one the false fails actually came from.
+  it("catches a heading that a fence left open swallowed", () => {
     expect(
       check(`# t\n\n\`\`\`md\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n`),
-    ).toEqual([]);
+    ).toEqual(gone);
   });
 
   it("accepts a document whose heading follows a comment that is never closed", () => {
@@ -182,8 +190,6 @@ describe("hiding places a reader never sees", () => {
 describe("blocks that hide a heading", () => {
   const check = (text) => missingFacts(text, { file: "README.md", heading: HEADING, facts: FACTS });
   const gone = ["README.md: has no `## How this fits with TheoKit` section"];
-  const phantom = (open, close) =>
-    `# t\n\n${open}\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n${close}\n\n## Install\n\nUnrelated.\n`;
 
   // Withdrawn on evidence, like the two above. Recognising YAML front matter meant treating `---`
   // on line 0 as an opener, and nothing distinguishes that from a thematic break — an ordinary
@@ -236,8 +242,8 @@ describe("innocent documents the gate must not fail", () => {
   });
 });
 
-// Round five. The gate had grown to 192 lines of hand-written CommonMark defending 63 lines of
-// documentation, and each review found another bypass and another FALSE FAIL. The bypasses were all
+// Round five. The gate had grown to 192 lines of hand-written CommonMark defending two short
+// documented sections, and each review found another bypass and another FALSE FAIL. The bypasses were all
 // adversarial — nobody hides a heading in a `<textarea>` by accident — while the false fails hit
 // authors who did nothing wrong. So the threat model is now stated and the parser shrank to it:
 // this gate defends against the section being deleted or commented out, not against an author
@@ -300,14 +306,21 @@ describe("the accidental threat model, and its stated limits", () => {
   });
 
   it("blanks the fence's own opening line, so a fact written on it does not count", () => {
-    // A heading can never sit on a boundary line — those start with the marker — so the bounds are
-    // observable only through facts, and only on the OPENING line: a valid closing fence carries
-    // the marker and whitespace and nothing else, so no fact can sit on it. Mutating `<= index` to
-    // `< index` therefore survives, and it survives because it changes nothing observable — an
-    // equivalent mutant, recorded here so the next review does not re-file it as a coverage gap.
     const text = doc(
       "handleChannelWebhook and theokit-gateways.\n\n```ts theokit-sdk\nconst a = 1;\n```",
     );
+    expect(check(text)).toEqual([
+      "README.md: `## How this fits with TheoKit` never names theokit-sdk",
+    ]);
+  });
+
+  it("blanks a comment's own closing line, so a fact written after `-->` does not count", () => {
+    // The case that refutes an "equivalent mutant" claim written here one round ago. That claim
+    // reasoned about fences — whose closer carries only its marker — and forgot the other block
+    // kind: a comment's closer is unanchored, so a fact CAN sit on it. Worse than being wrong, it
+    // was written to tell the next reviewer not to look. Mutating `<= index` to `< index` changes
+    // this document's verdict, which is what makes the branch covered rather than equivalent.
+    const text = doc("handleChannelWebhook and theokit-gateways.\n\n<!--\nnote\n--> theokit-sdk");
     expect(check(text)).toEqual([
       "README.md: `## How this fits with TheoKit` never names theokit-sdk",
     ]);
@@ -318,5 +331,34 @@ describe("the accidental threat model, and its stated limits", () => {
       "handleChannelWebhook, theokit-sdk, theokit-gateways.\n\n```ts\nconst a = 1;\n```   ",
     );
     expect(check(text)).toEqual([]);
+  });
+});
+
+// The two accidents the narrowed threat model claims to cover and did not, in opposite directions.
+// A forgotten closing fence is the commonest markdown typo there is, and for a reader it turns
+// everything after it — the whole documented section — into a code block: the section has stopped
+// being there, by accident, which is exactly what this gate is for. Meanwhile a document explaining
+// how to comment something out names both markers in prose, and failed.
+//
+// The rules are asymmetric because the accidents are: an unterminated FENCE runs to end of file, an
+// unterminated COMMENT does not, and a comment only opens at the start of a line.
+describe("the two accidents, told apart", () => {
+  const check = (text) => missingFacts(text, { file: "README.md", heading: HEADING, facts: FACTS });
+
+  it("catches a section that a forgotten closing fence turned into code", () => {
+    const text = `# t\n\n\`\`\`ts\nconst a = 1;\n\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n`;
+    expect(check(text)).toEqual(["README.md: has no `## How this fits with TheoKit` section"]);
+  });
+
+  it("accepts prose that names both comment markers on separate lines", () => {
+    const text = doc(
+      "Write `<!--` on its own line.\n\nhandleChannelWebhook and theokit-sdk.\n\nThen write `-->`.",
+    );
+    expect(check(text)).toEqual([]);
+  });
+
+  it("still catches a section actually commented out", () => {
+    const text = `# t\n\n<!--\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n-->\n\n## Install\n`;
+    expect(check(text)).toEqual(["README.md: has no `## How this fits with TheoKit` section"]);
   });
 });

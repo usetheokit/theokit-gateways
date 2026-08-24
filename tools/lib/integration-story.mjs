@@ -69,9 +69,17 @@ export function sectionBody(text, heading) {
  * The threat is a section that quietly stops being there: deleted in a tidy-up, commented out
  * during a rewrite, or pasted into an example. Those happen by accident, and they are what this
  * blanks — HTML comments and fenced code (``` or ~~~, indented up to three spaces, closer at least
- * as long as its opener), each only when it actually closes. Link
- * TARGETS go too — inline `](url)`, reference definitions and autolinks — because a URL that
- * contains a word is not a sentence naming it; a link LABEL stays.
+ * as long as its opener).
+ *
+ * The two are treated ASYMMETRICALLY when they never close, because the accidents are not the same
+ * one. A forgotten closing fence is the commonest markdown typo there is and its consequence is
+ * precisely the threat — everything after it, section included, renders as code — so a fence runs
+ * to end of file. An unterminated comment does not: `<!--` shows up in ordinary prose about
+ * commenting things out, and running that to end of file reported documented sections as missing.
+ * For the same reason a comment opens only at the start of a line.
+ *
+ * Link TARGETS go too — inline `](url)`, reference definitions, and bare `<http…>` autolinks —
+ * because a URL that contains a word is not a sentence naming it; a link LABEL stays.
  *
  * It does NOT defend against an author hiding a heading on purpose. `<script>`, `<pre>`,
  * `<textarea>` and `<div>` are HTML blocks CommonMark treats as raw, and a heading inside one is
@@ -110,10 +118,16 @@ function openBlock(line, index) {
   const fence = /^ {0,3}(`{3,}|~{3,})/.exec(line);
   if (fence !== null) {
     const [marker] = fence.slice(1);
-    return { start: index, close: new RegExp(`^ {0,3}\\${marker[0]}{${marker.length},}\\s*$`) };
+    return {
+      start: index,
+      close: new RegExp(`^ {0,3}\\${marker[0]}{${marker.length},}\\s*$`),
+      runsToEof: true,
+    };
   }
 
-  if (stillOpen(line, "<!--", "-->")) return { start: index, close: /-->/ };
+  if (/^\s*<!--/.test(line) && stillOpen(line, "<!--", "-->")) {
+    return { start: index, close: /-->/, runsToEof: false };
+  }
   return undefined;
 }
 
@@ -162,6 +176,10 @@ function blankBlocks(text) {
     for (let i = open.start; i <= index; i++) hidden.add(i);
     open = undefined;
   });
+
+  if (open !== undefined && open.runsToEof) {
+    for (let i = open.start; i < lines.length; i++) hidden.add(i);
+  }
 
   return lines.map((line, i) => (hidden.has(i) ? "" : line)).join("\n");
 }
