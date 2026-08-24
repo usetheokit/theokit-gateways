@@ -50,6 +50,31 @@ const runner = new GatewayRunner({
 await runner.start();
 ```
 
+## Receiving from a TheoKit app
+
+Three repositories share this path. `theokit` owns the HTTP route and the signature check —
+`handleChannelWebhook` validates the request and hands your app the raw body. These packages own the
+translation. `theokit-sdk` is used here for one thing today, redacting a handler error before it
+reaches a log.
+
+```ts
+import { parseInbound } from "@theokit/gateway-telegram";
+
+// The signature was already checked before this runs.
+const event = parseInbound(payload);
+if (event !== null) {
+  console.log(`${event.platform} ${event.channel.id}: ${event.text}`);
+}
+```
+
+`parseInbound` returns `null` and never throws, because the caller runs after TheoKit has already
+answered 200 — there is no status left to change. Each adapter exports its own; `gateway-line` calls
+its `lineEventToMessageEvent`, and `gateway-whatsapp` composes `parseWebhookPayload` with
+`normalizeInboundMessages`.
+
+Adapters whose platform uses a long-lived connection instead of a webhook own their transport and do
+not go through this seam.
+
 ## Design principles
 
 - **Compose, don't reimplement.** The gateway never owns session persistence (SDK does), never owns scheduling (Cron does), never owns prompt resolution (SystemPromptResolver does).

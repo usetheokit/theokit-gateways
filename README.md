@@ -18,6 +18,32 @@ Multi-channel gateway packages for the Theo ecosystem, extracted from `theokit-s
 | `@theokit/gateway-matrix` | Matrix |
 | `@theokit/gateway-mattermost` | Mattermost |
 
+## How this fits with TheoKit
+
+Receiving a message spans three repositories, and each owns one part of it.
+
+| Repository | Its half |
+|---|---|
+| [`theokit`](https://github.com/usetheokit/theokit) | The HTTP route and the signature check. `handleChannelWebhook` validates the request, then hands your app the raw body as `payload: unknown` |
+| **`theokit-gateways`** (here) | Translating that payload. `parseInbound` turns it into a canonical `MessageEvent`, so your app never re-declares a platform's wire format |
+| [`theokit-sdk`](https://github.com/usetheokit/theokit-sdk) | Measured today: one redaction helper, used when logging a handler error. Whether it should do more is open — see `BACKLOG.md` B-012 |
+
+```ts
+// In a TheoKit route. The signature was already checked before this runs.
+import { parseInbound } from "@theokit/gateway-telegram";
+
+const event = parseInbound(await request.json());
+if (event !== null) {
+  console.log(`${event.channel.id}: ${event.text}`);
+}
+```
+
+`parseInbound` returns `null` and never throws — `onMessage` runs after TheoKit has already answered
+200, so there is no status left to change. Adapters whose platform uses a long-lived connection
+rather than a webhook (Discord, Slack, Mattermost, Matrix, e-mail) do not go through this seam; they
+own their transport, and running one alongside a TheoKit server needs a process lifecycle that does
+not exist yet.
+
 ## Relationship to `@theokit/sdk`
 
 Every adapter consumes `@theokit/sdk` as a **published npm dependency** (`^1.9.0`). `@theokit/gateway` (the core) is an in-repo workspace dependency of the adapters.
