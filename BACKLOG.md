@@ -55,7 +55,7 @@ own quality gates.
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
-| [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `raw` | — |
+| [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `triaged` | — |
 | [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
 | [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive----) | The published packages carry 1 critical and 19 high advisories, all transitive | `raw` | — |
 | [`B-014`](#b-014--a-unit-test-calls-the-real-telegram-api-and-fails-when-the-network-is-slow----) | A unit test calls the real Telegram API and fails when the network is slow | `raw` | — |
@@ -374,13 +374,29 @@ domain: theokit-gateways
 repo: theokit-gateways
 suggested_mode: review
 source: human
+opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-integration-story-opportunity.md` (SHIPPABLE)
 evidence: `README.md:3` describes this repo only by its split from `theokit-sdk`, and the word `theokit` (the framework) appears nowhere in it. The scaffold a new user gets from `create-theokit` ships six `.claude/skills/` — agents, config, database, frontend, routes, ui — and none for gateways. So the framework's own scaffold does not mention gateways, and the gateways' own README does not mention the framework.
 why_now: measured by scaffolding an app and trying to wire a gateway from the documentation alone: the integration story exists in neither repo, and the seam that does exist (`handleChannelWebhook`) is discoverable only by reading TheoKit's `.d.ts`. Every step taken during that measurement was taken by reading source, which is what a user would also have to do.
-status: raw
+status: triaged
 dod:
   - one document states which repo owns which half of the seam
   - a new user can wire a gateway to an agent without reading any `.d.ts`
   - the story lives where each audience looks: the framework's scaffold and this repo's README
+
+> **DISCOVER 2026-08-24 — the item shrinks, and two of my own claims were wrong.** The falsification
+> clause fires partially: measured against `theokit@0.48.14`, the framework's README does NOT
+> document the seam (one `webhook` mention, a table row) and its scaffold ships six skills with none
+> for gateways — but `dist/server/agent/index.d.ts` DOES, twice, naming `@theokit/gateway-*` as the
+> translator. The clause I wrote lists the `.d.ts` as a qualifying surface, so by the letter the
+> hypothesis is dead; by its own qualifier ("reaches BEFORE our README") it is not, because a
+> `.d.ts` is where someone already inside the type looks. Including it was a mistake in the clause.
+> The item is therefore not "nothing documents the seam" but "it is documented only where B-010 just
+> measured that developers do not look".
+> And the scoping note's "zero mentions across all twelve documents" was true of four identifiers
+> and false of the topic: searching the concept, eight of eleven package READMEs discuss inbound for
+> their own platform (LINE 10 mentions, SMS 9). What none does — and what survives — is connect the
+> three repositories. Decision recorded as D431, with the limit stated: two of the three repos are
+> outside this one's write access.
 
 ## B-012 — The SDK sits in the middle of the triad wired to a single utility   [ ]
 
