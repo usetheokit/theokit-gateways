@@ -70,7 +70,7 @@ describe("parseInbound", () => {
 
   // NEGATIVE cases — a webhook body is attacker-reachable and Telegram sends update kinds this
   // function does not handle. Every one must return null rather than throw: `handleChannelWebhook`
-  // has already answered 200 by the time `onMessage` runs, so a throw here is an unhandled
+  // awaits `onMessage` before it builds the 200, so a throw here escapes the route — an
   // rejection in the app's request path, not an error anybody sees.
   it.each([
     ["null", null],

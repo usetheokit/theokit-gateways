@@ -86,3 +86,37 @@ describe("missingFacts", () => {
     ]);
   });
 });
+
+// A second review found the fix incomplete: `sectionBody` ran BEFORE anything was stripped, so a
+// heading written inside an HTML comment or a fenced code block defined a phantom section — and the
+// real one could then be deleted. The bypass the previous commit claimed to have closed was still
+// reachable, through the heading instead of the body. These are those attacks.
+describe("hiding places that defined a phantom section", () => {
+  const check = (text) => missingFacts(text, { file: "README.md", heading: HEADING, facts: FACTS });
+  const phantom = (open, close) =>
+    `# t\n\n${open}\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n${close}\n\n## Install\n\nUnrelated.\n`;
+
+  it("does not accept a heading written inside an HTML comment", () => {
+    expect(check(phantom("<!--", "-->"))).toEqual([
+      "README.md: has no `## How this fits with TheoKit` section",
+    ]);
+  });
+
+  it("does not accept a heading written inside a fenced code block", () => {
+    expect(check(phantom("```md", "```"))).toEqual([
+      "README.md: has no `## How this fits with TheoKit` section",
+    ]);
+  });
+
+  it("does not count a fact that appears only in a reference-link definition", () => {
+    const text = doc(
+      "See [the docs][d]. theokit-sdk redacts.\n\n[d]: https://x.test/#handleChannelWebhook",
+    );
+    expect(check(text)).toHaveLength(1);
+  });
+
+  it("does not count a fact that appears only inside a bare autolink", () => {
+    const text = doc("theokit-sdk redacts. See <https://x.test/api/handleChannelWebhook>.");
+    expect(check(text)).toHaveLength(1);
+  });
+});

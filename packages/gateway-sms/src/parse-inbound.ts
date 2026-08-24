@@ -25,8 +25,9 @@ import type { SMSAdapterOptions } from "./types.js";
  * Translate one raw provider webhook into an {@link SMSMessageEvent}.
  *
  * Returns `null` — never throws — when the body is not one this provider recognises. The caller is
- * TheoKit's `onMessage`, which runs AFTER the 200 has been sent, so a throw there is an unhandled
- * rejection in the app's request path rather than an error anyone sees (ADR D428).
+ * TheoKit's `onMessage`, which is awaited BEFORE the 200 is built and is not wrapped in a `catch` —
+ * so a throw there escapes it entirely and the 200 is never built (ADR D428, whose original
+ * rationale was measured false on 2026-08-24).
  *
  * `null` here means "this body is not a parseable inbound message".
  *
@@ -40,7 +41,8 @@ import type { SMSAdapterOptions } from "./types.js";
  * validated nowhere, and the invented rule rejected four documented, valid configurations — a
  * Vonage alphanumeric sender ID (`"ACME"`), a Twilio short code (`"12345"`), a Messaging Service
  * SID (`"MG…"`), and a national number with `defaultCountry` set. Each one threw out of
- * `onMessage` after the 200, which is precisely the failure the check was written to prevent.
+ * `onMessage`, turning a message the provider delivered into a failed request — precisely the
+ * failure the check was written to prevent.
  * Inventing a validation stricter than the package's own is how that happened.
  *
  * @public
@@ -61,11 +63,11 @@ export function parseInbound(
     // Everything from here is body-dependent, so any error means the body was unreadable. Caught
     // whatever its type: `decodeURIComponent` raises `URIError` on a malformed percent-escape
     // (`From=%zz`) and `normalizeE164` raises `ConfigurationError` on a number the body carried.
-    // Both are bad requests, and returning `null` is what keeps them from becoming a failed
-    // request: measured against `theokit@0.48.14`, `handleChannelWebhook` awaits `onMessage`
-    // BEFORE building the 200 and catches nothing around it, so a throw here escapes the route
-    // and answers an error where the provider expected an acknowledgement (ADR D428, whose
-    // original rationale — "runs after the 200" — was measured false on 2026-08-24).
+    // Both are bad requests, and returning `null` is what keeps them from failing the request:
+    // measured against `theokit@0.48.14`, `handleChannelWebhook` awaits `onMessage` BEFORE
+    // building the 200 and catches nothing around it, so a throw here escapes it entirely and
+    // the 200 is never built (ADR D428, whose original rationale — "runs after the 200" — was
+    // measured false on 2026-08-24).
     return null;
   }
 

@@ -303,7 +303,7 @@ status: shipped
 dod:
   - each adapter whose platform TheoKit already validates exports a pure `parseInbound(payload) -> event | null`
   - one mapping serves both the polling path and the webhook path, so the two cannot drift into dialects
-  - a malformed or unhandled payload returns null rather than throwing, since `onMessage` runs after the 200 was already sent
+  - a malformed or unhandled payload returns null rather than throwing, since a throw escapes `handleChannelWebhook` before the 200 is built *(the original wording here — "`onMessage` runs after the 200 was already sent" — was measured false on 2026-08-24 under B-011; the criterion itself is unchanged)*
   - an app wires a platform end to end without writing any platform-specific parsing
 
 > **DISCOVER 2026-08-24 — the item's own words were refuted.** "No adapter can translate" is false:
@@ -323,7 +323,7 @@ dod:
 > (PRs #68, #69). `line` and `whatsapp` unchanged — both already had the shape, which is what the
 > measurement refuted the item's own words with. Two adversarial review passes found a BLOCKER (the
 > line written to prevent ADR D428 was causing it — four documented sender configurations threw out
-> of `onMessage` after the 200), the declared return type unenforced (`text: 5` produced a numeric
+> of `onMessage`, failing the request), the declared return type unenforced (`text: 5` produced a numeric
 > `text`), and nine surviving mutants across two rounds. Eighteen of nineteen mutations now turn a
 > gate red; the nineteenth is documented as having no observable effect rather than claimed as
 > covered. Accepted against the npm packages in a real app: 3/3 platforms translated, zero lines of

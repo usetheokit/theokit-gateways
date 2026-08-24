@@ -40,16 +40,18 @@ if (event !== null) {
 
 `parseInbound` returns `null` and never throws. Measured against `theokit@0.48.14`: your `onMessage`
 is awaited **before** the 200 is built, and nothing catches around it — so a throw on an unparseable
-payload escapes the route and answers an error where the platform expected an acknowledgement.
-Returning `null` lets an app ignore a message it cannot read and still answer normally.
+payload escapes `handleChannelWebhook` entirely. The 200 is never built, and what the platform
+receives is whatever your framework does with an unhandled rejection. Returning `null` lets an app
+ignore a message it cannot read and still answer normally.
 
 `parseInbound` itself exists on `@theokit/gateway-telegram` and `@theokit/gateway-sms` today. The
-other adapters export their own translation — `lineEventToMessageEvent`, `normalizeTeamsActivity`,
-`parseWebhookPayload` composed with `normalizeInboundMessages` for WhatsApp Cloud — under their own
-names, and those return `undefined` rather than `null`. Adapters whose transport is a long-lived
-connection (Discord, Slack, Mattermost, Matrix, e-mail, and the `whatsapp-web` backend) do not go
-through this seam at all; they own their transport, and running one alongside a TheoKit server needs
-a process lifecycle that does not exist yet.
+other adapters export their own translation under their own names — `lineEventToMessageEvent`,
+`normalizeTeamsActivity`, and `parseWebhookPayload` composed with `normalizeInboundMessages` for
+WhatsApp Cloud — and each has its own signature: read the one you are using rather than assuming
+this one's. Adapters whose transport is a long-lived connection (Discord, Slack, Mattermost, Matrix,
+e-mail, and WhatsApp's `web` and `baileys` backends) do not go through this seam at all; they own
+their transport, and running one alongside a TheoKit server needs a process lifecycle that does not
+exist yet.
 
 ## Relationship to `@theokit/sdk`
 

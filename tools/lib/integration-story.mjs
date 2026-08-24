@@ -62,17 +62,33 @@ export function sectionBody(text, heading) {
 }
 
 /**
- * The prose a reader actually sees, with the hiding places removed.
+ * The prose a reader actually sees, with every hiding place blanked out.
  *
- * HTML comments are invisible in rendered Markdown, and a link target is a URL rather than a claim
- * — both passed the first version of this gate. A link LABEL survives: naming the repository in the
- * text of a link is naming it.
+ * Applied to the WHOLE document before the section is located, not to the section afterwards. The
+ * first attempt stripped only the body, so a `## How this fits with TheoKit` line written inside an
+ * HTML comment or a fenced code block defined a phantom section and the real one could be deleted —
+ * the bypass this was meant to close, reached through the heading instead of the body.
  *
- * @param {string} body
+ * Blanked, not deleted: comments and fences are replaced by their own newlines so headings after
+ * them still start a line.
+ *
+ * A fact counts when a reader can see it and it is being asserted. That excludes HTML comments
+ * (invisible), fenced code (an example, not a claim about repositories), every link TARGET — inline
+ * `](url)`, reference definitions `[id]: url`, and autolinks `<url>` — because a URL that contains
+ * a word is not a sentence naming it. A link LABEL survives: naming the repository in the text of a
+ * link is naming it.
+ *
+ * @param {string} text
  * @returns {string}
  */
-export function visibleText(body) {
-  return body.replace(/<!--[\s\S]*?-->/g, " ").replace(/\]\([^)]*\)/g, "]");
+export function visibleText(text) {
+  const blank = (match) => match.replace(/[^\n]/g, " ");
+  return text
+    .replace(/<!--[\s\S]*?-->/g, blank)
+    .replace(/^```[\s\S]*?^```/gm, blank)
+    .replace(/\]\([^)]*\)/g, "]")
+    .replace(/^\s*\[[^\]]+\]:.*$/gm, "")
+    .replace(/<https?:\/\/[^>]*>/g, "");
 }
 
 /**
@@ -88,11 +104,10 @@ export function visibleText(body) {
 export function missingFacts(text, { file, heading, facts }) {
   if (text === undefined) return [`${file}: not found`];
 
-  const body = sectionBody(text, heading);
+  const body = sectionBody(visibleText(text), heading);
   if (body === undefined) return [`${file}: has no \`## ${heading}\` section`];
 
-  const visible = visibleText(body);
   return facts
-    .filter((fact) => !boundedPattern(fact).test(visible))
+    .filter((fact) => !boundedPattern(fact).test(body))
     .map((fact) => `${file}: \`## ${heading}\` never names ${fact}`);
 }
