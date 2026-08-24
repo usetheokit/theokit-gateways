@@ -31,7 +31,14 @@ import { splitForWhatsApp } from "./split.js";
 
 /** Cloud (Meta WhatsApp Business Cloud API) backend config (ADR D304). */
 export interface WhatsAppCloudConfig {
-  /** Meta system-user / phone-number access token. */
+  /**
+   * The Meta system user's access token for the WhatsApp Business account.
+   *
+   * @platform-term Meta calls this an **access token**, and its Graph API names the parameter
+   * `access_token`, so the name here is theirs in camelCase.
+   * @issued-at Meta Business Manager, under System Users → Generate token, scoped to the WhatsApp
+   * Business account.
+   */
   readonly accessToken: string;
   /** Meta-issued phone-number-id (NOT the user-facing phone). */
   readonly phoneNumberId: string;

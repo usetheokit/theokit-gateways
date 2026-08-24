@@ -32,6 +32,69 @@ import { describe, expect, it } from "vitest";
 
 const PACKAGES_DIR = join(__dirname, "..", "..", "..");
 
+/**
+ * Which field each adapter authenticates with, declared rather than inferred.
+ *
+ * "The credential field" is a judgement, not a pattern: Teams has `clientId`, `clientSecret` and
+ * `tenantId`; SMS has `accountSid`, `authToken`, `fromNumber` and `publicUrl`. A check that guessed
+ * would either read the wrong field or find none and pass vacuously — and counting resolved FILES
+ * would not notice, because that proves ten files were read, not that ten credentials were found.
+ *
+ * A renamed field therefore fails this gate loudly, which is the intent: the rename is a breaking
+ * change to a published type and should not pass quietly.
+ */
+const CREDENTIAL_FIELD: ReadonlyMap<string, string> = new Map([
+  ["gateway-discord", "token"],
+  ["gateway-email", "password"],
+  ["gateway-line", "channelAccessToken"],
+  ["gateway-matrix", "accessToken"],
+  ["gateway-mattermost", "accessToken"],
+  ["gateway-slack", "botToken"],
+  ["gateway-sms", "authToken"],
+  ["gateway-teams", "clientSecret"],
+  ["gateway-telegram", "token"],
+  ["gateway-whatsapp", "accessToken"],
+]);
+
+/** Read a package's options declaration, wherever it lives — six use `types.ts`, four `adapter.ts`. */
+async function optionsSource(pkg: string): Promise<string | undefined> {
+  for (const file of ["types.ts", "adapter.ts"]) {
+    try {
+      const source = await readFile(join(PACKAGES_DIR, pkg, "src", file), "utf8");
+      if (source.includes("AdapterOptions")) return source;
+    } catch {
+      // Not every package declares options in every file.
+    }
+  }
+  return undefined;
+}
+
+/** The docblock immediately above `field`, or undefined when the field carries none. */
+function docblockFor(source: string, field: string): string | undefined {
+  const declaration = new RegExp(`^\\s+(?:readonly )?${field}\\??:`, "m").exec(source);
+  if (declaration === null) return undefined;
+  const before = source.slice(0, declaration.index);
+  const close = before.lastIndexOf("*/");
+  if (close === -1) return undefined;
+  const open = before.lastIndexOf("/**", close);
+  if (open === -1) return undefined;
+  // Anything between the docblock and the field means the block documents something else.
+  if (before.slice(close + 2).trim() !== "") return undefined;
+  return before.slice(open, close + 2);
+}
+
+/** The three axes a credential docblock must satisfy, as the reasons it fails to. */
+function docblockFaults(pkg: string, field: string, doc: string): string[] {
+  const faults: string[] = [];
+  const platform = pkg.replace("gateway-", "");
+  // Presence alone is satisfied by `/** The token. */`, which teaches nothing — and by another
+  // adapter's block pasted over, which is the likeliest error when ten are written in one pass.
+  if (!doc.toLowerCase().includes(platform)) faults.push(`docblock never names ${platform}`);
+  if (!/@platform-term/.test(doc)) faults.push("docblock has no @platform-term");
+  if (!/@issued-at/.test(doc)) faults.push("docblock has no @issued-at");
+  return faults.map((fault) => `${pkg}: \`${field}\` ${fault}`);
+}
+
 /** Every `gateway-*` package that ships a platform adapter. */
 async function adapterSources(): Promise<Array<{ pkg: string; source: string }>> {
   const entries = await readdir(PACKAGES_DIR, { withFileTypes: true });
@@ -351,5 +414,40 @@ describe("cross-adapter contract", () => {
       .filter((row) => row.verdict !== undefined)
       .map((row) => `${row.pkg}: ${row.verdict}`);
     expect(offenders).toEqual([]);
+  });
+
+  it("documents every credential field with its platform term and where it is issued", async () => {
+    // Measured in B-010: a developer carrying `token` from the first adapter they wired gets
+    // `error TS2353: … 'token' does not exist in type 'SlackAdapterOptions'` — which names the
+    // wrong field and the type, and never the right one. The docblock is what an editor surfaces
+    // on hover and completion, and these option types are published, so it reaches consumers.
+    //
+    // Six of the ten names are the platform's own key, verified against the SDK's own `.d.ts`, so
+    // the fix is to make them findable rather than to unify them (ADR D429).
+    expect(CREDENTIAL_FIELD.size).toBe(10);
+
+    const missing: string[] = [];
+    const resolved: string[] = [];
+
+    for (const [pkg, field] of CREDENTIAL_FIELD) {
+      const source = await optionsSource(pkg);
+      if (source === undefined) {
+        missing.push(`${pkg}: no options declaration found`);
+        continue;
+      }
+      resolved.push(pkg);
+
+      const doc = docblockFor(source, field);
+      if (doc === undefined) {
+        missing.push(`${pkg}: \`${field}\` has no docblock`);
+        continue;
+      }
+      missing.push(...docblockFaults(pkg, field, doc));
+    }
+
+    // Asserted separately from `missing`: a resolution that silently found six of ten would leave
+    // `missing` empty and report a coverage it does not have.
+    expect(resolved).toHaveLength(10);
+    expect(missing).toEqual([]);
   });
 });

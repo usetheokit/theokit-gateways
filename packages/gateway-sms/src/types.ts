@@ -12,7 +12,14 @@
 export interface TwilioOptions {
   readonly backend: "twilio";
   readonly accountSid: string;
-  /** Auth token used for signature verification — REQUIRED (D392, EC-1). */
+  /**
+   * The SMS provider's auth token, used both to call the API and to verify inbound signatures.
+   *
+   * @platform-term Twilio calls this an **auth token** and the `twilio` package names the field
+   * `authToken`, so the name here is theirs. Plivo and Vonage call their equivalent an auth token
+   * and an API secret respectively.
+   * @issued-at The Twilio Console dashboard, beside the Account SID.
+   */
   readonly authToken: string;
   /** Bot's own E.164 number (used as `from` in outbound). */
   readonly fromNumber: string;

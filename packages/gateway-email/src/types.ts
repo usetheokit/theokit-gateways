@@ -17,7 +17,14 @@ export const __emailTypesMarker: unique symbol = Symbol("email-types");
 export interface EmailAdapterOptions {
   /** Email address the bot listens on (also the From: of outbound). */
   readonly address: string;
-  /** Password — for Gmail use an App Password (NOT the account password). */
+  /**
+   * The mailbox password, or an app-specific password where the provider requires one.
+   *
+   * @platform-term IMAP and SMTP both call this a **password**. Note the divergence: `nodemailer`
+   * names its field `pass`, and this one is `password` — ours, not theirs.
+   * @issued-at The mail provider's account settings; most require an app password rather than the
+   * login password when two-factor authentication is on.
+   */
   readonly password: string;
   /** IMAP server (e.g., "imap.gmail.com"). */
   readonly imapHost: string;

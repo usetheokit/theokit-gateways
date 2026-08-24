@@ -11,7 +11,13 @@
 export interface LineAdapterOptions {
   /** From LINE Developers Console → Messaging API → Channel secret. */
   readonly channelSecret: string;
-  /** From LINE Developers Console → Messaging API → Channel access token (long-lived). */
+  /**
+   * The LINE channel's long-lived access token.
+   *
+   * @platform-term LINE calls this a **channel access token** — the same word `@line/bot-sdk` uses
+   * for this field, so the name here is theirs and not ours.
+   * @issued-at The LINE Developers Console, under the channel's Messaging API tab.
+   */
   readonly channelAccessToken: string;
   /**
    * Bot's own LINE user id (`Uxxx...`). When set + `requireMention: true`,

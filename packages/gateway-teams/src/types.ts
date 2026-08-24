@@ -17,7 +17,13 @@ export const __teamsTypesMarker: unique symbol = Symbol("teams-types");
 export interface TeamsAdapterOptions {
   /** Azure AD application client id. */
   readonly clientId: string;
-  /** Azure AD application client secret. */
+  /**
+   * The Teams app registration's client secret.
+   *
+   * @platform-term Microsoft calls this a **client secret** — OAuth's own word, and the field
+   * `@microsoft/teams.apps` uses, so the name here is theirs.
+   * @issued-at The Azure portal, under the app registration's Certificates & secrets.
+   */
   readonly clientSecret: string;
   /** Azure AD tenant id. */
   readonly tenantId: string;
