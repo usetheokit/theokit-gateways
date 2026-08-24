@@ -12,32 +12,32 @@
  * }
  * ```
  *
- * This union is intentionally **closed** — adding a platform edits it here
- * rather than extending it externally. The trade-off (exhaustive narrowing over
- * OCP purity) is recorded in `wiki/decisions/adr-0001-message-event-closed-union.md`.
+ * This union is **open to extension and closed to corruption**. It is derived from
+ * {@link PlatformEventRegistry}, an interface a package outside this repository extends through
+ * declaration merging — so a gateway can be authored, published and consumed without editing this
+ * file, while narrowing still holds over platforms declared here and elsewhere alike. Entries that
+ * are not well-formed event shapes agreeing with their own key are excluded rather than admitted.
+ *
+ * It was closed until 2026-08-23. `docs/adr/0001-message-event-closed-union.md` records why, and
+ * `docs/adr/0002-platform-event-registry.md` records what changed and what the guard costs.
  *
  * @public
  */
-
-/** Closed enum of supported transport platforms. */
-export type PlatformName =
-  | "telegram"
-  | "discord"
-  | "slack"
-  | "whatsapp"
-  | "teams"
-  | "email"
-  | "sms"
-  | "mattermost"
-  | "line"
-  | "matrix";
 
 /** Fields common to every platform's inbound event. */
 export interface BaseMessageEvent {
   /** Stable id used as a session-key segment and for dedup. */
   readonly id: string;
-  /** Discriminator. */
-  readonly platform: PlatformName;
+  /**
+   * Discriminator.
+   *
+   * Typed `string` here and narrowed to a literal by every variant. It cannot be `PlatformName`:
+   * that type is derived from the guarded union below, and the union is built out of shapes that
+   * extend this interface — naming it here would make the two reference each other (`TS2456`).
+   * Widening it is also what lets `PlatformName` be derived from the FILTERED union rather than
+   * from `keyof`, so a name and an event can never disagree about which platforms exist.
+   */
+  readonly platform: string;
   /** Sender identity (opaque, platform-namespaced). */
   readonly sender: {
     readonly id: string;
@@ -242,15 +242,147 @@ export interface MatrixMessageEvent extends BaseMessageEvent {
   };
 }
 
-/** Discriminated union of all platform variants. */
-export type MessageEvent =
-  | TelegramMessageEvent
-  | DiscordMessageEvent
-  | SlackMessageEvent
-  | WhatsAppMessageEvent
-  | TeamsMessageEvent
-  | EmailMessageEvent
-  | SMSMessageEvent
-  | MattermostMessageEvent
-  | LineMessageEvent
-  | MatrixMessageEvent;
+/**
+ * The open registry every platform's inbound event is filed under.
+ *
+ * **This is an `interface` on purpose, and it must stay one.** An interface can be extended from
+ * another package through declaration merging; a type alias cannot. That single property is what
+ * lets a gateway be authored, published and consumed without editing this file — the capability
+ * B-008 measured as impossible (`TS2416`, compiled against the published declaration) and ADR-0002
+ * decided to unlock. Collapsing it back into a type alias would silently remove that capability
+ * while every test in this package still passed.
+ *
+ * A third-party gateway registers itself from its own package:
+ *
+ * ```typescript
+ * declare module "@theokit/gateway" {
+ *   interface PlatformEventRegistry {
+ *     signal: SignalMessageEvent;
+ *   }
+ * }
+ * ```
+ *
+ * @public
+ */
+export interface PlatformEventRegistry {
+  telegram: TelegramMessageEvent;
+  discord: DiscordMessageEvent;
+  slack: SlackMessageEvent;
+  whatsapp: WhatsAppMessageEvent;
+  teams: TeamsMessageEvent;
+  email: EmailMessageEvent;
+  sms: SMSMessageEvent;
+  mattermost: MattermostMessageEvent;
+  line: LineMessageEvent;
+  matrix: MatrixMessageEvent;
+}
+
+/**
+ * `true` only for `any` — the one type that would otherwise swallow the union.
+ *
+ * `any extends X` distributes to both branches of a conditional, so an ordinary
+ * `T extends BaseMessageEvent ? T : never` does NOT keep `any` out. This does: nothing but `any`
+ * makes `1 & T` accept `0`.
+ */
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+/**
+ * A registry key must be a literal, never the broad `string` an index signature produces.
+ *
+ * Measured in review: `interface PlatformEventRegistry { [key: string]: BaseMessageEvent }` is a
+ * LEGAL augmentation — every existing variant is assignable to the base — and without this it
+ * widens the whole platform name to `string`, so every typo becomes valid and every consumer's
+ * `switch` stops narrowing. That is the same collapse an `any` VALUE causes, arriving through the
+ * key side, and it is why both sides are gated.
+ */
+type LiteralKey<K> = string extends K ? never : K;
+
+/**
+ * The registry's LITERAL keys — index signatures dropped before `keyof` ever sees them.
+ *
+ * Filtering the value was not enough, measured twice. `keyof` over a registry carrying
+ * `{ [key: string]: BaseMessageEvent }` is `string | number`, and indexing a mapped type by that
+ * yields `never` for BOTH the union and the platform name: a hostile augmentation did not merely
+ * fail to join, it annihilated the union and broke every first-party narrowing site with
+ * `TS2339: Property 'telegram' does not exist on type 'never'`.
+ *
+ * It also fixes a second measured defect for free. Mapping over `keyof` directly is HOMOMORPHIC, so
+ * an OPTIONAL entry (`signal?: Event`, a shape an author writes by accident) kept its modifier and
+ * injected `undefined` into the union — `TS18048: 'e' is possibly 'undefined'` on a plain `switch`.
+ * Mapping over a computed key set is not homomorphic and drops the modifier. A `-?` was written
+ * here first as an explicit belt; the gate showed it could not be made to matter while this type is
+ * in place, so it was removed rather than kept as decoration nothing can fail without.
+ */
+type LiteralKeysOf<R> = keyof {
+  [K in keyof R as string extends K
+    ? never
+    : number extends K
+      ? never
+      : symbol extends K
+        ? never
+        : K]: 0;
+};
+
+/**
+ * A registry entry joins {@link MessageEvent} only if it is a real event shape
+ * (`docs/adr/0002-platform-event-registry.md`).
+ *
+ * Measured, not anticipated: without this guard a single entry typed `any` collapses the whole
+ * union, and `tsc --strict` then accepts `event.completelyMadeUpField.nested.nonsense` on EVERY
+ * consumer — ours included — with no error in any package and nothing red in any suite. The closed
+ * union could not fail that way, so the guard is what keeps the new capability from costing a
+ * safety property the old design had.
+ *
+ * A malformed entry is EXCLUDED rather than admitted. It is NOT free for anybody else, and an
+ * earlier version of this docblock said it was — measured false twice over. Filtering the VALUE
+ * alone left two shapes that break every consumer rather than only their author:
+ * `{ [key: string]: … }` made `keyof` yield `string | number`, so the union and the platform name
+ * both collapsed to `never`; and `signal?: …` kept its optional modifier through a homomorphic
+ * mapping and injected `undefined` into the union. Both are handled above — the first by
+ * {@link LiteralKeysOf}, the second by the `-?` on the mapping. What remains true, and is the
+ * honest version of the original claim:
+ * a `Record<PlatformName, T>` written against the ten still fails to compile, because the rejected
+ * key is gone from `PlatformName` while the consumer's literal map is not. What the exclusion buys
+ * is that the failure is a missing-key error at the consumer's own map rather than a silent loss
+ * of narrowing everywhere.
+ *
+ * Exported for the contract test in `tests/types/registry-guard.test.ts`, which asserts against
+ * this type rather than a copy of it — a copy would stay green with the guard deleted. It is
+ * deliberately NOT re-exported from the package barrel; it is an implementation detail of the
+ * derivation, not part of the published surface.
+ */
+export type Registered<K, T> =
+  IsAny<T> extends true
+    ? never
+    : [T] extends [BaseMessageEvent]
+      ? [T] extends [{ readonly platform: LiteralKey<K> }]
+        ? [LiteralKey<K>] extends [never]
+          ? never
+          : T
+        : never
+      : never;
+
+/**
+ * The canonical inbound event: every guarded entry in {@link PlatformEventRegistry}.
+ *
+ * Derived rather than written, so third-party platforms are included automatically and exhaustive
+ * narrowing still holds over all of them.
+ *
+ * @public
+ */
+export type MessageEvent = {
+  [K in LiteralKeysOf<PlatformEventRegistry>]: Registered<K, PlatformEventRegistry[K]>;
+}[LiteralKeysOf<PlatformEventRegistry>];
+
+/**
+ * Every platform that actually has a well-formed event in {@link PlatformEventRegistry}.
+ *
+ * Derived from the GUARDED union rather than from `keyof`, so `PlatformName` and
+ * `MessageEvent["platform"]` are the same set by construction. Deriving from `keyof` let a rejected
+ * entry keep contributing its key, which produced names no event could ever carry — an adapter
+ * could register for a platform that cannot exist.
+ *
+ * Still a union of string literals, so `switch (event.platform)` narrows and a misspelled name is
+ * a compile error.
+ */
+export type PlatformName = MessageEvent["platform"];

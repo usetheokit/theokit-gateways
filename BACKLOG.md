@@ -49,17 +49,27 @@ own quality gates.
 
 ## Index
 
-6 items — **Open** 0 · **In flight** 0 · **Closed** 6
+16 items — **Open** 9 · **In flight** 0 · **Closed** 7
 
-### Open (0)
+### Open (9)
 
-_None._
+| Item | Title | Status | Severity |
+|---|---|---|---|
+| [`B-008`](#b-008--a-gateway-cannot-be-written-outside-this-repository----) | A gateway cannot be written outside this repository | `triaged` | — |
+| [`B-009`](#b-009--theokits-channel-seam-names-our-packages-as-the-translator-and-no-adapter-can-translate----) | TheoKit's channel seam names our packages as the translator, and no adapter can translate | `raw` | — |
+| [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `raw` | — |
+| [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `raw` | — |
+| [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
+| [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive----) | The published packages carry 1 critical and 19 high advisories, all transitive | `raw` | — |
+| [`B-014`](#b-014--a-unit-test-calls-the-real-telegram-api-and-fails-when-the-network-is-slow----) | A unit test calls the real Telegram API and fails when the network is slow | `raw` | — |
+| [`B-015`](#b-015--the-published-declarations-cite-75-adr-ids-that-resolve-nowhere----) | The published declarations cite 75 ADR ids that resolve nowhere | `raw` | — |
+| [`B-016`](#b-016--pnpm-qualitydocs-writes-into-the-repo-root-and-the-output-is-not-ignored----) | `pnpm quality:docs` writes into the repo root and the output is not ignored | `raw` | — |
 
 ### In flight (0)
 
 _None._
 
-### Closed (6)
+### Closed (7)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -69,6 +79,7 @@ _None._
 | [`B-004`](#b-004--five-packages-publish-a-dts-that-does-not-compile----) | Five packages publish a `.d.ts` that does not compile | `killed` | — |
 | [`B-005`](#b-005--the-dts-gate-accuses-the-published-artifact-when-the-build-command-was-wrong----) | The dts gate accuses the published artifact when the build command was wrong | `shipped` | — |
 | [`B-006`](#b-006--whatsappcloudbackendconnect-reports-success-without-authenticating----) | `WhatsAppCloudBackend.connect()` reports success without authenticating | `shipped` | — |
+| [`B-007`](#b-007--no-theokit-app-can-install-a-gateway-at-all----) | No TheoKit app can install a gateway at all | `shipped` | — |
 
 <!-- BACKLOG-INDEX:END -->
 
@@ -200,7 +211,187 @@ dod:
 
 > Registered 2026-08-23 on the first live run of the WhatsApp suite, after Cloud API credentials
 > were provisioned. Fix proven against Meta, not against a fake: the auth assertion passes live.
+> Two review rounds found nine more on the way, including three tests of mine that passed while
+> unable to fail — each caught by mutating the test rather than reading it. Closed with the
+> contract written onto the interface and a conformance suite over all three backends, plus a
+> second one over the nine credential-based adapters. Released in `@theokit/gateway-whatsapp@0.3.0`.
 > Also closed on the way: `connect()` had no in-flight guard, so two simultaneous callers each
 > asked Meta; and `131030` collapsed into `invalid_request`, hiding the one error whose remedy is
 > a console step. Live suite now 128 passed / 0 failed / 11 skipped, every skip naming what it
 > wants.
+
+## B-007 — No TheoKit app can install a gateway at all   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: bug
+source: human
+evidence: measured by scaffolding a real app (`npx create-theokit@latest appteste`) and running `npm install @theokit/gateway @theokit/gateway-telegram`: `npm error peer @theokit/sdk@"^2.18.0" from @theokit/gateway@0.6.1` against the `@theokit/sdk@4.53.1` the framework ships. All eleven published packages carried that peer. The ten adapters import the SDK in ZERO source files; the core imports one symbol, `Security.redact`, at `packages/gateway/src/runner/gateway-runner.ts:31` and `packages/gateway/src/hooks/executor.ts:11`, unchanged in 4.x.
+why_now: the packages were published to npm in this cycle (`@theokit/gateway@0.6.1` and siblings). The very first thing a new user does — install one into a TheoKit app — fails outright, and nothing in the repo's gates could see it because the monorepo resolves its own workspace versions and never installs itself as a consumer would.
+status: shipped
+dod:
+  - a fresh TheoKit app installs a gateway without `ERESOLVE`
+  - the widened range is verified against the SDK major the framework actually ships, not asserted
+  - peers that no source file imports are gone rather than merely re-pinned
+
+> Registered and fixed 2026-08-23 during the DX measurement. The dev dependency moved to `^4.53.1`
+> and typecheck, twelve suites and the build are green against it — widening a range without
+> running against the new major would be a claim, not a measurement. Proven end to end by packing
+> both packages and installing them into the scaffolded app. Commit `d2c1168`.
+
+## B-008 — A gateway cannot be written outside this repository   [ ]
+
+domain: theokit-gateways
+repo: packages/gateway
+suggested_mode: evolve → reclassified: capability gap (the cost half was refuted by measurement)
+source: human
+opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-open-platform-registry-opportunity.md` (SHIPPABLE_WITH_CAVEATS)
+evidence: `packages/gateway/src/types/message-event.ts:22` declares `PlatformName` as a closed union of our ten platforms, and line 223 builds `MessageEvent` from the ten matching variants. A third-party adapter was written and compiled to confirm rather than assume: `error TS2416: Type '"signal"' is not assignable to type 'PlatformName'`. The closure is deliberate and recorded — ADR-0001 (`docs/adr/0001-message-event-closed-union.md`) chose exhaustive narrowing over OCP purity, and names its own revisit trigger: "if third-party or out-of-repo adapters ever become a supported goal, reopen this decision".
+why_now: that trigger has fired — supporting gateways written outside this repo is now a stated goal. The naive fix was prototyped first and FAILED: adding a `platform: string` variant destroys the narrowing the ADR refused to give up (`TS2339: Property 'telegram' does not exist on type 'DiscordEvent'`), so reopening the decision must not mean simply opening the union.
+status: triaged
+dod:
+  - an adapter in a separate package names a platform core has never heard of, and compiles
+  - the ten first-party platforms keep exhaustive `switch` narrowing, proven by a test that fails when a case is deleted
+  - a typo'd platform name is still a compile error rather than silently accepted
+  - ADR-0001 is superseded by an ADR recording what changed and why
+
+> Registered 2026-08-23. A design that satisfies all four was prototyped and mutation-tested before
+> being proposed: an augmentable `PlatformEventRegistry` interface (the pattern Fastify and Vite
+> use), with the union derived from it. Three mutations each turn the compiler red — deleting a
+> third-party `case` breaks exhaustiveness, reading the wrong field fails to narrow, and removing
+> the augmentation rejects the platform name. Design only; nothing implemented.
+
+> **DISCOVER 2026-08-23 — `evolve` measured, half of it refuted.** ADR-0001's "~3-line" price is
+> substantially correct: an eleventh platform costs 4 lines of union machinery plus a 2-line
+> exhaustiveness test, measured by making the edit and running all four gates green, then reverting.
+> So the cost framing is dead and the item is re-scoped to a capability gap, which the measurement
+> confirmed: `TS2416 … Type '"signal"' is not assignable to type 'PlatformName'`, compiled in a
+> project outside this monorepo against the published `0.6.1` declaration. Blast radius: 157 sites,
+> zero of which switch on `event.platform` in production source — runtime dispatch is a string-keyed
+> Map, so the exhaustiveness ADR-0001 protects is a consumer-facing property. Decision recorded in
+> `docs/adr/0002-platform-event-registry.md` (supersedes ADR-0001).
+
+## B-009 — TheoKit's channel seam names our packages as the translator, and no adapter can translate   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: review
+source: human
+evidence: TheoKit ships `handleChannelWebhook(request, urlPath, { validators, onMessage })`, which owns the route and the signature gate and then hands the app `ChannelMessage { agent, platform, payload: unknown }`. Its own docblock states the division of labour: "the seam is where an app wires the SDK gateway package (`@theokit/gateway-*`) that translates the payload into an agent turn — TheoKit provides the route + signature gate, NOT the gateway's parsing". Measured against the ten adapters' barrels: none exports a payload translator. The mapping exists but is unreachable — Telegram's lives inside `normalizeEvent(ctx: Context)` in `packages/gateway-telegram/src/adapter.ts:198`, soldered to grammy's type and callable only from the polling loop; Slack's `normalizeSlackEvent` is not exported from the package.
+why_now: an app wiring the seam today must reimplement the platform's wire format by hand — written out during the measurement to confirm the cost, and it is exactly the work the framework says the gateway package spares them. The two halves of a seam both sides already agreed on have never met.
+status: raw
+dod:
+  - each adapter whose platform TheoKit already validates exports a pure `parseInbound(payload) -> event | null`
+  - one mapping serves both the polling path and the webhook path, so the two cannot drift into dialects
+  - a malformed or unhandled payload returns null rather than throwing, since `onMessage` runs after the 200 was already sent
+  - an app wires a platform end to end without writing any platform-specific parsing
+
+## B-010 — Ten adapters use seven different names for the same credential   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: review
+source: human
+evidence: measured across `packages/gateway-*/src`: the primary credential is `token` (telegram, discord), `botToken` (slack), `accessToken` (matrix, mattermost, whatsapp), `channelAccessToken` (line), `authToken` (sms), `clientSecret` (teams), `password` (email). Teams additionally requires three fields with no shared shape (`clientId`, `clientSecret`, `tenantId`), and SMS requires `publicUrl`.
+why_now: this cost real errors inside this repository during the cross-adapter conformance work — the suite was written against `botToken` for Discord and for Telegram, and both were wrong. A contributor holding one adapter's shape in their head is misled by the next one, and the type error arrives only after the wrong guess is written.
+status: raw
+dod:
+  - a developer who has wired one adapter can predict the next one's option names, or is told by the types before writing the wrong guess
+  - the change does not break the ten published packages' existing option shapes without a deprecation path
+  - the convention is stated once, where an author of a new adapter will read it
+
+## B-011 — Nothing documents how the three repositories fit together   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: review
+source: human
+evidence: `README.md:3` describes this repo only by its split from `theokit-sdk`, and the word `theokit` (the framework) appears nowhere in it. The scaffold a new user gets from `create-theokit` ships six `.claude/skills/` — agents, config, database, frontend, routes, ui — and none for gateways. So the framework's own scaffold does not mention gateways, and the gateways' own README does not mention the framework.
+why_now: measured by scaffolding an app and trying to wire a gateway from the documentation alone: the integration story exists in neither repo, and the seam that does exist (`handleChannelWebhook`) is discoverable only by reading TheoKit's `.d.ts`. Every step taken during that measurement was taken by reading source, which is what a user would also have to do.
+status: raw
+dod:
+  - one document states which repo owns which half of the seam
+  - a new user can wire a gateway to an agent without reading any `.d.ts`
+  - the story lives where each audience looks: the framework's scaffold and this repo's README
+
+## B-012 — The SDK sits in the middle of the triad wired to a single utility   [ ]
+
+domain: theokit-gateways
+repo: packages/gateway
+suggested_mode: evolve
+source: human
+evidence: the entire `@theokit/sdk` surface consumed by all eleven packages is `Security.redact`, called in two files (`packages/gateway/src/runner/gateway-runner.ts:227`, `packages/gateway/src/hooks/executor.ts:53`), both for redacting an error message before it reaches a log. Meanwhile nine `tsup.config.ts` files mark the SDK external and — until B-007 — all eleven `package.json` files declared a peer on it.
+why_now: the triad theokit → theokit-sdk → theokit-gateways is asserted by the build configuration and by the dependency declarations, but the code only ever asks the SDK to redact a string. Either the relationship is real and something is missing from it, or it is one utility function and nine build configs plus eleven manifests are describing a coupling that does not exist. B-007 already removed ten of those manifests' claims; the question of what the SDK is FOR here is still open.
+status: raw
+dod:
+  - it is stated what the gateways are supposed to get from the SDK, if anything beyond redaction
+  - the build configuration and the manifests agree with what the source actually imports
+  - if the answer is "one utility", the dependency is either justified in writing or removed
+
+## B-013 — The published packages carry 1 critical and 19 high advisories, all transitive   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: review
+source: human
+evidence: `pnpm audit --audit-level=moderate` exits 1 with **43 vulnerabilities — 4 low, 19 moderate, 19 high, 1 critical**. The critical is `form-data` `<2.5.4` (unsafe random for the multipart boundary). Named highs include the Matrix JavaScript SDK key-history sharing issue, `form-data` CRLF injection, a Nodemailer raw-option bypass, an `undici` WebSocket DoS reached via `packages__gateway-discord>discord.js>undici` (GHSA-v3r7-h72x-cjcm), `brace-expansion` exponential expansion, and `js-yaml` quadratic merge-key chains. Every one is transitive — none is declared in any of our `package.json` files.
+why_now: found by running the audit as the `/deps-audit` phase of B-008's plan cycle. Eleven of our packages are published on npm, so anyone installing `@theokit/gateway-discord` or `@theokit/gateway-matrix` today pulls these advisories into their own tree. `osv-scanner` is not installed on this machine, so the cross-check the deps-audit golden rule asks for was NOT run — the count above comes from one scanner only and may be incomplete.
+status: raw
+dod:
+  - the critical advisory is gone from a fresh install of every published package, or carries an allowlist entry with a sunset and a written reason
+  - each remaining high is either resolved, or recorded with why it is unreachable from our code paths
+  - the second scanner the golden rule requires is installed and its result cross-checked against the first
+  - a gate fails the build when a new critical or high enters the tree, so this is found by CI rather than by a plan cycle
+
+> Registered 2026-08-23 during B-008's `/deps-audit` phase. Deliberately NOT folded into B-008:
+> that plan adds zero dependencies and introduces none of these, so blocking it here would punish
+> the wrong change — and swallowing the finding because it was inconvenient is the failure the
+> single registry exists to prevent.
+
+## B-014 — A unit test calls the real Telegram API and fails when the network is slow   [ ]
+
+domain: theokit-gateways
+repo: packages/gateway-telegram
+suggested_mode: bug
+source: human
+evidence: `packages/gateway-telegram/tests/adapter.test.ts:101` — `EC-I: connect() with bad token resolves to false (does NOT throw)` calls `adapter.connect()`, which reaches grammy's `bot.init()` and therefore `api.telegram.org`. Measured over three consecutive `pnpm -r test` runs on an unchanged tree: exit 0, exit 0, exit **1** — `× EC-I: connect() with bad token resolves to false (does NOT throw) 5024ms`, `Test Files 1 failed | 3 passed (4)`. The failure is a 5s timeout, not an assertion.
+why_now: found while running the gates for B-008, on a tree whose only changes are type declarations in a different package. `rules/testing.md § 6` names network in a unit test as an anti-pattern and says a flaky test is a bug to fix or delete; this one is both. It also makes every future gate run on this repository a coin flip, so any red it produces will be dismissed as "just the flaky one" — which is how a real regression gets waved through.
+status: raw
+dod:
+  - the test asserts the same behaviour without reaching the network
+  - `pnpm -r test` passes 10 consecutive times on an unchanged tree
+  - if the live behaviour is genuinely worth covering, it lives in `integration/` behind a credential gate, not in a unit suite
+
+> Registered 2026-08-23 during B-008's gate run. Not folded into B-008: that change is type-level
+> and in a different package, and blocking it on a pre-existing flake would punish the wrong work.
+
+## B-015 — The published declarations cite 75 ADR ids that resolve nowhere   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: review
+source: human
+evidence: `packages/gateway/dist/index.d.ts` cites 24 `D###` ids while `packages/gateway/src/README.md:52-59` defines only D170–D177; 17 of them resolve nowhere (D101, D274, D308, D325, D335, D339, D389, D391, D397, D399, D402, D405, D409, D410, D413, D416, D421). Across all eleven `packages/*/dist/index.d.ts` the figure is 75 distinct unresolvable ids.
+why_now: found while verifying that B-008 removed the two ids a reviewer had flagged. It did — and left the identical defect 17 times in the same file, which is how a fix comes to look complete while the class of defect is untouched. These are shipped to npm: a consumer reading our published declaration is pointed at decisions they cannot open, and we cannot tell which ones still describe the code.
+status: raw
+dod:
+  - every `D###` cited in a published `.d.ts` resolves to a document in the repository, or the citation is removed
+  - a gate fails the build when a new unresolvable id enters a published declaration
+  - ids whose original decision no longer exists are recorded as such rather than silently deleted
+
+> Registered 2026-08-24. Pre-existing and unrelated to B-008's change; not folded into it.
+
+## B-016 — `pnpm quality:docs` writes into the repo root and the output is not ignored   [ ]
+
+domain: theokit-gateways
+repo: tools
+suggested_mode: bug
+source: human
+evidence: running `pnpm quality:docs` creates `.doc-probes/` under package roots (observed at `packages/gateway-line/.doc-probes/`); `.gitignore` does not list it. An interrupted run therefore leaves untracked files behind in a tree that was clean.
+why_now: two separate agents hit it during B-008's review and one of them had to clean it by hand. A quality gate that dirties the working tree makes `git status --porcelain` unusable as a pre-condition check — and `cycle-review` uses exactly that check to refuse to review an unstable tree.
+status: raw
+dod:
+  - `pnpm quality:docs` leaves `git status --porcelain` empty, whether it completes or is interrupted
+  - or the probe directory is ignored and cleaned on exit
+
+> Registered 2026-08-24 during B-008's review. Pre-existing.
