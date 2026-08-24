@@ -1,9 +1,19 @@
 /**
  * Translating a raw provider webhook into the canonical event.
  *
- * This is the gateway's half of TheoKit's channel seam for SMS. It composes two functions that
+ * **This does NOT go through TheoKit's `handleChannelWebhook`.** Signature verification here needs
+ * the RAW body, the headers and the exact URL — `ChannelMessage` carries none of the three, so the
+ * check cannot be performed from inside `onMessage` whatever the provider sends. Twilio adds a
+ * second obstacle: it posts `application/x-www-form-urlencoded`, and that seam reads the body with
+ * `request.json()` and answers 400 when it is not JSON. (Plivo accepts either encoding and Vonage
+ * posts JSON, so only the first reason applies to them.)
+ *
+ * For an Express app, `createWebhookServer` is the whole path and you never call this — it builds
+ * the {@link SignatureContext}, verifies the signature and goes through the adapter. This export is
+ * for a route you host yourself: build the context from a request whose body you have not parsed,
+ * then call this. It composes two functions that
  * already existed and were both private: each backend's `parseInbound`, which turns a provider's
- * form body into the provider-agnostic {@link SMSInbound}, and `inboundToMessageEvent`, which turns
+ * raw body into the provider-agnostic {@link SMSInbound}, and `inboundToMessageEvent`, which turns
  * that into the canonical event. Neither is duplicated here — per ADR D426 the mapping stays in one
  * place, and this is composition, not a second translator.
  *
@@ -25,8 +35,10 @@ import type { SMSAdapterOptions } from "./types.js";
  * Translate one raw provider webhook into an {@link SMSMessageEvent}.
  *
  * Returns `null` — never throws — when the body is not one this provider recognises. The caller is
- * TheoKit's `onMessage`, which runs AFTER the 200 has been sent, so a throw there is an unhandled
- * rejection in the app's request path rather than an error anyone sees (ADR D428).
+ * whatever holds the {@link SignatureContext}: `createWebhookServer` here, or your own route. It
+ * returns `null` rather than throwing because a throw out of a webhook handler becomes a failed
+ * request, and the provider then sees a delivery failure for a body that was merely unrecognised
+ * (ADR D428, whose original rationale — "runs after the 200" — was measured false on 2026-08-24).
  *
  * `null` here means "this body is not a parseable inbound message".
  *
@@ -40,7 +52,8 @@ import type { SMSAdapterOptions } from "./types.js";
  * validated nowhere, and the invented rule rejected four documented, valid configurations — a
  * Vonage alphanumeric sender ID (`"ACME"`), a Twilio short code (`"12345"`), a Messaging Service
  * SID (`"MG…"`), and a national number with `defaultCountry` set. Each one threw out of
- * `onMessage` after the 200, which is precisely the failure the check was written to prevent.
+ * `onMessage`, turning a message the provider delivered into a failed request — precisely the
+ * failure the check was written to prevent.
  * Inventing a validation stricter than the package's own is how that happened.
  *
  * @public
@@ -61,8 +74,11 @@ export function parseInbound(
     // Everything from here is body-dependent, so any error means the body was unreadable. Caught
     // whatever its type: `decodeURIComponent` raises `URIError` on a malformed percent-escape
     // (`From=%zz`) and `normalizeE164` raises `ConfigurationError` on a number the body carried.
-    // Both are bad requests, and `onMessage` runs AFTER TheoKit answered 200 — a throw here is an
-    // unhandled rejection with no status left to change (ADR D428).
+    // Both are bad requests, and returning `null` is what keeps them from failing the request:
+    // measured against `theokit@0.48.14`, `handleChannelWebhook` awaits `onMessage` BEFORE
+    // building the 200 and catches nothing around it, so a throw here escapes it entirely and
+    // the 200 is never built (ADR D428, whose original rationale — "runs after the 200" — was
+    // measured false on 2026-08-24).
     return null;
   }
 

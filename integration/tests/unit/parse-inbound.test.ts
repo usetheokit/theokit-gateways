@@ -105,8 +105,8 @@ describe("an app can translate a raw payload without writing platform knowledge"
   });
 
   it("rejects a body no platform posted, without throwing", () => {
-    // The contract the seam depends on: `onMessage` runs after TheoKit answered 200, so a throw
-    // here is an unhandled rejection with no status left to change.
+    // The contract the seam depends on: `onMessage` is awaited before the 200 is built, so a
+    // throw here means it never is — TheoKit answers 500 instead of the acknowledgement.
     expect(parseTelegram({ nonsense: true })).toBeNull();
     expect(parseWebhookPayload({ nonsense: true })).toBeNull();
   });

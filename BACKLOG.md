@@ -49,14 +49,13 @@ own quality gates.
 
 ## Index
 
-16 items — **Open** 7 · **In flight** 0 · **Closed** 9
+16 items — **Open** 6 · **In flight** 0 · **Closed** 10
 
-### Open (7)
+### Open (6)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
-| [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `triaged` | — |
-| [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `raw` | — |
+| [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `triaged` | — |
 | [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
 | [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive----) | The published packages carry 1 critical and 19 high advisories, all transitive | `raw` | — |
 | [`B-014`](#b-014--a-unit-test-calls-the-real-telegram-api-and-fails-when-the-network-is-slow----) | A unit test calls the real Telegram API and fails when the network is slow | `raw` | — |
@@ -67,7 +66,7 @@ own quality gates.
 
 _None._
 
-### Closed (9)
+### Closed (10)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -80,6 +79,7 @@ _None._
 | [`B-007`](#b-007--no-theokit-app-can-install-a-gateway-at-all----) | No TheoKit app can install a gateway at all | `shipped` | — |
 | [`B-008`](#b-008--a-gateway-cannot-be-written-outside-this-repository----) | A gateway cannot be written outside this repository | `shipped` | — |
 | [`B-009`](#b-009--theokits-channel-seam-names-our-packages-as-the-translator-and-no-adapter-can-translate----) | TheoKit's channel seam names our packages as the translator, and no adapter can translate | `shipped` | — |
+| [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `shipped` | — |
 
 <!-- BACKLOG-INDEX:END -->
 
@@ -303,7 +303,7 @@ status: shipped
 dod:
   - each adapter whose platform TheoKit already validates exports a pure `parseInbound(payload) -> event | null`
   - one mapping serves both the polling path and the webhook path, so the two cannot drift into dialects
-  - a malformed or unhandled payload returns null rather than throwing, since `onMessage` runs after the 200 was already sent
+  - a malformed or unhandled payload returns null rather than throwing, since a throw escapes `handleChannelWebhook` before the 200 is built *(the original wording here — "`onMessage` runs after the 200 was already sent" — was measured false on 2026-08-24 under B-011; the criterion itself is unchanged)*
   - an app wires a platform end to end without writing any platform-specific parsing
 
 > **DISCOVER 2026-08-24 — the item's own words were refuted.** "No adapter can translate" is false:
@@ -323,7 +323,7 @@ dod:
 > (PRs #68, #69). `line` and `whatsapp` unchanged — both already had the shape, which is what the
 > measurement refuted the item's own words with. Two adversarial review passes found a BLOCKER (the
 > line written to prevent ADR D428 was causing it — four documented sender configurations threw out
-> of `onMessage` after the 200), the declared return type unenforced (`text: 5` produced a numeric
+> of `onMessage`, failing the request), the declared return type unenforced (`text: 5` produced a numeric
 > `text`), and nine surviving mutants across two rounds. Eighteen of nineteen mutations now turn a
 > gate red; the nineteenth is documented as having no observable effect rather than claimed as
 > covered. Accepted against the npm packages in a real app: 3/3 platforms translated, zero lines of
@@ -338,7 +338,7 @@ source: human
 opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-credential-naming-opportunity.md` (SHIPPABLE_WITH_CAVEATS)
 evidence: measured across `packages/gateway-*/src`: the primary credential is `token` (telegram, discord), `botToken` (slack), `accessToken` (matrix, mattermost, whatsapp), `channelAccessToken` (line), `authToken` (sms), `clientSecret` (teams), `password` (email). Teams additionally requires three fields with no shared shape (`clientId`, `clientSecret`, `tenantId`), and SMS requires `publicUrl`.
 why_now: this cost real errors inside this repository during the cross-adapter conformance work — the suite was written against `botToken` for Discord and for Telegram, and both were wrong. A contributor holding one adapter's shape in their head is misled by the next one, and the type error arrives only after the wrong guess is written.
-status: triaged
+status: shipped
 dod:
   - a developer who has wired one adapter can predict the next one's option names, or is told by the types before writing the wrong guess
   - the change does not break the ten published packages' existing option shapes without a deprecation path
@@ -359,19 +359,44 @@ dod:
 > (`grep -c botToken` over the full output returns 0). Re-scoped from renaming to documenting, with
 > the decision recorded as D429.
 
+> **SHIPPED 2026-08-24** — all ten adapters at patch (PRs #70, #71). Nothing was renamed: six of the
+> ten primary names are the platform's own key, pinned against the SDK's own declaration, and every
+> `*AdapterOptions` is published, so a rename would break six packages to contradict six platforms'
+> documentation (ADR D429). Review found the gate reading 10 of 15 published credential fields while
+> its name said "every", a decoy `types.ts` shadowing the real declaration, and `deadline` satisfying
+> the `line` platform check — all three closed and verified by mutation. The fixed gate then caught a
+> field I had invented (`signingSecret`, which does not exist). Accepted against npm in a real app:
+> 10/10 adapters carry the documentation in their published declaration, 15 fields total.
+
 ## B-011 — Nothing documents how the three repositories fit together   [ ]
 
 domain: theokit-gateways
 repo: theokit-gateways
 suggested_mode: review
 source: human
+opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-integration-story-opportunity.md` (SHIPPABLE)
 evidence: `README.md:3` describes this repo only by its split from `theokit-sdk`, and the word `theokit` (the framework) appears nowhere in it. The scaffold a new user gets from `create-theokit` ships six `.claude/skills/` — agents, config, database, frontend, routes, ui — and none for gateways. So the framework's own scaffold does not mention gateways, and the gateways' own README does not mention the framework.
 why_now: measured by scaffolding an app and trying to wire a gateway from the documentation alone: the integration story exists in neither repo, and the seam that does exist (`handleChannelWebhook`) is discoverable only by reading TheoKit's `.d.ts`. Every step taken during that measurement was taken by reading source, which is what a user would also have to do.
-status: raw
+status: triaged
 dod:
   - one document states which repo owns which half of the seam
   - a new user can wire a gateway to an agent without reading any `.d.ts`
   - the story lives where each audience looks: the framework's scaffold and this repo's README
+
+> **DISCOVER 2026-08-24 — the item shrinks, and two of my own claims were wrong.** The falsification
+> clause fires partially: measured against `theokit@0.48.14`, the framework's README does NOT
+> document the seam (one `webhook` mention, a table row) and its scaffold ships six skills with none
+> for gateways — but `dist/server/agent/index.d.ts` DOES, twice, naming `@theokit/gateway-*` as the
+> translator. The clause I wrote lists the `.d.ts` as a qualifying surface, so by the letter the
+> hypothesis is dead; by its own qualifier ("reaches BEFORE our README") it is not, because a
+> `.d.ts` is where someone already inside the type looks. Including it was a mistake in the clause.
+> The item is therefore not "nothing documents the seam" but "it is documented only where B-010 just
+> measured that developers do not look".
+> And the scoping note's "zero mentions across all twelve documents" was true of four identifiers
+> and false of the topic: searching the concept, eight of eleven package READMEs discuss inbound for
+> their own platform (LINE 10 mentions, SMS 9). What none does — and what survives — is connect the
+> three repositories. Decision recorded as D431, with the limit stated: two of the three repos are
+> outside this one's write access.
 
 ## B-012 — The SDK sits in the middle of the triad wired to a single utility   [ ]
 
