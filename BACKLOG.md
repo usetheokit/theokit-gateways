@@ -49,9 +49,9 @@ own quality gates.
 
 ## Index
 
-12 items — **Open** 5 · **In flight** 0 · **Closed** 7
+13 items — **Open** 6 · **In flight** 0 · **Closed** 7
 
-### Open (5)
+### Open (6)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -60,6 +60,7 @@ own quality gates.
 | [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `raw` | — |
 | [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `raw` | — |
 | [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
+| [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive----) | The published packages carry 1 critical and 19 high advisories, all transitive | `raw` | — |
 
 ### In flight (0)
 
@@ -323,3 +324,23 @@ dod:
   - it is stated what the gateways are supposed to get from the SDK, if anything beyond redaction
   - the build configuration and the manifests agree with what the source actually imports
   - if the answer is "one utility", the dependency is either justified in writing or removed
+
+## B-013 — The published packages carry 1 critical and 19 high advisories, all transitive   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: review
+source: human
+evidence: `pnpm audit --audit-level=moderate` exits 1 with **43 vulnerabilities — 4 low, 19 moderate, 19 high, 1 critical**. The critical is `form-data` `<2.5.4` (unsafe random for the multipart boundary). Named highs include the Matrix JavaScript SDK key-history sharing issue, `form-data` CRLF injection, a Nodemailer raw-option bypass, an `undici` WebSocket DoS reached via `packages__gateway-discord>discord.js>undici` (GHSA-v3r7-h72x-cjcm), `brace-expansion` exponential expansion, and `js-yaml` quadratic merge-key chains. Every one is transitive — none is declared in any of our `package.json` files.
+why_now: found by running the audit as the `/deps-audit` phase of B-008's plan cycle. Eleven of our packages are published on npm, so anyone installing `@theokit/gateway-discord` or `@theokit/gateway-matrix` today pulls these advisories into their own tree. `osv-scanner` is not installed on this machine, so the cross-check the deps-audit golden rule asks for was NOT run — the count above comes from one scanner only and may be incomplete.
+status: raw
+dod:
+  - the critical advisory is gone from a fresh install of every published package, or carries an allowlist entry with a sunset and a written reason
+  - each remaining high is either resolved, or recorded with why it is unreachable from our code paths
+  - the second scanner the golden rule requires is installed and its result cross-checked against the first
+  - a gate fails the build when a new critical or high enters the tree, so this is found by CI rather than by a plan cycle
+
+> Registered 2026-08-23 during B-008's `/deps-audit` phase. Deliberately NOT folded into B-008:
+> that plan adds zero dependencies and introduces none of these, so blocking it here would punish
+> the wrong change — and swallowing the finding because it was inconvenient is the failure the
+> single registry exists to prevent.

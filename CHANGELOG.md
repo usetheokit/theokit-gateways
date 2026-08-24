@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **gateways:** B-013 registered — `pnpm audit` reports 43 transitive advisories (1 critical, 19 high) across the published packages, found while auditing dependencies for another plan and deliberately not folded into it
 
 - **gateways:** five measured items on the theokit ↔ theokit-sdk ↔ theokit-gateways integration (B-008..B-012): the event union cannot be extended out-of-repo, no adapter can translate the raw payload TheoKit's channel seam hands it, ten adapters name the same credential seven ways, nothing documents which repo owns which half of the seam, and the SDK's entire role is one redaction helper
 
