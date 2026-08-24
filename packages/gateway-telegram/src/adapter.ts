@@ -16,7 +16,7 @@
 import type { MessageEvent as GatewayMessageEvent, TelegramMessageEvent } from "@theokit/gateway";
 import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "@theokit/gateway";
 import { Bot, type Context, GrammyError, HttpError } from "grammy";
-
+import { buildEvent } from "./parse-inbound.js";
 import { splitForTelegram } from "./split.js";
 
 export interface TelegramAdapterOptions {
@@ -194,49 +194,18 @@ export class TelegramAdapter extends BasePlatformAdapter {
   }
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: shape-mapping function — each branch is a small conditional spread for an optional field; splitting hurts the "one event normalization here" locality.
+/**
+ * Adapt grammy's `Context` to the shared mapping in `parse-inbound.ts`.
+ *
+ * The mapping itself is NOT here: a polled update and a webhook-delivered one must produce the
+ * same event, and the only way to guarantee that is for one function to build both.
+ */
 function normalizeEvent(ctx: Context): TelegramMessageEvent | undefined {
   const chat = ctx.chat;
   const msg = ctx.message;
   if (chat === undefined || msg === undefined) return undefined;
 
-  let channelType: "dm" | "group" | "thread";
-  if (chat.type === "private") {
-    channelType = "dm";
-  } else if (msg.message_thread_id !== undefined) {
-    channelType = "thread";
-  } else {
-    channelType = "group";
-  }
-
-  const text = msg.text ?? msg.caption ?? "";
-  const senderId = String(ctx.from?.id ?? "anonymous");
-
-  return {
-    id: `tg-${chat.id}-${msg.message_id}`,
-    platform: "telegram",
-    sender: {
-      id: senderId,
-      ...(ctx.from?.username !== undefined ? { username: ctx.from.username } : {}),
-      ...(ctx.from?.first_name !== undefined ? { displayName: ctx.from.first_name } : {}),
-    },
-    channel: {
-      id: String(chat.id),
-      type: channelType,
-      ...(msg.message_thread_id !== undefined ? { topicId: String(msg.message_thread_id) } : {}),
-    },
-    text,
-    receivedAt: msg.date * 1000,
-    ...(msg.reply_to_message?.message_id !== undefined
-      ? { replyTo: String(msg.reply_to_message.message_id) }
-      : {}),
-    telegram: {
-      chatId: chat.id,
-      messageId: msg.message_id,
-      ...(msg.message_thread_id !== undefined ? { threadId: msg.message_thread_id } : {}),
-      raw: ctx,
-    },
-  };
+  return buildEvent(chat, msg, ctx.from, ctx);
 }
 
 function mapFormat(

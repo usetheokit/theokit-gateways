@@ -2,6 +2,7 @@
 
 export { SMSAdapter } from "./adapter.js";
 export { BackendNotInstalledError, ConfigurationError } from "./errors.js";
+export { parseInbound } from "./parse-inbound.js";
 export { normalizeE164 } from "./phone.js";
 export { splitForSMS } from "./split.js";
 export type {
