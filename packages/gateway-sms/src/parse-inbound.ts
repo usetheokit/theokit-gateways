@@ -1,7 +1,14 @@
 /**
  * Translating a raw provider webhook into the canonical event.
  *
- * This is the gateway's half of TheoKit's channel seam for SMS. It composes two functions that
+ * **This does NOT go through TheoKit's `handleChannelWebhook`.** Signature verification here needs
+ * the RAW body, the headers and the exact URL — `ChannelMessage` carries none of the three, so the
+ * check cannot be performed from inside `onMessage` whatever the provider sends. Twilio adds a
+ * second obstacle: it posts `application/x-www-form-urlencoded`, and that seam reads the body with
+ * `request.json()` and answers 400 when it is not JSON. (Plivo accepts either encoding and Vonage
+ * posts JSON, so only the first reason applies to them.) Use `createWebhookServer`,
+ * which builds the {@link SignatureContext} from the request, or call this from your own route
+ * where you still hold the unparsed body. It composes two functions that
  * already existed and were both private: each backend's `parseInbound`, which turns a provider's
  * form body into the provider-agnostic {@link SMSInbound}, and `inboundToMessageEvent`, which turns
  * that into the canonical event. Neither is duplicated here — per ADR D426 the mapping stays in one
@@ -25,9 +32,10 @@ import type { SMSAdapterOptions } from "./types.js";
  * Translate one raw provider webhook into an {@link SMSMessageEvent}.
  *
  * Returns `null` — never throws — when the body is not one this provider recognises. The caller is
- * TheoKit's `onMessage`, which is awaited BEFORE the 200 is built and is not wrapped in a `catch` —
- * so a throw there escapes it entirely and the 200 is never built (ADR D428, whose original
- * rationale was measured false on 2026-08-24).
+ * whatever holds the {@link SignatureContext}: `createWebhookServer` here, or your own route. It
+ * returns `null` rather than throwing because a throw out of a webhook handler becomes a failed
+ * request, and the provider then sees a delivery failure for a body that was merely unrecognised
+ * (ADR D428, whose original rationale — "runs after the 200" — was measured false on 2026-08-24).
  *
  * `null` here means "this body is not a parseable inbound message".
  *

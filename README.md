@@ -38,7 +38,9 @@ if (event !== null) {
 }
 ```
 
-`parseInbound` returns `null` and never throws. Measured against `theokit@0.48.14`: your `onMessage`
+`parseInbound` returns `null` rather than throwing for a body it does not recognise (in
+`gateway-sms` an unsupported provider in the options still throws — that is configuration, not a
+body). Measured against `theokit@0.48.14`: your `onMessage`
 is awaited **before** the 200 is built, and nothing inside `handleChannelWebhook` catches — so a
 throw on an unparseable payload means the 200 is never built. Mounted in a TheoKit route, the
 rejection reaches that route's error boundary and is answered **500**: the platform sees a failed
@@ -46,18 +48,23 @@ delivery where it expected an acknowledgement. Mounted anywhere else, whatever a
 framework's. Returning `null` lets an app ignore a
 message it cannot read and still answer normally.
 
-`parseInbound` itself exists on `@theokit/gateway-telegram` and `@theokit/gateway-sms` today. The
-other adapters export their own translation under their own names — `lineEventToMessageEvent`,
-`normalizeTeamsActivity`, and `parseWebhookPayload` composed with `normalizeInboundMessages` for
-WhatsApp Cloud — and each has its own signature: read the one you are using rather than assuming
-this one's. Adapters whose transport is a long-lived connection (Discord, Slack, Mattermost, Matrix,
+The example above is Telegram's. `@theokit/gateway-sms` also exports a `parseInbound`, and it takes
+different arguments — `parseInbound(options, ctx)` — because its signature check needs the raw body,
+the headers and the URL, and `ChannelMessage` carries none of the three. So SMS is wired through its
+own `createWebhookServer` instead of this seam. Every other adapter exports its translation under its own name —
+`lineEventToMessageEvent`, `normalizeTeamsActivity`, and `parseWebhookPayload` composed with
+`normalizeInboundMessages` for WhatsApp Cloud — each with its own signature. Read the one you are
+using rather than assuming this one's. Adapters whose transport is a long-lived connection (Discord, Slack, Mattermost, Matrix,
 e-mail, and WhatsApp's `web` and `baileys` backends) do not go through this seam at all; they own
 their transport, and running one alongside a TheoKit server needs a process lifecycle that does not
 exist yet.
 
 ## Relationship to `@theokit/sdk`
 
-Every adapter consumes `@theokit/sdk` as a **published npm dependency** (`^1.9.0`). `@theokit/gateway` (the core) is an in-repo workspace dependency of the adapters.
+Only `@theokit/gateway` (the core) declares a peer on `@theokit/sdk`, at `>=2.18.0 <5`, and uses it
+for one thing: redacting a throw before it reaches a log, at two call sites. The ten adapters declare
+no SDK dependency at all — B-007 measured that none of them imports it and removed the peer each had
+inherited. `@theokit/gateway` is an in-repo workspace dependency of the adapters.
 
 ## Develop
 

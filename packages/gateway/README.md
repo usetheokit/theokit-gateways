@@ -67,13 +67,17 @@ if (event !== null) {
 }
 ```
 
-`parseInbound` returns `null` and never throws. Measured against `theokit@0.48.14`: `onMessage` is
+`parseInbound` returns `null` rather than throwing for a body it does not recognise. Measured
+against `theokit@0.48.14`: `onMessage` is
 awaited **before** the 200 is built, and nothing inside `handleChannelWebhook` catches — so a throw
 on an unparseable payload means the 200 is never built. Mounted in a TheoKit route, the rejection
 reaches that route's error boundary and is answered **500**: the platform sees a failed delivery
 where it expected an acknowledgement.
 
-`parseInbound` under that name exists on `@theokit/gateway-telegram` and `@theokit/gateway-sms`.
+`parseInbound` under that name exists on `@theokit/gateway-telegram` and `@theokit/gateway-sms`,
+with different arguments: SMS takes `(options, ctx)` because its providers POST form bodies whose
+signature check needs the raw body, and it is wired through its own `createWebhookServer` rather
+than this seam.
 Every other adapter exports its translation under its own name — `gateway-line` has
 `lineEventToMessageEvent`, `gateway-whatsapp` composes `parseWebhookPayload` with
 `normalizeInboundMessages` — each with its own signature: read the one you are using rather than
