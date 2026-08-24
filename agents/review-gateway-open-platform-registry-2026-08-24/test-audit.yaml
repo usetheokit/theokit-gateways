@@ -1,0 +1,16 @@
+agent: test-auditor
+findings:
+  - id: TEST-1
+    severity: LOW
+    file: packages/gateway/tests/types/registry-guard.test.ts
+    line: 157
+    summary: "Reverting PlatformName to keyof turns no test red — the derivations coincide on a healthy registry"
+    evidence: "Mutation applied and grep-confirmed; packages/gateway tsc exit 0, vitest 104/104, integration tsc exit 0. Independently reproduced by a second reviewer."
+    recommended_action: "Recorded in the test body and in the implementation log. Closing it would require a permanently malformed entry in the shipped registry, which is worse."
+  - id: TEST-2
+    severity: LOW
+    file: packages/gateway-telegram/tests/adapter.test.ts
+    line: 101
+    summary: "A unit test calls the real Telegram API and times out under load — pre-existing, registered as B-014"
+    evidence: "Three consecutive pnpm -r test runs on an unchanged tree: exit 0, 0, 1. Failure is a 5024ms timeout, not an assertion."
+    recommended_action: "Tracked as B-014; unrelated package, out of scope."
