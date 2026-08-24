@@ -62,9 +62,10 @@ exist yet.
 ## Relationship to `@theokit/sdk`
 
 Only `@theokit/gateway` (the core) declares a peer on `@theokit/sdk`, at `>=2.18.0 <5`, and uses it
-for one thing: redacting a throw before it reaches a log, at two call sites. The ten adapters declare
-no SDK dependency at all — B-007 measured that none of them imports it and removed the peer each had
-inherited. `@theokit/gateway` is an in-repo workspace dependency of the adapters.
+for one thing: redacting a throw before it reaches a log, at two call sites. The ten adapters name it
+only as a `devDependency` and mark it external at build time; none of them imports it, which is what
+B-007 measured before removing the peer each had inherited. So installing an adapter does not pull
+the SDK. `@theokit/gateway` is an in-repo workspace dependency of the adapters.
 
 ## Develop
 

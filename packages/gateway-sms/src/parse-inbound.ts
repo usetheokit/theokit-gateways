@@ -6,11 +6,14 @@
  * check cannot be performed from inside `onMessage` whatever the provider sends. Twilio adds a
  * second obstacle: it posts `application/x-www-form-urlencoded`, and that seam reads the body with
  * `request.json()` and answers 400 when it is not JSON. (Plivo accepts either encoding and Vonage
- * posts JSON, so only the first reason applies to them.) Use `createWebhookServer`,
- * which builds the {@link SignatureContext} from the request, or call this from your own route
- * where you still hold the unparsed body. It composes two functions that
+ * posts JSON, so only the first reason applies to them.)
+ *
+ * For an Express app, `createWebhookServer` is the whole path and you never call this — it builds
+ * the {@link SignatureContext}, verifies the signature and goes through the adapter. This export is
+ * for a route you host yourself: build the context from a request whose body you have not parsed,
+ * then call this. It composes two functions that
  * already existed and were both private: each backend's `parseInbound`, which turns a provider's
- * form body into the provider-agnostic {@link SMSInbound}, and `inboundToMessageEvent`, which turns
+ * raw body into the provider-agnostic {@link SMSInbound}, and `inboundToMessageEvent`, which turns
  * that into the canonical event. Neither is duplicated here — per ADR D426 the mapping stays in one
  * place, and this is composition, not a second translator.
  *

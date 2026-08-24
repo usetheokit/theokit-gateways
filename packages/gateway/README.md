@@ -75,9 +75,9 @@ reaches that route's error boundary and is answered **500**: the platform sees a
 where it expected an acknowledgement.
 
 `parseInbound` under that name exists on `@theokit/gateway-telegram` and `@theokit/gateway-sms`,
-with different arguments: SMS takes `(options, ctx)` because its providers POST form bodies whose
-signature check needs the raw body, and it is wired through its own `createWebhookServer` rather
-than this seam.
+with different arguments: SMS takes `(options, ctx)` because its signature check needs the raw body,
+the headers and the URL, and `ChannelMessage` carries none of the three — so it is wired through its
+own `createWebhookServer` rather than this seam.
 Every other adapter exports its translation under its own name — `gateway-line` has
 `lineEventToMessageEvent`, `gateway-whatsapp` composes `parseWebhookPayload` with
 `normalizeInboundMessages` — each with its own signature: read the one you are using rather than
