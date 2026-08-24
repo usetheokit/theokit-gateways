@@ -33,7 +33,14 @@ import { describe, expect, it } from "vitest";
 const PACKAGES_DIR = join(__dirname, "..", "..", "..");
 
 /**
- * Which field each adapter authenticates with, declared rather than inferred.
+ * EVERY credential-bearing field each adapter publishes, declared rather than inferred.
+ *
+ * A list, not a single field, because review measured the single-field version checking less than
+ * its own name claimed: `gateway-sms` publishes `TwilioOptions.authToken`, `PlivoOptions.authToken`,
+ * `VonageOptions.apiSecret` and `signatureSecret`, and `gateway-whatsapp` publishes `appSecret` for
+ * `X-Hub-Signature-256` verification. All are exported types, so all are exactly as consumer-facing
+ * as the one field the first version looked at — and deleting any of their docblocks left the gate
+ * green.
  *
  * "The credential field" is a judgement, not a pattern: Teams has `clientId`, `clientSecret` and
  * `tenantId`; SMS has `accountSid`, `authToken`, `fromNumber` and `publicUrl`. A check that guessed
@@ -43,25 +50,63 @@ const PACKAGES_DIR = join(__dirname, "..", "..", "..");
  * A renamed field therefore fails this gate loudly, which is the intent: the rename is a breaking
  * change to a published type and should not pass quietly.
  */
-const CREDENTIAL_FIELD: ReadonlyMap<string, string> = new Map([
-  ["gateway-discord", "token"],
-  ["gateway-email", "password"],
-  ["gateway-line", "channelAccessToken"],
-  ["gateway-matrix", "accessToken"],
-  ["gateway-mattermost", "accessToken"],
-  ["gateway-slack", "botToken"],
-  ["gateway-sms", "authToken"],
-  ["gateway-teams", "clientSecret"],
-  ["gateway-telegram", "token"],
-  ["gateway-whatsapp", "accessToken"],
+const CREDENTIAL_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
+  ["gateway-discord", ["token"]],
+  ["gateway-email", ["password"]],
+  ["gateway-line", ["channelAccessToken", "channelSecret"]],
+  ["gateway-matrix", ["accessToken"]],
+  ["gateway-mattermost", ["accessToken"]],
+  ["gateway-slack", ["botToken", "appToken"]],
+  ["gateway-sms", ["authToken", "apiSecret", "signatureSecret"]],
+  ["gateway-teams", ["clientSecret"]],
+  ["gateway-telegram", ["token"]],
+  ["gateway-whatsapp", ["accessToken", "appSecret"]],
 ]);
+
+/** Every documentation fault for one package's credential fields, or none. */
+async function credentialFaults(pkg: string, fields: readonly string[]): Promise<string[]> {
+  const source = await optionsSource(pkg);
+  if (source === undefined) return [`${pkg}: no options declaration found`];
+
+  const faults: string[] = [];
+  for (const field of fields) {
+    const doc = docblockFor(source, field);
+    if (doc === undefined) {
+      faults.push(`${pkg}: \`${field}\` has no docblock`);
+      continue;
+    }
+    faults.push(...docblockFaults(pkg, field, doc));
+  }
+  return faults;
+}
+
+/** Every `gateway-*` package on disk that ships a `src/` — the gate's own universe. */
+async function adapterPackages(): Promise<string[]> {
+  const entries = await readdir(PACKAGES_DIR, { withFileTypes: true });
+  const out: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith("gateway-")) continue;
+    try {
+      await readdir(join(PACKAGES_DIR, entry.name, "src"));
+      out.push(entry.name);
+    } catch {
+      // A `gateway-*` directory without `src/` is not a package.
+    }
+  }
+  return out;
+}
 
 /** Read a package's options declaration, wherever it lives — six use `types.ts`, four `adapter.ts`. */
 async function optionsSource(pkg: string): Promise<string | undefined> {
   for (const file of ["types.ts", "adapter.ts"]) {
     try {
       const source = await readFile(join(PACKAGES_DIR, pkg, "src", file), "utf8");
-      if (source.includes("AdapterOptions")) return source;
+      // A DECLARATION, not a mention. Review defeated the substring version with a `types.ts`
+      // whose only reference to the type was a comment: it shadowed the real `adapter.ts`
+      // declaration and the published field lost its docblock with the gate still green.
+      if (/^export (?:interface|type) \w*(?:AdapterOptions|Options|Config)\b/m.test(source)) {
+        return source;
+      }
     } catch {
       // Not every package declares options in every file.
     }
@@ -89,7 +134,11 @@ function docblockFaults(pkg: string, field: string, doc: string): string[] {
   const platform = pkg.replace("gateway-", "");
   // Presence alone is satisfied by `/** The token. */`, which teaches nothing — and by another
   // adapter's block pasted over, which is the likeliest error when ten are written in one pass.
-  if (!doc.toLowerCase().includes(platform)) faults.push(`docblock never names ${platform}`);
+  // Word-boundary, not `includes`: review showed "deadline" satisfies a substring test for
+  // `line`, so a docblock that named no platform at all could pass.
+  if (!new RegExp(`\\b${platform}\\b`, "i").test(doc)) {
+    faults.push(`docblock never names ${platform}`);
+  }
   if (!/@platform-term/.test(doc)) faults.push("docblock has no @platform-term");
   if (!/@issued-at/.test(doc)) faults.push("docblock has no @issued-at");
   return faults.map((fault) => `${pkg}: \`${field}\` ${fault}`);
@@ -424,30 +473,18 @@ describe("cross-adapter contract", () => {
     //
     // Six of the ten names are the platform's own key, verified against the SDK's own `.d.ts`, so
     // the fix is to make them findable rather than to unify them (ADR D429).
-    expect(CREDENTIAL_FIELD.size).toBe(10);
+    // Derived from disk, not pinned to a number. Review measured the hardcoded version: an
+    // eleventh adapter declaring its options in `types.ts` was invisible to this invariant
+    // entirely, and `toBe(10)` only tripped for packages that happened to fail an unrelated
+    // whole-directory check.
+    const onDisk = (await adapterPackages()).sort();
+    expect([...CREDENTIAL_FIELDS.keys()].sort()).toEqual(onDisk);
 
     const missing: string[] = [];
-    const resolved: string[] = [];
-
-    for (const [pkg, field] of CREDENTIAL_FIELD) {
-      const source = await optionsSource(pkg);
-      if (source === undefined) {
-        missing.push(`${pkg}: no options declaration found`);
-        continue;
-      }
-      resolved.push(pkg);
-
-      const doc = docblockFor(source, field);
-      if (doc === undefined) {
-        missing.push(`${pkg}: \`${field}\` has no docblock`);
-        continue;
-      }
-      missing.push(...docblockFaults(pkg, field, doc));
+    for (const [pkg, fields] of CREDENTIAL_FIELDS) {
+      missing.push(...(await credentialFaults(pkg, fields)));
     }
 
-    // Asserted separately from `missing`: a resolution that silently found six of ten would leave
-    // `missing` empty and report a coverage it does not have.
-    expect(resolved).toHaveLength(10);
     expect(missing).toEqual([]);
   });
 });

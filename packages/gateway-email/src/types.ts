@@ -18,7 +18,7 @@ export interface EmailAdapterOptions {
   /** Email address the bot listens on (also the From: of outbound). */
   readonly address: string;
   /**
-   * The mailbox password, or an app-specific password where the provider requires one.
+   * The mailbox password for the email account, or an app-specific password where required.
    *
    * @platform-term IMAP and SMTP both call this a **password**. Note the divergence: `nodemailer`
    * names its field `pass`, and this one is `password` — ours, not theirs.

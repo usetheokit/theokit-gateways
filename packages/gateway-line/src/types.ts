@@ -9,7 +9,13 @@
  */
 
 export interface LineAdapterOptions {
-  /** From LINE Developers Console → Messaging API → Channel secret. */
+  /**
+   * The LINE channel secret, used to verify the `x-line-signature` header on inbound webhooks.
+   *
+   * @platform-term LINE calls this a **channel secret** — its own word, and distinct from the
+   * channel access token above: this one signs, that one authenticates.
+   * @issued-at The LINE Developers Console, on the channel's Basic settings tab.
+   */
   readonly channelSecret: string;
   /**
    * The LINE channel's long-lived access token.
