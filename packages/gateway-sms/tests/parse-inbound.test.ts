@@ -17,7 +17,6 @@
 
 import { describe, expect, it } from "vitest";
 
-import { ConfigurationError } from "../src/errors.js";
 import { parseInbound } from "../src/parse-inbound.js";
 import type { SMSAdapterOptions } from "../src/types.js";
 
@@ -61,12 +60,26 @@ describe("parseInbound", () => {
     expect(parseInbound(OPTIONS, { ...CTX, rawBody: noId })).toBeNull();
   });
 
-  it("THROWS on the app's own invalid configuration rather than returning null", () => {
-    // The regression. Returning `null` here is the defect: a misconfigured deployment would see
-    // every inbound message vanish, with the same value a malformed body produces.
-    expect(() => parseInbound({ ...OPTIONS, fromNumber: "not-a-number" }, CTX)).toThrow(
-      ConfigurationError,
-    );
+  it("THROWS on an unsupported backend rather than returning null", () => {
+    // The configuration error that IS separable: `createBackend` runs outside the try, so a
+    // backend nobody implemented surfaces instead of becoming the same `null` a bad body produces.
+    expect(() => parseInbound({ ...OPTIONS, backend: "sendgrid" as never }, CTX)).toThrow();
+  });
+
+  it.each([
+    ["a Vonage alphanumeric sender id", "ACME"],
+    ["a Twilio short code", "12345"],
+    ["a Messaging Service SID", "MG9752274e9470b73f5c"],
+    ["a national number with defaultCountry set", "11999999999"],
+  ])("accepts %s as fromNumber", (_label, fromNumber) => {
+    // The regression for the review BLOCKER. An earlier version validated `fromNumber` up front
+    // with `normalizeE164`, a rule stricter than anything else in this package applies to it, and
+    // these four documented configurations each threw `ConfigurationError` out of `onMessage`
+    // AFTER the 200 — the exact failure the check was meant to prevent.
+    const options = { ...OPTIONS, fromNumber, defaultCountry: "BR" };
+
+    expect(() => parseInbound(options, CTX)).not.toThrow();
+    expect(parseInbound(options, CTX)?.text).toBe("olá");
   });
 });
 
@@ -79,5 +92,25 @@ describe("no throw escapes into onMessage", () => {
     expect(
       parseInbound(OPTIONS, { ...CTX, rawBody: "From=%zz&Body=hi&MessageSid=SM1" }),
     ).toBeNull();
+  });
+});
+
+describe("the canonical event carries the backend that produced it", () => {
+  it("records the configured backend on the event", () => {
+    // Review found `event.sms.backend` asserted nowhere, so hardcoding it survived the suite.
+    expect(parseInbound(OPTIONS, CTX)?.sms.backend).toBe("twilio");
+  });
+});
+
+describe("what parseInbound does NOT do, stated so nobody assumes it", () => {
+  it("does not verify the webhook signature", () => {
+    // `SMSAdapter`'s constructor refuses an empty `authToken` because it would accept unsigned
+    // webhooks. `parseInbound` accepts one, and that is correct HERE: TheoKit's channel seam
+    // validates the signature before calling `onMessage`, so the body reaching this function is
+    // already authenticated. An app calling it OUTSIDE that seam must verify first — asserted so
+    // the difference is recorded rather than discovered.
+    const unsigned = { ...OPTIONS, authToken: "" };
+
+    expect(parseInbound(unsigned, CTX)?.text).toBe("olá");
   });
 });

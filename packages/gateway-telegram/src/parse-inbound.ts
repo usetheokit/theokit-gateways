@@ -93,6 +93,37 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Narrow the message's optional fields, dropping any that is not the type the event declares. */
+function narrowMessage(msg: Record<string, unknown>, messageId: number, date: number): MessageLike {
+  const threadId = msg.message_thread_id;
+  const replyTo = msg.reply_to_message;
+
+  return {
+    message_id: messageId,
+    date,
+    ...(typeof msg.text === "string" ? { text: msg.text } : {}),
+    ...(typeof msg.caption === "string" ? { caption: msg.caption } : {}),
+    ...(typeof threadId === "number" && Number.isFinite(threadId)
+      ? { message_thread_id: threadId }
+      : {}),
+    ...(isRecord(replyTo) && typeof replyTo.message_id === "number"
+      ? { reply_to_message: { message_id: replyTo.message_id } }
+      : {}),
+  };
+}
+
+/** Narrow the sender, or drop it entirely when it carries no usable id. */
+function narrowSender(value: unknown): UserLike | undefined {
+  if (!isRecord(value)) return undefined;
+  if (typeof value.id !== "number" || !Number.isFinite(value.id)) return undefined;
+
+  return {
+    id: value.id,
+    ...(typeof value.username === "string" ? { username: value.username } : {}),
+    ...(typeof value.first_name === "string" ? { first_name: value.first_name } : {}),
+  };
+}
+
 /**
  * Translate one raw Telegram webhook body into a `TelegramMessageEvent`.
  *
@@ -122,16 +153,21 @@ export function parseInbound(payload: unknown): TelegramMessageEvent | null {
 
   const msg = payload.message;
   if (!isRecord(msg)) return null;
-  if (typeof msg.message_id !== "number" || typeof msg.date !== "number") return null;
+
+  const messageId = msg.message_id;
+  const date = msg.date;
+  if (typeof messageId !== "number" || !Number.isFinite(messageId)) return null;
+  if (typeof date !== "number" || !Number.isFinite(date)) return null;
 
   const chat = msg.chat;
   if (!isRecord(chat)) return null;
-  if (typeof chat.id !== "number" || typeof chat.type !== "string") return null;
+  if (typeof chat.id !== "number" || !Number.isFinite(chat.id)) return null;
+  if (typeof chat.type !== "string") return null;
 
-  const from =
-    isRecord(msg.from) && typeof msg.from.id === "number"
-      ? (msg.from as unknown as UserLike)
-      : undefined;
-
-  return buildEvent(chat as unknown as ChatLike, msg as unknown as MessageLike, from, payload);
+  return buildEvent(
+    { id: chat.id, type: chat.type },
+    narrowMessage(msg, messageId, date),
+    narrowSender(msg.from),
+    payload,
+  );
 }

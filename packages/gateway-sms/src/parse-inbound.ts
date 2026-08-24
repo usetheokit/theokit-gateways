@@ -19,7 +19,6 @@ import type { SMSMessageEvent } from "@theokit/gateway";
 import { createBackend } from "./backend/index.js";
 import type { SignatureContext, SMSInbound } from "./backend-types.js";
 import { inboundToMessageEvent } from "./normalize.js";
-import { normalizeE164 } from "./phone.js";
 import type { SMSAdapterOptions } from "./types.js";
 
 /**
@@ -29,8 +28,20 @@ import type { SMSAdapterOptions } from "./types.js";
  * TheoKit's `onMessage`, which runs AFTER the 200 has been sent, so a throw there is an unhandled
  * rejection in the app's request path rather than an error anyone sees (ADR D428).
  *
- * `null` here means only "this body is not a parseable inbound message"; unlike Telegram, SMS
- * providers do not post update kinds that are ordinary-but-empty.
+ * `null` here means "this body is not a parseable inbound message".
+ *
+ * **One class of configuration error is not distinguishable from a bad body, and is not pretended
+ * to be.** `defaultCountry` is read while parsing the body's own numbers, and `normalizeE164`
+ * raises the same `ConfigurationError` for a bad configured country as for a bad number in the
+ * body. An invalid `defaultCountry` therefore degrades to `null` rather than throwing.
+ *
+ * An earlier version tried to separate them by validating `options.fromNumber` up front. That was
+ * wrong twice: `fromNumber` is passed raw to the provider SDK everywhere else in this package and
+ * validated nowhere, and the invented rule rejected four documented, valid configurations — a
+ * Vonage alphanumeric sender ID (`"ACME"`), a Twilio short code (`"12345"`), a Messaging Service
+ * SID (`"MG…"`), and a national number with `defaultCountry` set. Each one threw out of
+ * `onMessage` after the 200, which is precisely the failure the check was written to prevent.
+ * Inventing a validation stricter than the package's own is how that happened.
  *
  * @public
  */
@@ -38,35 +49,29 @@ export function parseInbound(
   options: SMSAdapterOptions,
   ctx: SignatureContext,
 ): SMSMessageEvent | null {
-  // Validate the APP's own configuration first, and let it throw. After this line a
-  // `ConfigurationError` can only have come from a number in the body, which is a bad request
-  // rather than a bad deployment — and the two are indistinguishable by type, since `normalizeE164`
-  // raises the same error for both. Ordering is what separates them.
-  //
-  // Measured, and the reason this exists: with a single broad `catch`, an invalid `fromNumber` in
-  // the app's options made every message return `null`. The app would have seen silent drops with
-  // nothing to diagnose. With no catch at all, an empty webhook body threw `ConfigurationError` out
-  // of `onMessage` — after TheoKit had already answered 200.
-  normalizeE164(options.fromNumber);
+  // `createBackend` is the CONFIGURATION step and sits outside the try on purpose: an unsupported
+  // `backend` is a programmer error and must surface, not become the same `null` a malformed body
+  // produces.
+  const backend = createBackend(options);
 
   let inbound: SMSInbound;
   try {
-    inbound = createBackend(options).parseInbound(ctx);
+    inbound = backend.parseInbound(ctx);
   } catch {
-    // Reaching here means the body was unreadable, whatever the error's type — the configuration
-    // already passed the check above, so nothing here can be a programmer error.
-    //
-    // Deliberately catches everything. An earlier version re-threw anything that was not a
-    // `ConfigurationError`, and a body containing a malformed percent-escape (`From=%zz`) then
-    // escaped as `URIError: URI malformed` — out of `onMessage`, which TheoKit calls AFTER
-    // answering 200. That is the unhandled rejection ADR D428 exists to prevent, and no test caught
-    // it: the mutation that should have gone red stayed green, which is the only signal an untested
-    // branch gives.
+    // Everything from here is body-dependent, so any error means the body was unreadable. Caught
+    // whatever its type: `decodeURIComponent` raises `URIError` on a malformed percent-escape
+    // (`From=%zz`) and `normalizeE164` raises `ConfigurationError` on a number the body carried.
+    // Both are bad requests, and `onMessage` runs AFTER TheoKit answered 200 — a throw here is an
+    // unhandled rejection with no status left to change (ADR D428).
     return null;
   }
 
-  // Shape checks, not error handling: a body the provider posted that carries no message.
-  if (inbound.messageId === "" || inbound.from === "") return null;
+  // A body the provider posted that carries no message id.
+  //
+  // Deliberately does NOT also check `inbound.from === ""`: all three backends build `from` with
+  // `normalizeE164(x ?? "")`, which throws on an empty string, so the branch was unreachable and a
+  // mutation deleting it survived the suite.
+  if (inbound.messageId === "") return null;
 
   return inboundToMessageEvent(inbound, options.backend);
 }

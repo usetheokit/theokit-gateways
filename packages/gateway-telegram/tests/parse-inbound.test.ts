@@ -121,12 +121,21 @@ describe("one mapping, two paths", () => {
    * hold by construction: it would still pass with two divergent mappings, because both would
    * receive identical input.
    *
-   * **What this assertion can and cannot detect, measured rather than assumed.** Changing the
-   * shared `buildEvent` does NOT turn it red: both paths call it, so both sides change equally and
-   * the equality still holds. That is not a weakness to fix — it is what an equality between two
-   * callers of one function means. What it DOES detect is the risk it exists for: replacing the
-   * call with a second, inline mapping makes it fail (verified — 4 assertions red). Drift is
-   * introduced by writing a second mapping, and that is the mutation that proves this test.
+   * **What this assertion detects, corrected after review measured the earlier claim false.**
+   *
+   * An earlier version of this comment said the test detects "replacing the call with a second,
+   * inline mapping". It does not: an EXACT copy of `buildEvent` inlined into `parseInbound` leaves
+   * the suite green. It detects a second mapping only once that mapping has already DIVERGED in a
+   * field this assertion compares — and drift begins as an exact duplicate, so the assertion is
+   * blind at the moment the risk starts.
+   *
+   * Changing the shared `buildEvent` also leaves it green, and the reason given earlier was wrong
+   * too. It is not a property of equality testing: an inline mapping diverging ONLY in `event.id`
+   * turns this test — and only this test — red. The survivor was `event.id` being asserted nowhere
+   * in the package, which is a coverage hole, not a philosophical limit. It is covered now.
+   *
+   * What remains true: this assertion is the only one comparing the two paths field by field, so it
+   * is where a divergence in any covered field is caught first.
    */
   it("builds the same event whether the update arrived by webhook or by polling", () => {
     // Path A — a raw webhook body, written out as Telegram sends it.
@@ -162,5 +171,106 @@ describe("one mapping, two paths", () => {
 
     expect(webhookRest).toEqual(polledRest);
     expect({ ...webhookTelegram, raw: null }).toEqual({ ...polledTelegram, raw: null });
+  });
+});
+
+describe("the boundary narrows every field it copies", () => {
+  // Review found the type declared by `TelegramMessageEvent` was not enforced: `text: 5` produced
+  // an event whose `text` was the number 5. An app calling `event.text.trim()` then got a
+  // `TypeError` thrown out of `onMessage`, after TheoKit answered 200.
+  it.each([
+    ["text is not a string", { text: 5 }, "text", ""],
+    ["text is an object", { text: { a: 1 } }, "text", ""],
+    ["caption is not a string", { text: undefined, caption: 7 }, "text", ""],
+  ])("drops %s rather than copying it", (_label, patch, field, expected) => {
+    const event = parseInbound({ ...UPDATE, message: { ...UPDATE.message, ...patch } });
+
+    expect(event).not.toBeNull();
+    expect(event?.[field as "text"]).toBe(expected);
+  });
+
+  it("drops a thread id that is not a number", () => {
+    const event = parseInbound({
+      ...UPDATE,
+      message: { ...UPDATE.message, message_thread_id: "5" },
+    });
+
+    expect(event?.telegram.threadId).toBeUndefined();
+    expect(event?.channel.topicId).toBeUndefined();
+    expect(event?.channel.type).toBe("group");
+  });
+
+  it("drops a sender name that is not a string", () => {
+    const event = parseInbound({
+      ...UPDATE,
+      message: { ...UPDATE.message, from: { id: 1, username: { a: 1 }, first_name: 9 } },
+    });
+
+    expect(event?.sender.username).toBeUndefined();
+    expect(event?.sender.displayName).toBeUndefined();
+    expect(event?.sender.id).toBe("1");
+  });
+
+  it.each([
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+  ])("rejects a date of %s instead of producing that timestamp", (_label, date) => {
+    // Nothing throws on `receivedAt: NaN` — it silently poisons every ordering and retention
+    // decision downstream, which is why it is rejected rather than copied.
+    expect(parseInbound({ ...UPDATE, message: { ...UPDATE.message, date } })).toBeNull();
+  });
+
+  it("rejects a non-numeric chat id", () => {
+    // The guard was fully deletable with the whole suite green before this existed.
+    expect(
+      parseInbound({
+        ...UPDATE,
+        message: { ...UPDATE.message, chat: { id: "-100123", type: "group" } },
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects a non-string chat type", () => {
+    expect(
+      parseInbound({ ...UPDATE, message: { ...UPDATE.message, chat: { id: -1, type: 7 } } }),
+    ).toBeNull();
+  });
+
+  it("rejects a non-numeric message id", () => {
+    expect(
+      parseInbound({ ...UPDATE, message: { ...UPDATE.message, message_id: "42" } }),
+    ).toBeNull();
+  });
+});
+
+describe("fields nothing else asserted", () => {
+  it("builds the canonical id from the chat and message ids", () => {
+    // Review found `event.id` was asserted by no test in this package — so the mutation that
+    // changed its prefix survived the entire suite.
+    expect(parseInbound(UPDATE)?.id).toBe("tg--100123-42");
+  });
+
+  it("carries the caller's own payload through as the raw escape hatch", () => {
+    const payload = { ...UPDATE };
+
+    expect(parseInbound(payload)?.telegram.raw).toBe(payload);
+  });
+
+  it("maps a reply to the message it answers", () => {
+    const event = parseInbound({
+      ...UPDATE,
+      message: { ...UPDATE.message, reply_to_message: { message_id: 41 } },
+    });
+
+    expect(event?.replyTo).toBe("41");
+  });
+
+  it("omits replyTo when the reply id is not a number", () => {
+    const event = parseInbound({
+      ...UPDATE,
+      message: { ...UPDATE.message, reply_to_message: { message_id: "41" } },
+    });
+
+    expect(event?.replyTo).toBeUndefined();
   });
 });
