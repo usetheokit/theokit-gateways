@@ -55,7 +55,7 @@ own quality gates.
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
-| [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `raw` | — |
+| [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `triaged` | — |
 | [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `raw` | — |
 | [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
 | [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive----) | The published packages carry 1 critical and 19 high advisories, all transitive | `raw` | — |
@@ -335,13 +335,29 @@ domain: theokit-gateways
 repo: theokit-gateways
 suggested_mode: review
 source: human
+opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-credential-naming-opportunity.md` (SHIPPABLE_WITH_CAVEATS)
 evidence: measured across `packages/gateway-*/src`: the primary credential is `token` (telegram, discord), `botToken` (slack), `accessToken` (matrix, mattermost, whatsapp), `channelAccessToken` (line), `authToken` (sms), `clientSecret` (teams), `password` (email). Teams additionally requires three fields with no shared shape (`clientId`, `clientSecret`, `tenantId`), and SMS requires `publicUrl`.
 why_now: this cost real errors inside this repository during the cross-adapter conformance work — the suite was written against `botToken` for Discord and for Telegram, and both were wrong. A contributor holding one adapter's shape in their head is misled by the next one, and the type error arrives only after the wrong guess is written.
-status: raw
+status: triaged
 dod:
   - a developer who has wired one adapter can predict the next one's option names, or is told by the types before writing the wrong guess
   - the change does not break the ten published packages' existing option shapes without a deprecation path
   - the convention is stated once, where an author of a new adapter will read it
+
+> **DISCOVER 2026-08-24 — the fix the item implies is refuted; the friction is real.** Eight of ten
+> field names were pinned to a string in the platform SDK's own `.d.ts`, not recalled: six are
+> exactly the platform's own key (`channelAccessToken`, `clientSecret`, `accessToken`, `token`×2,
+> `authToken`) and three are ours (`botToken` where Slack says `token` — deliberate, since the
+> adapter also takes `appToken`; `accessToken` where Mattermost says `token`; `password` where
+> nodemailer says `pass`). They are not seven names for one thing: the source docblocks name a
+> console, a dashboard, an app registration and an admin page as issuers. And every
+> `*AdapterOptions` is in its package's published export list, so a rename is breaking across six
+> packages — paid to contradict six platforms' own documentation.
+> What survives is discoverability. Compiled the mistake a developer actually makes (carrying
+> `token` from the first adapter): `error TS2353: … 'token' does not exist in type
+> 'SlackAdapterOptions'` — it names the wrong field and the type, and **never** the right one
+> (`grep -c botToken` over the full output returns 0). Re-scoped from renaming to documenting, with
+> the decision recorded as D429.
 
 ## B-011 — Nothing documents how the three repositories fit together   [ ]
 
