@@ -121,10 +121,10 @@ describe("hiding places that defined a phantom section", () => {
   });
 });
 
-// A third review found four more ways to write a phantom heading the reader never sees. Three are
-// fences the strip did not recognise (`~~~`, indented 1-3 spaces, never closed) and one is an HTML
-// comment that is never closed — CommonMark runs both to end of file, so everything after them is
-// invisible while the gate still read the heading.
+// A third review found ways to write a phantom heading the reader never sees: fences the strip did
+// not recognise — `~~~`, and fences indented one to three spaces. Two more cases in this block, the
+// unterminated fence and the unterminated comment, were closed in that round and deliberately
+// reopened in the next one; the comment above them says why.
 describe("hiding places a reader never sees", () => {
   const check = (text) => missingFacts(text, { file: "README.md", heading: HEADING, facts: FACTS });
   const gone = ["README.md: has no `## How this fits with TheoKit` section"];
@@ -139,15 +139,20 @@ describe("hiding places a reader never sees", () => {
     expect(check(phantom("   ```md", "   ```"))).toEqual(gone);
   });
 
-  it("does not accept a heading after a fence that is never closed", () => {
+  // These two asserted the OPPOSITE one round ago, and the assertion was withdrawn on evidence
+  // rather than deleted. Running an unterminated fence or comment to end of file is what CommonMark
+  // says, and implementing it failed four innocent documents — `<!--` written in prose was enough.
+  // The cost fell on authors who did nothing wrong; the benefit was against an author deliberately
+  // gaming a gate that already states it cannot check whether the section is true.
+  it("accepts a document whose heading follows a fence that is never closed", () => {
     expect(
       check(`# t\n\n\`\`\`md\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n`),
-    ).toEqual(gone);
+    ).toEqual([]);
   });
 
-  it("does not accept a heading after an HTML comment that is never closed", () => {
+  it("accepts a document whose heading follows a comment that is never closed", () => {
     expect(check(`# t\n\n<!--\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n`)).toEqual(
-      gone,
+      [],
     );
   });
 
@@ -157,5 +162,73 @@ describe("hiding places a reader never sees", () => {
     expect(check(doc("    an indented example\n\nhandleChannelWebhook and theokit-sdk."))).toEqual(
       [],
     );
+  });
+});
+
+// A fourth review found a ninth bypass and, worse, four FALSE FAILS: an innocent document
+// containing `<!--` in prose, or a four-backtick fence, failed the gate outright. That is the more
+// expensive defect — a bypass needs someone to try, a false fail happens to someone who did nothing
+// wrong, and it is what teaches a team to distrust the next report.
+//
+// So the rule changed direction: a block that never closes is NOT treated as hiding anything. An
+// unterminated fence does run to end of file in CommonMark, but the reader who writes one is
+// making a typo, while the author who exploits one is gaming a gate that already admits it cannot
+// check accuracy.
+describe("blocks that hide a heading", () => {
+  const check = (text) => missingFacts(text, { file: "README.md", heading: HEADING, facts: FACTS });
+  const gone = ["README.md: has no `## How this fits with TheoKit` section"];
+  const phantom = (open, close) =>
+    `# t\n\n${open}\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n${close}\n\n## Install\n\nUnrelated.\n`;
+
+  it("does not accept a heading inside a script block", () => {
+    expect(check(phantom("<script>", "</script>"))).toEqual(gone);
+  });
+
+  it("does not accept a heading inside a style block", () => {
+    expect(check(phantom("<style>", "</style>"))).toEqual(gone);
+  });
+
+  it("does not accept a heading inside YAML front matter", () => {
+    expect(
+      check(`---\n## ${HEADING}\nhandleChannelWebhook theokit-sdk\n---\n\n# t\n\n## Install\n`),
+    ).toEqual(gone);
+  });
+
+  it("does not let a short line close a longer fence", () => {
+    // ````md … ``` … ```` — CommonMark requires the closer to be at least as long as the opener, so
+    // the inner line is content and the heading after it is still inside the block.
+    const text = `# t\n\n\`\`\`\`md\n\`\`\`\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n\`\`\`\`\n\n## Install\n`;
+    expect(check(text)).toEqual(gone);
+  });
+});
+
+describe("innocent documents the gate must not fail", () => {
+  const check = (text) => missingFacts(text, { file: "README.md", heading: HEADING, facts: FACTS });
+
+  it("accepts prose that mentions the comment marker", () => {
+    expect(
+      check(
+        doc("A note is written with `<!--` and its mirror. handleChannelWebhook, theokit-sdk."),
+      ),
+    ).toEqual([]);
+  });
+
+  it("accepts a four-backtick fence closed with four backticks", () => {
+    expect(
+      check(doc("handleChannelWebhook, theokit-sdk.\n\n\`\`\`\`ts\nconst a = 1;\n\`\`\`\`")),
+    ).toEqual([]);
+  });
+
+  it("accepts a three-backtick fence closed with four", () => {
+    expect(
+      check(doc("handleChannelWebhook, theokit-sdk.\n\n\`\`\`ts\nconst a = 1;\n\`\`\`\`")),
+    ).toEqual([]);
+  });
+
+  it("accepts a fence whose closer is indented", () => {
+    // Guards the closer's own indentation allowance, which survived a mutation until it had a test.
+    expect(
+      check(doc("handleChannelWebhook, theokit-sdk.\n\n\`\`\`ts\nconst a = 1;\n   \`\`\`")),
+    ).toEqual([]);
   });
 });

@@ -87,63 +87,74 @@ export function sectionBody(text, heading) {
  * @returns {string}
  */
 export function visibleText(text) {
-  return stripLinkTargets(blankComments(blankFences(text)));
+  return stripLinkTargets(blankBlocks(text));
 }
 
 /**
- * Blanks fenced code blocks, keeping line count.
+ * What opens a block the reader does not read, and what closes it.
  *
- * CommonMark: a fence opens on ``` or ~~~ indented up to three spaces, closes on the same marker,
- * and runs to end of file when it never closes. Four-space indentation is an indented code block,
- * not a fence — treating it as one would swallow the rest of the document.
+ * One function so the four kinds share a shape: a line opens, a later line closes, everything
+ * between is not prose. Fences honour CommonMark's length rule — a closer must be at least as long
+ * as its opener — which is both a bypass (a short line closing a long fence) and a false fail (a
+ * three-backtick fence legitimately closed with four) when it is missing.
+ *
+ * @param {string} line
+ * @param {number} index
+ * @returns {{start: number, close: RegExp} | undefined}
+ */
+function openBlock(line, index) {
+  if (index === 0 && /^---\s*$/.test(line)) return { start: 0, close: /^---\s*$/ };
+
+  const fence = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+  if (fence !== null) {
+    const [marker] = fence.slice(1);
+    return { start: index, close: new RegExp(`^ {0,3}\\${marker[0]}{${marker.length},}\\s*$`) };
+  }
+
+  const html = /^\s*<(script|style)\b/i.exec(line);
+  if (html !== null) return { start: index, close: new RegExp(`</${html[1]}>`, "i") };
+
+  if (line.includes("<!--") && !line.includes("-->")) return { start: index, close: /-->/ };
+  return undefined;
+}
+
+/**
+ * Blanks every block that opens AND closes, keeping line count.
+ *
+ * A block that never closes is discarded rather than run to end of file. CommonMark does run an
+ * unterminated fence or comment to EOF, and honouring that produced four false fails on innocent
+ * documents — `<!--` written in prose, a four-backtick fence, a commented-out draft — each of which
+ * blanked the rest of the file and reported the documented section missing.
+ *
+ * That is the trade, stated rather than implied: an author who deliberately opens a block and never
+ * closes it can hide a heading from this gate. Someone willing to do that can equally write a
+ * section that names every fact and says something false, which this gate does not check either. A
+ * false fail, by contrast, happens to someone who did nothing wrong, and it is what teaches a team
+ * to stop reading the gate's output.
  *
  * @param {string} text
  * @returns {string}
  */
-function blankFences(text) {
-  let marker;
-  return text
-    .split("\n")
-    .map((line) => {
-      if (marker !== undefined) {
-        if (new RegExp(`^ {0,3}${marker}\\s*$`).test(line)) marker = undefined;
-        return "";
-      }
-      const opener = /^ {0,3}(```|~~~)/.exec(line);
-      if (opener === null) return line;
-      marker = opener[1];
-      return "";
-    })
-    .join("\n");
-}
+function blankBlocks(text) {
+  const lines = text.split("\n");
+  const hidden = new Set();
+  let open;
 
-/**
- * Blanks HTML comments, including one that is never closed — which runs to end of file.
- *
- * Runs after `blankFences`, so a comment marker inside a code example is already gone. The reverse
- * order would let a fence written inside a comment blank the rest of the document.
- *
- * @param {string} text
- * @returns {string}
- */
-function blankComments(text) {
-  let open = false;
-  const lines = text.split("\n").map((line) => {
-    if (open) {
-      if (line.includes("-->")) open = false;
-      return "";
+  lines.forEach((line, index) => {
+    if (open === undefined) {
+      open = openBlock(line, index);
+      return;
     }
-    if (line.includes("<!--") && !line.includes("-->")) {
-      open = true;
-      return "";
-    }
-    return line;
+    if (!open.close.test(line)) return;
+    for (let i = open.start; i <= index; i++) hidden.add(i);
+    open = undefined;
   });
-  return lines.join("\n").replace(/<!--.*?-->/g, " ");
+
+  return lines.map((line, i) => (hidden.has(i) ? "" : line)).join("\n");
 }
 
 /**
- * Removes every link TARGET, keeping labels.
+ * Removes every link TARGET, keeping labels, and single-line HTML comments.
  *
  * A URL that contains a word is not a sentence naming it. Inline `](url)`, reference definitions
  * `[id]: url` and autolinks `<url>` all hid a fact from an earlier version of this gate.
@@ -153,6 +164,7 @@ function blankComments(text) {
  */
 function stripLinkTargets(text) {
   return text
+    .replace(/<!--.*?-->/g, " ")
     .replace(/\]\([^)]*\)/g, "]")
     .replace(/^\s*\[[^\]]+\]:.*$/gm, "")
     .replace(/<https?:\/\/[^>]*>/g, "");
