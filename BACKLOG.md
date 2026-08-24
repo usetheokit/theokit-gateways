@@ -49,23 +49,17 @@ own quality gates.
 
 ## Index
 
-16 items — **Open** 5 · **In flight** 0 · **Closed** 11
+16 items — **Open** 0 · **In flight** 0 · **Closed** 16
 
-### Open (5)
+### Open (0)
 
-| Item | Title | Status | Severity |
-|---|---|---|---|
-| [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
-| [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive----) | The published packages carry 1 critical and 19 high advisories, all transitive | `raw` | — |
-| [`B-014`](#b-014--a-unit-test-calls-the-real-telegram-api-and-fails-when-the-network-is-slow----) | A unit test calls the real Telegram API and fails when the network is slow | `raw` | — |
-| [`B-015`](#b-015--the-published-declarations-cite-75-adr-ids-that-resolve-nowhere----) | The published declarations cite 75 ADR ids that resolve nowhere | `raw` | — |
-| [`B-016`](#b-016--pnpm-qualitydocs-writes-into-the-repo-root-and-the-output-is-not-ignored----) | `pnpm quality:docs` writes into the repo root and the output is not ignored | `raw` | — |
+_None._
 
 ### In flight (0)
 
 _None._
 
-### Closed (11)
+### Closed (16)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -80,6 +74,11 @@ _None._
 | [`B-009`](#b-009--theokits-channel-seam-names-our-packages-as-the-translator-and-no-adapter-can-translate----) | TheoKit's channel seam names our packages as the translator, and no adapter can translate | `shipped` | — |
 | [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `shipped` | — |
 | [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together---x) | Nothing documents how the three repositories fit together | `shipped` | — |
+| [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility---x) | The SDK sits in the middle of the triad wired to a single utility | `shipped` | — |
+| [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive---x) | The published packages carry 1 critical and 19 high advisories, all transitive | `shipped` | — |
+| [`B-014`](#b-014--a-unit-test-calls-the-real-telegram-api-and-fails-when-the-network-is-slow---x) | A unit test calls the real Telegram API and fails when the network is slow | `shipped` | — |
+| [`B-015`](#b-015--the-published-declarations-cite-75-adr-ids-that-resolve-nowhere---x) | The published declarations cite 75 ADR ids that resolve nowhere | `shipped` | — |
+| [`B-016`](#b-016--pnpm-qualitydocs-writes-into-the-repo-root-and-the-output-is-not-ignored---x) | `pnpm quality:docs` writes into the repo root and the output is not ignored | `shipped` | — |
 
 <!-- BACKLOG-INDEX:END -->
 
@@ -422,7 +421,7 @@ dod:
 > the pnpm-11 test skips that window with the pins named. Version Packages then passed 23/23 — the
 > first time that gate has been green; #200 merged with 12 failures and #73 with 14.
 
-## B-012 — The SDK sits in the middle of the triad wired to a single utility   [ ]
+## B-012 — The SDK sits in the middle of the triad wired to a single utility   [x]
 
 domain: theokit-gateways
 repo: packages/gateway
@@ -430,7 +429,8 @@ suggested_mode: evolve
 source: human
 evidence: the entire `@theokit/sdk` surface consumed by all eleven packages is `Security.redact`, called in two files (`packages/gateway/src/runner/gateway-runner.ts:227`, `packages/gateway/src/hooks/executor.ts:53`), both for redacting an error message before it reaches a log. Meanwhile nine `tsup.config.ts` files mark the SDK external and — until B-007 — all eleven `package.json` files declared a peer on it.
 why_now: the triad theokit → theokit-sdk → theokit-gateways is asserted by the build configuration and by the dependency declarations, but the code only ever asks the SDK to redact a string. Either the relationship is real and something is missing from it, or it is one utility function and nine build configs plus eleven manifests are describing a coupling that does not exist. B-007 already removed ten of those manifests' claims; the question of what the SDK is FOR here is still open.
-status: triaged
+status: shipped
+shipped_as: `@theokit/gateway@0.8.0` (PR #77)
 opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-sdk-redaction-consistency-opportunity.md` (SHIPPABLE_WITH_CAVEATS, 89)
 measured: `Security.redact` changes 1 of the 11 credential shapes this repo holds, and on a Telegram token the parametric matcher redacts the PUBLIC bot id while preserving the secret half — `token=***:AAF-…`. Mode reclassified evolve → review.
 dod:
@@ -438,7 +438,9 @@ dod:
   - the build configuration and the manifests agree with what the source actually imports
   - if the answer is "one utility", the dependency is either justified in writing or removed
 
-## B-013 — The published packages carry 1 critical and 19 high advisories, all transitive   [ ]
+> **ACCEPTANCE** — installed `@theokit/gateway@0.8.0` from the registry. `redactSecrets('connect failed: token=<telegram token>')` returns `token=***`; the secret half no longer reaches the log, where before the public bot id was removed and the secret kept. `password=<passphrase>` still returns `password=***` — the first attempt had degraded that to `password=hunter…aple`. A dashless UUID passes through untouched. 6 shapes covered, 6 rows recorded as deliberately uncovered.
+
+## B-013 — The published packages carry 1 critical and 19 high advisories, all transitive   [x]
 
 domain: theokit-gateways
 repo: theokit-gateways
@@ -446,7 +448,8 @@ suggested_mode: review
 source: human
 evidence: `pnpm audit --audit-level=moderate` exits 1 with **43 vulnerabilities — 4 low, 19 moderate, 19 high, 1 critical**. The critical is `form-data` `<2.5.4` (unsafe random for the multipart boundary). Named highs include the Matrix JavaScript SDK key-history sharing issue, `form-data` CRLF injection, a Nodemailer raw-option bypass, an `undici` WebSocket DoS reached via `packages__gateway-discord>discord.js>undici` (GHSA-v3r7-h72x-cjcm), `brace-expansion` exponential expansion, and `js-yaml` quadratic merge-key chains. Every one is transitive — none is declared in any of our `package.json` files.
 why_now: found by running the audit as the `/deps-audit` phase of B-008's plan cycle. Eleven of our packages are published on npm, so anyone installing `@theokit/gateway-discord` or `@theokit/gateway-matrix` today pulls these advisories into their own tree. `osv-scanner` is not installed on this machine, so the cross-check the deps-audit golden rule asks for was NOT run — the count above comes from one scanner only and may be incomplete.
-status: raw
+status: shipped
+shipped_as: `@theokit/gateway-email@0.2.0` (PR #77)
 dod:
   - the critical advisory is gone from a fresh install of every published package, or carries an allowlist entry with a sunset and a written reason
   - each remaining high is either resolved, or recorded with why it is unreachable from our code paths
@@ -458,7 +461,9 @@ dod:
 > the wrong change — and swallowing the finding because it was inconvenient is the failure the
 > single registry exists to prevent.
 
-## B-014 — A unit test calls the real Telegram API and fails when the network is slow   [ ]
+> **ACCEPTANCE** — the item's premise was refuted by measurement: the 43 advisories describe a contributor's tree, since every platform SDK is an optional peer. Installing all eleven published packages yields 2 high and no critical. Both were the nodemailer peer, now `^9.0.1`. The critical (`form-data <2.5.4` via plivo) never reached a consumer and is pinned by an override — verified after regenerating the lockfile, which a first attempt had not done while documenting the fix as verified.
+
+## B-014 — A unit test calls the real Telegram API and fails when the network is slow   [x]
 
 domain: theokit-gateways
 repo: packages/gateway-telegram
@@ -466,7 +471,8 @@ suggested_mode: bug
 source: human
 evidence: `packages/gateway-telegram/tests/adapter.test.ts:101` — `EC-I: connect() with bad token resolves to false (does NOT throw)` calls `adapter.connect()`, which reaches grammy's `bot.init()` and therefore `api.telegram.org`. Measured over three consecutive `pnpm -r test` runs on an unchanged tree: exit 0, exit 0, exit **1** — `× EC-I: connect() with bad token resolves to false (does NOT throw) 5024ms`, `Test Files 1 failed | 3 passed (4)`. The failure is a 5s timeout, not an assertion.
 why_now: found while running the gates for B-008, on a tree whose only changes are type declarations in a different package. `rules/testing.md § 6` names network in a unit test as an anti-pattern and says a flaky test is a bug to fix or delete; this one is both. It also makes every future gate run on this repository a coin flip, so any red it produces will be dismissed as "just the flaky one" — which is how a real regression gets waved through.
-status: raw
+status: shipped
+shipped_as: `@theokit/gateway-telegram@0.2.3` (PR #77)
 dod:
   - the test asserts the same behaviour without reaching the network
   - `pnpm -r test` passes 10 consecutive times on an unchanged tree
@@ -475,7 +481,9 @@ dod:
 > Registered 2026-08-23 during B-008's gate run. Not folded into B-008: that change is type-level
 > and in a different package, and blocking it on a pre-existing flake would punish the wrong work.
 
-## B-015 — The published declarations cite 75 ADR ids that resolve nowhere   [ ]
+> **ACCEPTANCE** — the test no longer touches the network; the full suite ran green 10 consecutive times by exit code, and reverting `connect()` to rethrow turns it red. The contract widened: the old test survived deleting the log line and survived returning false without calling `init()`.
+
+## B-015 — The published declarations cite 75 ADR ids that resolve nowhere   [x]
 
 domain: theokit-gateways
 repo: theokit-gateways
@@ -483,7 +491,8 @@ suggested_mode: review
 source: human
 evidence: `packages/gateway/dist/index.d.ts` cites 24 `D###` ids while `packages/gateway/src/README.md:52-59` defines only D170–D177; 17 of them resolve nowhere (D101, D274, D308, D325, D335, D339, D389, D391, D397, D399, D402, D405, D409, D410, D413, D416, D421). Across all eleven `packages/*/dist/index.d.ts` the figure is 75 distinct unresolvable ids.
 why_now: found while verifying that B-008 removed the two ids a reviewer had flagged. It did — and left the identical defect 17 times in the same file, which is how a fix comes to look complete while the class of defect is untouched. These are shipped to npm: a consumer reading our published declaration is pointed at decisions they cannot open, and we cannot tell which ones still describe the code.
-status: raw
+status: shipped
+shipped_as: no published surface changed (PR #75)
 dod:
   - every `D###` cited in a published `.d.ts` resolves to a document in the repository, or the citation is removed
   - a gate fails the build when a new unresolvable id enters a published declaration
@@ -491,7 +500,9 @@ dod:
 
 > Registered 2026-08-24. Pre-existing and unrelated to B-008's change; not folded into it.
 
-## B-016 — `pnpm quality:docs` writes into the repo root and the output is not ignored   [ ]
+> **ACCEPTANCE** — `docs/adr/decision-ids.md` accounts for all 76 cited ids; `pnpm quality:adr-citations` exits 1 on an unaccounted citation and refuses to report over a partial build. The lost count is ratcheted at 59 and may only fall.
+
+## B-016 — `pnpm quality:docs` writes into the repo root and the output is not ignored   [x]
 
 domain: theokit-gateways
 repo: tools
@@ -499,9 +510,12 @@ suggested_mode: bug
 source: human
 evidence: running `pnpm quality:docs` creates `.doc-probes/` under package roots (observed at `packages/gateway-line/.doc-probes/`); `.gitignore` does not list it. An interrupted run therefore leaves untracked files behind in a tree that was clean.
 why_now: two separate agents hit it during B-008's review and one of them had to clean it by hand. A quality gate that dirties the working tree makes `git status --porcelain` unusable as a pre-condition check — and `cycle-review` uses exactly that check to refuse to review an unstable tree.
-status: raw
+status: shipped
+shipped_as: no published surface changed (PR #75)
 dod:
   - `pnpm quality:docs` leaves `git status --porcelain` empty, whether it completes or is interrupted
   - or the probe directory is ignored and cleaned on exit
 
 > Registered 2026-08-24 during B-008's review. Pre-existing.
+
+> **ACCEPTANCE** — `pnpm quality:docs` leaves `git status` clean; injecting a throw leaves zero directories; the refusal branch that `process.exit` puts beyond any `finally` cleans up itself, proven by a test that runs the gate with no npx on PATH.
