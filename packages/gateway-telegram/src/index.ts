@@ -7,4 +7,5 @@ export {
   shouldRespondInChat,
   stripBotMention,
 } from "./group-policy.js";
+export { parseInbound } from "./parse-inbound.js";
 export { splitForTelegram } from "./split.js";
