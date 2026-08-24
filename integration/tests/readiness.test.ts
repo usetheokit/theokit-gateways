@@ -169,6 +169,17 @@ describe("live-test readiness", () => {
     // That exact mistake was made once in this repository and caught only
     // because the check was run against a deliberately broken input.
     const NOT_DRIVEN_LIVE: Record<string, string> = {
+      maskShapes:
+        "pure string -> string, no I/O. What a live run could add is whether a REAL credential " +
+        "matches the shape, and no live test may carry one — the tests use synthetic values built " +
+        "to each platform's documented format, which is the strongest form available anywhere",
+      CREDENTIAL_SHAPES: "a data table. A live run would read the same rows the unit tests read",
+      redactSecrets:
+        "reached on every handler and hook throw, so the live suites exercise it whenever one " +
+        "fails — but nothing ASSERTS on it there, and an assertion would need a live credential in " +
+        "the log to be meaningful. Covered instead by tests/security/redaction-wiring.test.ts, " +
+        "which drives the runner end to end and asserts the secret half of a synthetic token never " +
+        "reaches stderr",
       chunkText:
         "pure function, no I/O. The splitting it performs IS proven over the wire, by the five adapter suites that send past their platform's cap",
       chunkByGrapheme: "pure function, same reasoning as chunkText",
