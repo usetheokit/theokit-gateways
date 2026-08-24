@@ -430,7 +430,9 @@ suggested_mode: evolve
 source: human
 evidence: the entire `@theokit/sdk` surface consumed by all eleven packages is `Security.redact`, called in two files (`packages/gateway/src/runner/gateway-runner.ts:227`, `packages/gateway/src/hooks/executor.ts:53`), both for redacting an error message before it reaches a log. Meanwhile nine `tsup.config.ts` files mark the SDK external and — until B-007 — all eleven `package.json` files declared a peer on it.
 why_now: the triad theokit → theokit-sdk → theokit-gateways is asserted by the build configuration and by the dependency declarations, but the code only ever asks the SDK to redact a string. Either the relationship is real and something is missing from it, or it is one utility function and nine build configs plus eleven manifests are describing a coupling that does not exist. B-007 already removed ten of those manifests' claims; the question of what the SDK is FOR here is still open.
-status: raw
+status: triaged
+opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-sdk-redaction-consistency-opportunity.md` (SHIPPABLE_WITH_CAVEATS, 89)
+measured: `Security.redact` changes 1 of the 11 credential shapes this repo holds, and on a Telegram token the parametric matcher redacts the PUBLIC bot id while preserving the secret half — `token=***:AAF-…`. Mode reclassified evolve → review.
 dod:
   - it is stated what the gateways are supposed to get from the SDK, if anything beyond redaction
   - the build configuration and the manifests agree with what the source actually imports
