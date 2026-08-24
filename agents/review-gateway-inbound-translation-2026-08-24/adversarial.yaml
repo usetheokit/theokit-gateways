@@ -1,0 +1,16 @@
+agent: adversarial-reviewer-pass1
+findings:
+  - id: ADV-1
+    severity: INFO
+    file: packages/gateway-sms/src/parse-inbound.ts
+    line: 55
+    summary: "BLOCKER from pass 1 (invented fromNumber validation rejecting four valid configs) — fixed and regression-tested"
+    evidence: "Verified in pass 2: all four (Vonage 'ACME', Twilio short code, Messaging Service SID, national+BR) return an event, threw=no. Re-adding the check exactly as shipped fails 4 tests."
+    recommended_action: "None — closed."
+  - id: ADV-2
+    severity: INFO
+    file: packages/gateway-telegram/src/parse-inbound.ts
+    line: 96
+    summary: "HIGH from pass 1 (declared return type unenforced) — every copied field now narrowed at the boundary"
+    evidence: "12/12 hostile payload shapes verified dropped or rejected in pass 2."
+    recommended_action: "None — closed."

@@ -1,0 +1,23 @@
+agent: verification-reviewer-pass2
+findings:
+  - id: VER-1
+    severity: INFO
+    file: packages/gateway-telegram/src/parse-inbound.ts
+    line: 109
+    summary: "HIGH from pass 2 (reply id lacked isFinite; date*1000 overflow) — both fixed with regressions"
+    evidence: "Seven mutations run: six turn the suite red including both new guards."
+    recommended_action: "None — closed."
+  - id: VER-2
+    severity: LOW
+    file: packages/gateway-telegram/src/parse-inbound.ts
+    line: 93
+    summary: "The !Array.isArray clause in isRecord survives its mutation — no observable effect at any current call site"
+    evidence: "Removing it leaves the suite green: every array reaching it fails the next field check anyway ([].message is undefined)."
+    recommended_action: "Documented in place rather than claimed as covered. Kept as a property of the helper, not of its callers."
+  - id: VER-3
+    severity: LOW
+    file: packages/gateway-sms/tests/parse-inbound.test.ts
+    line: 110
+    summary: "The 'does not verify the webhook signature' test asserts an absence and no mutation can turn it red"
+    evidence: "Only adding code kills it; its happy-path assertion duplicates an earlier one."
+    recommended_action: "Kept deliberately as documentation of a boundary an app must not assume. Its nature is stated in the test body."
