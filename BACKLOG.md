@@ -49,13 +49,12 @@ own quality gates.
 
 ## Index
 
-16 items — **Open** 7 · **In flight** 0 · **Closed** 9
+16 items — **Open** 6 · **In flight** 0 · **Closed** 10
 
-### Open (7)
+### Open (6)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
-| [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `triaged` | — |
 | [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `raw` | — |
 | [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
 | [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive----) | The published packages carry 1 critical and 19 high advisories, all transitive | `raw` | — |
@@ -67,7 +66,7 @@ own quality gates.
 
 _None._
 
-### Closed (9)
+### Closed (10)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -80,6 +79,7 @@ _None._
 | [`B-007`](#b-007--no-theokit-app-can-install-a-gateway-at-all----) | No TheoKit app can install a gateway at all | `shipped` | — |
 | [`B-008`](#b-008--a-gateway-cannot-be-written-outside-this-repository----) | A gateway cannot be written outside this repository | `shipped` | — |
 | [`B-009`](#b-009--theokits-channel-seam-names-our-packages-as-the-translator-and-no-adapter-can-translate----) | TheoKit's channel seam names our packages as the translator, and no adapter can translate | `shipped` | — |
+| [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `shipped` | — |
 
 <!-- BACKLOG-INDEX:END -->
 
@@ -338,7 +338,7 @@ source: human
 opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-credential-naming-opportunity.md` (SHIPPABLE_WITH_CAVEATS)
 evidence: measured across `packages/gateway-*/src`: the primary credential is `token` (telegram, discord), `botToken` (slack), `accessToken` (matrix, mattermost, whatsapp), `channelAccessToken` (line), `authToken` (sms), `clientSecret` (teams), `password` (email). Teams additionally requires three fields with no shared shape (`clientId`, `clientSecret`, `tenantId`), and SMS requires `publicUrl`.
 why_now: this cost real errors inside this repository during the cross-adapter conformance work — the suite was written against `botToken` for Discord and for Telegram, and both were wrong. A contributor holding one adapter's shape in their head is misled by the next one, and the type error arrives only after the wrong guess is written.
-status: triaged
+status: shipped
 dod:
   - a developer who has wired one adapter can predict the next one's option names, or is told by the types before writing the wrong guess
   - the change does not break the ten published packages' existing option shapes without a deprecation path
@@ -358,6 +358,15 @@ dod:
 > 'SlackAdapterOptions'` — it names the wrong field and the type, and **never** the right one
 > (`grep -c botToken` over the full output returns 0). Re-scoped from renaming to documenting, with
 > the decision recorded as D429.
+
+> **SHIPPED 2026-08-24** — all ten adapters at patch (PRs #70, #71). Nothing was renamed: six of the
+> ten primary names are the platform's own key, pinned against the SDK's own declaration, and every
+> `*AdapterOptions` is published, so a rename would break six packages to contradict six platforms'
+> documentation (ADR D429). Review found the gate reading 10 of 15 published credential fields while
+> its name said "every", a decoy `types.ts` shadowing the real declaration, and `deadline` satisfying
+> the `line` platform check — all three closed and verified by mutation. The fixed gate then caught a
+> field I had invented (`signingSecret`, which does not exist). Accepted against npm in a real app:
+> 10/10 adapters carry the documentation in their published declaration, 15 fields total.
 
 ## B-011 — Nothing documents how the three repositories fit together   [ ]
 
