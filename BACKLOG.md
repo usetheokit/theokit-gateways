@@ -49,9 +49,9 @@ own quality gates.
 
 ## Index
 
-14 items — **Open** 7 · **In flight** 0 · **Closed** 7
+16 items — **Open** 9 · **In flight** 0 · **Closed** 7
 
-### Open (7)
+### Open (9)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -62,6 +62,8 @@ own quality gates.
 | [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
 | [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive----) | The published packages carry 1 critical and 19 high advisories, all transitive | `raw` | — |
 | [`B-014`](#b-014--a-unit-test-calls-the-real-telegram-api-and-fails-when-the-network-is-slow----) | A unit test calls the real Telegram API and fails when the network is slow | `raw` | — |
+| [`B-015`](#b-015--the-published-declarations-cite-75-adr-ids-that-resolve-nowhere----) | The published declarations cite 75 ADR ids that resolve nowhere | `raw` | — |
+| [`B-016`](#b-016--pnpm-qualitydocs-writes-into-the-repo-root-and-the-output-is-not-ignored----) | `pnpm quality:docs` writes into the repo root and the output is not ignored | `raw` | — |
 
 ### In flight (0)
 
@@ -362,3 +364,34 @@ dod:
 
 > Registered 2026-08-23 during B-008's gate run. Not folded into B-008: that change is type-level
 > and in a different package, and blocking it on a pre-existing flake would punish the wrong work.
+
+## B-015 — The published declarations cite 75 ADR ids that resolve nowhere   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: review
+source: human
+evidence: `packages/gateway/dist/index.d.ts` cites 24 `D###` ids while `packages/gateway/src/README.md:52-59` defines only D170–D177; 17 of them resolve nowhere (D101, D274, D308, D325, D335, D339, D389, D391, D397, D399, D402, D405, D409, D410, D413, D416, D421). Across all eleven `packages/*/dist/index.d.ts` the figure is 75 distinct unresolvable ids.
+why_now: found while verifying that B-008 removed the two ids a reviewer had flagged. It did — and left the identical defect 17 times in the same file, which is how a fix comes to look complete while the class of defect is untouched. These are shipped to npm: a consumer reading our published declaration is pointed at decisions they cannot open, and we cannot tell which ones still describe the code.
+status: raw
+dod:
+  - every `D###` cited in a published `.d.ts` resolves to a document in the repository, or the citation is removed
+  - a gate fails the build when a new unresolvable id enters a published declaration
+  - ids whose original decision no longer exists are recorded as such rather than silently deleted
+
+> Registered 2026-08-24. Pre-existing and unrelated to B-008's change; not folded into it.
+
+## B-016 — `pnpm quality:docs` writes into the repo root and the output is not ignored   [ ]
+
+domain: theokit-gateways
+repo: tools
+suggested_mode: bug
+source: human
+evidence: running `pnpm quality:docs` creates `.doc-probes/` under package roots (observed at `packages/gateway-line/.doc-probes/`); `.gitignore` does not list it. An interrupted run therefore leaves untracked files behind in a tree that was clean.
+why_now: two separate agents hit it during B-008's review and one of them had to clean it by hand. A quality gate that dirties the working tree makes `git status --porcelain` unusable as a pre-condition check — and `cycle-review` uses exactly that check to refuse to review an unstable tree.
+status: raw
+dod:
+  - `pnpm quality:docs` leaves `git status --porcelain` empty, whether it completes or is interrupted
+  - or the probe directory is ignored and cleaned on exit
+
+> Registered 2026-08-24 during B-008's review. Pre-existing.

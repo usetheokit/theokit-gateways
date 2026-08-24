@@ -23,11 +23,14 @@
  * `typecheck` is the gate that runs them, which is why `packages/gateway`'s `test` script invokes
  * `tsc --noEmit` first — a green vitest summary here means the files were collected, nothing more.
  *
- * Two assertion forms appear here, and which one each case uses was decided by mutation rather
- * than by taste. `Exact<…, never>` detects a guard clause being removed for every case EXCEPT
- * `any`, where it stays green because `any` makes the comparison true either way. The `any` case
- * therefore asserts by ASSIGNMENT behind `@ts-expect-error`, which does detect it. Using either
- * form everywhere leaves half the battery unable to fail — measured, both directions.
+ * Two assertion forms appear here. Both were verified to detect the mutation each case targets,
+ * and the reason originally written down for preferring one over the other was WRONG: it claimed
+ * `Exact<…, never>` is vacuous against `any` because `any` makes the comparison true either way.
+ * `Exact<any, never>` is `false`, so that form would have caught the `any` case too. The claim was
+ * true of an earlier single-argument guard and was carried forward without re-measuring. It is
+ * recorded here rather than quietly deleted, because a maintainer choosing assertion forms on that
+ * premise would choose badly — and because the mistake is instructive: a rationale that stops being
+ * true when the code changes is indistinguishable from one that was never true.
  *
  * Assertions are written so that ONE mutation makes them red. An earlier version compared
  * `Registered<any>` to `never` with a type-equality helper and stayed green with the guard deleted,

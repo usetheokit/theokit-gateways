@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **tools:** `pnpm quality:registry-augmentation` compiles twelve hostile registry augmentations, each in its own program against the published declaration, and fails when one of them breaks a first-party consumer instead of being excluded. Two such shapes were found in review and neither was reachable from any test here, because a `declare module` poisons the whole compilation rather than being observed (#B-008)
 - **gateway:** `PlatformEventRegistry` — a gateway can now be authored, published and consumed outside this repository. `PlatformName` and `MessageEvent` derive from an interface other packages extend by declaration merging, so exhaustive narrowing still holds, including over platforms the core has never heard of. Both sides of an augmentation are gated: an entry typed `any`, registered under an index signature, carrying a non-literal discriminator, or disagreeing with its own key is excluded rather than admitted — each of those was measured to break narrowing for every consumer before the guard existed. `BaseMessageEvent.platform` widens to `string` as a consequence; every variant still narrows it to its literal. See `docs/adr/0002-platform-event-registry.md` (#B-008)
 - **gateways:** B-013 registered — `pnpm audit` reports 43 transitive advisories (1 critical, 19 high) across the published packages, found while auditing dependencies for another plan and deliberately not folded into it
 

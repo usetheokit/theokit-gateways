@@ -298,6 +298,32 @@ type IsAny<T> = 0 extends 1 & T ? true : false;
 type LiteralKey<K> = string extends K ? never : K;
 
 /**
+ * The registry's LITERAL keys — index signatures dropped before `keyof` ever sees them.
+ *
+ * Filtering the value was not enough, measured twice. `keyof` over a registry carrying
+ * `{ [key: string]: BaseMessageEvent }` is `string | number`, and indexing a mapped type by that
+ * yields `never` for BOTH the union and the platform name: a hostile augmentation did not merely
+ * fail to join, it annihilated the union and broke every first-party narrowing site with
+ * `TS2339: Property 'telegram' does not exist on type 'never'`.
+ *
+ * It also fixes a second measured defect for free. Mapping over `keyof` directly is HOMOMORPHIC, so
+ * an OPTIONAL entry (`signal?: Event`, a shape an author writes by accident) kept its modifier and
+ * injected `undefined` into the union — `TS18048: 'e' is possibly 'undefined'` on a plain `switch`.
+ * Mapping over a computed key set is not homomorphic and drops the modifier. A `-?` was written
+ * here first as an explicit belt; the gate showed it could not be made to matter while this type is
+ * in place, so it was removed rather than kept as decoration nothing can fail without.
+ */
+type LiteralKeysOf<R> = keyof {
+  [K in keyof R as string extends K
+    ? never
+    : number extends K
+      ? never
+      : symbol extends K
+        ? never
+        : K]: 0;
+};
+
+/**
  * A registry entry joins {@link MessageEvent} only if it is a real event shape
  * (`docs/adr/0002-platform-event-registry.md`).
  *
@@ -307,8 +333,14 @@ type LiteralKey<K> = string extends K ? never : K;
  * union could not fail that way, so the guard is what keeps the new capability from costing a
  * safety property the old design had.
  *
- * A malformed entry is EXCLUDED rather than fatal, so it does not break narrowing for anybody
- * else's platform. It is NOT free for first-party consumers, and saying otherwise would be false:
+ * A malformed entry is EXCLUDED rather than admitted. It is NOT free for anybody else, and an
+ * earlier version of this docblock said it was — measured false twice over. Filtering the VALUE
+ * alone left two shapes that break every consumer rather than only their author:
+ * `{ [key: string]: … }` made `keyof` yield `string | number`, so the union and the platform name
+ * both collapsed to `never`; and `signal?: …` kept its optional modifier through a homomorphic
+ * mapping and injected `undefined` into the union. Both are handled above — the first by
+ * {@link LiteralKeysOf}, the second by the `-?` on the mapping. What remains true, and is the
+ * honest version of the original claim:
  * a `Record<PlatformName, T>` written against the ten still fails to compile, because the rejected
  * key is gone from `PlatformName` while the consumer's literal map is not. What the exclusion buys
  * is that the failure is a missing-key error at the consumer's own map rather than a silent loss
@@ -339,8 +371,8 @@ export type Registered<K, T> =
  * @public
  */
 export type MessageEvent = {
-  [K in keyof PlatformEventRegistry]: Registered<K, PlatformEventRegistry[K]>;
-}[keyof PlatformEventRegistry];
+  [K in LiteralKeysOf<PlatformEventRegistry>]: Registered<K, PlatformEventRegistry[K]>;
+}[LiteralKeysOf<PlatformEventRegistry>];
 
 /**
  * Every platform that actually has a well-formed event in {@link PlatformEventRegistry}.

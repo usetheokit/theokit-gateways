@@ -87,6 +87,16 @@ jobs:
       - name: Declarations and runtime export the same values
         run: pnpm quality:dts-parity
 
+      # `PlatformEventRegistry` is extended by packages we do not control. The unit suite asserts the
+      # guard in isolation; both defects found in review lived in the COMPOSITION instead — what
+      # `keyof` yields over an index signature, and what a homomorphic mapping preserves from an
+      # optional member. Neither is reachable from a test in this repository, because a
+      # `declare module` applies to the whole compilation and would poison the package's own
+      # typecheck rather than be observed. This gate compiles each hostile shape in its own program,
+      # against the published declaration.
+      - name: A third party cannot break consumers who never opted in
+        run: pnpm quality:registry-augmentation
+
       # npm verifies the signed provenance bundle against `repository.url`, and every package here
       # sets `publishConfig.provenance: true`. None of the eleven declared a repository, so a release
       # spent nine minutes on the build, the suite and the live gate before the registry refused all
