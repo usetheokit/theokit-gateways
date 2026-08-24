@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **gateways:** five measured items on the theokit ↔ theokit-sdk ↔ theokit-gateways integration (B-008..B-012): the event union cannot be extended out-of-repo, no adapter can translate the raw payload TheoKit's channel seam hands it, ten adapters name the same credential seven ways, nothing documents which repo owns which half of the seam, and the SDK's entire role is one redaction helper
 
 ### Fixed
+- **gateway-telegram, gateway-sms, docs:** the published docblocks and the READMEs said a TheoKit app's `onMessage` runs *after* the 200 is answered, so a throw there had no status left to change. Measured against `theokit@0.48.14`: `handleChannelWebhook` awaits `onMessage` **before** the response is built and catches nothing around it, so a throw means the 200 is never built and TheoKit answers 500 where the platform expected an acknowledgement. `parseInbound` returning `null` is unchanged and still the right contract — only the reason given for it was wrong. It had reached nine places, including the `.d.ts` both adapters publish (#B-011)
+- **docs:** the READMEs implied every adapter exports `parseInbound`. Only `@theokit/gateway-telegram` and `@theokit/gateway-sms` do; the others export their translation under their own names, each with its own signature, so the README now says to read the one you are using (#B-011)
+- **tools:** `quality:integration-story` located its section before stripping HTML comments and code fences, so a heading written inside either defined a phantom section and the documented one could be deleted without failing the gate. Facts are now looked up after HTML comments and code fences are blanked — including `~~~`, indented and unterminated ones — and link targets — inline, reference definitions and autolinks — no longer count as naming anything (#B-011)
 - **gateway:** `MessageEvent`'s docblock pointed at `wiki/decisions/adr-0001-…`, a path removed in `b1b3e09` and never restored — a published `.d.ts` sending readers to a file that does not exist. ADR-0001 is restored at `docs/adr/0001-message-event-closed-union.md` and the citation repointed (#B-007)
 
 - A behavioural conformance suite runs the `PlatformAdapter` contract against all nine
@@ -230,11 +233,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and how a value reaches `.env` are covered by 43 tests behind `test:unit` — a script name
   `pnpm -r run test` cannot reach, so the invariant that keeps live tests off pull requests is
   untouched (#35)
-
-### Fixed
-- **gateway-telegram, gateway-sms, docs:** the published docblocks and the READMEs said a TheoKit app's `onMessage` runs *after* the 200 is answered, so a throw there had no status left to change. Measured against `theokit@0.48.14`: `handleChannelWebhook` awaits `onMessage` **before** the response is built and catches nothing around it, so a throw escapes it entirely and the 200 is never built. `parseInbound` returning `null` is unchanged and still the right contract — only the reason given for it was wrong. It had reached nine places, including the `.d.ts` both adapters publish (#B-011)
-- **docs:** the READMEs implied every adapter exports `parseInbound`. Only `@theokit/gateway-telegram` and `@theokit/gateway-sms` do; the others export their translation under their own names, each with its own signature — the `null` contract belongs to `parseInbound`, not to all of them (#B-011)
-- **tools:** `quality:integration-story` located its section before stripping HTML comments and code fences, so a heading written inside either defined a phantom section and the documented one could be deleted without failing the gate. Facts are now looked up in visible prose only, and link targets — inline, reference definitions and autolinks — no longer count as naming anything (#B-011)
 
 ### Changed
 - **gateways:** every package declared a peer on `@theokit/sdk@^2.18.0`, which no adapter imports and which the framework left behind at 4.x — a fresh TheoKit app could not install a gateway at all. The core's peer is widened to `>=2.18.0 <5` (verified green against 4.53.1) and the unused peer dropped from the ten adapters (#B-007)

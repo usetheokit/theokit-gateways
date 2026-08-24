@@ -70,8 +70,8 @@ describe("parseInbound", () => {
 
   // NEGATIVE cases — a webhook body is attacker-reachable and Telegram sends update kinds this
   // function does not handle. Every one must return null rather than throw: `handleChannelWebhook`
-  // awaits `onMessage` before it builds the 200, so a throw here escapes the route — an
-  // rejection in the app's request path, not an error anybody sees.
+  // awaits `onMessage` before it builds the 200, so a throw here means it never is: the
+  // rejection reaches the route's error boundary and TheoKit answers 500.
   it.each([
     ["null", null],
     ["a string", "not-an-update"],
@@ -181,7 +181,7 @@ describe("one mapping, two paths", () => {
 describe("the boundary narrows every field it copies", () => {
   // Review found the type declared by `TelegramMessageEvent` was not enforced: `text: 5` produced
   // an event whose `text` was the number 5. An app calling `event.text.trim()` then got a
-  // `TypeError` thrown out of `onMessage`, after TheoKit answered 200.
+  // `TypeError` thrown out of `onMessage`, turning a delivered message into a 500.
   it.each([
     ["text is not a string", { text: 5 }, "text", ""],
     ["text is an object", { text: { a: 1 } }, "text", ""],

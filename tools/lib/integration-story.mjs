@@ -62,7 +62,7 @@ export function sectionBody(text, heading) {
 }
 
 /**
- * The prose a reader actually sees, with every hiding place blanked out.
+ * The prose a reader actually sees, with the hiding places listed below blanked out.
  *
  * Applied to the WHOLE document before the section is located, not to the section afterwards. The
  * first attempt stripped only the body, so a `## How this fits with TheoKit` line written inside an
@@ -72,20 +72,87 @@ export function sectionBody(text, heading) {
  * Blanked, not deleted: comments and fences are replaced by their own newlines so headings after
  * them still start a line.
  *
- * A fact counts when a reader can see it and it is being asserted. That excludes HTML comments
- * (invisible), fenced code (an example, not a claim about repositories), every link TARGET — inline
- * `](url)`, reference definitions `[id]: url`, and autolinks `<url>` — because a URL that contains
- * a word is not a sentence naming it. A link LABEL survives: naming the repository in the text of a
- * link is naming it.
+ * A fact counts when a reader can see it and it is being asserted. What is blanked, and nothing
+ * else: HTML comments (invisible), fenced code — ``` or ~~~, indented up to three spaces, closed or
+ * running to end of file as CommonMark says they do — and every link TARGET: inline `](url)`,
+ * reference definitions `[id]: url`, and autolinks `<url>`, because a URL that contains a word is
+ * not a sentence naming it. A link LABEL survives: naming the repository in the text of a link is
+ * naming it. Four-space indented code is NOT blanked — it is ordinary content, and treating it as a
+ * fence would swallow the rest of the document.
+ *
+ * This list is what is covered, not a claim that nothing else hides text. An earlier version of
+ * this docblock said "every hiding place" and four bypasses were found the same afternoon.
  *
  * @param {string} text
  * @returns {string}
  */
 export function visibleText(text) {
-  const blank = (match) => match.replace(/[^\n]/g, " ");
+  return stripLinkTargets(blankComments(blankFences(text)));
+}
+
+/**
+ * Blanks fenced code blocks, keeping line count.
+ *
+ * CommonMark: a fence opens on ``` or ~~~ indented up to three spaces, closes on the same marker,
+ * and runs to end of file when it never closes. Four-space indentation is an indented code block,
+ * not a fence — treating it as one would swallow the rest of the document.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function blankFences(text) {
+  let marker;
   return text
-    .replace(/<!--[\s\S]*?-->/g, blank)
-    .replace(/^```[\s\S]*?^```/gm, blank)
+    .split("\n")
+    .map((line) => {
+      if (marker !== undefined) {
+        if (new RegExp(`^ {0,3}${marker}\\s*$`).test(line)) marker = undefined;
+        return "";
+      }
+      const opener = /^ {0,3}(```|~~~)/.exec(line);
+      if (opener === null) return line;
+      marker = opener[1];
+      return "";
+    })
+    .join("\n");
+}
+
+/**
+ * Blanks HTML comments, including one that is never closed — which runs to end of file.
+ *
+ * Runs after `blankFences`, so a comment marker inside a code example is already gone. The reverse
+ * order would let a fence written inside a comment blank the rest of the document.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function blankComments(text) {
+  let open = false;
+  const lines = text.split("\n").map((line) => {
+    if (open) {
+      if (line.includes("-->")) open = false;
+      return "";
+    }
+    if (line.includes("<!--") && !line.includes("-->")) {
+      open = true;
+      return "";
+    }
+    return line;
+  });
+  return lines.join("\n").replace(/<!--.*?-->/g, " ");
+}
+
+/**
+ * Removes every link TARGET, keeping labels.
+ *
+ * A URL that contains a word is not a sentence naming it. Inline `](url)`, reference definitions
+ * `[id]: url` and autolinks `<url>` all hid a fact from an earlier version of this gate.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function stripLinkTargets(text) {
+  return text
     .replace(/\]\([^)]*\)/g, "]")
     .replace(/^\s*\[[^\]]+\]:.*$/gm, "")
     .replace(/<https?:\/\/[^>]*>/g, "");

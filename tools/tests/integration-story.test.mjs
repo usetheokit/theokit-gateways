@@ -120,3 +120,42 @@ describe("hiding places that defined a phantom section", () => {
     expect(check(text)).toHaveLength(1);
   });
 });
+
+// A third review found four more ways to write a phantom heading the reader never sees. Three are
+// fences the strip did not recognise (`~~~`, indented 1-3 spaces, never closed) and one is an HTML
+// comment that is never closed — CommonMark runs both to end of file, so everything after them is
+// invisible while the gate still read the heading.
+describe("hiding places a reader never sees", () => {
+  const check = (text) => missingFacts(text, { file: "README.md", heading: HEADING, facts: FACTS });
+  const gone = ["README.md: has no `## How this fits with TheoKit` section"];
+  const phantom = (open, close) =>
+    `# t\n\n${open}\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n${close}\n\n## Install\n\nUnrelated.\n`;
+
+  it("does not accept a heading inside a tilde fence", () => {
+    expect(check(phantom("~~~md", "~~~"))).toEqual(gone);
+  });
+
+  it("does not accept a heading inside a fence indented up to three spaces", () => {
+    expect(check(phantom("   ```md", "   ```"))).toEqual(gone);
+  });
+
+  it("does not accept a heading after a fence that is never closed", () => {
+    expect(
+      check(`# t\n\n\`\`\`md\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n`),
+    ).toEqual(gone);
+  });
+
+  it("does not accept a heading after an HTML comment that is never closed", () => {
+    expect(check(`# t\n\n<!--\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n`)).toEqual(
+      gone,
+    );
+  });
+
+  it("still accepts a four-space indented block as ordinary content, not a fence", () => {
+    // Four spaces is an indented code block in CommonMark, not a fence — it must not swallow the
+    // rest of the document. Guards the strip against becoming a false-FAIL machine.
+    expect(check(doc("    an indented example\n\nhandleChannelWebhook and theokit-sdk."))).toEqual(
+      [],
+    );
+  });
+});

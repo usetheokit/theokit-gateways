@@ -39,10 +39,11 @@ if (event !== null) {
 ```
 
 `parseInbound` returns `null` and never throws. Measured against `theokit@0.48.14`: your `onMessage`
-is awaited **before** the 200 is built, and nothing catches around it — so a throw on an unparseable
-payload escapes `handleChannelWebhook` entirely. The 200 is never built, and what the platform
-receives is whatever your framework does with an unhandled rejection. Returning `null` lets an app
-ignore a message it cannot read and still answer normally.
+is awaited **before** the 200 is built, and nothing inside `handleChannelWebhook` catches — so a
+throw on an unparseable payload means the 200 is never built. The rejection reaches the route's
+error boundary, and TheoKit answers **500** (`handleRequestError` → `INTERNAL_ERROR`): the platform
+sees a failed delivery where it expected an acknowledgement. Returning `null` lets an app ignore a
+message it cannot read and still answer normally.
 
 `parseInbound` itself exists on `@theokit/gateway-telegram` and `@theokit/gateway-sms` today. The
 other adapters export their own translation under their own names — `lineEventToMessageEvent`,
