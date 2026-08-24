@@ -239,6 +239,15 @@ dod:
 > running against the new major would be a claim, not a measurement. Proven end to end by packing
 > both packages and installing them into the scaffolded app. Commit `d2c1168`.
 
+> **Correction, 2026-08-24.** This item was marked `shipped` on 2026-08-23 and was not. The DoD
+> requires a fresh app to install *a gateway*; only `@theokit/gateway@0.7.0` had been released, and
+> every adapter's own manifest still pinned `@theokit/sdk@^2.18.0`, so installing one still failed
+> with `ERESOLVE`. The acceptance run had used a locally packed tarball, which carries the
+> repository's fixed manifest rather than the published one. Found while installing
+> `@theokit/gateway-line` during B-009's DISCOVER. Closed for real once the ten adapters published
+> (0.1.4 / 0.3.1, PRs #66 and #67) and `npm install @theokit/gateway-line@0.1.4` returned exit 0 in
+> the app. Record: `.claude/knowledge-base/acceptance/B-007-2026-08-24.md`.
+
 ## B-008 — A gateway cannot be written outside this repository   [ ]
 
 domain: theokit-gateways
