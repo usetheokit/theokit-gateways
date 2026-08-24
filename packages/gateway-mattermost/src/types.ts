@@ -7,7 +7,14 @@
 export interface MattermostAdapterOptions {
   /** Mattermost base URL, e.g. `https://mattermost.acme.com`. No trailing slash. (D400) */
   readonly baseUrl: string;
-  /** Personal Access Token (D401). Get one in System Console → Integrations → Bot Accounts. */
+  /**
+   * The Mattermost bot's personal access token.
+   *
+   * @platform-term Mattermost calls this a **personal access token**. Note the divergence:
+   * `@mattermost/client` names its field `token`, and this one is `accessToken` — ours, not theirs.
+   * @issued-at Integrations → Bot Accounts in the Mattermost System Console, with personal access
+   * tokens enabled.
+   */
   readonly accessToken: string;
   /**
    * Whether the bot should require an `@mention` in non-DM channels (D403).

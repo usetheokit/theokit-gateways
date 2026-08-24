@@ -18,6 +18,13 @@ import { Client, DiscordAPIError, Events, GatewayIntentBits, type Message } from
 import { splitForDiscord } from "./split.js";
 
 export interface DiscordAdapterOptions {
+  /**
+   * The Discord bot token.
+   *
+   * @platform-term Discord calls this a **bot token** and `discord.js` names the field `token`, so
+   * the name here is theirs.
+   * @issued-at The Discord Developer Portal, under the application's Bot tab.
+   */
   readonly token: string;
   /**
    * Default: [Guilds, GuildMessages, MessageContent, DirectMessages,

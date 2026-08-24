@@ -8,7 +8,13 @@
 export interface MatrixAdapterOptions {
   /** Homeserver URL (e.g. `https://matrix.org`). No trailing slash. (D414) */
   readonly homeserverUrl: string;
-  /** Long-lived access token (`syt_xxx`). Generate via Element → Settings → Help & About → Advanced. */
+  /**
+   * The Matrix user's access token.
+   *
+   * @platform-term Matrix calls this an **access token**, and `matrix-js-sdk` names the field
+   * `accessToken`, so the name here is theirs.
+   * @issued-at A login against the homeserver, or the admin API for an application service.
+   */
   readonly accessToken: string;
   /** Bot's full Matrix user id (`@bot:matrix.org`). */
   readonly userId: string;

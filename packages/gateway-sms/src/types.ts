@@ -12,7 +12,16 @@
 export interface TwilioOptions {
   readonly backend: "twilio";
   readonly accountSid: string;
-  /** Auth token used for signature verification — REQUIRED (D392, EC-1). */
+  /**
+   * The SMS provider's auth token, used both to call the API and to verify inbound signatures.
+   *
+   * @platform-term Twilio calls this an **auth token**. The name is pinned on the verification
+   * surface — `RequestValidatorOptions.authToken` in the `twilio` package — which is the call this
+   * adapter makes. On the CLIENT surface the same SDK names it `password`, so "theirs" is true of
+   * the half we use and not of the other. Plivo names its field `authToken`; Vonage's equivalent
+   * is an API secret.
+   * @issued-at The Twilio Console dashboard, beside the Account SID.
+   */
   readonly authToken: string;
   /** Bot's own E.164 number (used as `from` in outbound). */
   readonly fromNumber: string;
@@ -37,8 +46,22 @@ export interface PlivoOptions {
 export interface VonageOptions {
   readonly backend: "vonage";
   readonly apiKey: string;
+  /**
+   * The Vonage API secret for this SMS account.
+   *
+   * @platform-term Vonage calls this an **API secret**, and `@vonage/auth` names the field
+   * `apiSecret`, so the name here is theirs.
+   * @issued-at The Vonage API Dashboard, beside the API key.
+   */
   readonly apiSecret: string;
-  /** Signature secret (a.k.a. Signature Secret in Vonage dashboard) — REQUIRED (D392, EC-1). */
+  /**
+   * The Vonage signature secret, used to verify inbound SMS webhooks.
+   *
+   * @platform-term Vonage calls this a **signature secret** — a different object from the API
+   * secret above, and issued separately.
+   * @issued-at The Vonage API Dashboard, under Settings → Inbound messages, once signed webhooks
+   * are enabled.
+   */
   readonly signatureSecret: string;
   readonly fromNumber: string;
   readonly publicUrl: string;

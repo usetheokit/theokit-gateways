@@ -20,6 +20,13 @@ import { buildEvent } from "./parse-inbound.js";
 import { splitForTelegram } from "./split.js";
 
 export interface TelegramAdapterOptions {
+  /**
+   * The Telegram bot token.
+   *
+   * @platform-term Telegram calls this a **bot token** and `grammy` names the field `token`, so the
+   * name here is theirs.
+   * @issued-at BotFather, in Telegram itself, when the bot is created or its token regenerated.
+   */
   readonly token: string;
   /** Optional allow-list filter applied at the adapter level. */
   readonly allowedUsers?: ReadonlyArray<string>;

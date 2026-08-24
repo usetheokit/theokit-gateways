@@ -31,11 +31,30 @@ import { splitForWhatsApp } from "./split.js";
 
 /** Cloud (Meta WhatsApp Business Cloud API) backend config (ADR D304). */
 export interface WhatsAppCloudConfig {
-  /** Meta system-user / phone-number access token. */
+  /**
+   * The Meta system user's access token for the WhatsApp Business account.
+   *
+   * @platform-term Meta calls this an **access token**. Unlike the other adapters' terms, this one
+   * is NOT pinned to a package under `node_modules` — the Cloud backend calls the Graph API with
+   * `fetch`, so there is no Meta SDK in the dependency graph to check against. It rests on Meta's
+   * own documentation, and our client sends it as `authorization: Bearer …`, never as an
+   * `access_token` parameter.
+   * @issued-at Meta Business Manager, under System Users → Generate token, scoped to the WhatsApp
+   * Business account.
+   */
   readonly accessToken: string;
   /** Meta-issued phone-number-id (NOT the user-facing phone). */
   readonly phoneNumberId: string;
-  /** App secret used to verify `X-Hub-Signature-256` on inbound webhooks. */
+  /**
+   * The Meta app secret, used to verify `X-Hub-Signature-256` on inbound WhatsApp webhooks.
+   *
+   * @platform-term Meta calls this an **app secret** — note it belongs to the Meta app, not to the
+   * WhatsApp Business account, which is why it is issued somewhere different from the access token
+   * above. It signs inbound payloads and never
+   * authenticates outbound calls, which is why it is optional: an adapter that only sends does
+   * not need it.
+   * @issued-at Meta for Developers, under the app's Settings → Basic.
+   */
   readonly appSecret: string;
   /** Graph API version. Defaults to `v18.0`. */
   readonly apiVersion?: string;
