@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.2.0
+
+### Minor Changes
+
+- `parseInbound` — translate a raw webhook payload without re-declaring the platform's wire format.
+
+  An app receiving a message through TheoKit's channel seam gets `payload: unknown` and, until now,
+  had to parse it by hand. Measured against the published packages: wiring Telegram took 35 lines, 27
+  of them the app re-declaring Telegram's own format — that `caption` is the fallback for `text`, that
+  `message_thread_id` distinguishes a forum topic. It is now 13 lines and none.
+
+  ```ts
+  import { parseInbound } from "@theokit/gateway-telegram";
+
+  const event = parseInbound(await request.json());
+  if (event !== null) console.log(event.text);
+  ```
+
+  **Telegram** — `parseInbound(payload)`. One mapping serves both this and the polling path, so a
+  webhook-delivered message and a polled one cannot produce different events.
+
+  **SMS** — `parseInbound(options, ctx)`. Takes the adapter options an app already holds, because
+  parsing is provider-specific and, for Twilio, country-dependent. `createBackend` runs outside the
+  error boundary, so an unsupported backend surfaces instead of becoming the same `null` a malformed
+  body produces.
+
+  Both return `null` and never throw. `onMessage` runs after TheoKit has already answered 200, so a
+  throw there is an unhandled rejection with no status left to change. Every field either translator
+  copies is narrowed at the boundary: a payload with `text: 5` yields `text: ""`, and one with a
+  non-finite `date`, `message_id`, `chat.id`, thread id, sender id or reply id is rejected or dropped
+  rather than producing an event whose declared types are lies.
+
+  `@theokit/gateway-line` and `@theokit/gateway-whatsapp` already shipped this shape and are unchanged.
+
 ## 0.1.4
 
 ### Patch Changes

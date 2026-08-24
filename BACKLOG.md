@@ -55,7 +55,7 @@ own quality gates.
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
-| [`B-009`](#b-009--theokits-channel-seam-names-our-packages-as-the-translator-and-no-adapter-can-translate----) | TheoKit's channel seam names our packages as the translator, and no adapter can translate | `raw` | — |
+| [`B-009`](#b-009--theokits-channel-seam-names-our-packages-as-the-translator-and-no-adapter-can-translate----) | TheoKit's channel seam names our packages as the translator, and no adapter can translate | `triaged` | — |
 | [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `raw` | — |
 | [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `raw` | — |
 | [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
@@ -239,6 +239,15 @@ dod:
 > running against the new major would be a claim, not a measurement. Proven end to end by packing
 > both packages and installing them into the scaffolded app. Commit `d2c1168`.
 
+> **Correction, 2026-08-24.** This item was marked `shipped` on 2026-08-23 and was not. The DoD
+> requires a fresh app to install *a gateway*; only `@theokit/gateway@0.7.0` had been released, and
+> every adapter's own manifest still pinned `@theokit/sdk@^2.18.0`, so installing one still failed
+> with `ERESOLVE`. The acceptance run had used a locally packed tarball, which carries the
+> repository's fixed manifest rather than the published one. Found while installing
+> `@theokit/gateway-line` during B-009's DISCOVER. Closed for real once the ten adapters published
+> (0.1.4 / 0.3.1, PRs #66 and #67) and `npm install @theokit/gateway-line@0.1.4` returned exit 0 in
+> the app. Record: `.claude/knowledge-base/acceptance/B-007-2026-08-24.md`.
+
 ## B-008 — A gateway cannot be written outside this repository   [ ]
 
 domain: theokit-gateways
@@ -287,14 +296,28 @@ domain: theokit-gateways
 repo: theokit-gateways
 suggested_mode: review
 source: human
+opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-inbound-translation-opportunity.md` (SHIPPABLE_WITH_CAVEATS)
 evidence: TheoKit ships `handleChannelWebhook(request, urlPath, { validators, onMessage })`, which owns the route and the signature gate and then hands the app `ChannelMessage { agent, platform, payload: unknown }`. Its own docblock states the division of labour: "the seam is where an app wires the SDK gateway package (`@theokit/gateway-*`) that translates the payload into an agent turn — TheoKit provides the route + signature gate, NOT the gateway's parsing". Measured against the ten adapters' barrels: none exports a payload translator. The mapping exists but is unreachable — Telegram's lives inside `normalizeEvent(ctx: Context)` in `packages/gateway-telegram/src/adapter.ts:198`, soldered to grammy's type and callable only from the polling loop; Slack's `normalizeSlackEvent` is not exported from the package.
 why_now: an app wiring the seam today must reimplement the platform's wire format by hand — written out during the measurement to confirm the cost, and it is exactly the work the framework says the gateway package spares them. The two halves of a seam both sides already agreed on have never met.
-status: raw
+status: triaged
 dod:
   - each adapter whose platform TheoKit already validates exports a pure `parseInbound(payload) -> event | null`
   - one mapping serves both the polling path and the webhook path, so the two cannot drift into dialects
   - a malformed or unhandled payload returns null rather than throwing, since `onMessage` runs after the 200 was already sent
   - an app wires a platform end to end without writing any platform-specific parsing
+
+> **DISCOVER 2026-08-24 — the item's own words were refuted.** "No adapter can translate" is false:
+> `packages/gateway-line/src/index.ts:5` exports `lineEventToMessageEvent`, and it was CALLED with a
+> raw webhook payload and no transport, returning `{"platform":"line","text":"olá",…}`. Nine of ten
+> still have nothing on the barrel, so the item is re-scoped from "the seam is unimplemented" to
+> "the shape exists for one platform and was never generalised" — `line` is the template.
+> Cost measured in a real app against the published packages: with a translator, 13 lines and ZERO
+> platform knowledge; without one, 35 lines of which 27 are the app re-declaring Telegram's wire
+> format. Also measured: TheoKit ships no per-platform signature verifier either, only primitives.
+> Blast radius: six of ten adapters own a long-lived connection the channel seam never sees, so a
+> translator does not by itself make them usable under `theokit dev` — that needs a lifecycle in
+> TheoKit. Decisions recorded as D426 (one mapping, both paths) and D427 (export only what was
+> called).
 
 ## B-010 — Ten adapters use seven different names for the same credential   [ ]
 
