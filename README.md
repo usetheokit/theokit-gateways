@@ -10,7 +10,7 @@ Multi-channel gateway packages for the Theo ecosystem, extracted from `theokit-s
 | `@theokit/gateway-telegram` | Telegram (grammy) |
 | `@theokit/gateway-discord` | Discord (discord.js) |
 | `@theokit/gateway-slack` | Slack (@slack/bolt) |
-| `@theokit/gateway-whatsapp` | WhatsApp (Meta Cloud API + whatsapp-web.js) |
+| `@theokit/gateway-whatsapp` | WhatsApp (Meta Cloud API + whatsapp-web.js + Baileys) |
 | `@theokit/gateway-teams` | Microsoft Teams |
 | `@theokit/gateway-email` | Email (nodemailer + imapflow) |
 | `@theokit/gateway-sms` | SMS (Twilio / Plivo / Vonage) |

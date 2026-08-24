@@ -89,8 +89,9 @@ export function sectionBody(text, heading) {
  * — a `<!--` written in prose was enough to report the documented section missing. A false fail
  * lands on someone who did nothing wrong, and it is what teaches a team to stop reading the gate.
  *
- * For the same reason an unterminated block is not treated as hiding anything, even though
- * CommonMark runs one to end of file.
+ * An unterminated COMMENT is not treated as hiding anything, for the same reason. An unterminated
+ * FENCE is, because that accident is the other way round: a forgotten closer is a typo, and for a
+ * reader it turns everything after it — the section included — into code.
  *
  * @param {string} text
  * @returns {string}
@@ -146,18 +147,18 @@ function stillOpen(line, open, close) {
 }
 
 /**
- * Blanks every block that opens AND closes, keeping line count.
+ * Blanks each block, keeping line count.
  *
- * A block that never closes is discarded rather than run to end of file. CommonMark does run an
- * unterminated fence or comment to EOF, and honouring that produced four false fails on innocent
- * documents — `<!--` written in prose, a four-backtick fence, a commented-out draft — each of which
- * blanked the rest of the file and reported the documented section missing.
+ * A block that never closes is blanked to end of file only when it is a FENCE. CommonMark runs both
+ * an unterminated fence and an unterminated comment to EOF, and honouring that for comments produced
+ * four false fails on innocent documents — `<!--` written in prose, a table naming both markers, a
+ * commented-out draft — each of which blanked the rest of the file and reported the documented
+ * section missing. Honouring it for fences is what catches the forgotten closer, which is a real
+ * accident with the same consequence as deleting the section.
  *
- * That is the trade, stated rather than implied: an author who deliberately opens a block and never
- * closes it can hide a heading from this gate. Someone willing to do that can equally write a
- * section that names every fact and says something false, which this gate does not check either. A
- * false fail, by contrast, happens to someone who did nothing wrong, and it is what teaches a team
- * to stop reading the gate's output.
+ * That is the trade, stated rather than implied: an author who opens a COMMENT and never closes it
+ * can hide a heading from this gate. Someone willing to do that can equally write a section that
+ * names every fact and says something false, which this gate does not check either.
  *
  * @param {string} text
  * @returns {string}
@@ -177,7 +178,7 @@ function blankBlocks(text) {
     open = undefined;
   });
 
-  if (open !== undefined && open.runsToEof) {
+  if (open?.runsToEof === true) {
     for (let i = open.start; i < lines.length; i++) hidden.add(i);
   }
 
