@@ -7,7 +7,8 @@
  *   - a single broad `catch` returned `null` for an invalid `fromNumber` in the app's OWN options,
  *     so a misconfigured deployment saw every message silently dropped with nothing to diagnose;
  *   - removing the catch made an empty webhook body throw out of `onMessage` — which TheoKit calls
- *     AFTER answering 200, so the throw is an unhandled rejection with no status left to change.
+ *     BEFORE building the 200 and does not catch, so the 200 is never built and the route's own
+ *     error boundary answers instead.
  *
  * The design that fixed those two was itself wrong, and review caught it: validating
  * `options.fromNumber` up front invented a rule stricter than anything else in this package applies
@@ -80,7 +81,7 @@ describe("parseInbound", () => {
     // The regression for the review BLOCKER. An earlier version validated `fromNumber` up front
     // with `normalizeE164`, a rule stricter than anything else in this package applies to it, and
     // these four documented configurations each threw `ConfigurationError` out of `onMessage`
-    // AFTER the 200 — the exact failure the check was meant to prevent.
+    // before TheoKit answered at all — the exact failure the check was meant to prevent.
     const options = { ...OPTIONS, fromNumber, defaultCountry: "BR" };
 
     expect(() => parseInbound(options, CTX)).not.toThrow();
@@ -92,7 +93,7 @@ describe("no throw escapes into onMessage", () => {
   it("returns null for a body containing a malformed percent-escape", () => {
     // The regression. `decodeURIComponent("%zz")` raises `URIError`, and an earlier version
     // re-threw anything that was not a `ConfigurationError` — so this escaped out of `onMessage`,
-    // after TheoKit had already answered 200. Found because a mutation that should have gone red
+    // before TheoKit answered at all. Found because a mutation that should have gone red
     // stayed green, which is the only signal an untested branch gives.
     expect(
       parseInbound(OPTIONS, { ...CTX, rawBody: "From=%zz&Body=hi&MessageSid=SM1" }),
