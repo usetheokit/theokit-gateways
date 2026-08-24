@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-mattermost",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Mattermost platform adapter for @theokit/gateway. WebSocket gateway + REST. ADRs D397-D404.",
   "license": "Apache-2.0",
   "repository": {
