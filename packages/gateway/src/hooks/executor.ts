@@ -8,7 +8,7 @@
  * @public
  */
 
-import { Security } from "@theokit/sdk";
+import { redactSecrets } from "../security/credential-patterns.js";
 
 import type {
   GatewayHook,
@@ -44,13 +44,13 @@ export class HookExecutor {
         // `hook ${h.name} threw: ${err.message}` sent whatever the hook happened
         // to throw — connection strings, internal ids, bearer tokens — to the end
         // user verbatim. The sibling handler path already logs through
-        // `Security.redact` (EC-F); this one skipped redaction entirely, and the
+        // `redactSecrets` (EC-F); this one skipped redaction entirely, and the
         // test asserting the raw text appeared locked the leak in as expected
         // behaviour.
         //
         // The detail is not lost, only moved: stderr gets it, redacted.
         process.stderr.write(
-          `[gateway] pre_inbound hook "${h.name}" threw: ${Security.redact((err as Error).message)}\n`,
+          `[gateway] pre_inbound hook "${h.name}" threw: ${redactSecrets((err as Error).message)}\n`,
         );
         return {
           block: true,

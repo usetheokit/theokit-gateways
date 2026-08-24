@@ -36,3 +36,9 @@ reports/
 # a published package's directory that a `git add -A` would happily commit.
 .dts-probe-*.ts
 .dts-repair-stamp
+
+# Probe files the doc-api gate writes into package roots to typecheck what the documentation claims.
+# It removes them on every path it controls; this covers the ones it cannot — a Ctrl-C, a SIGTERM, a
+# SIGKILL, where no handler runs. A gate that dirties the tree it checks teaches people to stop
+# reading `git status` (B-016).
+.doc-probes/

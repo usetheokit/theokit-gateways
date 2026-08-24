@@ -99,12 +99,29 @@ describe("TelegramAdapter (T5.1)", () => {
     expect(await adapter.dispatchEvent(makeEvent())).toBe("no_handler");
   });
 
-  it("EC-I: connect() with bad token resolves to false (does NOT throw)", async () => {
+  it("EC-I: connect() resolves to false when init fails (does NOT throw)", async () => {
+    // This asserted the same contract by calling the REAL Telegram API with a bogus token and
+    // waiting for the 401 (B-014). A unit test that needs api.telegram.org fails when the network is
+    // slow and passes when a proxy answers, and it did — found while running the gates for a
+    // type-level change in a different package.
+    //
+    // The behaviour worth covering is `init() rejects -> connect() returns false`, and the rejection
+    // is what a bogus token was being used to produce. Producing it directly is the same assertion
+    // in milliseconds, and it also covers the failures a bad token never reaches: a DNS failure, a
+    // 500, a socket reset.
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    // grammy will fail bot.init() on a bogus token — must NOT escape as throw.
-    const result = await adapter.connect();
-    expect(result).toBe(false);
-    stderr.mockRestore();
+    const init = vi
+      .spyOn(adapter.getBot(), "init")
+      .mockRejectedValue(new Error("Call to 'getMe' failed! (401: Unauthorized)"));
+
+    try {
+      expect(await adapter.connect()).toBe(false);
+      expect(init).toHaveBeenCalledOnce();
+      expect(stderr.mock.calls.map(String).join("")).toContain("connect failed");
+    } finally {
+      init.mockRestore();
+      stderr.mockRestore();
+    }
   });
 
   it("disconnect is idempotent on never-connected", async () => {

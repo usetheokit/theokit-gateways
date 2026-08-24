@@ -38,6 +38,12 @@ export {
   GatewayRunner,
   type GatewayRunnerOptions,
 } from "./runner/gateway-runner.js";
+export type { CoveredShape, UncoveredShape } from "./security/credential-patterns.js";
+export {
+  CREDENTIAL_SHAPES,
+  maskShapes,
+  redactSecrets,
+} from "./security/credential-patterns.js";
 // Session
 export {
   type AgentIdStrategy,
