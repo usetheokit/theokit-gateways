@@ -18,7 +18,7 @@
  * 2. If `block: true` + `message`: call `ctx.reply(message)` (EC-D), short-circuit.
  * 3. If `block: true` only: short-circuit silently.
  * 4. Otherwise: call user handler.
- * 5. On handler throw: fire `on_error`, log via `Security.redact` (EC-F).
+ * 5. On handler throw: fire `on_error`, log via `redactSecrets` (EC-F).
  *
  * Every reply — the handler's `ctx.reply` and the EC-D auto-reply alike — fires
  * `post_outbound` with the event, the outbound and the adapter's result, once
@@ -28,12 +28,11 @@
  * @public
  */
 
-import { Security } from "@theokit/sdk";
-
 import type { BasePlatformAdapter, OutboundMessage, SendResult } from "../adapter/base.js";
 import { GatewayLifecycleError } from "../errors/lifecycle-error.js";
 import { HookExecutor } from "../hooks/executor.js";
 import type { GatewayHook } from "../hooks/types.js";
+import { redactSecrets } from "../security/credential-patterns.js";
 import type { MessageEvent as GatewayMessageEvent, PlatformName } from "../types/message-event.js";
 
 /** Per-event context passed to the user handler. */
@@ -223,9 +222,7 @@ export class GatewayRunner {
         await handler(event, ctx);
       } catch (err) {
         await this.hookExecutor.fireOnError({ event, error: err as Error });
-        process.stderr.write(
-          `[gateway] handler error: ${Security.redact((err as Error).message)}\n`,
-        );
+        process.stderr.write(`[gateway] handler error: ${redactSecrets((err as Error).message)}\n`);
       }
     })();
     this.inflight.add(work);
