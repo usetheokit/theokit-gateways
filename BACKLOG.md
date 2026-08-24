@@ -49,13 +49,12 @@ own quality gates.
 
 ## Index
 
-16 items — **Open** 6 · **In flight** 0 · **Closed** 10
+16 items — **Open** 5 · **In flight** 0 · **Closed** 11
 
-### Open (6)
+### Open (5)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
-| [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `triaged` | — |
 | [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
 | [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive----) | The published packages carry 1 critical and 19 high advisories, all transitive | `raw` | — |
 | [`B-014`](#b-014--a-unit-test-calls-the-real-telegram-api-and-fails-when-the-network-is-slow----) | A unit test calls the real Telegram API and fails when the network is slow | `raw` | — |
@@ -66,7 +65,7 @@ own quality gates.
 
 _None._
 
-### Closed (10)
+### Closed (11)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -80,6 +79,7 @@ _None._
 | [`B-008`](#b-008--a-gateway-cannot-be-written-outside-this-repository----) | A gateway cannot be written outside this repository | `shipped` | — |
 | [`B-009`](#b-009--theokits-channel-seam-names-our-packages-as-the-translator-and-no-adapter-can-translate----) | TheoKit's channel seam names our packages as the translator, and no adapter can translate | `shipped` | — |
 | [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `shipped` | — |
+| [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together---x) | Nothing documents how the three repositories fit together | `shipped` | — |
 
 <!-- BACKLOG-INDEX:END -->
 
@@ -368,7 +368,7 @@ dod:
 > field I had invented (`signingSecret`, which does not exist). Accepted against npm in a real app:
 > 10/10 adapters carry the documentation in their published declaration, 15 fields total.
 
-## B-011 — Nothing documents how the three repositories fit together   [ ]
+## B-011 — Nothing documents how the three repositories fit together   [x]
 
 domain: theokit-gateways
 repo: theokit-gateways
@@ -377,7 +377,8 @@ source: human
 opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-integration-story-opportunity.md` (SHIPPABLE)
 evidence: `README.md:3` describes this repo only by its split from `theokit-sdk`, and the word `theokit` (the framework) appears nowhere in it. The scaffold a new user gets from `create-theokit` ships six `.claude/skills/` — agents, config, database, frontend, routes, ui — and none for gateways. So the framework's own scaffold does not mention gateways, and the gateways' own README does not mention the framework.
 why_now: measured by scaffolding an app and trying to wire a gateway from the documentation alone: the integration story exists in neither repo, and the seam that does exist (`handleChannelWebhook`) is discoverable only by reading TheoKit's `.d.ts`. Every step taken during that measurement was taken by reading source, which is what a user would also have to do.
-status: triaged
+status: shipped
+shipped_as: `@theokit/gateway@0.7.1`, `@theokit/gateway-telegram@0.2.2`, `@theokit/gateway-sms@0.2.2` (theokit-gateways PR #74) · `theokit@0.50.0`, `create-theokit@1.23.10` (theokit PR #437)
 dod:
   - one document states which repo owns which half of the seam
   - a new user can wire a gateway to an agent without reading any `.d.ts`
@@ -398,6 +399,29 @@ dod:
 > three repositories. Decision recorded as D431, with the limit stated: two of the three repos are
 > outside this one's write access.
 
+> **ACCEPTANCE 2026-08-24 — all three DoD bullets met, each verified against the published artifact.**
+>
+> | # | Bullet | Verified by |
+> |---|---|---|
+> | 1 | one document states which repo owns which half | installed `@theokit/gateway@0.7.1` from the registry; the README section is in the tarball, and the refuted rationale gives 0 hits in both adapters' `.d.ts` |
+> | 2 | a new user can wire a gateway without reading a `.d.ts` | installed `theokit@0.50.0`; `telegram`, `discord`, `slack`, `github` and `stripe` all resolve to `function` from `theokit/server/webhook`. On `0.48.14` every one was `undefined` |
+> | 3 | the story lives in the framework's scaffold and this repo's README | ran `npx create-theokit@1.23.10`; the scaffolded app ships `.claude/skills/theokit-gateways/SKILL.md` beside the other six |
+>
+> Bullet 2 was not merely undocumented — it was **impossible**. `handleChannelWebhook` takes a
+> required `validators` map, its own docblock demonstrates `telegram({ secretToken })`, and no
+> validator was exported from any entrypoint a consumer could reach: `dist/server/webhook/` held
+> only `index.{js,d.ts}`, no `providers/` file shipped, and `x-telegram-bot-api-secret-token`
+> appeared nowhere in `dist/`. Six providers existed in source with their own barrel and the public
+> `index.ts` re-exported none. Found by trying to write the scaffold skill's example and failing.
+>
+> Releasing that fix then hit a second defect: the Version Packages PR could never pass its own
+> required checks, because `changeset version` points the scaffold template's pin at the version
+> that PR is what publishes. `main` enforces admins, so nobody could merge — and the failing test's
+> message asked for the publish its own failure prevented. Filed as usetheokit/theokit#438 and fixed
+> in #439: the scaffold job installs with `--skip-install` and links against the working tree, and
+> the pnpm-11 test skips that window with the pins named. Version Packages then passed 23/23 — the
+> first time that gate has been green; #200 merged with 12 failures and #73 with 14.
+
 ## B-012 — The SDK sits in the middle of the triad wired to a single utility   [ ]
 
 domain: theokit-gateways
@@ -406,7 +430,9 @@ suggested_mode: evolve
 source: human
 evidence: the entire `@theokit/sdk` surface consumed by all eleven packages is `Security.redact`, called in two files (`packages/gateway/src/runner/gateway-runner.ts:227`, `packages/gateway/src/hooks/executor.ts:53`), both for redacting an error message before it reaches a log. Meanwhile nine `tsup.config.ts` files mark the SDK external and — until B-007 — all eleven `package.json` files declared a peer on it.
 why_now: the triad theokit → theokit-sdk → theokit-gateways is asserted by the build configuration and by the dependency declarations, but the code only ever asks the SDK to redact a string. Either the relationship is real and something is missing from it, or it is one utility function and nine build configs plus eleven manifests are describing a coupling that does not exist. B-007 already removed ten of those manifests' claims; the question of what the SDK is FOR here is still open.
-status: raw
+status: triaged
+opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-sdk-redaction-consistency-opportunity.md` (SHIPPABLE_WITH_CAVEATS, 89)
+measured: `Security.redact` changes 1 of the 11 credential shapes this repo holds, and on a Telegram token the parametric matcher redacts the PUBLIC bot id while preserving the secret half — `token=***:AAF-…`. Mode reclassified evolve → review.
 dod:
   - it is stated what the gateways are supposed to get from the SDK, if anything beyond redaction
   - the build configuration and the manifests agree with what the source actually imports

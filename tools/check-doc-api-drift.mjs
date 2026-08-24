@@ -114,72 +114,82 @@ for (const [root, rootClaims] of byRoot) {
   rmSync(probeDir, { recursive: true, force: true });
   mkdirSync(probeDir, { recursive: true });
 
-  const probes = rootClaims.map((claim, index) => {
-    const probe = join(probeDir, `probe-${index}.ts`);
-    writeFileSync(
-      probe,
-      `import type { ${claim.names.join(", ")} } from ${JSON.stringify(claim.specifier)};\n`,
-    );
-    return { probe, claim };
-  });
-
-  writeFileSync(
-    join(probeDir, "tsconfig.json"),
-    JSON.stringify(
-      {
-        compilerOptions: {
-          noEmit: true,
-          strict: true,
-          skipLibCheck: true,
-          target: "es2022",
-          module: "esnext",
-          moduleResolution: "bundler",
-          baseUrl: root,
-          paths: WORKSPACE,
-        },
-        files: probes.map((entry) => entry.probe),
-      },
-      null,
-      2,
-    ),
-  );
-
-  let output = "";
+  // Everything below removes the directory on its way out, including the throw nobody wrote a
+  // handler for. Two `rmSync` calls used to cover two of the paths, so an exception between them
+  // left probe files in a package root — two agents hit that and one cleaned it by hand (B-016).
+  // `.doc-probes/` is also gitignored, which is what covers the paths no `finally` can: a SIGKILL
+  // runs nothing.
   try {
-    execFileSync("npx", ["tsc", "--project", join(probeDir, "tsconfig.json")], {
-      cwd: root,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-  } catch (error) {
-    // A failed invocation is not a clean compile.
-    if (typeof error.status !== "number") {
-      console.error(`[${LABEL}] x tsc could not be run: ${error.message}`);
-      console.error(
-        "  Refusing to report: a gate that cannot invoke its tool has checked nothing.",
+    const probes = rootClaims.map((claim, index) => {
+      const probe = join(probeDir, `probe-${index}.ts`);
+      writeFileSync(
+        probe,
+        `import type { ${claim.names.join(", ")} } from ${JSON.stringify(claim.specifier)};\n`,
       );
-      rmSync(probeDir, { recursive: true, force: true });
-      process.exit(2);
-    }
-    output = `${error.stdout ?? ""}${error.stderr ?? ""}`;
-  }
+      return { probe, claim };
+    });
 
-  for (const raw of output.split("\n")) {
-    const match = /probe-(\d+)\.ts\(\d+,\d+\): error (TS\d+): (.+)$/.exec(raw.trim());
-    if (match === null) continue;
-    const entry = probes[Number(match[1])];
-    if (entry === undefined) continue;
-    if (match[2] === "TS2307") {
-      // The module did not resolve where the probe stood. For one of ours that is a broken gate,
-      // never a documentation defect — and it must be loud, or our own drift goes quiet.
-      notChecked.push({ ...entry.claim, ours: WORKSPACE[entry.claim.specifier] !== undefined });
-      continue;
-    }
-    const name = /has no exported member(?: named)? '([^']+)'/.exec(match[3])?.[1];
-    drifted.push({ ...entry.claim, name: name ?? entry.claim.names.join(", ") });
-  }
+    writeFileSync(
+      join(probeDir, "tsconfig.json"),
+      JSON.stringify(
+        {
+          compilerOptions: {
+            noEmit: true,
+            strict: true,
+            skipLibCheck: true,
+            target: "es2022",
+            module: "esnext",
+            moduleResolution: "bundler",
+            baseUrl: root,
+            paths: WORKSPACE,
+          },
+          files: probes.map((entry) => entry.probe),
+        },
+        null,
+        2,
+      ),
+    );
 
-  rmSync(probeDir, { recursive: true, force: true });
+    let output = "";
+    try {
+      execFileSync("npx", ["tsc", "--project", join(probeDir, "tsconfig.json")], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (error) {
+      // A failed invocation is not a clean compile.
+      if (typeof error.status !== "number") {
+        console.error(`[${LABEL}] x tsc could not be run: ${error.message}`);
+        console.error(
+          "  Refusing to report: a gate that cannot invoke its tool has checked nothing.",
+        );
+        // `process.exit` does not unwind the stack, so the `finally` below never runs on this
+        // path. The clean-up has to happen here or the probe files stay — which is the defect
+        // this file's `finally` was added to fix, reintroduced on the one path it cannot reach.
+        rmSync(probeDir, { recursive: true, force: true });
+        process.exit(2);
+      }
+      output = `${error.stdout ?? ""}${error.stderr ?? ""}`;
+    }
+
+    for (const raw of output.split("\n")) {
+      const match = /probe-(\d+)\.ts\(\d+,\d+\): error (TS\d+): (.+)$/.exec(raw.trim());
+      if (match === null) continue;
+      const entry = probes[Number(match[1])];
+      if (entry === undefined) continue;
+      if (match[2] === "TS2307") {
+        // The module did not resolve where the probe stood. For one of ours that is a broken gate,
+        // never a documentation defect — and it must be loud, or our own drift goes quiet.
+        notChecked.push({ ...entry.claim, ours: WORKSPACE[entry.claim.specifier] !== undefined });
+        continue;
+      }
+      const name = /has no exported member(?: named)? '([^']+)'/.exec(match[3])?.[1];
+      drifted.push({ ...entry.claim, name: name ?? entry.claim.names.join(", ") });
+    }
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true });
+  }
 }
 
 const checkedNames = claims

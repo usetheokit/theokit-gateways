@@ -479,12 +479,29 @@ describe("cross-adapter contract", () => {
     // whole-directory check.
     const onDisk = (await adapterPackages()).sort();
     expect([...CREDENTIAL_FIELDS.keys()].sort()).toEqual(onDisk);
+  });
+
+  it("every credential field is either masked or recorded as uncovered", async () => {
+    // The gate against a new adapter arriving with a credential nobody thought about. It is keyed on
+    // the FIELD, not the platform: a platform with two credentials used to pass when one was
+    // covered, and `gateway-line` shipped with its `channelAccessToken` unmasked behind a green
+    // gate. The first version also matched by substring, so `gateway-x` passed because
+    // "matrix access token" contains an x.
+    const { CREDENTIAL_SHAPES } = await import("../../src/security/credential-patterns.js");
+    const accounted = [...CREDENTIAL_SHAPES.covered, ...CREDENTIAL_SHAPES.uncovered]
+      .map((s) => s.field)
+      .join(" ");
 
     const missing: string[] = [];
     for (const [pkg, fields] of CREDENTIAL_FIELDS) {
-      missing.push(...(await credentialFaults(pkg, fields)));
+      for (const field of fields) {
+        // Both halves must appear, so a field name alone cannot satisfy a different platform's row.
+        if (!accounted.includes(pkg) || !accounted.includes(`\`${field}\``)) {
+          missing.push(`${pkg} \`${field}\``);
+        }
+      }
     }
 
-    expect(missing).toEqual([]);
+    expect(missing, "neither masked nor recorded as uncovered").toEqual([]);
   });
 });
