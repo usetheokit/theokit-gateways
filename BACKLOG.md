@@ -49,17 +49,23 @@ own quality gates.
 
 ## Index
 
-6 items — **Open** 0 · **In flight** 0 · **Closed** 6
+12 items — **Open** 5 · **In flight** 0 · **Closed** 7
 
-### Open (0)
+### Open (5)
 
-_None._
+| Item | Title | Status | Severity |
+|---|---|---|---|
+| [`B-008`](#b-008--a-gateway-cannot-be-written-outside-this-repository----) | A gateway cannot be written outside this repository | `raw` | — |
+| [`B-009`](#b-009--theokits-channel-seam-names-our-packages-as-the-translator-and-no-adapter-can-translate----) | TheoKit's channel seam names our packages as the translator, and no adapter can translate | `raw` | — |
+| [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `raw` | — |
+| [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `raw` | — |
+| [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
 
 ### In flight (0)
 
 _None._
 
-### Closed (6)
+### Closed (7)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -69,6 +75,7 @@ _None._
 | [`B-004`](#b-004--five-packages-publish-a-dts-that-does-not-compile----) | Five packages publish a `.d.ts` that does not compile | `killed` | — |
 | [`B-005`](#b-005--the-dts-gate-accuses-the-published-artifact-when-the-build-command-was-wrong----) | The dts gate accuses the published artifact when the build command was wrong | `shipped` | — |
 | [`B-006`](#b-006--whatsappcloudbackendconnect-reports-success-without-authenticating----) | `WhatsAppCloudBackend.connect()` reports success without authenticating | `shipped` | — |
+| [`B-007`](#b-007--no-theokit-app-can-install-a-gateway-at-all----) | No TheoKit app can install a gateway at all | `shipped` | — |
 
 <!-- BACKLOG-INDEX:END -->
 
@@ -208,3 +215,100 @@ dod:
 > asked Meta; and `131030` collapsed into `invalid_request`, hiding the one error whose remedy is
 > a console step. Live suite now 128 passed / 0 failed / 11 skipped, every skip naming what it
 > wants.
+
+## B-007 — No TheoKit app can install a gateway at all   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: bug
+source: human
+evidence: measured by scaffolding a real app (`npx create-theokit@latest appteste`) and running `npm install @theokit/gateway @theokit/gateway-telegram`: `npm error peer @theokit/sdk@"^2.18.0" from @theokit/gateway@0.6.1` against the `@theokit/sdk@4.53.1` the framework ships. All eleven published packages carried that peer. The ten adapters import the SDK in ZERO source files; the core imports one symbol, `Security.redact`, at `packages/gateway/src/runner/gateway-runner.ts:31` and `packages/gateway/src/hooks/executor.ts:11`, unchanged in 4.x.
+why_now: the packages were published to npm in this cycle (`@theokit/gateway@0.6.1` and siblings). The very first thing a new user does — install one into a TheoKit app — fails outright, and nothing in the repo's gates could see it because the monorepo resolves its own workspace versions and never installs itself as a consumer would.
+status: shipped
+dod:
+  - a fresh TheoKit app installs a gateway without `ERESOLVE`
+  - the widened range is verified against the SDK major the framework actually ships, not asserted
+  - peers that no source file imports are gone rather than merely re-pinned
+
+> Registered and fixed 2026-08-23 during the DX measurement. The dev dependency moved to `^4.53.1`
+> and typecheck, twelve suites and the build are green against it — widening a range without
+> running against the new major would be a claim, not a measurement. Proven end to end by packing
+> both packages and installing them into the scaffolded app. Commit `d2c1168`.
+
+## B-008 — A gateway cannot be written outside this repository   [ ]
+
+domain: theokit-gateways
+repo: packages/gateway
+suggested_mode: evolve
+source: human
+evidence: `packages/gateway/src/types/message-event.ts:22` declares `PlatformName` as a closed union of our ten platforms, and line 223 builds `MessageEvent` from the ten matching variants. A third-party adapter was written and compiled to confirm rather than assume: `error TS2416: Type '"signal"' is not assignable to type 'PlatformName'`. The closure is deliberate and recorded — ADR-0001 (`docs/adr/0001-message-event-closed-union.md`) chose exhaustive narrowing over OCP purity, and names its own revisit trigger: "if third-party or out-of-repo adapters ever become a supported goal, reopen this decision".
+why_now: that trigger has fired — supporting gateways written outside this repo is now a stated goal. The naive fix was prototyped first and FAILED: adding a `platform: string` variant destroys the narrowing the ADR refused to give up (`TS2339: Property 'telegram' does not exist on type 'DiscordEvent'`), so reopening the decision must not mean simply opening the union.
+status: raw
+dod:
+  - an adapter in a separate package names a platform core has never heard of, and compiles
+  - the ten first-party platforms keep exhaustive `switch` narrowing, proven by a test that fails when a case is deleted
+  - a typo'd platform name is still a compile error rather than silently accepted
+  - ADR-0001 is superseded by an ADR recording what changed and why
+
+> Registered 2026-08-23. A design that satisfies all four was prototyped and mutation-tested before
+> being proposed: an augmentable `PlatformEventRegistry` interface (the pattern Fastify and Vite
+> use), with the union derived from it. Three mutations each turn the compiler red — deleting a
+> third-party `case` breaks exhaustiveness, reading the wrong field fails to narrow, and removing
+> the augmentation rejects the platform name. Design only; nothing implemented.
+
+## B-009 — TheoKit's channel seam names our packages as the translator, and no adapter can translate   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: review
+source: human
+evidence: TheoKit ships `handleChannelWebhook(request, urlPath, { validators, onMessage })`, which owns the route and the signature gate and then hands the app `ChannelMessage { agent, platform, payload: unknown }`. Its own docblock states the division of labour: "the seam is where an app wires the SDK gateway package (`@theokit/gateway-*`) that translates the payload into an agent turn — TheoKit provides the route + signature gate, NOT the gateway's parsing". Measured against the ten adapters' barrels: none exports a payload translator. The mapping exists but is unreachable — Telegram's lives inside `normalizeEvent(ctx: Context)` in `packages/gateway-telegram/src/adapter.ts:198`, soldered to grammy's type and callable only from the polling loop; Slack's `normalizeSlackEvent` is not exported from the package.
+why_now: an app wiring the seam today must reimplement the platform's wire format by hand — written out during the measurement to confirm the cost, and it is exactly the work the framework says the gateway package spares them. The two halves of a seam both sides already agreed on have never met.
+status: raw
+dod:
+  - each adapter whose platform TheoKit already validates exports a pure `parseInbound(payload) -> event | null`
+  - one mapping serves both the polling path and the webhook path, so the two cannot drift into dialects
+  - a malformed or unhandled payload returns null rather than throwing, since `onMessage` runs after the 200 was already sent
+  - an app wires a platform end to end without writing any platform-specific parsing
+
+## B-010 — Ten adapters use seven different names for the same credential   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: review
+source: human
+evidence: measured across `packages/gateway-*/src`: the primary credential is `token` (telegram, discord), `botToken` (slack), `accessToken` (matrix, mattermost, whatsapp), `channelAccessToken` (line), `authToken` (sms), `clientSecret` (teams), `password` (email). Teams additionally requires three fields with no shared shape (`clientId`, `clientSecret`, `tenantId`), and SMS requires `publicUrl`.
+why_now: this cost real errors inside this repository during the cross-adapter conformance work — the suite was written against `botToken` for Discord and for Telegram, and both were wrong. A contributor holding one adapter's shape in their head is misled by the next one, and the type error arrives only after the wrong guess is written.
+status: raw
+dod:
+  - a developer who has wired one adapter can predict the next one's option names, or is told by the types before writing the wrong guess
+  - the change does not break the ten published packages' existing option shapes without a deprecation path
+  - the convention is stated once, where an author of a new adapter will read it
+
+## B-011 — Nothing documents how the three repositories fit together   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: review
+source: human
+evidence: `README.md:3` describes this repo only by its split from `theokit-sdk`, and the word `theokit` (the framework) appears nowhere in it. The scaffold a new user gets from `create-theokit` ships six `.claude/skills/` — agents, config, database, frontend, routes, ui — and none for gateways. So the framework's own scaffold does not mention gateways, and the gateways' own README does not mention the framework.
+why_now: measured by scaffolding an app and trying to wire a gateway from the documentation alone: the integration story exists in neither repo, and the seam that does exist (`handleChannelWebhook`) is discoverable only by reading TheoKit's `.d.ts`. Every step taken during that measurement was taken by reading source, which is what a user would also have to do.
+status: raw
+dod:
+  - one document states which repo owns which half of the seam
+  - a new user can wire a gateway to an agent without reading any `.d.ts`
+  - the story lives where each audience looks: the framework's scaffold and this repo's README
+
+## B-012 — The SDK sits in the middle of the triad wired to a single utility   [ ]
+
+domain: theokit-gateways
+repo: packages/gateway
+suggested_mode: evolve
+source: human
+evidence: the entire `@theokit/sdk` surface consumed by all eleven packages is `Security.redact`, called in two files (`packages/gateway/src/runner/gateway-runner.ts:227`, `packages/gateway/src/hooks/executor.ts:53`), both for redacting an error message before it reaches a log. Meanwhile nine `tsup.config.ts` files mark the SDK external and — until B-007 — all eleven `package.json` files declared a peer on it.
+why_now: the triad theokit → theokit-sdk → theokit-gateways is asserted by the build configuration and by the dependency declarations, but the code only ever asks the SDK to redact a string. Either the relationship is real and something is missing from it, or it is one utility function and nine build configs plus eleven manifests are describing a coupling that does not exist. B-007 already removed ten of those manifests' claims; the question of what the SDK is FOR here is still open.
+status: raw
+dod:
+  - it is stated what the gateways are supposed to get from the SDK, if anything beyond redaction
+  - the build configuration and the manifests agree with what the source actually imports
+  - if the answer is "one utility", the dependency is either justified in writing or removed

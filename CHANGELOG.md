@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **gateways:** five measured items on the theokit ↔ theokit-sdk ↔ theokit-gateways integration (B-008..B-012): the event union cannot be extended out-of-repo, no adapter can translate the raw payload TheoKit's channel seam hands it, ten adapters name the same credential seven ways, nothing documents which repo owns which half of the seam, and the SDK's entire role is one redaction helper
+
 ### Fixed
 - **gateway:** `MessageEvent`'s docblock pointed at `wiki/decisions/adr-0001-…`, a path removed in `b1b3e09` and never restored — a published `.d.ts` sending readers to a file that does not exist. ADR-0001 is restored at `docs/adr/0001-message-event-closed-union.md` and the citation repointed (#B-007)
 
