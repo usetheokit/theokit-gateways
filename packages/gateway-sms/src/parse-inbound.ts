@@ -61,8 +61,11 @@ export function parseInbound(
     // Everything from here is body-dependent, so any error means the body was unreadable. Caught
     // whatever its type: `decodeURIComponent` raises `URIError` on a malformed percent-escape
     // (`From=%zz`) and `normalizeE164` raises `ConfigurationError` on a number the body carried.
-    // Both are bad requests, and `onMessage` runs AFTER TheoKit answered 200 — a throw here is an
-    // unhandled rejection with no status left to change (ADR D428).
+    // Both are bad requests, and returning `null` is what keeps them from becoming a failed
+    // request: measured against `theokit@0.48.14`, `handleChannelWebhook` awaits `onMessage`
+    // BEFORE building the 200 and catches nothing around it, so a throw here escapes the route
+    // and answers an error where the provider expected an acknowledgement (ADR D428, whose
+    // original rationale — "runs after the 200" — was measured false on 2026-08-24).
     return null;
   }
 

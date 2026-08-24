@@ -53,26 +53,30 @@ await runner.start();
 ## Receiving from a TheoKit app
 
 Three repositories share this path. `theokit` owns the HTTP route and the signature check —
-`handleChannelWebhook` validates the request and hands your app the raw body. These packages own the
-translation. `theokit-sdk` is used here for one thing today, redacting a handler error before it
-reaches a log.
+`handleChannelWebhook` verifies the signature, parses the body, and hands your app the parsed JSON
+as `payload: unknown`. These packages own the translation. `theokit-sdk` is used here for one thing
+today: redacting a throw before it reaches a log, at two call sites.
 
 ```ts
 import { parseInbound } from "@theokit/gateway-telegram";
 
-// The signature was already checked before this runs.
-const event = parseInbound(payload);
+// Inside onMessage. The signature and the JSON parse already happened.
+const event = parseInbound(message.payload);
 if (event !== null) {
   console.log(`${event.platform} ${event.channel.id}: ${event.text}`);
 }
 ```
 
-`parseInbound` returns `null` and never throws, because the caller runs after TheoKit has already
-answered 200 — there is no status left to change. Each adapter exports its own; `gateway-line` calls
-its `lineEventToMessageEvent`, and `gateway-whatsapp` composes `parseWebhookPayload` with
-`normalizeInboundMessages`.
+`parseInbound` returns `null` and never throws. Measured against `theokit@0.48.14`: `onMessage` is
+awaited **before** the 200 is built, with nothing catching around it — so a throw on an unparseable
+payload escapes the route and answers an error where the platform expected an acknowledgement.
 
-Adapters whose platform uses a long-lived connection instead of a webhook own their transport and do
+`parseInbound` under that name exists on `@theokit/gateway-telegram` and `@theokit/gateway-sms`.
+Every other adapter exports its translation under its own name — `gateway-line` has
+`lineEventToMessageEvent`, `gateway-whatsapp` composes `parseWebhookPayload` with
+`normalizeInboundMessages` — and those return `undefined` rather than `null`.
+
+Adapters whose transport is a long-lived connection rather than a webhook own that transport and do
 not go through this seam.
 
 ## Design principles
