@@ -5,7 +5,7 @@
  * The test imports `@theokit/gateway` as a package, so TypeScript resolves it through the manifest's
  * `types` field to `dist/index.d.ts` — the same declaration an npm consumer receives. A test placed
  * next to the source would import `src/` and be blind to the one defect this arrangement exists to
- * catch (ADR D423).
+ * catch — see `docs/adr/0002-platform-event-registry.md` § Consequences, risk R1.
  *
  * That defect is not hypothetical. During the measurement for B-008 the first registry build
  * emitted `PlatformEventRegistry` into the declaration and omitted it from the barrel's export

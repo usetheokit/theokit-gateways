@@ -12,28 +12,32 @@
  * }
  * ```
  *
- * This union is intentionally **closed** — adding a platform edits it here
- * rather than extending it externally. The trade-off (exhaustive narrowing over
- * OCP purity) is recorded in `docs/adr/0001-message-event-closed-union.md`.
+ * This union is **open to extension and closed to corruption**. It is derived from
+ * {@link PlatformEventRegistry}, an interface a package outside this repository extends through
+ * declaration merging — so a gateway can be authored, published and consumed without editing this
+ * file, while narrowing still holds over platforms declared here and elsewhere alike. Entries that
+ * are not well-formed event shapes agreeing with their own key are excluded rather than admitted.
+ *
+ * It was closed until 2026-08-23. `docs/adr/0001-message-event-closed-union.md` records why, and
+ * `docs/adr/0002-platform-event-registry.md` records what changed and what the guard costs.
  *
  * @public
  */
-
-/**
- * Every platform filed in {@link PlatformEventRegistry}.
- *
- * Still a union of string literals, so `switch (event.platform)` narrows and a misspelled name is
- * a compile error — the property ADR-0001 protected and ADR-0002 preserves. What changed is that
- * the list is derived rather than written, so a package outside this repository can add to it.
- */
-export type PlatformName = keyof PlatformEventRegistry & string;
 
 /** Fields common to every platform's inbound event. */
 export interface BaseMessageEvent {
   /** Stable id used as a session-key segment and for dedup. */
   readonly id: string;
-  /** Discriminator. */
-  readonly platform: PlatformName;
+  /**
+   * Discriminator.
+   *
+   * Typed `string` here and narrowed to a literal by every variant. It cannot be `PlatformName`:
+   * that type is derived from the guarded union below, and the union is built out of shapes that
+   * extend this interface — naming it here would make the two reference each other (`TS2456`).
+   * Widening it is also what lets `PlatformName` be derived from the FILTERED union rather than
+   * from `keyof`, so a name and an event can never disagree about which platforms exist.
+   */
+  readonly platform: string;
   /** Sender identity (opaque, platform-namespaced). */
   readonly sender: {
     readonly id: string;
@@ -238,7 +242,6 @@ export interface MatrixMessageEvent extends BaseMessageEvent {
   };
 }
 
-/** Discriminated union of all platform variants. */
 /**
  * The open registry every platform's inbound event is filed under.
  *
@@ -284,7 +287,19 @@ export interface PlatformEventRegistry {
 type IsAny<T> = 0 extends 1 & T ? true : false;
 
 /**
- * A registry entry joins {@link MessageEvent} only if it is a real event shape (ADR D425).
+ * A registry key must be a literal, never the broad `string` an index signature produces.
+ *
+ * Measured in review: `interface PlatformEventRegistry { [key: string]: BaseMessageEvent }` is a
+ * LEGAL augmentation — every existing variant is assignable to the base — and without this it
+ * widens the whole platform name to `string`, so every typo becomes valid and every consumer's
+ * `switch` stops narrowing. That is the same collapse an `any` VALUE causes, arriving through the
+ * key side, and it is why both sides are gated.
+ */
+type LiteralKey<K> = string extends K ? never : K;
+
+/**
+ * A registry entry joins {@link MessageEvent} only if it is a real event shape
+ * (`docs/adr/0002-platform-event-registry.md`).
  *
  * Measured, not anticipated: without this guard a single entry typed `any` collapses the whole
  * union, and `tsc --strict` then accepts `event.completelyMadeUpField.nested.nonsense` on EVERY
@@ -292,15 +307,28 @@ type IsAny<T> = 0 extends 1 & T ? true : false;
  * union could not fail that way, so the guard is what keeps the new capability from costing a
  * safety property the old design had.
  *
- * A malformed entry is EXCLUDED rather than fatal, which also fixes the blast direction: the
- * author's own `case` stops narrowing, and first-party consumers are untouched.
+ * A malformed entry is EXCLUDED rather than fatal, so it does not break narrowing for anybody
+ * else's platform. It is NOT free for first-party consumers, and saying otherwise would be false:
+ * a `Record<PlatformName, T>` written against the ten still fails to compile, because the rejected
+ * key is gone from `PlatformName` while the consumer's literal map is not. What the exclusion buys
+ * is that the failure is a missing-key error at the consumer's own map rather than a silent loss
+ * of narrowing everywhere.
  *
  * Exported for the contract test in `tests/types/registry-guard.test.ts`, which asserts against
  * this type rather than a copy of it — a copy would stay green with the guard deleted. It is
  * deliberately NOT re-exported from the package barrel; it is an implementation detail of the
  * derivation, not part of the published surface.
  */
-export type Registered<T> = IsAny<T> extends true ? never : T extends BaseMessageEvent ? T : never;
+export type Registered<K, T> =
+  IsAny<T> extends true
+    ? never
+    : [T] extends [BaseMessageEvent]
+      ? [T] extends [{ readonly platform: LiteralKey<K> }]
+        ? [LiteralKey<K>] extends [never]
+          ? never
+          : T
+        : never
+      : never;
 
 /**
  * The canonical inbound event: every guarded entry in {@link PlatformEventRegistry}.
@@ -311,5 +339,18 @@ export type Registered<T> = IsAny<T> extends true ? never : T extends BaseMessag
  * @public
  */
 export type MessageEvent = {
-  [K in keyof PlatformEventRegistry]: Registered<PlatformEventRegistry[K]>;
+  [K in keyof PlatformEventRegistry]: Registered<K, PlatformEventRegistry[K]>;
 }[keyof PlatformEventRegistry];
+
+/**
+ * Every platform that actually has a well-formed event in {@link PlatformEventRegistry}.
+ *
+ * Derived from the GUARDED union rather than from `keyof`, so `PlatformName` and
+ * `MessageEvent["platform"]` are the same set by construction. Deriving from `keyof` let a rejected
+ * entry keep contributing its key, which produced names no event could ever carry — an adapter
+ * could register for a platform that cannot exist.
+ *
+ * Still a union of string literals, so `switch (event.platform)` narrows and a misspelled name is
+ * a compile error.
+ */
+export type PlatformName = MessageEvent["platform"];

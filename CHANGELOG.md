@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **gateway:** `PlatformEventRegistry` — a gateway can now be authored, published and consumed outside this repository. `PlatformName` and `MessageEvent` derive from an interface other packages extend by declaration merging, so exhaustive narrowing still holds, including over platforms core has never heard of (#B-008)
+- **gateway:** `PlatformEventRegistry` — a gateway can now be authored, published and consumed outside this repository. `PlatformName` and `MessageEvent` derive from an interface other packages extend by declaration merging, so exhaustive narrowing still holds, including over platforms the core has never heard of. Both sides of an augmentation are gated: an entry typed `any`, registered under an index signature, carrying a non-literal discriminator, or disagreeing with its own key is excluded rather than admitted — each of those was measured to break narrowing for every consumer before the guard existed. `BaseMessageEvent.platform` widens to `string` as a consequence; every variant still narrows it to its literal. See `docs/adr/0002-platform-event-registry.md` (#B-008)
 - **gateways:** B-013 registered — `pnpm audit` reports 43 transitive advisories (1 critical, 19 high) across the published packages, found while auditing dependencies for another plan and deliberately not folded into it
 
 - **gateways:** five measured items on the theokit ↔ theokit-sdk ↔ theokit-gateways integration (B-008..B-012): the event union cannot be extended out-of-repo, no adapter can translate the raw payload TheoKit's channel seam hands it, ten adapters name the same credential seven ways, nothing documents which repo owns which half of the seam, and the SDK's entire role is one redaction helper
@@ -228,7 +228,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   untouched (#35)
 
 ### Changed
-- **integration:** the credential-free suite now runs in the default gate. The package had no `test` script, so 8 files and 109 tests — the cross-adapter conformance suite among them — never ran under `pnpm -r test` (#B-008)
 - **gateways:** every package declared a peer on `@theokit/sdk@^2.18.0`, which no adapter imports and which the framework left behind at 4.x — a fresh TheoKit app could not install a gateway at all. The core's peer is widened to `>=2.18.0 <5` (verified green against 4.53.1) and the unused peer dropped from the ten adapters (#B-007)
 
 - `/code-quality` now audits something. `code-quality-languages.txt` shipped empty, and an empty

@@ -1,6 +1,6 @@
 # ADR-0002 — `MessageEvent` derives from an augmentable platform registry
 
-- Status: Proposed
+- Status: Accepted (implemented 2026-08-23; see § Verification)
 - Date: 2026-08-23
 - Deciders: gateway cluster maintainers
 - Supersedes: [ADR-0001](0001-message-event-closed-union.md)
@@ -36,13 +36,46 @@ export interface PlatformEventRegistry {
   telegram: TelegramMessageEvent;
   /* …the ten… */
 }
-export type PlatformName  = keyof PlatformEventRegistry & string;
-export type MessageEvent  = PlatformEventRegistry[keyof PlatformEventRegistry];
+
+/** A registry key must be a literal, never the broad `string` an index signature produces. */
+type LiteralKey<K> = string extends K ? never : K;
+
+/** An entry joins only if it is a real event shape whose discriminator equals its own key. */
+export type Registered<K, T> = IsAny<T> extends true
+  ? never
+  : [T] extends [BaseMessageEvent]
+    ? [T] extends [{ readonly platform: LiteralKey<K> }]
+      ? [LiteralKey<K>] extends [never] ? never : T
+      : never
+    : never;
+
+export type MessageEvent = {
+  [K in keyof PlatformEventRegistry]: Registered<K, PlatformEventRegistry[K]>;
+}[keyof PlatformEventRegistry];
+
+/** Derived from the GUARDED union, so a name and an event can never disagree. */
+export type PlatformName = MessageEvent["platform"];
 ```
 
 An interface is chosen over a type alias for one reason: an interface can be augmented via
 `declare module` from another package, and a type alias cannot. The union remains a set of literal
 keys, so exhaustive narrowing is preserved — including over platforms core has never heard of.
+
+**Both sides of an augmentation are gated, and an earlier draft of this ADR gated neither.** That
+draft recorded the derivation as a bare `PlatformEventRegistry[keyof PlatformEventRegistry]`, which
+review measured to fail four ways — each by compiling a hostile augmentation, none by argument:
+
+| Augmentation | What it did to the bare derivation |
+|---|---|
+| `sloppy: any` | collapsed the whole union; `tsc --strict` then accepted `event.completelyMadeUpField.nested.nonsense` on every consumer with **exit 0** |
+| `[key: string]: BaseMessageEvent` | legal, because every variant is assignable to the base — widened `PlatformName` to `string`, so every typo became valid |
+| `signal: BaseMessageEvent` | admitted an entry whose discriminator is not a literal, breaking narrowing for every first-party case |
+| `signal: { platform: "signl"; … }` | key and discriminator disagreed; the error landed on the *consumer's* `switch`, not on the augmentation |
+
+The closed union this ADR supersedes could not fail any of those ways. Recording the derivation
+without the guard would have traded a real safety property for the new capability instead of keeping
+both — and it would have done so in the only record that travels with the repository, since the
+detailed plan lives under `.claude/`, which `.gitignore` excludes.
 
 ## Consequences
 
@@ -58,6 +91,18 @@ keys, so exhaustive narrowing is preserved — including over platforms core has
 - **Negative (accepted).** `PlatformName` no longer reads as a list of platforms at its declaration
   site; a reader must open `PlatformEventRegistry` to see them. This is a real legibility cost and
   is accepted for the capability it buys.
+- **Negative (accepted).** `BaseMessageEvent.platform` widens from `PlatformName` to `string`. It
+  has to: `PlatformName` is now derived from the guarded union, and the union is built from shapes
+  that extend the base, so naming it there makes the two reference each other (`TS2456`). Every
+  concrete variant still narrows the field to its own literal, and no production code in this
+  repository reads `platform` off a bare `BaseMessageEvent`. A published consumer that assigns
+  `baseEvent.platform` into a `PlatformName` slot would break; a consumer holding a `MessageEvent`
+  is unaffected.
+- **Negative (corrected).** An excluded entry is NOT free for first-party consumers. A
+  `Record<PlatformName, T>` written against the ten fails to compile when a rejected key disappears
+  from `PlatformName`. An earlier version of this ADR and of the source docblock claimed first-party
+  consumers were untouched; that was measured false in review. What the exclusion buys is a
+  missing-key error at the consumer's own map instead of a silent loss of narrowing everywhere.
 - **Negative (accepted).** Declaration merging is invisible to anyone who has not met the pattern.
   It is documented at the declaration and in the authoring guide, and it is the same mechanism
   Fastify and Vite use for the same purpose — which is a note about familiarity, not a justification

@@ -6,7 +6,6 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "test": "vitest run tests/unit tests/readiness.test.ts",
     "integration": "vitest run",
     "integration:watch": "vitest",
     "readiness": "vitest run tests/readiness.test.ts",

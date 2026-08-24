@@ -49,9 +49,9 @@ own quality gates.
 
 ## Index
 
-13 items — **Open** 6 · **In flight** 0 · **Closed** 7
+14 items — **Open** 7 · **In flight** 0 · **Closed** 7
 
-### Open (6)
+### Open (7)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -61,6 +61,7 @@ own quality gates.
 | [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `raw` | — |
 | [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
 | [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive----) | The published packages carry 1 critical and 19 high advisories, all transitive | `raw` | — |
+| [`B-014`](#b-014--a-unit-test-calls-the-real-telegram-api-and-fails-when-the-network-is-slow----) | A unit test calls the real Telegram API and fails when the network is slow | `raw` | — |
 
 ### In flight (0)
 
@@ -344,3 +345,20 @@ dod:
 > that plan adds zero dependencies and introduces none of these, so blocking it here would punish
 > the wrong change — and swallowing the finding because it was inconvenient is the failure the
 > single registry exists to prevent.
+
+## B-014 — A unit test calls the real Telegram API and fails when the network is slow   [ ]
+
+domain: theokit-gateways
+repo: packages/gateway-telegram
+suggested_mode: bug
+source: human
+evidence: `packages/gateway-telegram/tests/adapter.test.ts:101` — `EC-I: connect() with bad token resolves to false (does NOT throw)` calls `adapter.connect()`, which reaches grammy's `bot.init()` and therefore `api.telegram.org`. Measured over three consecutive `pnpm -r test` runs on an unchanged tree: exit 0, exit 0, exit **1** — `× EC-I: connect() with bad token resolves to false (does NOT throw) 5024ms`, `Test Files 1 failed | 3 passed (4)`. The failure is a 5s timeout, not an assertion.
+why_now: found while running the gates for B-008, on a tree whose only changes are type declarations in a different package. `rules/testing.md § 6` names network in a unit test as an anti-pattern and says a flaky test is a bug to fix or delete; this one is both. It also makes every future gate run on this repository a coin flip, so any red it produces will be dismissed as "just the flaky one" — which is how a real regression gets waved through.
+status: raw
+dod:
+  - the test asserts the same behaviour without reaching the network
+  - `pnpm -r test` passes 10 consecutive times on an unchanged tree
+  - if the live behaviour is genuinely worth covering, it lives in `integration/` behind a credential gate, not in a unit suite
+
+> Registered 2026-08-23 during B-008's gate run. Not folded into B-008: that change is type-level
+> and in a different package, and blocking it on a pre-existing flake would punish the wrong work.

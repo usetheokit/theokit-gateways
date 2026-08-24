@@ -1,9 +1,17 @@
 # ADR-0001 — `MessageEvent` is a closed discriminated union
 
-- Status: Accepted
+- Status: **Superseded by [ADR-0002](0002-platform-event-registry.md)** (2026-08-23)
+- Previous status: Accepted
 - Date: 2026-07-10
 - Deciders: gateway cluster maintainers
 - Context source: `architect-output/ARCHITECTURE-REPORT.md` (coupling#4 / pattern#9), roadmap M3
+
+
+> **Superseded, not refuted.** ADR-0002 reopened this decision because the revisit trigger below
+> fired — out-of-repo adapters became a supported goal. The pricing recorded here was then measured
+> and found substantially correct: adding a platform costs 4 lines of union machinery plus a 2-line
+> exhaustiveness test, not more. The exhaustive-narrowing requirement this ADR defends is preserved
+> by the successor, including over platforms the core has never heard of.
 
 ## Context and Problem Statement
 

@@ -36,7 +36,7 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "tsc --noEmit && vitest run",
     "test:mutation": "stryker run"
   },
   "peerDependencies": {
