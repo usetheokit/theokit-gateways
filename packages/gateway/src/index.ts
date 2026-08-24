@@ -60,6 +60,7 @@ export type {
   MatrixMessageEvent,
   MattermostMessageEvent,
   MessageEvent,
+  PlatformEventRegistry,
   PlatformName,
   SlackMessageEvent,
   SMSMessageEvent,

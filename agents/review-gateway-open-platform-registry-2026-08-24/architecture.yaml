@@ -1,0 +1,16 @@
+agent: architecture-reviewer
+findings:
+  - id: ARCH-1
+    severity: INFO
+    file: packages/gateway/src/types/message-event.ts
+    line: 36
+    summary: "BaseMessageEvent.platform widened to string; no production code reads it off a bare base event"
+    evidence: "grep across packages/*/src: only packages/gateway/src/index.ts:56 re-exports the type. gateway-runner.ts:295 and delivery/router.ts:50 read it off a MessageEvent. pnpm -r typecheck exit 0."
+    recommended_action: "None. Recorded as an accepted consequence in docs/adr/0002-platform-event-registry.md."
+  - id: ARCH-2
+    severity: LOW
+    file: packages/gateway/dist/index.d.ts
+    line: 1
+    summary: "75 ADR ids across published declarations resolve nowhere — pre-existing, registered as B-015"
+    evidence: "24 D### ids cited in packages/gateway/dist/index.d.ts; packages/gateway/src/README.md:52-59 defines D170-D177 only."
+    recommended_action: "Tracked as B-015; out of scope for this change."

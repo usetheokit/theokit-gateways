@@ -1,0 +1,16 @@
+agent: verification-reviewer
+findings:
+  - id: VER-1
+    severity: INFO
+    file: tools/check-registry-augmentation.mjs
+    line: 1
+    summary: "Composition-level augmentation gate added and wired into CI; 12 hostile shapes, none fatal to first parties"
+    evidence: "pnpm quality:registry-augmentation exit 0. Verified detecting: reintroducing the defect reports optional-member, string-index-signature and readonly-index-signature and exits 1."
+    recommended_action: "None."
+  - id: VER-2
+    severity: LOW
+    file: package.json
+    line: 1
+    summary: "pnpm quality:docs writes .doc-probes/ into the tree and it is not gitignored — pre-existing, registered as B-016"
+    evidence: "Observed at packages/gateway-line/.doc-probes/ by two independent agents."
+    recommended_action: "Tracked as B-016."
