@@ -46,9 +46,23 @@ import { splitForSlack } from "./split.js";
 
 /** Construction options for {@link SlackAdapter}. */
 export interface SlackAdapterOptions {
-  /** xoxb-... Bot User OAuth token. */
+  /**
+   * The Slack bot user's OAuth token, beginning `xoxb-`.
+   *
+   * @platform-term Slack calls this a **bot token**. Note the divergence, which is deliberate:
+   * `@slack/bolt` names its field `token`, and this adapter also takes an `appToken`, so `token`
+   * alone would not say which of the two it is.
+   * @issued-at The Slack app's OAuth & Permissions page, after installing the app to a workspace.
+   */
   readonly botToken: string;
-  /** xapp-... App-Level token with `connections:write` scope. */
+  /**
+   * The Slack app-level token, beginning `xapp-`, used for Socket Mode.
+   *
+   * @platform-term Slack calls this an **app-level token**. It is a different object from the bot
+   * token above — that one acts as the bot, this one opens the socket — which is why this adapter
+   * names both explicitly rather than following `@slack/bolt`'s bare `token`.
+   * @issued-at The Slack app's Basic Information page, under App-Level Tokens.
+   */
   readonly appToken: string;
   /** D269: only `"socket"` is supported in v1. */
   readonly transport?: "socket";

@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-discord",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Discord (discord.js) platform adapter for @theokit/gateway. ADRs D171, D179.",
   "license": "Apache-2.0",
   "repository": {

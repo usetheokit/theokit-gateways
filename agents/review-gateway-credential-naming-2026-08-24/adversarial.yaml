@@ -1,0 +1,23 @@
+agent: adversarial-reviewer
+findings:
+  - id: CRED-1
+    severity: INFO
+    file: packages/gateway/tests/lint/adapter-contract.test.ts
+    line: 44
+    summary: "HIGH (gate read 10 of 15 published credential fields) — fixed; table now lists every field per package"
+    evidence: "Deleting VonageOptions.apiSecret's docblock left the gate green before; it now exits 1. 15 fields across 10 packages."
+    recommended_action: "None — closed."
+  - id: CRED-2
+    severity: INFO
+    file: packages/gateway/tests/lint/adapter-contract.test.ts
+    line: 67
+    summary: "HIGH (a decoy types.ts mentioning AdapterOptions in a comment shadowed the real declaration) — fixed"
+    evidence: "Resolver matches an export declaration, not a substring. Reproduced the reviewer's decoy: now exits 1."
+    recommended_action: "None — closed."
+  - id: CRED-3
+    severity: LOW
+    file: packages/gateway-whatsapp/src/adapter.ts
+    line: 37
+    summary: "Meta's term could not be pinned to a package — no Meta SDK in the dependency graph"
+    evidence: "grep for access_token across node_modules returns only the docblock itself; the Cloud backend uses fetch."
+    recommended_action: "Docblock now states it rests on Meta's documentation rather than an SDK, unlike the other nine."

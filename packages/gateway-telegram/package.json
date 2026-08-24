@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-telegram",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Telegram (grammy) platform adapter for @theokit/gateway. ADR D171.",
   "license": "Apache-2.0",
   "repository": {
