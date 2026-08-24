@@ -18,3 +18,9 @@ it: a throw means the 200 is never built, and mounted in a TheoKit route the rej
 route's error boundary and is answered 500 where the platform expected an acknowledgement. `parseInbound` returning `null`
 is unchanged and still the right contract — only the stated reason was wrong, and it was reaching
 users through the `.d.ts` on hover.
+
+`@theokit/gateway-sms`'s docblocks also named the wrong seam. Its `parseInbound` is
+`(options, ctx)`, and the `SignatureContext` it needs carries the raw body, the headers and the URL
+— none of which TheoKit's `ChannelMessage` provides, so the signature check cannot be performed
+from inside `onMessage` for any provider. SMS goes through its own `createWebhookServer`, and the
+published `.d.ts` says so now instead of claiming to be the gateway half of the channel seam.
