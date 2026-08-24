@@ -28,7 +28,8 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm run build && changeset publish",
-    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
+    "quality:adr-citations": "node tools/check-adr-citations.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.0",
@@ -41,6 +42,9 @@
       "bufferutil",
       "esbuild",
       "utf-8-validate"
-    ]
+    ],
+    "overrides": {
+      "form-data@<2.5.4": ">=2.5.4"
+    }
   }
 }

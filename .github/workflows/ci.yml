@@ -104,6 +104,11 @@ jobs:
       # remove, and deliberately not the prose around them.
       - name: The integration story is still told
         run: pnpm quality:integration-story
+      # B-015: 76 decision ids were cited across the eleven published declarations and 59 resolved
+      # nowhere — they lived in plans under `.claude/`, which is not versioned. This fails when a
+      # NEW unaccounted citation enters a published `.d.ts`.
+      - name: Every cited decision id is accounted for
+        run: pnpm quality:adr-citations
 
       # npm verifies the signed provenance bundle against `repository.url`, and every package here
       # sets `publishConfig.provenance: true`. None of the eleven declared a repository, so a release
