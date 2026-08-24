@@ -49,22 +49,23 @@ own quality gates.
 
 ## Index
 
-16 items — **Open** 6 · **In flight** 0 · **Closed** 10
+16 items — **Open** 5 · **In flight** 1 · **Closed** 10
 
-### Open (6)
+### Open (5)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
-| [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `triaged` | — |
 | [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
 | [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive----) | The published packages carry 1 critical and 19 high advisories, all transitive | `raw` | — |
 | [`B-014`](#b-014--a-unit-test-calls-the-real-telegram-api-and-fails-when-the-network-is-slow----) | A unit test calls the real Telegram API and fails when the network is slow | `raw` | — |
 | [`B-015`](#b-015--the-published-declarations-cite-75-adr-ids-that-resolve-nowhere----) | The published declarations cite 75 ADR ids that resolve nowhere | `raw` | — |
 | [`B-016`](#b-016--pnpm-qualitydocs-writes-into-the-repo-root-and-the-output-is-not-ignored----) | `pnpm quality:docs` writes into the repo root and the output is not ignored | `raw` | — |
 
-### In flight (0)
+### In flight (1)
 
-_None._
+| Item | Title | Status | Severity |
+|---|---|---|---|
+| [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `planned` | — |
 
 ### Closed (10)
 
@@ -377,7 +378,9 @@ source: human
 opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-integration-story-opportunity.md` (SHIPPABLE)
 evidence: `README.md:3` describes this repo only by its split from `theokit-sdk`, and the word `theokit` (the framework) appears nowhere in it. The scaffold a new user gets from `create-theokit` ships six `.claude/skills/` — agents, config, database, frontend, routes, ui — and none for gateways. So the framework's own scaffold does not mention gateways, and the gateways' own README does not mention the framework.
 why_now: measured by scaffolding an app and trying to wire a gateway from the documentation alone: the integration story exists in neither repo, and the seam that does exist (`handleChannelWebhook`) is discoverable only by reading TheoKit's `.d.ts`. Every step taken during that measurement was taken by reading source, which is what a user would also have to do.
-status: triaged
+status: planned
+partially_shipped: `@theokit/gateway@0.7.1`, `@theokit/gateway-telegram@0.2.2`, `@theokit/gateway-sms@0.2.2` (PR #74, 2026-08-24) — the gateways half only
+blocked_on: two of the three DoD bullets need a `theokit` release, which is another repository's cycle. See the note below.
 dod:
   - one document states which repo owns which half of the seam
   - a new user can wire a gateway to an agent without reading any `.d.ts`
@@ -397,6 +400,31 @@ dod:
 > their own platform (LINE 10 mentions, SMS 9). What none does — and what survives — is connect the
 > three repositories. Decision recorded as D431, with the limit stated: two of the three repos are
 > outside this one's write access.
+
+> **ACCEPTANCE 2026-08-24 — the gateways half is released and the item is NOT done.** DoD bullet 1
+> is met: `@theokit/gateway@0.7.1`'s README, verified by installing it from the registry, states
+> which repository owns which half. Bullets 2 and 3 are not, and no work in this repository can meet
+> them.
+>
+> Bullet 3 asks for the story in the framework's scaffold. `create-theokit` ships six skills and
+> none for gateways; the only occurrence of the word in the whole template is in
+> `docs/ENVIRONMENT.md`. A `theokit-gateways` skill was written and committed on `theokit`'s
+> `workspace` branch, unpushed — the repository owner was committing to that branch at the time and
+> the authorisation for this loop covers this registry, not his. Until `create-theokit` publishes,
+> a new user downloads a scaffold that still says nothing.
+>
+> Bullet 2 asks that a new user wire a gateway without reading a `.d.ts`. **They cannot wire one at
+> all.** `handleChannelWebhook` takes a required `validators` map and its own docblock demonstrates
+> `telegram({ secretToken })` — and in the published `theokit@0.48.14` no validator is exported from
+> any entrypoint a consumer can reach: `dist/server/webhook/` holds only `index.{js,d.ts}`, there is
+> no `providers/` file in the package, and the string `x-telegram-bot-api-secret-token` appears
+> nowhere in `dist/`. Six providers exist in `src/server/webhook/providers/` with their own barrel,
+> and the public `index.ts` re-exported none of them. Found by trying to write the scaffold skill's
+> example and failing. The one-line re-export plus a test that fails with
+> `expected 'undefined' to be 'function'` is committed on `theokit`'s `workspace`, also unpushed.
+>
+> Editing this DoD to drop those bullets would be grading a moved target, and calling them caveats
+> would be the anti-pattern `cycle-acceptance` names by name. The item stays open.
 
 ## B-012 — The SDK sits in the middle of the triad wired to a single utility   [ ]
 
