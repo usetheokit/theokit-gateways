@@ -62,26 +62,27 @@ export function sectionBody(text, heading) {
 }
 
 /**
- * The prose a reader actually sees, with the hiding places listed below blanked out.
+ * The prose a reader actually sees.
  *
- * Applied to the WHOLE document before the section is located, not to the section afterwards. The
- * first attempt stripped only the body, so a `## How this fits with TheoKit` line written inside an
- * HTML comment or a fenced code block defined a phantom section and the real one could be deleted —
- * the bypass this was meant to close, reached through the heading instead of the body.
+ * WHAT THIS DEFENDS AGAINST, AND WHAT IT DOES NOT.
  *
- * Blanked, not deleted: comments and fences are replaced by their own newlines so headings after
- * them still start a line.
+ * The threat is a section that quietly stops being there: deleted in a tidy-up, commented out
+ * during a rewrite, or pasted into an example. Those happen by accident, and they are what this
+ * blanks — HTML comments and fenced code (``` or ~~~, indented up to three spaces, closer at least
+ * as long as its opener), each only when it actually closes. Link
+ * TARGETS go too — inline `](url)`, reference definitions and autolinks — because a URL that
+ * contains a word is not a sentence naming it; a link LABEL stays.
  *
- * A fact counts when a reader can see it and it is being asserted. What is blanked, and nothing
- * else: HTML comments (invisible), fenced code — ``` or ~~~, indented up to three spaces, closed or
- * running to end of file as CommonMark says they do — and every link TARGET: inline `](url)`,
- * reference definitions `[id]: url`, and autolinks `<url>`, because a URL that contains a word is
- * not a sentence naming it. A link LABEL survives: naming the repository in the text of a link is
- * naming it. Four-space indented code is NOT blanked — it is ordinary content, and treating it as a
- * fence would swallow the rest of the document.
+ * It does NOT defend against an author hiding a heading on purpose. `<script>`, `<pre>`,
+ * `<textarea>` and `<div>` are HTML blocks CommonMark treats as raw, and a heading inside one is
+ * invisible to a reader and visible here. That is deliberate: an author willing to do that can equally write a
+ * section that names every fact and says something false, which this gate has never checked, and
+ * chasing each new construct cost four rounds of review and four FALSE FAILS on innocent documents
+ * — a `<!--` written in prose was enough to report the documented section missing. A false fail
+ * lands on someone who did nothing wrong, and it is what teaches a team to stop reading the gate.
  *
- * This list is what is covered, not a claim that nothing else hides text. An earlier version of
- * this docblock said "every hiding place" and four bypasses were found the same afternoon.
+ * For the same reason an unterminated block is not treated as hiding anything, even though
+ * CommonMark runs one to end of file.
  *
  * @param {string} text
  * @returns {string}
@@ -93,29 +94,41 @@ export function visibleText(text) {
 /**
  * What opens a block the reader does not read, and what closes it.
  *
- * One function so the four kinds share a shape: a line opens, a later line closes, everything
- * between is not prose. Fences honour CommonMark's length rule — a closer must be at least as long
- * as its opener — which is both a bypass (a short line closing a long fence) and a false fail (a
+ * One function so the kinds share a shape: a line opens, a later line closes, everything between is
+ * not prose. Fences honour CommonMark's length rule — a closer must be at least as long as its
+ * opener — which is both a bypass (a short line closing a long fence) and a false fail (a
  * three-backtick fence legitimately closed with four) when it is missing.
+ *
+ * A comment only opens when it is still open at end of line: `<!-- note --> <!--` opens, and
+ * `<!-- note -->` does not. Getting that backwards produced a bypass and a false fail at once.
  *
  * @param {string} line
  * @param {number} index
  * @returns {{start: number, close: RegExp} | undefined}
  */
 function openBlock(line, index) {
-  if (index === 0 && /^---\s*$/.test(line)) return { start: 0, close: /^---\s*$/ };
-
   const fence = /^ {0,3}(`{3,}|~{3,})/.exec(line);
   if (fence !== null) {
     const [marker] = fence.slice(1);
     return { start: index, close: new RegExp(`^ {0,3}\\${marker[0]}{${marker.length},}\\s*$`) };
   }
 
-  const html = /^\s*<(script|style)\b/i.exec(line);
-  if (html !== null) return { start: index, close: new RegExp(`</${html[1]}>`, "i") };
-
-  if (line.includes("<!--") && !line.includes("-->")) return { start: index, close: /-->/ };
+  if (stillOpen(line, "<!--", "-->")) return { start: index, close: /-->/ };
   return undefined;
+}
+
+/**
+ * Whether `open` is the last of the two markers on this line — i.e. the block it starts is still
+ * open when the line ends.
+ *
+ * @param {string} line
+ * @param {string} open
+ * @param {string} close
+ * @returns {boolean}
+ */
+function stillOpen(line, open, close) {
+  const opened = line.toLowerCase().lastIndexOf(open.toLowerCase());
+  return opened !== -1 && opened > line.toLowerCase().lastIndexOf(close.toLowerCase());
 }
 
 /**

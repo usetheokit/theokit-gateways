@@ -81,7 +81,7 @@ describe("parseInbound", () => {
     // The regression for the review BLOCKER. An earlier version validated `fromNumber` up front
     // with `normalizeE164`, a rule stricter than anything else in this package applies to it, and
     // these four documented configurations each threw `ConfigurationError` out of `onMessage`
-    // out of the route before it answered — the exact failure the check was meant to prevent.
+    // before TheoKit answered at all — the exact failure the check was meant to prevent.
     const options = { ...OPTIONS, fromNumber, defaultCountry: "BR" };
 
     expect(() => parseInbound(options, CTX)).not.toThrow();

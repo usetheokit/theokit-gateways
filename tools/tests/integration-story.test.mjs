@@ -174,24 +174,27 @@ describe("hiding places a reader never sees", () => {
 // unterminated fence does run to end of file in CommonMark, but the reader who writes one is
 // making a typo, while the author who exploits one is gaming a gate that already admits it cannot
 // check accuracy.
+// The `<script>` and `<style>` assertions that stood here were withdrawn with the rule they tested.
+// They defended against an author deliberately hiding a heading — which `visibleText`'s docblock now
+// declares out of scope — while costing three untested branches and a false fail on a document that
+// showed two script tags. Keeping an adversarial defence after declaring adversaries out of scope is
+// the incoherence, not the removal.
 describe("blocks that hide a heading", () => {
   const check = (text) => missingFacts(text, { file: "README.md", heading: HEADING, facts: FACTS });
   const gone = ["README.md: has no `## How this fits with TheoKit` section"];
   const phantom = (open, close) =>
     `# t\n\n${open}\n## ${HEADING}\n\nhandleChannelWebhook and theokit-sdk.\n${close}\n\n## Install\n\nUnrelated.\n`;
 
-  it("does not accept a heading inside a script block", () => {
-    expect(check(phantom("<script>", "</script>"))).toEqual(gone);
-  });
-
-  it("does not accept a heading inside a style block", () => {
-    expect(check(phantom("<style>", "</style>"))).toEqual(gone);
-  });
-
-  it("does not accept a heading inside YAML front matter", () => {
+  // Withdrawn on evidence, like the two above. Recognising YAML front matter meant treating `---`
+  // on line 0 as an opener, and nothing distinguishes that from a thematic break — an ordinary
+  // README starting with a horizontal rule had everything up to its next `---` blanked. Hiding a
+  // heading in front matter is adversarial; starting a document with a rule is not.
+  it("accepts a thematic break as the first line, front matter or not", () => {
     expect(
-      check(`---\n## ${HEADING}\nhandleChannelWebhook theokit-sdk\n---\n\n# t\n\n## Install\n`),
-    ).toEqual(gone);
+      check(
+        `---\n\n# t\n\n## ${HEADING}\n\nhandleChannelWebhook, theokit-sdk, theokit-gateways.\n\n---\n`,
+      ),
+    ).toEqual([]);
   });
 
   it("does not let a short line close a longer fence", () => {
@@ -214,21 +217,106 @@ describe("innocent documents the gate must not fail", () => {
   });
 
   it("accepts a four-backtick fence closed with four backticks", () => {
-    expect(
-      check(doc("handleChannelWebhook, theokit-sdk.\n\n\`\`\`\`ts\nconst a = 1;\n\`\`\`\`")),
-    ).toEqual([]);
+    expect(check(doc("handleChannelWebhook, theokit-sdk.\n\n````ts\nconst a = 1;\n````"))).toEqual(
+      [],
+    );
   });
 
   it("accepts a three-backtick fence closed with four", () => {
-    expect(
-      check(doc("handleChannelWebhook, theokit-sdk.\n\n\`\`\`ts\nconst a = 1;\n\`\`\`\`")),
-    ).toEqual([]);
+    expect(check(doc("handleChannelWebhook, theokit-sdk.\n\n```ts\nconst a = 1;\n````"))).toEqual(
+      [],
+    );
   });
 
   it("accepts a fence whose closer is indented", () => {
     // Guards the closer's own indentation allowance, which survived a mutation until it had a test.
-    expect(
-      check(doc("handleChannelWebhook, theokit-sdk.\n\n\`\`\`ts\nconst a = 1;\n   \`\`\`")),
-    ).toEqual([]);
+    expect(check(doc("handleChannelWebhook, theokit-sdk.\n\n```ts\nconst a = 1;\n   ```"))).toEqual(
+      [],
+    );
+  });
+});
+
+// Round five. The gate had grown to 192 lines of hand-written CommonMark defending 63 lines of
+// documentation, and each review found another bypass and another FALSE FAIL. The bypasses were all
+// adversarial — nobody hides a heading in a `<textarea>` by accident — while the false fails hit
+// authors who did nothing wrong. So the threat model is now stated and the parser shrank to it:
+// this gate defends against the section being deleted or commented out, not against an author
+// deliberately hiding a heading from it. Someone willing to do that can equally write a section
+// naming every fact that says something false, which this gate has never checked.
+describe("the accidental threat model, and its stated limits", () => {
+  const check = (text) => missingFacts(text, { file: "README.md", heading: HEADING, facts: FACTS });
+  const gone = ["README.md: has no `## How this fits with TheoKit` section"];
+
+  it("catches the section commented out during a rewrite", () => {
+    const text = `# t\n\n<!--\n## ${HEADING}\n\nhandleChannelWebhook, theokit-sdk, theokit-gateways.\n-->\n\n## Install\n`;
+    expect(check(text)).toEqual(gone);
+  });
+
+  it("accepts prose about comment markers, closing marker and all", () => {
+    // The false fail that came back once already: a document explaining how to comment something
+    // out names both markers, and an earlier version blanked everything between them.
+    const text = doc(
+      "Wrap it in `<!--` and close with `-->`. handleChannelWebhook, theokit-sdk, theokit-gateways.",
+    );
+    expect(check(text)).toEqual([]);
+  });
+
+  it("accepts a table whose cells name both comment markers", () => {
+    const text = doc(
+      "| a | b |\n|---|---|\n| `<!--` | opens |\n| `-->` | closes |\n\nhandleChannelWebhook, theokit-sdk, theokit-gateways.",
+    );
+    expect(check(text)).toEqual([]);
+  });
+
+  it("treats a real comment reopened on a line that closes an earlier one as open", () => {
+    const text = `# t\n\n<!-- note --> <!--\n## ${HEADING}\n\nhandleChannelWebhook, theokit-sdk.\n-->\n\n## Install\n`;
+    expect(check(text)).toEqual(gone);
+  });
+
+  it("accepts a document that opens a script tag twice in examples", () => {
+    const text = doc(
+      '`<script src="a.js"></script>` and `<script src="b.js"></script>`. handleChannelWebhook, theokit-sdk, theokit-gateways.',
+    );
+    expect(check(text)).toEqual([]);
+  });
+
+  it("accepts a thematic break on the first line", () => {
+    const text = `---\n\n# t\n\n## ${HEADING}\n\nhandleChannelWebhook, theokit-sdk, theokit-gateways.\n\n---\n\n## Install\n`;
+    expect(check(text)).toEqual([]);
+  });
+
+  it("blanks the fence's own opening and closing lines, not only what is between", () => {
+    // Both were untested; a mutant that shifted either bound survived the previous review.
+    const text = `# t\n\n\`\`\`md ## ${HEADING}\nx\n\`\`\` handleChannelWebhook\n\n## Install\n`;
+    expect(check(text)).toEqual(gone);
+  });
+
+  it("hides a heading inside a fence whose closer carries trailing whitespace", () => {
+    // The discriminating case: with the closer unrecognised the fence never closes, is discarded,
+    // and the heading inside it becomes visible — a bypass. Asserting the fence closes is not
+    // enough to catch that, which is why the mutation on `\\s*$` survived until this test.
+    const text = `# t\n\n\`\`\`md\n## ${HEADING}\n\nhandleChannelWebhook, theokit-sdk.\n\`\`\`   \n\n## Install\n`;
+    expect(check(text)).toEqual(gone);
+  });
+
+  it("blanks the fence's own opening line, so a fact written on it does not count", () => {
+    // A heading can never sit on a boundary line — those start with the marker — so the bounds are
+    // observable only through facts, and only on the OPENING line: a valid closing fence carries
+    // the marker and whitespace and nothing else, so no fact can sit on it. Mutating `<= index` to
+    // `< index` therefore survives, and it survives because it changes nothing observable — an
+    // equivalent mutant, recorded here so the next review does not re-file it as a coverage gap.
+    const text = doc(
+      "handleChannelWebhook and theokit-gateways.\n\n```ts theokit-sdk\nconst a = 1;\n```",
+    );
+    expect(check(text)).toEqual([
+      "README.md: `## How this fits with TheoKit` never names theokit-sdk",
+    ]);
+  });
+
+  it("closes a fence whose marker is followed by trailing whitespace", () => {
+    const text = doc(
+      "handleChannelWebhook, theokit-sdk, theokit-gateways.\n\n```ts\nconst a = 1;\n```   ",
+    );
+    expect(check(text)).toEqual([]);
   });
 });
