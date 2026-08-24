@@ -55,7 +55,7 @@ own quality gates.
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
-| [`B-008`](#b-008--a-gateway-cannot-be-written-outside-this-repository----) | A gateway cannot be written outside this repository | `raw` | — |
+| [`B-008`](#b-008--a-gateway-cannot-be-written-outside-this-repository----) | A gateway cannot be written outside this repository | `triaged` | — |
 | [`B-009`](#b-009--theokits-channel-seam-names-our-packages-as-the-translator-and-no-adapter-can-translate----) | TheoKit's channel seam names our packages as the translator, and no adapter can translate | `raw` | — |
 | [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `raw` | — |
 | [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together----) | Nothing documents how the three repositories fit together | `raw` | — |
@@ -239,11 +239,12 @@ dod:
 
 domain: theokit-gateways
 repo: packages/gateway
-suggested_mode: evolve
+suggested_mode: evolve → reclassified: capability gap (the cost half was refuted by measurement)
 source: human
+opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-open-platform-registry-opportunity.md` (SHIPPABLE_WITH_CAVEATS)
 evidence: `packages/gateway/src/types/message-event.ts:22` declares `PlatformName` as a closed union of our ten platforms, and line 223 builds `MessageEvent` from the ten matching variants. A third-party adapter was written and compiled to confirm rather than assume: `error TS2416: Type '"signal"' is not assignable to type 'PlatformName'`. The closure is deliberate and recorded — ADR-0001 (`docs/adr/0001-message-event-closed-union.md`) chose exhaustive narrowing over OCP purity, and names its own revisit trigger: "if third-party or out-of-repo adapters ever become a supported goal, reopen this decision".
 why_now: that trigger has fired — supporting gateways written outside this repo is now a stated goal. The naive fix was prototyped first and FAILED: adding a `platform: string` variant destroys the narrowing the ADR refused to give up (`TS2339: Property 'telegram' does not exist on type 'DiscordEvent'`), so reopening the decision must not mean simply opening the union.
-status: raw
+status: triaged
 dod:
   - an adapter in a separate package names a platform core has never heard of, and compiles
   - the ten first-party platforms keep exhaustive `switch` narrowing, proven by a test that fails when a case is deleted
@@ -255,6 +256,16 @@ dod:
 > use), with the union derived from it. Three mutations each turn the compiler red — deleting a
 > third-party `case` breaks exhaustiveness, reading the wrong field fails to narrow, and removing
 > the augmentation rejects the platform name. Design only; nothing implemented.
+
+> **DISCOVER 2026-08-23 — `evolve` measured, half of it refuted.** ADR-0001's "~3-line" price is
+> substantially correct: an eleventh platform costs 4 lines of union machinery plus a 2-line
+> exhaustiveness test, measured by making the edit and running all four gates green, then reverting.
+> So the cost framing is dead and the item is re-scoped to a capability gap, which the measurement
+> confirmed: `TS2416 … Type '"signal"' is not assignable to type 'PlatformName'`, compiled in a
+> project outside this monorepo against the published `0.6.1` declaration. Blast radius: 157 sites,
+> zero of which switch on `event.platform` in production source — runtime dispatch is a string-keyed
+> Map, so the exhaustiveness ADR-0001 protects is a consumer-facing property. Decision recorded in
+> `docs/adr/0002-platform-event-registry.md` (supersedes ADR-0001).
 
 ## B-009 — TheoKit's channel seam names our packages as the translator, and no adapter can translate   [ ]
 
