@@ -19,18 +19,14 @@
  * @public
  */
 
-/** Closed enum of supported transport platforms. */
-export type PlatformName =
-  | "telegram"
-  | "discord"
-  | "slack"
-  | "whatsapp"
-  | "teams"
-  | "email"
-  | "sms"
-  | "mattermost"
-  | "line"
-  | "matrix";
+/**
+ * Every platform filed in {@link PlatformEventRegistry}.
+ *
+ * Still a union of string literals, so `switch (event.platform)` narrows and a misspelled name is
+ * a compile error — the property ADR-0001 protected and ADR-0002 preserves. What changed is that
+ * the list is derived rather than written, so a package outside this repository can add to it.
+ */
+export type PlatformName = keyof PlatformEventRegistry & string;
 
 /** Fields common to every platform's inbound event. */
 export interface BaseMessageEvent {
@@ -243,14 +239,77 @@ export interface MatrixMessageEvent extends BaseMessageEvent {
 }
 
 /** Discriminated union of all platform variants. */
-export type MessageEvent =
-  | TelegramMessageEvent
-  | DiscordMessageEvent
-  | SlackMessageEvent
-  | WhatsAppMessageEvent
-  | TeamsMessageEvent
-  | EmailMessageEvent
-  | SMSMessageEvent
-  | MattermostMessageEvent
-  | LineMessageEvent
-  | MatrixMessageEvent;
+/**
+ * The open registry every platform's inbound event is filed under.
+ *
+ * **This is an `interface` on purpose, and it must stay one.** An interface can be extended from
+ * another package through declaration merging; a type alias cannot. That single property is what
+ * lets a gateway be authored, published and consumed without editing this file — the capability
+ * B-008 measured as impossible (`TS2416`, compiled against the published declaration) and ADR-0002
+ * decided to unlock. Collapsing it back into a type alias would silently remove that capability
+ * while every test in this package still passed.
+ *
+ * A third-party gateway registers itself from its own package:
+ *
+ * ```typescript
+ * declare module "@theokit/gateway" {
+ *   interface PlatformEventRegistry {
+ *     signal: SignalMessageEvent;
+ *   }
+ * }
+ * ```
+ *
+ * @public
+ */
+export interface PlatformEventRegistry {
+  telegram: TelegramMessageEvent;
+  discord: DiscordMessageEvent;
+  slack: SlackMessageEvent;
+  whatsapp: WhatsAppMessageEvent;
+  teams: TeamsMessageEvent;
+  email: EmailMessageEvent;
+  sms: SMSMessageEvent;
+  mattermost: MattermostMessageEvent;
+  line: LineMessageEvent;
+  matrix: MatrixMessageEvent;
+}
+
+/**
+ * `true` only for `any` — the one type that would otherwise swallow the union.
+ *
+ * `any extends X` distributes to both branches of a conditional, so an ordinary
+ * `T extends BaseMessageEvent ? T : never` does NOT keep `any` out. This does: nothing but `any`
+ * makes `1 & T` accept `0`.
+ */
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+/**
+ * A registry entry joins {@link MessageEvent} only if it is a real event shape (ADR D425).
+ *
+ * Measured, not anticipated: without this guard a single entry typed `any` collapses the whole
+ * union, and `tsc --strict` then accepts `event.completelyMadeUpField.nested.nonsense` on EVERY
+ * consumer — ours included — with no error in any package and nothing red in any suite. The closed
+ * union could not fail that way, so the guard is what keeps the new capability from costing a
+ * safety property the old design had.
+ *
+ * A malformed entry is EXCLUDED rather than fatal, which also fixes the blast direction: the
+ * author's own `case` stops narrowing, and first-party consumers are untouched.
+ *
+ * Exported for the contract test in `tests/types/registry-guard.test.ts`, which asserts against
+ * this type rather than a copy of it — a copy would stay green with the guard deleted. It is
+ * deliberately NOT re-exported from the package barrel; it is an implementation detail of the
+ * derivation, not part of the published surface.
+ */
+export type Registered<T> = IsAny<T> extends true ? never : T extends BaseMessageEvent ? T : never;
+
+/**
+ * The canonical inbound event: every guarded entry in {@link PlatformEventRegistry}.
+ *
+ * Derived rather than written, so third-party platforms are included automatically and exhaustive
+ * narrowing still holds over all of them.
+ *
+ * @public
+ */
+export type MessageEvent = {
+  [K in keyof PlatformEventRegistry]: Registered<PlatformEventRegistry[K]>;
+}[keyof PlatformEventRegistry];
