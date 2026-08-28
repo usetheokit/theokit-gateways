@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that gate is built on. The pin is exact so a later `pnpm update` cannot walk into it silently.
 
 ### Fixed
+- **gateway-teams:** `connect()` reported success without checking the credential. The SDK's
+  `initialize()` validates nothing — measured with a client id of all zeros and an invented secret,
+  it returned `true` in 474ms — so the adapter claimed a connection it had never established. It now
+  asks Entra for a bot token first, and returns `false` carrying Microsoft's own error code. Every
+  sibling adapter already did this; Teams was the one left, hidden because its live suite has never
+  had credentials to run.
 - **integration:** readiness reported a provisioned platform as `[ready]` while its server was down.
   For Matrix and Mattermost the credentials are written BY the bootstrap script, so finding them in
   `.env` proves the container was once up and never that it is up now — measured when a live run spent

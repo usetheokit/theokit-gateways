@@ -35,6 +35,12 @@ export interface TeamsAdapterOptions {
    * `POST /api/messages` on your existing server (ADR D316/D326).
    */
   readonly httpServerAdapter?: unknown;
+  /** Test seam — inject a fake credential check, so no test needs a real tenant. @internal */
+  readonly __tokenFetcher?: (opts: {
+    clientId: string;
+    clientSecret: string;
+    tenantId: string;
+  }) => Promise<{ ok: boolean; status: number; error?: string }>;
   /** Test seam — inject a fake App instance. @internal */
   readonly __appFactory?: (opts: {
     clientId: string;

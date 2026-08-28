@@ -72,6 +72,46 @@ async function createDefaultTeamsApp(opts: {
   });
 }
 
+/**
+ * Ask Entra for a bot token, which is the only thing that proves the three credentials.
+ *
+ * The SDK's `initialize()` validates none of them — measured 2026-08-28, a client id of all zeros
+ * and an invented secret initialized happily — so without this, `connect()` reports a connection it
+ * has never established. Every sibling adapter already asks its platform first (LINE calls
+ * `getBotInfo()`, WhatsApp asks Meta); Teams was the one that did not.
+ *
+ * Uses the documented client-credentials endpoint rather than the SDK's `TokenManager`, which is
+ * not exported from the package. Reaching into `dist/token-manager` would bind this adapter to an
+ * unpublished path; the OAuth2 request is a public Microsoft contract and is what that class issues
+ * underneath.
+ */
+async function fetchBotToken(opts: {
+  clientId: string;
+  clientSecret: string;
+  tenantId: string;
+}): Promise<{ ok: boolean; status: number; error?: string }> {
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: opts.clientId,
+    client_secret: opts.clientSecret,
+    scope: "https://api.botframework.com/.default",
+  });
+  const res = await fetch(
+    `https://login.microsoftonline.com/${encodeURIComponent(opts.tenantId)}/oauth2/v2.0/token`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+      signal: AbortSignal.timeout(15_000),
+    },
+  );
+  if (res.ok) return { ok: true, status: res.status };
+  // Entra names the reason in `error`; carrying it is what turns "connect failed" into something
+  // a reader can act on.
+  const detail = (await res.text().catch(() => "")).slice(0, 200);
+  return { ok: false, status: res.status, error: detail };
+}
+
 export class TeamsAdapter extends BasePlatformAdapter {
   readonly platform = "teams" as const;
   private readonly opts: TeamsAdapterOptions;
@@ -141,6 +181,25 @@ export class TeamsAdapter extends BasePlatformAdapter {
         });
       });
       await this.app.initialize();
+
+      // initialize() proves nothing about the credentials; ask Microsoft before claiming a
+      // connection. EC-7 still holds below: a rejection returns false, it does not throw.
+      const verify = this.opts.__tokenFetcher ?? fetchBotToken;
+      const token = await verify({
+        clientId: this.opts.clientId,
+        clientSecret: this.opts.clientSecret,
+        tenantId: this.opts.tenantId,
+      });
+      if (!token.ok) {
+        console.error(
+          `[teams] connect failed: Microsoft rejected the credential (${token.status})${token.error === undefined ? "" : `: ${token.error}`}`,
+        );
+        await this.app.stop?.();
+        this.app = undefined;
+        this.connected = false;
+        return false;
+      }
+
       this.connected = true;
       return true;
     } catch (err) {

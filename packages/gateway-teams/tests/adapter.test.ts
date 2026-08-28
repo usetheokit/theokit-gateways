@@ -36,6 +36,15 @@ function makeFakeApp() {
   };
 }
 
+/**
+ * A credential Microsoft accepts.
+ *
+ * `connect()` asks Entra whether the three credentials are real, so a unit test that does not
+ * inject this reaches the network and is rejected — these credentials are `client-1` / `secret-1`.
+ * Injecting it keeps the assertion on the behaviour under test and keeps I/O out of a unit test.
+ */
+const acceptedCredential = async () => ({ ok: true, status: 200 });
+
 function makeAdapter(opts: { botDisplayName?: string } = {}) {
   const fakeApp = makeFakeApp();
   const adapter = new TeamsAdapter({
@@ -44,6 +53,7 @@ function makeAdapter(opts: { botDisplayName?: string } = {}) {
     tenantId: "tenant-1",
     botDisplayName: opts.botDisplayName,
     __appFactory: () => fakeApp as never,
+    __tokenFetcher: acceptedCredential,
   });
   return { adapter, fakeApp };
 }
@@ -127,6 +137,7 @@ describe("TeamsAdapter — lifecycle", () => {
       clientSecret: "s",
       tenantId: "t",
       __appFactory: () => failApp as never,
+      __tokenFetcher: acceptedCredential,
     });
     expect(await adapter.connect()).toBe(false);
   });
