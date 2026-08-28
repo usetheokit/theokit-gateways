@@ -53,6 +53,15 @@ export interface PlatformSpec {
   readonly target: readonly CredentialVar[];
   /** Anything that stops this platform running unattended. */
   readonly caveat?: string;
+  /**
+   * Env var holding a base URL that must ANSWER for this platform to run.
+   *
+   * Only for platforms whose server we provision ourselves: there, the credentials are written by
+   * the bootstrap script, so their presence proves the container was once up rather than that it is
+   * up now. A platform hosted by someone else declares nothing here — its server being down is not
+   * a local precondition anyone can act on.
+   */
+  readonly reachableVia?: string;
 }
 
 export const PLATFORMS: readonly PlatformSpec[] = [
@@ -131,6 +140,7 @@ export const PLATFORMS: readonly PlatformSpec[] = [
   },
   {
     id: "matrix",
+    reachableVia: "MATRIX_HOMESERVER_URL",
     label: "Matrix",
     pkg: "@theokit/gateway-matrix",
     transport: "connection",
@@ -167,6 +177,7 @@ export const PLATFORMS: readonly PlatformSpec[] = [
   },
   {
     id: "mattermost",
+    reachableVia: "MATTERMOST_BASE_URL",
     label: "Mattermost",
     pkg: "@theokit/gateway-mattermost",
     transport: "connection",

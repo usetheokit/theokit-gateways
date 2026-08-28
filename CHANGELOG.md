@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that gate is built on. The pin is exact so a later `pnpm update` cannot walk into it silently.
 
 ### Fixed
+- **integration:** readiness reported a provisioned platform as `[ready]` while its server was down.
+  For Matrix and Mattermost the credentials are written BY the bootstrap script, so finding them in
+  `.env` proves the container was once up and never that it is up now — measured when a live run spent
+  two minutes failing 16 tests to discover two stopped containers. The report now carries a third state,
+  `[down]`, naming the variable and the command that fixes it.
 - **integration:** a live send that fails now names its own reason. Fourteen assertions across nine
   platforms read only `SendResult.ok`, so a failure reported `expected false to be true` and discarded
   the `error: { code, message }` the adapter had filled in — measured when an intermittent SMTP failure

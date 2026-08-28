@@ -14,17 +14,38 @@ import { describe, expect, it } from "vitest";
 
 import { has, liveRunEnabled, missingFor } from "../src/credentials.js";
 import { PLATFORMS, type PlatformSpec } from "../src/platforms.js";
+import { reachabilityOf } from "../src/reachability.js";
 import { findUnmetRequirements, parseRequiredPlatforms } from "../src/required-platforms.js";
 
 /** The lines describing one platform: its status, then each gap and how to close it. */
-function describeRow(spec: PlatformSpec, missing: readonly string[]): string[] {
-  const mark = missing.length === 0 ? "ready  " : "missing";
+/**
+ * The three states a platform can be in.
+ *
+ * Credentials present and the server not answering is the THIRD one, and the one that used to read
+ * as ready — which is how a live run came to spend two minutes failing 16 tests to discover that a
+ * container was stopped.
+ */
+function markFor(missing: readonly string[], reachable: boolean | undefined): string {
+  if (missing.length > 0) return "missing";
+  return reachable === false ? "down   " : "ready  ";
+}
+
+function describeRow(
+  spec: PlatformSpec,
+  missing: readonly string[],
+  reachable: boolean | undefined,
+): string[] {
+  const mark = markFor(missing, reachable);
   const lines = [`  [${mark}] ${spec.label.padEnd(26)} (${spec.transport})`];
   const docs = [...spec.credentials, ...spec.target];
   for (const name of missing) {
     const doc = docs.find((c) => c.name === name);
     lines.push(`             ${name} — ${doc?.what ?? ""}`);
     if (doc !== undefined) lines.push(`             ↳ ${doc.where}`);
+  }
+  if (missing.length === 0 && reachable === false) {
+    lines.push(`             ${spec.reachableVia} points at a server that is not answering`);
+    lines.push(`             ↳ pnpm --filter @theokit/gateway-integration ${spec.id}:up`);
   }
   if (missing.length > 0 && spec.caveat !== undefined) {
     lines.push(`             ⚠ ${spec.caveat}`);
@@ -33,11 +54,15 @@ function describeRow(spec: PlatformSpec, missing: readonly string[]): string[] {
 }
 
 describe("live-test readiness", () => {
-  it("reports what is configured, and what each missing platform still needs", () => {
-    const rows = PLATFORMS.map((spec) => {
-      const missing = missingFor(spec);
-      return { spec, missing, ready: missing.length === 0 };
-    });
+  it("reports what is configured, and what each missing platform still needs", async () => {
+    const rows = await Promise.all(
+      PLATFORMS.map(async (spec) => {
+        const missing = missingFor(spec);
+        const reachable = missing.length === 0 ? await reachabilityOf(spec) : undefined;
+        // A provisioned platform whose server is down is NOT ready, whatever `.env` holds.
+        return { spec, missing, reachable, ready: missing.length === 0 && reachable !== false };
+      }),
+    );
 
     const ready = rows.filter((r) => r.ready).length;
     const lines = [
@@ -45,7 +70,7 @@ describe("live-test readiness", () => {
       `Live run enabled (INTEGRATION_LIVE): ${liveRunEnabled() ? "yes" : "NO — suites will skip"}`,
       `Platforms ready: ${ready}/${rows.length}`,
       "",
-      ...rows.flatMap((row) => describeRow(row.spec, row.missing)),
+      ...rows.flatMap((row) => describeRow(row.spec, row.missing, row.reachable)),
       "",
     ];
     process.stdout.write(`${lines.join("\n")}\n`);
