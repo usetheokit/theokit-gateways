@@ -19,7 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **gateways:** five measured items on the theokit ↔ theokit-sdk ↔ theokit-gateways integration (B-008..B-012): the event union cannot be extended out-of-repo, no adapter can translate the raw payload TheoKit's channel seam hands it, ten adapters name the same credential seven ways, nothing documents which repo owns which half of the seam, and the SDK's entire role is one redaction helper
 
+### Changed
+
+- **all packages:** dependencies updated to current — `@theokit/sdk` 4.62.0, biome 2.5.11, vitest 4.1.11,
+  `@types/node` 26, express 5, twilio 6, nodemailer 9. TypeScript is pinned at 5.9.3 rather than raised:
+  6.x needs a deprecation flag for a `baseUrl` that `tsup@8.5.1` injects — its latest release, so there is
+  nothing to upgrade to — and defeats `tools/repair-dts-imports.mjs`, while 7.x removes the compiler API
+  that gate is built on. The pin is exact so a later `pnpm update` cannot walk into it silently.
+
 ### Fixed
+- **gateway:** the credential-documentation gate had stopped running — `9729ab3` replaced the body of the test that called it instead of adding one beside it, so every adapter's `@platform-term` / `@issued-at` docblock went unchecked behind a green suite. Restored, and verified to fail when a docblock is removed.
+- **tools:** the published-value gate resolved TypeScript by directory path, which skips the package's `exports` map and depends on the package manager hoisting it to the root. Both assumptions broke at once; it now resolves by name, and `tools` declares the dependency it compiles with.
 - **gateway-email:** the `nodemailer` peer was `^8.0.0`, and the whole of `^8` sits inside the range an advisory names vulnerable — so a consumer following it got a vulnerable nodemailer and one who wanted a safe one got a peer conflict. Now `^9.0.1`; nodemailer 9 keeps the four functions this adapter uses and its 95 tests pass against it (#B-013)
 - **repo:** `pnpm audit`'s findings describe the tree a contributor installs, not what a consumer receives. Measured against the registry: installing all eleven published packages yields 2 high — both the nodemailer one above — and no critical. The critical (`form-data <2.5.4`) arrives through `plivo`, an OPTIONAL peer nobody gets without choosing Plivo, and is now pinned by an override: after regenerating the lockfile, `request@2.88.2` resolves `form-data` to 4.0.6, nothing resolves below 2.5.4, and the audit drops from 43 findings to 41 with no critical. `docs/security/dependency-advisories.md` records the measurement and how to check what a consumer actually receives (#B-013)
 - **all published packages:** the declarations cited 76 decision ids and 59 of them resolved nowhere. They were never deleted — they were written in implementation plans under `.claude/`, which is development tooling and is not versioned, so the citations reached npm inside a `.d.ts` while the documents defining them stayed on one machine. `docs/adr/decision-ids.md` now lists every cited id with its status: 17 **recorded** with the decision recovered, 59 **lost**. The lost ones are recorded as lost rather than deleted, because a reader who meets `D412` in a docblock is better served by "not recoverable" than by silence, and deleting the citations would destroy the only evidence the decisions were made. `pnpm quality:adr-citations` fails when a new unaccounted citation enters a published declaration (#B-015)

@@ -479,6 +479,22 @@ describe("cross-adapter contract", () => {
     // whole-directory check.
     const onDisk = (await adapterPackages()).sort();
     expect([...CREDENTIAL_FIELDS.keys()].sort()).toEqual(onDisk);
+
+    // Covering every package is the PRECONDITION, not the contract. The contract is that each
+    // field carries a docblock naming the platform's own term and where the credential is issued,
+    // and only `credentialFaults` reads that. It was called here until 9729ab3 replaced this
+    // test's body instead of adding a test beside it, so the documentation gate stopped running
+    // while the suite stayed green — caught later by a linter that noticed the helper had no
+    // caller. A test whose name promises more than its body checks is worse than no test: it is
+    // read as coverage.
+    const faults: string[] = [];
+    for (const [pkg, fields] of CREDENTIAL_FIELDS) {
+      faults.push(...(await credentialFaults(pkg, fields)));
+    }
+    expect(
+      faults,
+      "credential fields whose docblock does not say what they are or where they come from",
+    ).toEqual([]);
   });
 
   it("every credential field is either masked or recorded as uncovered", async () => {
