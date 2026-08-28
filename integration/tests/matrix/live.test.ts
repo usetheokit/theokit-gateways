@@ -84,7 +84,7 @@ describeLive(MATRIX, "outbound", () => {
         channel: { id: required("MATRIX_TEST_ROOM_ID"), type: "group" },
         text: `${marker} outbound ok`,
       });
-      expect(result.ok).toBe(true);
+      expect(result.ok, JSON.stringify(result.error)).toBe(true);
       expect(result.messageId).toBeDefined();
     } finally {
       await adapter.disconnect();

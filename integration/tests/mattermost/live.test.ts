@@ -87,7 +87,7 @@ describeLive(MATTERMOST, "outbound", () => {
         channel: { id: required("MATTERMOST_TEST_CHANNEL_ID"), type: "group" },
         text: `${marker} outbound ok`,
       });
-      expect(result.ok).toBe(true);
+      expect(result.ok, JSON.stringify(result.error)).toBe(true);
       expect(result.messageId).toBeDefined();
     } finally {
       await adapter.disconnect();
@@ -106,7 +106,7 @@ describeLive(MATTERMOST, "outbound", () => {
         channel: { id: required("MATTERMOST_TEST_CHANNEL_ID"), type: "group" },
         text: `${marker} ${"paragraph.\n\n".repeat(2000)}`,
       });
-      expect(result.ok).toBe(true);
+      expect(result.ok, JSON.stringify(result.error)).toBe(true);
     } finally {
       await adapter.disconnect();
     }

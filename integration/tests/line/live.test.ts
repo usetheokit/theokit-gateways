@@ -77,7 +77,7 @@ describeLive(LINE, "outbound", () => {
         channel: { id: required("LINE_TEST_USER_ID"), type: "dm" },
         text: `${marker} outbound ok`,
       });
-      expect(result.ok).toBe(true);
+      expect(result.ok, JSON.stringify(result.error)).toBe(true);
       expect(result.messageId).toBeDefined();
     } finally {
       await adapter.disconnect();
@@ -96,7 +96,7 @@ describeLive(LINE, "outbound", () => {
         channel: { id: required("LINE_TEST_USER_ID"), type: "dm" },
         text: `${marker} ${"paragraph. ".repeat(800)}`,
       });
-      expect(result.ok).toBe(true);
+      expect(result.ok, JSON.stringify(result.error)).toBe(true);
     } finally {
       await adapter.disconnect();
     }

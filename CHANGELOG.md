@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that gate is built on. The pin is exact so a later `pnpm update` cannot walk into it silently.
 
 ### Fixed
+- **integration:** a live send that fails now names its own reason. Fourteen assertions across nine
+  platforms read only `SendResult.ok`, so a failure reported `expected false to be true` and discarded
+  the `error: { code, message }` the adapter had filled in — measured when an intermittent SMTP failure
+  cost a hand-written probe to recover a reason the result already held.
 - **gateway:** the credential-documentation gate had stopped running — `9729ab3` replaced the body of the test that called it instead of adding one beside it, so every adapter's `@platform-term` / `@issued-at` docblock went unchecked behind a green suite. Restored, and verified to fail when a docblock is removed.
 - **tools:** the published-value gate resolved TypeScript by directory path, which skips the package's `exports` map and depends on the package manager hoisting it to the root. Both assumptions broke at once; it now resolves by name, and `tools` declares the dependency it compiles with.
 - **gateway-email:** the `nodemailer` peer was `^8.0.0`, and the whole of `^8` sits inside the range an advisory names vulnerable — so a consumer following it got a vulnerable nodemailer and one who wanted a safe one got a peer conflict. Now `^9.0.1`; nodemailer 9 keeps the four functions this adapter uses and its 95 tests pass against it (#B-013)
