@@ -171,13 +171,26 @@ describe("HookExecutor (T4.1)", () => {
     stderr.mockRestore();
   });
 
-  it("on_error fires all hooks", async () => {
+  it("on_error fires every hook even when one of them throws, and says which", async () => {
+    // The first hook throws on purpose. `fireOnError` runs while something has ALREADY failed, so a
+    // hook that fails in there must not take the remaining hooks with it — and must not disappear
+    // either. Until this, both hooks succeeded and the catch was never entered at all: mutation
+    // testing reported its three mutants as NoCoverage, meaning the whole recovery path could be
+    // deleted with every test still green.
     const calls: string[] = [];
+    const written: string[] = [];
+    const restore = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+      written.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+
     const hooks: GatewayHook[] = [
       {
         name: "a",
         on_error: () => {
           calls.push("a");
+          throw new Error("hook a is broken");
         },
       },
       {
@@ -187,7 +200,23 @@ describe("HookExecutor (T4.1)", () => {
         },
       },
     ];
-    await new HookExecutor(hooks).fireOnError({ event: ev, error: new Error("x") });
-    expect(calls).toEqual(["a", "b"]);
+
+    try {
+      // Must not reject: a throw escaping here would replace the original failure with this one.
+      await expect(
+        new HookExecutor(hooks).fireOnError({ event: ev, error: new Error("x") }),
+      ).resolves.toBeUndefined();
+    } finally {
+      process.stderr.write = restore;
+    }
+
+    // "b" ran despite "a" throwing — the loop continued rather than aborting.
+    expect(calls, "a throwing stopped the remaining hooks").toEqual(["a", "b"]);
+
+    // And the swallow is reported. A catch that logs nothing is the silent-error anti-pattern
+    // `rules/error-handling.md` forbids, and it is what the emptied-catch mutant produces.
+    const logged = written.join("");
+    expect(logged, "the failing hook was swallowed silently").toContain("a");
+    expect(logged).toContain("hook a is broken");
   });
 });
