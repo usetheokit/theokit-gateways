@@ -141,6 +141,37 @@ describe("live-test readiness", () => {
     }
   });
 
+  it("is named, with a validation status, in the README table a reader trusts", async () => {
+    // The README's Packages table carries a per-platform claim about what has been
+    // exercised against the real platform. A reader takes that table as the whole set,
+    // so a platform registered here and absent there does not read as "unknown" — it
+    // reads as "does not exist", which is the more expensive kind of wrong.
+    //
+    // WHAT THIS CANNOT CHECK, and the reason it is worth saying out loud: whether each
+    // status is still TRUE. That needs credentials and a live run, so it cannot happen
+    // in CI. This closes the drift that can be closed — a package added and never
+    // documented — and leaves the other one to the date printed beside the table.
+    const { readFile } = await import("node:fs/promises");
+    const readme = await readFile(new URL("../../README.md", import.meta.url), "utf8");
+    const rows = readme
+      .split("\n")
+      .filter((line) => line.startsWith("| `@theokit/gateway"))
+      .map((line) => line.split("|").map((cell) => cell.trim()));
+
+    for (const platform of PLATFORMS) {
+      const row = rows.find((cells) => cells[1] === `\`${platform.pkg}\``);
+      expect(
+        row,
+        `${platform.pkg} is registered here and missing from the README table`,
+      ).toBeDefined();
+      // Four fields: the empty string before the leading pipe, then the three columns.
+      expect(
+        (row ?? [])[3],
+        `${platform.pkg} has a README row with no validation status`,
+      ).toBeTruthy();
+    }
+  });
+
   it("has a test directory for every platform id, and no orphan directories", async () => {
     // Keeps the registry and the suites from drifting apart: a platform added
     // here with no suite, or a suite for a platform nobody registered.

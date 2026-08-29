@@ -4,19 +4,60 @@ Multi-channel gateway packages for the Theo ecosystem, extracted from `theokit-s
 
 ## Packages
 
-| Package | Platform |
-| --- | --- |
-| `@theokit/gateway` | Transport-agnostic core (BasePlatformAdapter, SessionRouter, DeliveryRouter, GatewayRunner). |
-| `@theokit/gateway-telegram` | Telegram (grammy) |
-| `@theokit/gateway-discord` | Discord (discord.js) |
-| `@theokit/gateway-slack` | Slack (@slack/bolt) |
-| `@theokit/gateway-whatsapp` | WhatsApp (Meta Cloud API + whatsapp-web.js + Baileys) |
-| `@theokit/gateway-teams` | Microsoft Teams |
-| `@theokit/gateway-email` | Email (nodemailer + imapflow) |
-| `@theokit/gateway-sms` | SMS (Twilio / Plivo / Vonage) |
-| `@theokit/gateway-line` | LINE Messaging API |
-| `@theokit/gateway-matrix` | Matrix |
-| `@theokit/gateway-mattermost` | Mattermost |
+| Package | Platform | Exercised against the real platform |
+| --- | --- | --- |
+| `@theokit/gateway` | Transport-agnostic core (BasePlatformAdapter, SessionRouter, DeliveryRouter, GatewayRunner). | end to end, over Matrix |
+| `@theokit/gateway-telegram` | Telegram (grammy) | **full** — send and receive |
+| `@theokit/gateway-discord` | Discord (discord.js) | **full** — send and receive |
+| `@theokit/gateway-slack` | Slack (@slack/bolt) | **full** — send and receive |
+| `@theokit/gateway-matrix` | Matrix | **full** — send and receive |
+| `@theokit/gateway-mattermost` | Mattermost | **full** — send and receive |
+| `@theokit/gateway-email` | Email (nodemailer + imapflow) | **full** — send and receive |
+| `@theokit/gateway-line` | LINE Messaging API | partial — send only; the inbound test exists and has never run |
+| `@theokit/gateway-whatsapp` | WhatsApp (Meta Cloud API + whatsapp-web.js + Baileys) | partial — send accepted by Meta; delivery and inbound not asserted here |
+| `@theokit/gateway-teams` | Microsoft Teams | **none** — no credentials; four tests written, never executed |
+| `@theokit/gateway-sms` | SMS (Twilio / Plivo / Vonage) | **none** — no credentials; inbound not written |
+
+### What that column means
+
+Unit tests say the code does what we think. They cannot say the platform agrees. The
+column above reports only the second question, answered by running
+`integration/tests/{platform}/live.test.ts` against the real API — with real
+credentials, on a real account.
+
+**full** is the whole circle: connect with a valid credential, return `false` rather
+than throw on one the platform rejects, deliver a message, split past that platform's
+own size cap into parts it accepts, map a refusal into a structured error, refuse
+empty text without a call, **and receive a message back** over that platform's own
+inbound transport.
+
+Measured 2026-08-29 — 52 live tests passed, 9 skipped for missing credentials, plus 9
+end-to-end tests that drive the core's hooks, slash commands, drain and restart
+refusal over a real Matrix connection. Reproduce with:
+
+```bash
+cp integration/.env.example integration/.env   # then fill in what you have
+pnpm --filter @theokit/gateway-integration integration
+```
+
+A platform with no credentials **skips**, naming the variables it wants. It is never
+reported green.
+
+Three caveats the column is too narrow to carry, and they are the honest part:
+
+- **WhatsApp "send" means Meta accepted it,** not that anyone received it. The test
+  asserts `ok` and a returned `wamid`; delivery status (`sent` / `delivered` /
+  `failed`) arrives only by webhook, and no test here reads one. Its inbound half was
+  proven once by hand against a live webhook, which is evidence, but not evidence this
+  suite can re-run.
+- **LINE's inbound round trip is written and has never executed.** It drives LINE's own
+  `setWebhookEndpoint` / `testWebhookEndpoint` and verifies the signature over the raw
+  bytes; it needs `INTEGRATION_PUBLIC_URL` pointing at a reachable HTTPS endpoint.
+  Written and unrun is not the same as covered.
+- **Teams needs a work tenant, not a personal account.** Personal Teams
+  (`teams.live.com`) has no app catalog, so a custom bot cannot be installed and the
+  two outbound tests have nothing to post into. The two authentication tests need only
+  an Azure app registration.
 
 ## How this fits with TheoKit
 
