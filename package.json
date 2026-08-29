@@ -15,6 +15,7 @@
     "quality:registry-augmentation": "node tools/check-registry-augmentation.mjs",
     "quality:integration-story": "node tools/check-integration-story.mjs",
     "quality:repository-field": "node tools/check-repository-field.mjs",
+    "quality:peer-range": "node tools/check-peer-range-tested.mjs",
     "quality:doc-api": "node tools/check-doc-api-drift.mjs",
     "quality:doc-orphans": "node tools/check-orphan-docblocks.mjs",
     "quality:doc-coverage": "node tools/check-doc-coverage.mjs",

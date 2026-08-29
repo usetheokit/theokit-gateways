@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "@line/bot-sdk": "^9.0.0",
-    "@mattermost/client": "^10.0.0",
+    "@mattermost/client": "^11.9.0",
     "@theokit/gateway": "workspace:*",
     "@theokit/gateway-discord": "workspace:*",
     "@theokit/gateway-email": "workspace:*",

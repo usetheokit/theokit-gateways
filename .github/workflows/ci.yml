@@ -111,6 +111,14 @@ jobs:
       - name: Published packages declare the repository npm verifies
         run: pnpm quality:repository-field
 
+      # What we EXERCISE must fall inside what we PROMISE. `gateway-mattermost` declared
+      # `@mattermost/client ^9` while its tests loaded a newer client and went green every run;
+      # nothing compared the two, so a consumer installing the adapter beside a current client hit
+      # ERESOLVE, reached for --legacy-peer-deps, and had an unrelated peer silently dropped from
+      # their tree (#79). Reads package.json only, needs no network.
+      - name: Peer ranges admit the version their package loads
+        run: pnpm quality:peer-range
+
       # Three questions the source typecheck cannot answer: do the imports our READMEs tell a reader
       # to write actually resolve, is any docblock stranded above another (attaching to nothing), and
       # does every published export carry documentation a consumer's editor will render.

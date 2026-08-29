@@ -40,7 +40,7 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@mattermost/client": "^9.0.0",
+    "@mattermost/client": "^9.0.0 || ^11.0.0",
     "@theokit/gateway": ">=0.6.0 <1.0.0",
     "ws": "^8.0.0"
   },
@@ -53,6 +53,7 @@
     }
   },
   "devDependencies": {
+    "@mattermost/client": "11.9.0",
     "@theokit/gateway": "workspace:*",
     "@theokit/sdk": "^4.62.0",
     "tsup": "^8.5.0",
