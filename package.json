@@ -36,6 +36,7 @@
     "@biomejs/biome": "^2.5.11",
     "@changesets/cli": "^2.31.0",
     "@types/node": "^22.20.1",
+    "theokit": "^0.60.0",
     "typescript": "5.9.3"
   },
   "pnpm": {
