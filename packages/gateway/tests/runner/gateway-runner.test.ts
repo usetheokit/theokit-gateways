@@ -66,7 +66,16 @@ describe("GatewayRunner (T1.3)", () => {
   });
 
   it("handler throw does not crash runner", async () => {
-    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    // Surviving the throw is half the contract; REPORTING it is the other half, and only the second
+    // half was left unchecked. "test passes if we reach here" is satisfied just as well by a runner
+    // that swallows the error in silence — the failure mode `rules/error-handling.md` § 5 names
+    // first, and the one this suite would never have seen, because installing the spy is what makes
+    // the log invisible in the first place.
+    const writes: string[] = [];
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation((s) => {
+      writes.push(String(s));
+      return true;
+    });
     const a = new MockAdapter("telegram");
     const runner = new GatewayRunner({
       adapters: [a],
@@ -76,10 +85,12 @@ describe("GatewayRunner (T1.3)", () => {
     });
     await runner.start();
     await a.emit(tg());
-    // No throw escapes — test passes if we reach here.
     expect(a.connected).toBe(true);
     await runner.stop();
     stderr.mockRestore();
+
+    const logged = writes.join("");
+    expect(logged, "the handler throw was swallowed without a word").toContain("boom");
   });
 
   it("stop disconnects all adapters", async () => {
@@ -260,7 +271,11 @@ describe("GatewayRunner (T1.3)", () => {
   it("post_outbound observes the send without altering the result the handler receives", async () => {
     // Fire-and-forget means the hook watches the delivery; it does not intercept
     // it. A hook that throws must not turn a delivered reply into a failed one.
-    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const writes: string[] = [];
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation((s) => {
+      writes.push(String(s));
+      return true;
+    });
     const a = new MockAdapter("telegram");
     let replyResult: SendResult | undefined;
     const runner = new GatewayRunner({
@@ -283,6 +298,13 @@ describe("GatewayRunner (T1.3)", () => {
 
     expect(replyResult).toEqual({ ok: true, messageId: "mock-1" });
     stderr.mockRestore();
+
+    // Not intercepting is not the same as not noticing. The reply assertion above holds equally for
+    // a runner that drops the hook's failure on the floor, which would leave an audit hook broken
+    // in production with nothing anywhere saying so.
+    const logged = writes.join("");
+    expect(logged, "the post_outbound hook failure was swallowed").toContain("broken-audit");
+    expect(logged).toContain("hook blew up");
   });
 
   it("EC-D: the auto-reply on a blocking hook also fires post_outbound", async () => {

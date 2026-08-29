@@ -98,48 +98,64 @@ function makeRoom(memberCount = 2, roomId = "!r:server"): MatrixRoomLike {
   return { roomId, getJoinedMemberCount: () => memberCount };
 }
 
+// One helper, one assertion, and it checks the pair that matters: the error TYPE and the `code` a
+// caller branches on. Every field below raises the SAME ConfigurationError, so a check on the type
+// alone stays green if the constructor reports the WRONG field — and the field is the entire content
+// of the diagnostic. `code` rather than the message because it is the machine-readable half of the
+// contract; the prose is free to be reworded.
+function configErrorCode(fn: () => unknown): string {
+  try {
+    fn();
+  } catch (err) {
+    expect(err, "threw something that is not a ConfigurationError").toBeInstanceOf(
+      ConfigurationError,
+    );
+    return (err as ConfigurationError).code;
+  }
+  throw new Error("expected a ConfigurationError, nothing was thrown");
+}
+
 describe("MatrixAdapter constructor", () => {
+  // The separate "carries actionable code" case that used to close this block is folded in: it
+  // re-tested the homeserver path the first case already covers, and asserted strictly less than
+  // what all three now assert.
   it("throws on empty homeserverUrl", () => {
     expect(
-      () =>
-        new MatrixAdapter({
-          homeserverUrl: "",
-          accessToken: "t",
-          userId: "@bot:matrix.org",
-        }),
-    ).toThrow(ConfigurationError);
+      configErrorCode(
+        () =>
+          new MatrixAdapter({
+            homeserverUrl: "",
+            accessToken: "t",
+            userId: "@bot:matrix.org",
+          }),
+      ),
+    ).toBe("homeserver_url_required");
   });
 
   it("throws on empty accessToken", () => {
     expect(
-      () =>
-        new MatrixAdapter({
-          homeserverUrl: "https://matrix.org",
-          accessToken: "",
-          userId: "@bot:matrix.org",
-        }),
-    ).toThrow(ConfigurationError);
+      configErrorCode(
+        () =>
+          new MatrixAdapter({
+            homeserverUrl: "https://matrix.org",
+            accessToken: "",
+            userId: "@bot:matrix.org",
+          }),
+      ),
+    ).toBe("access_token_required");
   });
 
   it("throws on userId without @ prefix", () => {
     expect(
-      () =>
-        new MatrixAdapter({
-          homeserverUrl: "https://matrix.org",
-          accessToken: "t",
-          userId: "bot:matrix.org",
-        }),
-    ).toThrow(ConfigurationError);
-  });
-
-  it("ConfigurationError carries actionable code", () => {
-    try {
-      new MatrixAdapter({ homeserverUrl: "", accessToken: "t", userId: "@bot:m" });
-    } catch (err) {
-      expect((err as ConfigurationError).code).toBe("homeserver_url_required");
-      return;
-    }
-    throw new Error("did not throw");
+      configErrorCode(
+        () =>
+          new MatrixAdapter({
+            homeserverUrl: "https://matrix.org",
+            accessToken: "t",
+            userId: "bot:matrix.org",
+          }),
+      ),
+    ).toBe("user_id_required");
   });
 });
 

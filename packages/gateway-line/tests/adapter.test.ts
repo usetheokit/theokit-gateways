@@ -58,35 +58,50 @@ function installMockClient(adapter: LineAdapter, client: LineSdkClient): void {
   (adapter as unknown as { connected: boolean }).connected = true;
 }
 
+// One helper, one assertion, and it checks the pair that matters: the error TYPE and the `code` a
+// caller branches on. Every field below raises the SAME ConfigurationError, so a check on the type
+// alone stays green if the constructor reports the WRONG field — and the field is the entire content
+// of the diagnostic. `code` rather than the message because it is the machine-readable half of the
+// contract; the prose is free to be reworded.
+function configErrorCode(fn: () => unknown): string {
+  try {
+    fn();
+  } catch (err) {
+    expect(err, "threw something that is not a ConfigurationError").toBeInstanceOf(
+      ConfigurationError,
+    );
+    return (err as ConfigurationError).code;
+  }
+  throw new Error("expected a ConfigurationError, nothing was thrown");
+}
+
 describe("LineAdapter constructor", () => {
+  // The "carries actionable code" case that used to close this block is folded in: it re-tested the
+  // channelSecret path the first case already covers, and only ONE of the two fields had its code
+  // checked at all — an adapter that reported `channel_secret_required` for a missing access token
+  // passed the whole block.
   it("throws on empty channelSecret (D408)", () => {
     expect(
-      () =>
-        new LineAdapter({
-          channelSecret: "",
-          channelAccessToken: "tok",
-        }),
-    ).toThrow(ConfigurationError);
+      configErrorCode(
+        () =>
+          new LineAdapter({
+            channelSecret: "",
+            channelAccessToken: "tok",
+          }),
+      ),
+    ).toBe("channel_secret_required");
   });
 
   it("throws on empty channelAccessToken", () => {
     expect(
-      () =>
-        new LineAdapter({
-          channelSecret: "secret",
-          channelAccessToken: "",
-        }),
-    ).toThrow(ConfigurationError);
-  });
-
-  it("ConfigurationError carries actionable code", () => {
-    try {
-      new LineAdapter({ channelSecret: "", channelAccessToken: "tok" });
-    } catch (err) {
-      expect((err as ConfigurationError).code).toBe("channel_secret_required");
-      return;
-    }
-    throw new Error("did not throw");
+      configErrorCode(
+        () =>
+          new LineAdapter({
+            channelSecret: "secret",
+            channelAccessToken: "",
+          }),
+      ),
+    ).toBe("access_token_required");
   });
 });
 

@@ -70,44 +70,67 @@ function makeMockBackend(): SMSBackend & {
 }
 
 describe("SMSAdapter constructor (EC-1)", () => {
+  // All three backends raise the SAME `signing_secret_required` code, so unlike the sibling adapters
+  // the code cannot say WHICH one refused — the message names the backend and is the only thing that
+  // does. Without this, a constructor that read the wrong backend's secret, or named the wrong
+  // backend in its diagnostic, passed all three cases below.
+  const refusalFor = (fn: () => unknown): string => {
+    try {
+      fn();
+    } catch (err) {
+      expect(err, "threw something that is not a ConfigurationError").toBeInstanceOf(
+        ConfigurationError,
+      );
+      expect((err as ConfigurationError).code).toBe("signing_secret_required");
+      return (err as Error).message;
+    }
+    throw new Error("expected a ConfigurationError, nothing was thrown");
+  };
+
   it("throws when twilio authToken is empty", () => {
     expect(
-      () =>
-        new SMSAdapter({
-          backend: "twilio",
-          accountSid: "AC",
-          authToken: "",
-          fromNumber: "+14155550100",
-          publicUrl: "http://localhost",
-        }),
-    ).toThrow(ConfigurationError);
+      refusalFor(
+        () =>
+          new SMSAdapter({
+            backend: "twilio",
+            accountSid: "AC",
+            authToken: "",
+            fromNumber: "+14155550100",
+            publicUrl: "http://localhost",
+          }),
+      ),
+    ).toContain('backend="twilio"');
   });
 
   it("throws when plivo authToken is empty", () => {
     expect(
-      () =>
-        new SMSAdapter({
-          backend: "plivo",
-          authId: "AI",
-          authToken: "",
-          fromNumber: "+14155550100",
-          publicUrl: "http://localhost",
-        }),
-    ).toThrow(ConfigurationError);
+      refusalFor(
+        () =>
+          new SMSAdapter({
+            backend: "plivo",
+            authId: "AI",
+            authToken: "",
+            fromNumber: "+14155550100",
+            publicUrl: "http://localhost",
+          }),
+      ),
+    ).toContain('backend="plivo"');
   });
 
   it("throws when vonage signatureSecret is empty", () => {
     expect(
-      () =>
-        new SMSAdapter({
-          backend: "vonage",
-          apiKey: "k",
-          apiSecret: "s",
-          signatureSecret: "",
-          fromNumber: "+14155550100",
-          publicUrl: "http://localhost",
-        }),
-    ).toThrow(ConfigurationError);
+      refusalFor(
+        () =>
+          new SMSAdapter({
+            backend: "vonage",
+            apiKey: "k",
+            apiSecret: "s",
+            signatureSecret: "",
+            fromNumber: "+14155550100",
+            publicUrl: "http://localhost",
+          }),
+      ),
+    ).toContain('backend="vonage"');
   });
 
   it("ConfigurationError carries code=signing_secret_required", () => {

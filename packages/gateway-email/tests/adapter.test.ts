@@ -137,11 +137,25 @@ function mk(extra: Partial<typeof VALID_OPTS> & Record<string, unknown> = {}) {
 }
 
 describe("EmailAdapter", () => {
+  // These two spies were installed and never read. Silencing a log is not the same as checking it,
+  // and here it hid the sharper problem below: `expect(received.length).toBe(0)` cannot tell a
+  // message the FILTER dropped from one that never arrived — a parse failure, a drain that threw,
+  // an adapter that stopped fetching. Both give zero. The warn line naming the filter is the only
+  // thing that separates them, and it was going into a spy nobody looked at.
+  let warned: string[] = [];
+  let errored: string[] = [];
   let warnSpy: ReturnType<typeof vi.spyOn>;
   let errorSpy: ReturnType<typeof vi.spyOn>;
+  const logOf = (xs: string[]): string => xs.join("\n");
   beforeEach(() => {
-    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    warned = [];
+    errored = [];
+    warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation((...a: unknown[]) => void warned.push(a.map(String).join(" ")));
+    errorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation((...a: unknown[]) => void errored.push(a.map(String).join(" ")));
   });
   afterEach(() => {
     warnSpy.mockRestore();
@@ -160,10 +174,14 @@ describe("EmailAdapter", () => {
 
   describe("constructor", () => {
     for (const key of ["address", "password", "imapHost", "smtpHost"] as const) {
+      // The message, not just the type: all four fields raise the SAME TypeError from the same loop,
+      // so the type alone would still pass if the check reported the wrong field — and the field name
+      // is the entire content of the diagnostic for whoever mis-configured the adapter.
+      const named = new RegExp(`^EmailAdapter: ${key} is required and must be a non-empty string$`);
       it(`throws TypeError when ${key} is empty`, () => {
         expect(() => {
           new EmailAdapter({ ...VALID_OPTS, [key]: "" });
-        }).toThrow(TypeError);
+        }).toThrow(named);
       });
       it(`throws TypeError when ${key} is missing`, () => {
         const opts = { ...VALID_OPTS } as Record<string, string>;
@@ -171,7 +189,7 @@ describe("EmailAdapter", () => {
         expect(() => {
           // @ts-expect-error — deliberately invalid
           new EmailAdapter(opts);
-        }).toThrow(TypeError);
+        }).toThrow(named);
       });
     }
   });
@@ -199,6 +217,9 @@ describe("EmailAdapter", () => {
       imap.connectError = new Error("network unreachable");
       const ok = await adapter.connect();
       expect(ok).toBe(false);
+      // `false` is the contract; the reason is what an operator has to act on. Without this, a
+      // connect that fails silently is indistinguishable from one that reports why.
+      expect(logOf(errored), "connect failed without saying why").toContain("network unreachable");
     });
 
     it("returns false on SMTP verify failure", async () => {
@@ -206,6 +227,7 @@ describe("EmailAdapter", () => {
       smtp.verifyError = new Error("auth bad");
       const ok = await adapter.connect();
       expect(ok).toBe(false);
+      expect(logOf(errored), "SMTP verify failed without saying why").toContain("auth bad");
     });
 
     it("is idempotent — second connect returns true without reinit", async () => {
@@ -256,6 +278,9 @@ describe("EmailAdapter", () => {
       });
       await adapter._drainNow();
       expect(received.length).toBe(0);
+      // ...and dropped BY THE LOOPBACK FILTER. Zero deliveries is also what a parse failure or a
+      // dead drain produces, and either would make this test green while the guard was gone.
+      expect(logOf(warned), "nothing was dropped by the loopback filter").toContain("loopback");
       // Thread store also untouched.
       expect(adapter._threadStoreSize).toBe(0);
       await adapter.disconnect();
@@ -356,6 +381,9 @@ describe("EmailAdapter", () => {
       });
       await adapter._drainNow();
       expect(received.length).toBe(0);
+      expect(logOf(warned), "bob was not dropped by the allowlist").toContain(
+        "sender not in allowlist: bob@x.com",
+      );
       await adapter.disconnect();
     });
 
