@@ -145,6 +145,14 @@ function makeCorpus(): string[] {
   corpus.push(`${"a".repeat(1899)}😀${"b".repeat(200)}`);
   // Non-\n/non-space whitespace in the strip position — distinguishes /^\s+/ from /^\n+/.
   corpus.push(`${"x".repeat(3990)} \t\r\f${"y".repeat(500)}`);
+  // A boundary that exists but sits BEFORE half the window, with none after it. This is the only
+  // shape that separates `lastResort: "last-boundary"` from `"window"`: with a boundary at index 2
+  // and nothing later, last-boundary cuts at 2 and window cuts at the limit. Every other corpus
+  // entry has either a usable boundary or none at all, so both modes agreed on all of them and the
+  // branch that chooses between them was never observed — mutation testing found it alive.
+  corpus.push(`ab ${"x".repeat(5000)}`);
+  corpus.push(`ab\n${"x".repeat(5000)}`);
+  corpus.push(`ab\n\n${"x".repeat(5000)}`);
   return corpus;
 }
 
