@@ -123,6 +123,15 @@ dod:
   - either `puppeteer` is buildable so a browser exists, or the backend states in its own docblock that the consumer must provide one
 
 > Registered 2026-08-22 by `/discover --mode evolve` (sweep finding on B-001).
+>
+> **2026-08-29 — the third DoD bullet was never met, and the item shipped anyway.** It asked
+> for either a buildable `puppeteer` or a docblock saying the consumer must supply a browser;
+> neither existed. `pnpm.onlyBuiltDependencies` still omits `puppeteer`, and the backend's
+> docblock said nothing, so a consumer met the gap as a bridge that starts and cannot connect.
+> Found by probing the bridge directly: with `PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome`
+> it reaches WhatsApp and issues a pairing QR. Closed now by the docblock at
+> `src/backend/web/index.ts` and a "Choosing a backend" section in the package README — the
+> documentation half of the bullet, since the browser half remains a deliberate non-download.
 
 
 ## B-003 — The adapter's docblock promises factories that do not exist   [x]
