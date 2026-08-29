@@ -89,6 +89,63 @@ delivery where it expected an acknowledgement. Mounted anywhere else, whatever a
 framework's. Returning `null` lets an app ignore a
 message it cannot read and still answer normally.
 
+### WhatsApp, since `theokit@0.60.0`
+
+Until that release this was impossible rather than undocumented: `theokit/server/webhook`
+exported no `whatsapp` validator, so the `validators` map could not carry one and the path
+answered 404 by construction. Meta's subscribe handshake had no seam at all
+([usetheokit/theokit#556](https://github.com/usetheokit/theokit/issues/556), filed from
+here). Both halves exist now, and the wiring needs three things that are easy to miss:
+
+```ts
+import { handleChannelWebhook } from "theokit/server/agent";
+import { route } from "theokit/server/define";
+import { whatsapp, whatsappSubscribe } from "theokit/server/webhook";
+import { normalizeInboundMessages, parseWebhookPayload } from "@theokit/gateway-whatsapp";
+
+const handle = ({ request }: { request: Request }) =>
+  handleChannelWebhook(request, new URL(request.url).pathname, {
+    validators: { whatsapp: whatsapp({ appSecret: process.env.META_APP_SECRET! }) },
+    subscribe: { whatsapp: whatsappSubscribe({ verifyToken: process.env.META_VERIFY_TOKEN! }) },
+    onMessage: async ({ payload }) => {
+      const envelope = parseWebhookPayload(payload);
+      if (envelope === null) return; // not a shape we know — answer normally
+      for (const event of normalizeInboundMessages(envelope)) {
+        console.log(`${event.from}: ${event.text}`);
+      }
+    },
+  });
+
+// BOTH verbs, and `.csrf(false)` on each.
+export const GET = route().csrf(false).policy("public").handler(handle).build();
+export const POST = route().csrf(false).policy("public").handler(handle).build();
+```
+
+- **`GET` as well as `POST`.** Meta calls the endpoint once with
+  `?hub.mode=subscribe&hub.verify_token=…&hub.challenge=…` and expects the challenge echoed as
+  `text/plain` before it delivers anything. That is what `subscribe` answers. A `GET` on a
+  platform that has a validator and no `subscribe` entry is **405**, not 404 — configured, but
+  it does not do handshakes.
+- **`.csrf(false)` on both.** Without it the route answers `403 CSRF_INVALID: Missing
+  X-Theo-Action header` before the signature is ever checked, and Meta will never send that
+  header. `policy("public")` answers a different question — may an unauthenticated caller reach
+  this — and does not lift the CSRF gate. The HMAC is strictly stronger than the header it
+  replaces, and Meta carries no session for a third-party page to ride.
+- **`appSecret` is the Meta *app secret*,** not the access token. It accepts an array so a
+  rotation can verify against either.
+
+This package also exports `verifyWebhookSignature` and `verifyWebhookSubscription`, which do
+the same two jobs. Use theokit's when you are on this seam; ours exist for an app that is not,
+and they are what `gateway-sms` uses through its own `createWebhookServer`.
+
+Not verified here: the `theokit` behaviour above was measured by the session that shipped
+0.60.0, driving a scaffolded app over HTTP. What this repository checked is narrower and
+stated as such — that `theokit@0.60.0` does export `whatsapp` and `whatsappSubscribe` from
+`theokit/server/webhook`, that `route` lives on `theokit/server/define` rather than on the
+`theokit/server` umbrella that warns it is deprecated, and that `parseWebhookPayload` takes the
+`unknown` payload `onMessage` hands over. A real delivery from Meta needs an approved app and a public URL, and
+has not happened on either side.
+
 The example above is Telegram's. `@theokit/gateway-sms` also exports a `parseInbound`, and it takes
 different arguments — `parseInbound(options, ctx)` — because its signature check needs the raw body,
 the headers and the URL, and `ChannelMessage` carries none of the three. So SMS is wired through its
