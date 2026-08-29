@@ -86,26 +86,34 @@ function installMockHandle(adapter: MattermostAdapter, handle: MockHandle): void
 }
 
 describe("MattermostAdapter constructor", () => {
+  // Both fields raise the SAME ConfigurationError from the same constructor, so checking the type
+  // alone stays green if it reports the wrong one — and the field name is the whole diagnostic. The
+  // separate "carries actionable code" case is folded in: it re-ran the accessToken path the second
+  // case covers, and left `base_url_required` unverified by anything.
+  const configErrorCode = (fn: () => unknown): string => {
+    try {
+      fn();
+    } catch (err) {
+      expect(err, "threw something that is not a ConfigurationError").toBeInstanceOf(
+        ConfigurationError,
+      );
+      return (err as ConfigurationError).code;
+    }
+    throw new Error("expected a ConfigurationError, nothing was thrown");
+  };
+
   it("throws on empty baseUrl", () => {
-    expect(() => new MattermostAdapter({ baseUrl: "", accessToken: "tok" })).toThrow(
-      ConfigurationError,
+    expect(configErrorCode(() => new MattermostAdapter({ baseUrl: "", accessToken: "tok" }))).toBe(
+      "base_url_required",
     );
   });
 
   it("throws on empty accessToken (D401)", () => {
     expect(
-      () => new MattermostAdapter({ baseUrl: "https://mm.acme.com", accessToken: "" }),
-    ).toThrow(ConfigurationError);
-  });
-
-  it("ConfigurationError carries actionable code", () => {
-    try {
-      new MattermostAdapter({ baseUrl: "https://x.com", accessToken: "" });
-    } catch (err) {
-      expect((err as ConfigurationError).code).toBe("access_token_required");
-      return;
-    }
-    throw new Error("did not throw");
+      configErrorCode(
+        () => new MattermostAdapter({ baseUrl: "https://mm.acme.com", accessToken: "" }),
+      ),
+    ).toBe("access_token_required");
   });
 });
 

@@ -18,6 +18,8 @@ export class MockAdapter extends BasePlatformAdapter {
   sent: OutboundMessage[] = [];
   /** Force sendMessage to return error on next call. */
   failNextSend?: { code: string; message: string };
+  /** What `connect()` reports. `false` is a refusal, not a throw — the D172 contract. */
+  connectResult = true;
   private handler?: (event: MessageEvent) => Promise<void>;
 
   constructor(platform: PlatformName = "telegram") {
@@ -27,8 +29,8 @@ export class MockAdapter extends BasePlatformAdapter {
 
   override async connect(): Promise<boolean> {
     this.connectCount += 1;
-    this.connected = true;
-    return true;
+    this.connected = this.connectResult;
+    return this.connectResult;
   }
 
   override async disconnect(): Promise<void> {

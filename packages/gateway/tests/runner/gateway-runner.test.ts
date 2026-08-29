@@ -93,6 +93,24 @@ describe("GatewayRunner (T1.3)", () => {
     expect(logged, "the handler throw was swallowed without a word").toContain("boom");
   });
 
+  it("start() closes the adapters it already opened when another refuses", async () => {
+    // Justified by absence, not by appetite for another test: mutation testing reported THREE
+    // mutants with no coverage at all on this rollback, so the whole recovery path — the catch, the
+    // disconnect of what was already open, the rethrow — was reachable by no test in the suite. A
+    // broken rollback leaks a live platform connection on every failed start, and the process that
+    // failed to start is exactly the one nobody is watching.
+    const ok = new MockAdapter("telegram");
+    const refuses = new MockAdapter("discord");
+    refuses.connectResult = false;
+    const runner = new GatewayRunner({ adapters: [ok, refuses], handler: async () => {} });
+
+    await expect(runner.start()).rejects.toThrow(/discord/);
+    expect(ok.connected, "the adapter that DID connect was left open").toBe(false);
+    expect(ok.disconnectCount, "rollback did not disconnect it exactly once").toBe(1);
+    // The refusal is a `false` return, not a throw, so nothing should have been rolled back on it.
+    expect(refuses.disconnectCount).toBe(0);
+  });
+
   it("stop disconnects all adapters", async () => {
     const a = new MockAdapter("telegram");
     const b = new MockAdapter("discord");

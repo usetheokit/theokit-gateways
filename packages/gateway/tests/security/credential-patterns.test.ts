@@ -75,6 +75,29 @@ describe("maskShapes", () => {
         secret.slice(i, i + 6),
       );
     }
+    // The secret is GONE — and what stands in its place is the documented marker. Absence alone is
+    // also what a replacement of "" produces, which deletes the surrounding evidence instead of
+    // masking it, and every assertion above is equally happy either way.
+    expect(out, "the secret vanished instead of being masked").toBe("connect failed: ***");
+  });
+
+  it.each(SECRETS)("does not mask a %s glued to a longer identifier", (_name, secret) => {
+    // The other side of every pattern's leading anchor. All six open with a negative lookbehind
+    // whose job is to refuse a match starting mid-identifier, and nothing ever put a character
+    // there — so the anchors could be inverted, or dropped, and the suite stayed green. Redacting a
+    // value that merely CONTAINS a token-shaped run costs a debugging session, the same cost
+    // MUST_SURVIVE prevents from the other direction.
+    //
+    // The prefix width is measured, not picked. An anchor can only refuse what the leading segment's
+    // width cannot ABSORB: Discord's first segment is `{23,28}` and its fixture is 24 characters, so
+    // four glued characters are simply eaten by the range and the match still starts at the prefix.
+    // Five is the first width that cannot be, and eight leaves margin if a fixture is retuned. Note
+    // which way absorption errs — it masks a superset, so the failure it causes is over-redaction,
+    // never a leak; that is why this is a boundary worth pinning rather than a hole worth patching.
+    const glued = `request abcdefgh${secret} aborted`;
+    expect(maskShapes(glued), "the leading anchor did not refuse a mid-identifier match").toBe(
+      glued,
+    );
   });
 
   it.each(MUST_SURVIVE)("leaves a %s alone", (_name, value) => {
@@ -96,6 +119,12 @@ describe("redactSecrets", () => {
   it("masks a bare credential the SDK does not recognise", () => {
     const secret = ["syt", "dGhlb2tpdA", "ZxWvUtSrQpOnMlKjIhGf", "3AbCdE"].join("_");
     expect(redactSecrets(`connect failed: ${secret}`)).not.toContain("ZxWvUt");
+    // The signature is `unknown` and the docblock promises "anything stringifiable", but every call
+    // in the suite handed it a string, so the `String(value)` branch was never taken. The log sites
+    // pass `(err as Error).message` today; the first one that passes the Error itself would hit an
+    // untested path in the code that keeps secrets out of logs.
+    expect(redactSecrets(new Error(`connect failed: ${secret}`))).not.toContain("ZxWvUt");
+    expect(redactSecrets({ toString: () => `boom ${secret}` })).not.toContain("ZxWvUt");
   });
 
   it("still applies the SDK's own patterns", () => {
