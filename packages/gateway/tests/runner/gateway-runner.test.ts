@@ -117,6 +117,22 @@ describe("GatewayRunner (T1.3)", () => {
     expect(refuses.disconnectCount).toBe(0);
   });
 
+  it("the drain set shrinks back to empty as dispatches settle", async () => {
+    // Mutation testing reported that both `inflight.delete` callbacks and one of the two `add` calls
+    // could be removed with nothing failing, because `stop()` drains correctly either way: settled
+    // promises resolve immediately whether or not anyone took them out of the set. What breaks is
+    // only visible over TIME — a runner that never empties the set accumulates one promise per
+    // message received, for the life of the process, and a gateway is a process that stays up.
+    const a = new MockAdapter("telegram");
+    const runner = new GatewayRunner({ adapters: [a], handler: async () => {} });
+    await runner.start();
+    for (let i = 0; i < 5; i++) await a.emit(tg());
+    await runner.stop();
+    expect(runner._inflightSize, "settled dispatches were never removed from the drain set").toBe(
+      0,
+    );
+  });
+
   it("stop disconnects all adapters", async () => {
     const a = new MockAdapter("telegram");
     const b = new MockAdapter("discord");
@@ -202,6 +218,11 @@ describe("GatewayRunner (T1.3)", () => {
   it("EC-D: block:true with message triggers reply then short-circuits", async () => {
     const a = new MockAdapter("telegram");
     let handlerCalled = false;
+    // The hook is handed the EVENT, and nothing checked that. A pre_inbound hook exists to decide
+    // ABOUT something — rate-limit this sender, refuse this channel — so a context arriving empty
+    // breaks every real hook. Every hook in this suite ignored its argument and returned the same
+    // verdict regardless, which is exactly the shape that cannot notice.
+    let sawEventId: unknown;
     const runner = new GatewayRunner({
       adapters: [a],
       handler: async () => {
@@ -210,14 +231,19 @@ describe("GatewayRunner (T1.3)", () => {
       hooks: [
         {
           name: "deny",
-          pre_inbound: () => ({ block: true, message: "rate-limited" }),
+          pre_inbound: (ctx) => {
+            sawEventId = ctx.event?.id;
+            return { block: true, message: "rate-limited" };
+          },
         },
       ],
     });
     await runner.start();
-    await a.emit(tg());
+    const event = tg();
+    await a.emit(event);
     expect(a.sent.map((s) => s.text)).toEqual(["rate-limited"]);
     expect(handlerCalled).toBe(false);
+    expect(sawEventId, "pre_inbound was handed a context with no event").toBe(event.id);
     await runner.stop();
   });
 
@@ -240,6 +266,21 @@ describe("GatewayRunner (T1.3)", () => {
     expect(a.sent).toHaveLength(0);
     expect(handlerCalled).toBe(false);
     await runner.stop();
+
+    // An EMPTY message is the other half of the same guard, and it is the half a real hook produces:
+    // `message: ""` comes out of a template that rendered to nothing, not out of a hook that chose
+    // to stay silent. Only the `length > 0` half rejects it, and with `message` undefined above the
+    // first half short-circuits before that half is ever reached.
+    const b = new MockAdapter("telegram");
+    const empty = new GatewayRunner({
+      adapters: [b],
+      handler: async () => {},
+      hooks: [{ name: "deny", pre_inbound: () => ({ block: true, message: "" }) }],
+    });
+    await empty.start();
+    await b.emit(tg());
+    expect(b.sendAttempts, "the runner tried to reply with an empty message").toBe(0);
+    await empty.stop();
   });
 
   it("post_outbound fires with the event, the outbound and the adapter's result", async () => {
@@ -373,6 +414,7 @@ describe("GatewayRunner (T1.3)", () => {
     await runner.stop();
 
     expect(seen).toHaveLength(1);
+    expect(seen[0]?.result.ok, "a delivery that reached no transport reported success").toBe(false);
     expect(seen[0]?.result.error?.code).toBe("no_adapter");
     // The code says a route was missing; only the message says WHICH platform had none, and that is
     // the whole diagnostic for an operator staring at an audit log full of failed deliveries.
@@ -460,20 +502,34 @@ describe("GatewayRunner (T1.3)", () => {
         return true;
       });
     const a = new MockAdapter("telegram");
+    const reported: Array<{ id: unknown; message: unknown }> = [];
     const runner = new GatewayRunner({
       adapters: [a],
       handler: async () => {
         // Include something that looks like a token.
         throw new Error("auth failed bearer sk-abc123def456ghi789jkl");
       },
+      // An on_error hook is how a real deployment reaches Sentry, and it is handed the event and the
+      // error. Nothing checked either, so both could arrive empty: the log line below would still be
+      // written and still be redacted, while every error report carried no error.
+      hooks: [
+        {
+          name: "sentry",
+          on_error: (ctx) => void reported.push({ id: ctx.event?.id, message: ctx.error?.message }),
+        },
+      ],
     });
     await runner.start();
-    await a.emit(tg());
+    const event = tg();
+    await a.emit(event);
     await runner.stop();
     const combined = writes.join("");
     expect(combined).toContain("handler error");
     // The literal token string should NOT appear unredacted.
     expect(combined).not.toContain("sk-abc123def456ghi789jkl");
+    expect(reported, "on_error was handed a context with no event and no error").toEqual([
+      { id: event.id, message: "auth failed bearer sk-abc123def456ghi789jkl" },
+    ]);
     stderr.mockRestore();
   });
 

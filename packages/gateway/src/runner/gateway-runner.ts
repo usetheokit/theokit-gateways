@@ -195,6 +195,16 @@ export class GatewayRunner {
     this.connected = false;
   }
 
+  /**
+   * @internal Test seam, following `EmailAdapter._threadStoreSize`. The drain set must SHRINK: a
+   * settled dispatch that is never removed is a leak that grows for the life of the process, and it
+   * is invisible from the outside — `stop()` drains correctly either way, because settled promises
+   * resolve immediately whether or not anyone deleted them.
+   */
+  get _inflightSize(): number {
+    return this.inflight.size;
+  }
+
   /** @internal */
   private async dispatch(event: GatewayMessageEvent): Promise<void> {
     const ctx = this.buildContext(event);
