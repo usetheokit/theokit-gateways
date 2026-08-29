@@ -64,10 +64,27 @@ name. Measured 2026-08-29:
 `discord.js` version reaches shapeshift 5 yet, and there is no combination that
 satisfies both type lines.
 
-**Workaround:** pin `@types/node` to `^22`, which is what `engines.node: >=22.12.0`
-here is typechecked against, or keep `skipLibCheck: true` (the default). Tracked in
-[#81](https://github.com/usetheokit/theokit-gateways/issues/81); it closes when
-`@discordjs/builders` moves to shapeshift 5.
+**Fix — one line in your `tsconfig.json`:**
+
+```jsonc
+{ "include": ["src", "node_modules/@theokit/gateway-discord/shims/types-node-26.d.ts"] }
+```
+
+That file ships with this package and restores the renamed type. It is **opt-in and
+loaded by nothing** — a library that augments Node's own types for everyone changes
+the type environment of people who never asked. Measured 2026-08-29 in a scratch
+consumer: `@types/node@26` fails to compile without it and passes with it, and
+`@types/node@22` passes either way, since the declaration merges with the interface
+that already exists there.
+
+Two alternatives, if you would rather not add the file: pin `@types/node` to `^22`,
+which is what `engines.node: >=22.12.0` here is typechecked against, or set
+`skipLibCheck: true` — most scaffolds do, though TypeScript's own default is `false`,
+which is why this is reachable at all.
+
+Tracked in [#81](https://github.com/usetheokit/theokit-gateways/issues/81). It closes
+when `@discordjs/builders` moves to shapeshift 5; the shim's own header says how you
+will find out without having to watch for it.
 
 ## License
 

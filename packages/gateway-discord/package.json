@@ -29,6 +29,7 @@
   },
   "files": [
     "dist",
+    "shims",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
