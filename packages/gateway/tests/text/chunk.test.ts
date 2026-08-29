@@ -157,6 +157,33 @@ describe("chunkText — single-chunk fast path", () => {
   it("returns empty string as a single chunk by default", () => {
     expect(chunkText("", { limit: 100 })).toEqual([""]);
   });
+
+  it("splits on the documented defaults when only a limit is given", () => {
+    // Justified by a gap, not by a wish for another test: every other case here passes an explicit
+    // `boundaries` / `stripLeading` / `lastResort`, and the one call that omits them ("hello", under
+    // the limit) returns on the fast path before any of them is read. So the DEFAULTS on the
+    // splitting path had no coverage at all, and mutation testing said so — six mutants survived
+    // across the two default declarations, meaning the documented contract could be changed to
+    // anything and every test would still pass.
+    //
+    // `boundaries = ["\n\n", "\n", " "]`: with a space inside the window, the cut takes it rather
+    // than slicing mid-word.
+    const words = `${"a".repeat(30)} ${"b".repeat(30)}`;
+    expect(chunkText(words, { limit: 40 })).toEqual(["a".repeat(30), ` ${"b".repeat(30)}`]);
+
+    // `stripLeading = /^\n+/`: newlines that begin a continuation chunk are dropped, and other
+    // leading whitespace is NOT — a default of /^\s+/ would eat the space and fail here.
+    const lines = `${"a".repeat(30)}\n\n ${"b".repeat(20)}`;
+    expect(chunkText(lines, { limit: 32 })).toEqual(["a".repeat(30), ` ${"b".repeat(20)}`]);
+
+    // `lastResort = "window"`: with no boundary anywhere, the cut falls on the window rather than
+    // on the last (failed) boundary search, so chunks come out exactly `limit` long.
+    expect(chunkText("x".repeat(25), { limit: 10 })).toEqual([
+      "x".repeat(10),
+      "x".repeat(10),
+      "xxxxx",
+    ]);
+  });
   it("drops an all-whitespace single chunk when trimParts is set", () => {
     expect(chunkText("   ", { limit: 100, trimParts: true })).toEqual([]);
   });
@@ -209,12 +236,41 @@ describe("chunkText reproduces the adapter oracles byte-for-byte", () => {
 });
 
 describe("chunkText — surrogate guard", () => {
-  it("never splits an emoji in the middle (Slack family)", () => {
-    const text = `${"a".repeat(3999)}😀${"b".repeat(200)}`;
-    for (const c of slackViaCore(text)) {
-      // A chunk must not end with a lone high surrogate.
-      const last = c.charCodeAt(c.length - 1);
-      expect(last >= 0xd800 && last <= 0xdbff).toBe(false);
+  it("never splits an astral character in the middle (Slack family)", () => {
+    // Three characters, not one, and the choice is the point. `guardSurrogate` tests
+    // `code >= 0xdc00 && code <= 0xdfff`, so only a low surrogate sitting ON one of those bounds can
+    // tell `>=` from `>` or `<=` from `<`. 😀 is U+1F600, whose low surrogate is 0xDE00 — comfortably
+    // inside the range, so it passes either way and the boundary was never exercised. U+10000 and
+    // U+103FF are the two characters whose low surrogates ARE the bounds.
+    const cases: ReadonlyArray<readonly [string, string]> = [
+      ["\u{1F600}", "grinning face, low surrogate 0xDE00 — mid-range"],
+      ["\u{10000}", "linear B syllable, low surrogate 0xDC00 — the lower bound"],
+      ["\u{103FF}", "old italic letter, low surrogate 0xDFFF — the upper bound"],
+    ];
+
+    for (const [astral, why] of cases) {
+      // Placed so the 4000-char window falls between the two code units of the pair.
+      const text = `${"a".repeat(3999)}${astral}${"b".repeat(200)}`;
+      const parts = slackViaCore(text);
+
+      for (const c of parts) {
+        const first = c.charCodeAt(0);
+        const last = c.charCodeAt(c.length - 1);
+        // Both ends, not just the tail: a cut severs a pair into a trailing HIGH surrogate on one
+        // chunk and a leading LOW surrogate on the next, and checking one end sees half the damage.
+        expect(
+          last >= 0xd800 && last <= 0xdbff,
+          `${why}: chunk ends on a lone high surrogate`,
+        ).toBe(false);
+        expect(
+          first >= 0xdc00 && first <= 0xdfff,
+          `${why}: chunk starts on a lone low surrogate`,
+        ).toBe(false);
+      }
+
+      // The property the two checks above are proxies for: nothing was lost or altered. A guard that
+      // stepped back too far, or not far enough, changes the text even when no chunk ends badly.
+      expect(parts.join(""), `${why}: rejoining the chunks did not reproduce the input`).toBe(text);
     }
   });
 });

@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that gate is built on. The pin is exact so a later `pnpm update` cannot walk into it silently.
 
 ### Fixed
+- **gateway:** the emoji-splitting test could not see the bug it was named for. It used one
+  character, U+1F600, whose low surrogate sits mid-range — so the boundary comparisons in
+  `guardSurrogate` could be changed either way and it still passed. It now exercises the two
+  characters whose low surrogates ARE the bounds, checks both ends of every chunk, and asserts the
+  rejoined text equals the input. Mutation score on the critical paths: 76.27% -> 80.23%.
 - **integration:** the LINE inbound suite proved nothing and its skip named a remedy that did not
   work. The test body was `expect(true).toBe(true)`, and `describeLiveInbound` skipped every webhook
   platform unconditionally while telling the reader to set `INTEGRATION_PUBLIC_URL` — which nothing
