@@ -155,6 +155,10 @@ describe("HookExecutor (T4.1)", () => {
           throw new Error("ouch");
         },
       },
+      // Declares no post_outbound at all. Without one of these the `=== undefined` skip is never
+      // observed: calling a missing hook throws a TypeError that the catch below swallows, so the
+      // suite stays green while every hook in the list is invoked.
+      { name: "silent" },
       {
         name: "second",
         post_outbound: () => {
@@ -168,6 +172,16 @@ describe("HookExecutor (T4.1)", () => {
       result: { ok: true },
     });
     expect(calls).toEqual(["first", "second"]);
+
+    // The spy was installed and never read, which silenced the log instead of checking it. What the
+    // catch owes the operator is a message naming the hook that failed — a catch that writes nothing
+    // is the silent-error anti-pattern `rules/error-handling.md` forbids.
+    const logged = stderr.mock.calls.map((c) => String(c[0])).join("");
+    expect(logged, "the throwing hook was swallowed silently").toContain("first");
+    expect(logged).toContain("ouch");
+    // Exactly one complaint: the hook that declared nothing must be skipped, not called and caught.
+    expect(logged, "a hook without post_outbound was invoked anyway").not.toContain("silent");
+
     stderr.mockRestore();
   });
 
@@ -193,6 +207,9 @@ describe("HookExecutor (T4.1)", () => {
           throw new Error("hook a is broken");
         },
       },
+      // Declares no on_error: pins that the `=== undefined` skip is a skip, and not a call whose
+      // TypeError the catch quietly absorbs.
+      { name: "silent" },
       {
         name: "b",
         on_error: () => {
@@ -218,5 +235,6 @@ describe("HookExecutor (T4.1)", () => {
     const logged = written.join("");
     expect(logged, "the failing hook was swallowed silently").toContain("a");
     expect(logged).toContain("hook a is broken");
+    expect(logged, "a hook without on_error was invoked anyway").not.toContain("silent");
   });
 });
