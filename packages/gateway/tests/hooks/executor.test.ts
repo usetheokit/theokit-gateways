@@ -31,25 +31,48 @@ describe("HookExecutor (T4.1)", () => {
 
   it("first block short-circuits the chain", async () => {
     const calls: string[] = [];
+    // A PERMISSIVE hook runs first, and that ordering is the point. Every hook in this suite either
+    // blocked or was short-circuited before it ran, so no test ever observed a hook that executes,
+    // returns nothing, and lets the chain continue — the ordinary case. Without it, treating every
+    // decision as a block is undetectable: the first hook stops the chain, the assertions below still
+    // see block === true, and a gateway that refuses every request looks exactly like a healthy one.
     const hooks: GatewayHook[] = [
       {
-        name: "first",
+        name: "allows",
         pre_inbound: () => {
-          calls.push("first");
+          calls.push("allows");
+        },
+      },
+      {
+        // Returning nothing and returning `{ block: false }` are BOTH "allow", and only the second
+        // distinguishes "this decision blocks" from "there is a decision". Without it, short-circuiting
+        // on the mere presence of a returned object is invisible: the implicit-allow hook above returns
+        // undefined and passes through under either reading.
+        name: "allows-explicitly",
+        pre_inbound: () => {
+          calls.push("allows-explicitly");
+          return { block: false };
+        },
+      },
+      {
+        name: "denies",
+        pre_inbound: () => {
+          calls.push("denies");
           return { block: true, message: "no" };
         },
       },
       {
-        name: "second",
+        name: "never",
         pre_inbound: () => {
-          calls.push("second");
+          calls.push("never");
         },
       },
     ];
     const d = await new HookExecutor(hooks).firePreInbound({ event: ev });
     expect(d.block).toBe(true);
     expect(d.message).toBe("no");
-    expect(calls).toEqual(["first"]);
+    // "allows" ran and did NOT stop the chain; "never" is after the block and must not have run.
+    expect(calls).toEqual(["allows", "allows-explicitly", "denies"]);
   });
 
   it("hook throw is treated as block", async () => {
