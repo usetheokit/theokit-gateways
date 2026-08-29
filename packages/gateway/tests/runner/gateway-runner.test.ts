@@ -47,6 +47,12 @@ describe("GatewayRunner (T1.3)", () => {
     await runner.start();
     expect(a.connected).toBe(true);
     expect(b.connected).toBe(true);
+    // ...and starting again is a no-op, not a second connect. Nothing checked the guard, so a
+    // supervisor that calls start() twice — a restart hook, a retried bootstrap — would open a
+    // second session per adapter and the platform would deliver every event twice.
+    await runner.start();
+    expect(a.connectCount, "start() connected the adapter twice").toBe(1);
+    expect(b.connectCount).toBe(1);
     await runner.stop();
   });
 
@@ -227,6 +233,10 @@ describe("GatewayRunner (T1.3)", () => {
     });
     await runner.start();
     await a.emit(tg());
+    // `sent` only records what sendMessage ACCEPTED, and it rejects empty text — so it reads as 0
+    // whether the runner stayed quiet or tried to reply with a message that does not exist. The
+    // attempt is what the guard is about, and sendMessage's own call count is what shows it.
+    expect(a.sendAttempts, "the runner tried to reply with a message it does not have").toBe(0);
     expect(a.sent).toHaveLength(0);
     expect(handlerCalled).toBe(false);
     await runner.stop();
@@ -364,6 +374,11 @@ describe("GatewayRunner (T1.3)", () => {
 
     expect(seen).toHaveLength(1);
     expect(seen[0]?.result.error?.code).toBe("no_adapter");
+    // The code says a route was missing; only the message says WHICH platform had none, and that is
+    // the whole diagnostic for an operator staring at an audit log full of failed deliveries.
+    expect(seen[0]?.result.error?.message, "the failure does not name the platform").toBe(
+      "no adapter for discord",
+    );
   });
 
   it("EC-E: stop drains in-flight handlers before disconnect", async () => {
@@ -482,6 +497,35 @@ describe("GatewayRunner (T1.3)", () => {
     await a.emit(tg("/skill foo"));
     await a.emit(tg("/skill"));
     expect(calls).toEqual(["/skills", "/skill", "/skill"]);
+    await runner.stop();
+  });
+
+  it("EC-A: matches on any configured prefix, not only the first", async () => {
+    // `commandPrefixes` exists to accept more than one, and every test until now passed one — so the
+    // search that picks WHICH prefix a message used was never asked to choose. A search that always
+    // answered "the first" behaved identically under a single-prefix config, and Mattermost and
+    // Slack both conventionally use "!" alongside "/".
+    const a = new MockAdapter("telegram");
+    const calls: string[] = [];
+    const runner = new GatewayRunner({
+      adapters: [a],
+      handler: async () => {
+        calls.push("default");
+      },
+      commandPrefixes: ["/", "!"],
+    });
+    runner.command("ping", async () => {
+      calls.push("ping");
+    });
+    await runner.start();
+    await a.emit(tg("/ping"));
+    await a.emit(tg("!ping"));
+    await a.emit(tg("ping"));
+    expect(calls, "a command on the second prefix did not reach its handler").toEqual([
+      "ping",
+      "ping",
+      "default",
+    ]);
     await runner.stop();
   });
 

@@ -16,6 +16,8 @@ export class MockAdapter extends BasePlatformAdapter {
   connectCount = 0;
   disconnectCount = 0;
   sent: OutboundMessage[] = [];
+  /** Every call, including the ones `sendMessage` refuses — `sent` only records what it accepted. */
+  sendAttempts = 0;
   /** Force sendMessage to return error on next call. */
   failNextSend?: { code: string; message: string };
   /** What `connect()` reports. `false` is a refusal, not a throw — the D172 contract. */
@@ -39,6 +41,7 @@ export class MockAdapter extends BasePlatformAdapter {
   }
 
   override async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    this.sendAttempts += 1;
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "text is empty" } };
     }
