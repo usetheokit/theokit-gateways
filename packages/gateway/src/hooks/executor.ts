@@ -8,6 +8,7 @@
  * @public
  */
 
+import { GatewayConfigurationError } from "../errors/config-error.js";
 import { redactSecrets } from "../security/credential-patterns.js";
 
 import type {
@@ -24,8 +25,56 @@ import type {
  *
  * @public
  */
+const HOOK_PHASES = ["pre_inbound", "post_outbound", "on_error"] as const;
+
+/** Refusal for one bad entry in a hook list, naming WHICH entry (#80). */
+function malformedHook(index: number, why: string): GatewayConfigurationError {
+  return new GatewayConfigurationError("gateway", {
+    code: "malformed_hook",
+    message: `gateway: hooks[${index}] ${why}`,
+    detail: `hooks[${index}]`,
+  });
+}
+
+/**
+ * Refuse one hook-list entry that is not a hook (#80).
+ *
+ * Every fire point below asks `if (h.<phase> === undefined) continue`, which cannot tell "this hook
+ * does not implement this phase" from "this is not a hook". So an entry that failed to resolve in a
+ * config-driven list used to be skipped in silence, and the gateway started with the rate limiter,
+ * audit trail or error reporter its operator believed they had wired simply absent. A missing
+ * security hook that says nothing is worse than a loud failure, because the deployment looks
+ * correct.
+ */
+function assertHook(entry: unknown, index: number): void {
+  if (typeof entry !== "object" || entry === null) {
+    throw malformedHook(index, `is ${entry === null ? "null" : typeof entry}, not a hook object`);
+  }
+  const hook = entry as Partial<GatewayHook>;
+  if (typeof hook.name !== "string" || hook.name.length === 0) {
+    throw malformedHook(
+      index,
+      "has no name — every hook is named so a log can say which one acted",
+    );
+  }
+  const declared = HOOK_PHASES.filter((phase) => hook[phase] !== undefined);
+  if (declared.length === 0) {
+    throw malformedHook(
+      index,
+      `("${hook.name}") declares none of ${HOOK_PHASES.join(", ")} — it would never run`,
+    );
+  }
+  for (const phase of declared) {
+    if (typeof hook[phase] !== "function") {
+      throw malformedHook(index, `("${hook.name}") declares ${phase}, which is not callable`);
+    }
+  }
+}
+
 export class HookExecutor {
-  constructor(private readonly hooks: ReadonlyArray<GatewayHook>) {}
+  constructor(private readonly hooks: ReadonlyArray<GatewayHook>) {
+    hooks.forEach(assertHook);
+  }
 
   /**
    * Fire `pre_inbound` hooks sequentially. First `{ block: true }` short-circuits.

@@ -1,6 +1,6 @@
 # The mutants that survive, and why none of them can be killed
 
-`pnpm --filter @theokit/gateway run test:mutation` scores 95.09% over the four
+`pnpm --filter @theokit/gateway run test:mutation` scores 95.6% over the four
 source files with real branching logic. The 20 survivors are listed here with the
 reason each one cannot change behaviour, so nobody re-derives it and nobody writes
 a test that appears to kill one.
@@ -29,19 +29,32 @@ list is outstanding work.
 |---|---|---|
 | 154 | `typeof value === "string"` → `false`; `"string"` → `""` | both send every input through `String(value)`, and `String(s)` IS `s` for a string — the ternary selects between two expressions with the same value |
 
-## `src/runner/gateway-runner.ts` — 8, ceiling 88.2%
+## `src/hooks/executor.ts` — 1, ceiling 98.9%
+
+| Line | Mutation | Why it cannot be observed |
+|---|---|---|
+| 32 | `"gateway"` → `""` | the package prefix reaches `GatewayConfigurationError`, which only uses it to BUILD a default message (`` `${prefix}: ${code}` ``); every refusal here passes an explicit `message`, so the prefix is never read |
+
+## `src/runner/gateway-runner.ts` — 7, ceiling 94.5%
 
 | Line | Mutation | Why it cannot be observed |
 |---|---|---|
 | 80 | `unsubs = []` seeded | `stop()` calls each entry inside `try { … } catch { /* ignore */ }`; a non-function throws and is swallowed **by design**, so shutdown survives a bad unsubscribe |
-| 88 | `opts.hooks ?? []` seeded | `HookExecutor` skips any hook whose handler is `undefined`, which a non-object always is |
 | 172 | `inflight.size > 0` → `true` / `>=` | entering the drain branch with an empty set still resolves immediately (`allSettled([])`) and clears its timer in `finally` |
 | 188 | `timer !== undefined` → `true` | `clearTimeout(undefined)` is a no-op |
 | 195 | `connected = false` → `true` | `stopped` is what refuses a restart; `connected` is not read again after `stop()` returns |
 | 238 | `inflight.add(work)` removed | redundant with the add in `start()`'s `onInbound` wrapper, which puts the same dispatch in the same set |
 | 259 | `activePrefix === undefined` → `false` | the loop then builds `` `${undefined}${name}` ``, which no ordinary message text equals |
 
-Two of these are worth a second look by someone changing the code rather than the
-tests, and are recorded rather than fixed here: line 88 means a **malformed hook is
-silently ignored** instead of refused, which `rules/error-handling.md` § 2 would
-have fail fast; line 238 is an add nothing needs.
+One entry left this list by being fixed rather than explained. `gateway-runner.ts:88`
+— seeding the default hook array with a non-hook — used to survive because
+`HookExecutor` skipped anything whose handler was `undefined`, which is what a
+malformed entry always looks like. That was issue #80: a **malformed hook silently
+ignored** where `rules/error-handling.md` § 2 asks for fail-fast. The executor now
+refuses it at construction, so the mutant is detectable and dies. A survivor that
+disappears because the code got better is the outcome this file exists to make
+possible — reading the list is how you tell those apart from the ones that cannot
+move.
+
+Still recorded rather than fixed: `gateway-runner.ts:238` is an `inflight.add`
+nothing needs, redundant with the one in `start()`'s `onInbound` wrapper.

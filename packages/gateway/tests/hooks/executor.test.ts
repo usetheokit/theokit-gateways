@@ -4,6 +4,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { GatewayConfigurationError } from "../../src/errors/config-error.js";
 import { HookExecutor } from "../../src/hooks/executor.js";
 import type { GatewayHook } from "../../src/hooks/types.js";
 import type { MessageEvent } from "../../src/types/message-event.js";
@@ -178,10 +179,12 @@ describe("HookExecutor (T4.1)", () => {
           throw new Error("ouch");
         },
       },
-      // Declares no post_outbound at all. Without one of these the `=== undefined` skip is never
+      // Implements a DIFFERENT phase. Without one of these the `=== undefined` skip is never
       // observed: calling a missing hook throws a TypeError that the catch below swallows, so the
-      // suite stays green while every hook in the list is invoked.
-      { name: "silent" },
+      // suite stays green while every hook in the list is invoked. It declares `on_error` rather
+      // than nothing at all because nothing at all is now refused at construction (#80) — and a
+      // hook that implements one phase and not another is the realistic shape anyway.
+      { name: "silent", on_error: () => undefined },
       {
         name: "second",
         post_outbound: () => {
@@ -230,9 +233,9 @@ describe("HookExecutor (T4.1)", () => {
           throw new Error("hook a is broken");
         },
       },
-      // Declares no on_error: pins that the `=== undefined` skip is a skip, and not a call whose
-      // TypeError the catch quietly absorbs.
-      { name: "silent" },
+      // Declares no on_error — it implements `pre_inbound` instead. Pins that the `=== undefined`
+      // skip is a skip, and not a call whose TypeError the catch quietly absorbs.
+      { name: "silent", pre_inbound: () => undefined },
       {
         name: "b",
         on_error: () => {
@@ -259,5 +262,67 @@ describe("HookExecutor (T4.1)", () => {
     expect(logged, "the failing hook was swallowed silently").toContain("a");
     expect(logged).toContain("hook a is broken");
     expect(logged, "a hook without on_error was invoked anyway").not.toContain("silent");
+  });
+});
+
+describe("HookExecutor — hook validation at the boundary (#80)", () => {
+  // A hook list is caller input arriving at a system boundary, and `rules/error-handling.md` § 2
+  // says validate it there. Before this, every phase asked `if (h.<phase> === undefined) continue`,
+  // which reads "this hook does not implement this phase" and "this is not a hook" identically —
+  // so a config-driven list with an entry that failed to resolve started a gateway whose rate
+  // limiter, audit trail or error reporter was simply absent, with nothing said. A silently missing
+  // security hook is worse than a loud failure: the deployment looks correct.
+  // Third column: the fragment that says WHY. All eight share one `code`, so unlike the sibling
+  // adapters the code cannot discriminate and the message is the only thing that does — "is null,
+  // not a hook object" and "has no name" send an operator to different fixes. A fragment rather
+  // than the whole string, so rewording the surrounding prose does not break eight tests.
+  const rejected: ReadonlyArray<readonly [string, unknown, string]> = [
+    ["undefined", undefined, "is undefined, not a hook object"],
+    ["null", null, "is null, not a hook object"],
+    ["a string", "pre_inbound", "is string, not a hook object"],
+    ["a number", 7, "is number, not a hook object"],
+    ["an object with no name", { pre_inbound: () => undefined }, "has no name"],
+    ["an object whose name is empty", { name: "", pre_inbound: () => undefined }, "has no name"],
+    [
+      "an object declaring no phase at all",
+      { name: "inert" },
+      "declares none of pre_inbound, post_outbound, on_error",
+    ],
+    [
+      "an object whose phase is not callable",
+      { name: "bad", pre_inbound: "nope" },
+      "declares pre_inbound, which is not callable",
+    ],
+  ];
+
+  it.each(rejected)("refuses %s, naming where it was and why", (_what, entry, why) => {
+    let thrown: unknown;
+    try {
+      new HookExecutor([{ name: "fine", on_error: () => undefined }, entry] as never);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown, "a malformed hook was accepted in silence").toBeInstanceOf(
+      GatewayConfigurationError,
+    );
+    const err = thrown as GatewayConfigurationError;
+    // The index is half the diagnostic: a list built from config has no other way to say WHICH
+    // entry is wrong, and "one of your hooks is malformed" sends the reader back to guess.
+    expect(err.message, "the refusal does not say which entry").toContain("hooks[1]");
+    expect(err.message, "the refusal does not say what is wrong with it").toContain(why);
+    expect(err.code).toBe("malformed_hook");
+    // `detail` is part of the published error shape, so a caller can branch on the position
+    // without parsing prose.
+    expect(err.detail, "detail does not carry the position").toBe("hooks[1]");
+  });
+
+  it("accepts a hook that implements only one of the three phases", () => {
+    // The guard against a fix that overshoots. Every phase is optional by contract, so a hook
+    // declaring exactly one is the ORDINARY case — most of this file's own hooks are that shape —
+    // and a validator demanding all three would refuse nearly every real hook.
+    expect(() => new HookExecutor([{ name: "a", pre_inbound: () => undefined }])).not.toThrow();
+    expect(() => new HookExecutor([{ name: "b", post_outbound: () => undefined }])).not.toThrow();
+    expect(() => new HookExecutor([{ name: "c", on_error: () => undefined }])).not.toThrow();
+    expect(() => new HookExecutor([]), "an empty list is a valid list").not.toThrow();
   });
 });
