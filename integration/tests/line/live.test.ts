@@ -17,20 +17,61 @@
  * anywhere.
  */
 
+import { createHmac } from "node:crypto";
+import { createServer } from "node:http";
+
+import { messagingApi } from "@line/bot-sdk";
 import { LineAdapter } from "@theokit/gateway-line";
 import { expect, it } from "vitest";
 
 import { required, runMarker } from "../../src/credentials.js";
-import { describeLive, describeLiveInbound } from "../../src/harness.js";
+import { describeLive, describeLiveInbound, publicUrl, waitFor } from "../../src/harness.js";
 import { platformById } from "../../src/platforms.js";
 
 const LINE = platformById("line");
+
+/** The port the tunnel forwards to. Fixed, because the tunnel was started against it. */
+const PORT = Number(process.env.INTEGRATION_PUBLIC_PORT ?? 3100);
 
 function makeAdapter(overrides: Record<string, unknown> = {}): LineAdapter {
   return new LineAdapter({
     channelSecret: required("LINE_CHANNEL_SECRET"),
     channelAccessToken: required("LINE_CHANNEL_ACCESS_TOKEN"),
     ...overrides,
+  });
+}
+
+/** One delivery as it arrived: the header LINE signed with, and the exact bytes it signed. */
+interface Delivery {
+  signature: string | undefined;
+  raw: string;
+}
+
+/**
+ * A server that records what LINE posts and answers 200.
+ *
+ * `node:http` and not express: one endpoint that captures bytes needs no framework, and the
+ * integration package does not carry express. The RAW body is the point — LINE signs the bytes, and
+ * re-serialising parsed JSON would hash something else, so the signature check below would compare
+ * a digest of the wrong input and fail for a correct delivery.
+ */
+function captureServer(into: Delivery[]): ReturnType<typeof createServer> {
+  return createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => chunks.push(c));
+    req.on("end", () => {
+      const isDelivery = req.method === "POST" && (req.url ?? "").startsWith("/line");
+      if (!isDelivery) {
+        res.writeHead(404).end();
+        return;
+      }
+      const header = req.headers["x-line-signature"];
+      into.push({
+        signature: typeof header === "string" ? header : undefined,
+        raw: Buffer.concat(chunks).toString("utf8"),
+      });
+      res.writeHead(200).end();
+    });
   });
 }
 
@@ -135,11 +176,56 @@ describeLive(LINE, "outbound", () => {
 });
 
 describeLiveInbound(LINE, "inbound round trip", () => {
-  it("receives a webhook delivery", () => {
-    // Unreachable without a tunnel: LINE posts to a URL it must be able to
-    // reach, and a locally-served request would prove this test's own fixture
-    // works and nothing about LINE. `describeLiveInbound` skips webhook
-    // platforms with that reason rather than staging a fake round trip.
-    expect(true).toBe(true);
-  });
+  it("receives a delivery LINE itself sends, signed with the real channel secret", async () => {
+    // The placeholder this replaces asserted `true === true`, and its comment was right about why:
+    // a locally-served request proves the fixture works and nothing about LINE. The way out is not
+    // to fake the round trip but to make LINE perform it — `POST /v2/bot/channel/webhook/test` asks
+    // the platform to dial our endpoint for real, so what arrives is LINE's own request, signed with
+    // LINE's own key. No second account and no human writing to the bot.
+    const base = publicUrl();
+    if (base === undefined) throw new Error("INTEGRATION_PUBLIC_URL is required by this suite");
+
+    const received: Delivery[] = [];
+    const server = captureServer(received);
+    await new Promise<void>((resolve) => server.listen(PORT, "127.0.0.1", () => resolve()));
+
+    const client = new messagingApi.MessagingApiClient({
+      channelAccessToken: required("LINE_CHANNEL_ACCESS_TOKEN"),
+    });
+    const endpoint = `${base}/line`;
+    const previous = await client.getWebhookEndpoint().catch(() => undefined);
+
+    try {
+      await client.setWebhookEndpoint({ endpoint });
+      const result = await client.testWebhookEndpoint({ endpoint });
+
+      // LINE reports what IT saw. A 200 here means our endpoint answered LINE, not ourselves.
+      expect(result.success, `LINE could not reach ${endpoint}: ${result.reason ?? "?"}`).toBe(
+        true,
+      );
+      expect(result.statusCode).toBe(200);
+
+      const delivery = await waitFor(() => received[0], {
+        timeoutMs: 30_000,
+        label: "a webhook delivery from LINE",
+      });
+
+      // The signature is the half that proves it came from LINE and not from anything on this
+      // machine: only the holder of the channel secret can produce it over these exact bytes.
+      const expected = createHmac("sha256", required("LINE_CHANNEL_SECRET"))
+        .update(delivery.raw)
+        .digest("base64");
+      expect(delivery.signature, "LINE sent no signature").toBeDefined();
+      expect(delivery.signature, "the delivery was not signed by LINE's channel secret").toBe(
+        expected,
+      );
+    } finally {
+      // Put the console back the way it was, whatever happened: leaving a tunnel URL registered
+      // there would silently break inbound the moment this tunnel dies.
+      if (previous?.endpoint !== undefined && previous.endpoint !== "") {
+        await client.setWebhookEndpoint({ endpoint: previous.endpoint }).catch(() => {});
+      }
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }, 90_000);
 });

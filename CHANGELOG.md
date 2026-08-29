@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that gate is built on. The pin is exact so a later `pnpm update` cannot walk into it silently.
 
 ### Fixed
+- **integration:** the LINE inbound suite proved nothing and its skip named a remedy that did not
+  work. The test body was `expect(true).toBe(true)`, and `describeLiveInbound` skipped every webhook
+  platform unconditionally while telling the reader to set `INTEGRATION_PUBLIC_URL` — which nothing
+  read. The harness now honours that variable, and the test asks LINE to dial our endpoint itself
+  (`POST /v2/bot/channel/webhook/test`), then verifies the signature over the raw bytes.
 - **gateway-line, gateway-sms:** the webhook server could not be restarted. `started` and `stopped`
   were latched and never reset, so a `start()` after a `stop()` returned without creating a listener
   and the server was silently dead — no error, no log, just a port nothing answers on. Found by
