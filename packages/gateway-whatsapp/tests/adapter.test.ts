@@ -277,6 +277,10 @@ describe("WhatsAppAdapter — sendMessage", () => {
     });
     expect(r.ok).toBe(true);
     expect(backend.sends).toHaveLength(1);
+    // ...carrying the message, to the recipient it was addressed to. Counting the sends proves the
+    // text was not split; it does not prove anything reached the right number with the right words,
+    // and an adapter that sent "" to somebody else would have counted exactly the same.
+    expect(backend.sends[0]).toMatchObject({ to: "5511888", text: "hello" });
   });
 
   it("send error stops remaining parts (T4.3 + EC-8)", async () => {

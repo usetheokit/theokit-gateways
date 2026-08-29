@@ -29,9 +29,11 @@ function fakeApp() {
 
 function makeAdapter(overrides: Record<string, unknown> = {}) {
   return new TeamsAdapter({
-    clientId: "00000000-0000-0000-0000-000000000000",
+    // Deliberately DISTINCT: with the same uuid in both slots, a connect that asked about the wrong
+    // one would still look right. Placeholder values, so nothing here is a credential.
+    clientId: "11111111-1111-1111-1111-111111111111",
     clientSecret: "not-a-real-secret",
-    tenantId: "00000000-0000-0000-0000-000000000000",
+    tenantId: "22222222-2222-2222-2222-222222222222",
     __appFactory: () => fakeApp() as never,
     ...overrides,
   } as never);
@@ -51,14 +53,31 @@ describe("connect verifies the credential", () => {
   });
 
   it("returns true when Microsoft issues a token", async () => {
+    // ...having asked about THIS app. The stub answers yes to anything, so `true` alone proves the
+    // call happened and nothing about what it carried: an adapter passing the appId where the
+    // clientId belongs, or a tenant it did not read from its own options, verifies a credential
+    // nobody configured and reports the gateway ready.
+    let asked: { clientId?: string; clientSecret?: string; tenantId?: string } | undefined;
     const adapter = makeAdapter({
-      __tokenFetcher: async () => ({ ok: true, status: 200 }),
+      __tokenFetcher: async (opts: {
+        clientId: string;
+        clientSecret: string;
+        tenantId: string;
+      }) => {
+        asked = opts;
+        return { ok: true, status: 200 };
+      },
     });
     try {
       expect(await adapter.connect()).toBe(true);
     } finally {
       await adapter.disconnect();
     }
+    expect(asked, "connect() verified a credential other than its own").toEqual({
+      clientId: "11111111-1111-1111-1111-111111111111",
+      clientSecret: "not-a-real-secret",
+      tenantId: "22222222-2222-2222-2222-222222222222",
+    });
   });
 
   it("returns false rather than throwing when the token request itself fails", async () => {
