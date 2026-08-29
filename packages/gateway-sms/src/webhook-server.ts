@@ -148,6 +148,9 @@ export async function createWebhookServer(opts: WebhookServerOptions): Promise<W
         started = true;
         return;
       }
+      // Cleared here, not in stop(): a server that was stopped and is starting again is no longer
+      // stopped, and leaving the flag latched made the NEXT stop() a no-op that left the listener up.
+      stopped = false;
       const port = opts.port ?? 3000;
       await new Promise<void>((resolve) => {
         server = app.listen(port, () => resolve());
@@ -157,6 +160,10 @@ export async function createWebhookServer(opts: WebhookServerOptions): Promise<W
     async stop(): Promise<void> {
       if (stopped) return;
       stopped = true;
+      // The pair of latches used to be write-once, so `start()` after a `stop()` returned without
+      // creating a listener and the server was silently dead — no error, no log, just a port nothing
+      // answers on. Resetting `started` is what makes a restart a restart.
+      started = false;
       if (server === undefined) return;
       await new Promise<void>((resolve) => {
         server?.close(() => resolve());
