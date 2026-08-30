@@ -49,11 +49,13 @@ own quality gates.
 
 ## Index
 
-16 items — **Open** 0 · **In flight** 0 · **Closed** 16
+17 items — **Open** 1 · **In flight** 0 · **Closed** 16
 
-### Open (0)
+### Open (1)
 
-_None._
+| Item | Title | Status | Severity |
+|---|---|---|---|
+| [`B-017`](#b-017--bridge-starts-fails-intermittently-on-chromium-profile-cleanup----) | `bridge-starts` fails intermittently on Chromium profile cleanup | `raw` | — |
 
 ### In flight (0)
 
@@ -528,3 +530,17 @@ dod:
 > Registered 2026-08-24 during B-008's review. Pre-existing.
 
 > **ACCEPTANCE** — `pnpm quality:docs` leaves `git status` clean; injecting a throw leaves zero directories; the refusal branch that `process.exit` puts beyond any `finally` cleans up itself, proven by a test that runs the gate with no npx on PATH.
+
+## B-017 — `bridge-starts` fails intermittently on Chromium profile cleanup   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: bug
+source: human
+evidence: `tests/bridge-starts.test.ts` — `Error: ENOTEMPTY: directory not empty, rmdir '/tmp/wa-bridge-XX6ZgI/.wwebjs_auth/session-vitest-start-check/Default'`. Failed 2 of 4 consecutive runs on 2026-08-30 (03:00, 03:20); passed on the runs in between with no code change.
+why_now: found while running the suite for the Baileys self-message work. A test that fails on a cleanup race makes the suite unusable as a gate — `cycle-review` and `run_validation.py` both read a red suite as "the branch is broken", so the next person to hit this either re-runs until green (which trains the team to ignore red) or stops trusting the gate. `rules/testing.md` § 3 is explicit: a flaky test is a bug.
+status: raw
+dod:
+  - the test passes 20 consecutive runs, or its teardown waits for the spawned Chromium to exit before removing the profile directory
+  - if the race cannot be closed, the test is removed rather than left flaky, and what it used to prove is stated in the removal commit
+> Registered 2026-08-30. Pre-existing and unrelated to the Baileys change measured alongside it: the failure is in the whatsapp-web.js bridge, which that work does not touch.

@@ -325,6 +325,40 @@ describe("WhatsAppAdapter — sender allowlist", () => {
     stderr.mockRestore();
   });
 
+  it("delivers the owner's own note even though the allowlist names a phone number", async () => {
+    // The allowlist answers "may this STRANGER reach the agent?". A note-to-self is not from a
+    // stranger, and it cannot answer that question anyway: MEASURED on a real paired session,
+    // the self-chat reports the account's LID (`231116569108705`) as the sender while the operator
+    // wrote their phone number in the allowlist. Asking the allowlist here mutes the one use case
+    // the pairing exists for, and no user can be expected to look up their own LID.
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend, { allowedSenders: "553598838687" });
+    const seen: string[] = [];
+    adapter.onInbound(async (event) => void seen.push(event.text));
+
+    await backend.emitInbound({
+      ...inboundFrom("231116569108705@lid", "note to self"),
+      fromSelf: true,
+    });
+
+    expect(seen).toEqual(["note to self"]);
+  });
+
+  it("still refuses a stranger whose id happens to look like a LID", async () => {
+    // The exemption is the FLAG, not the address shape — otherwise anyone reaching the socket on
+    // a LID would bypass the allowlist entirely.
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend, { allowedSenders: "553598838687" });
+    const seen: string[] = [];
+    adapter.onInbound(async (event) => void seen.push(event.text));
+
+    await backend.emitInbound(inboundFrom("999999999999999@lid", "not the owner"));
+
+    expect(seen).toEqual([]);
+    stderr.mockRestore();
+  });
+
   it("says which sender it refused, instead of dropping in silence", async () => {
     // A silent drop is indistinguishable from a broken gateway. The first thing an
     // operator does with a mistyped allowlist is wonder why the bot went mute.

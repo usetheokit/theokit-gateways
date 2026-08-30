@@ -24,6 +24,7 @@ import type {
   WhatsAppSendResult,
   WhatsAppStatusReceipt,
 } from "../../backend-types.js";
+import { normalizeWhatsAppId } from "../../allowlist.js";
 import { normalizeBaileysMessage } from "./normalize.js";
 import {
   type BaileysSocketFactory,
@@ -49,6 +50,14 @@ function endQuietly(socket: BaileysSocketLike): void {
 const DEFAULT_CONNECT_TIMEOUT_MS = 60_000;
 /** How long to wait for one send to be acknowledged. */
 const DEFAULT_SEND_TIMEOUT_MS = 30_000;
+/**
+ * How many of our own message ids to keep, as an echo guard.
+ *
+ * A window rather than a log: WhatsApp delivers our own message back within seconds or not at
+ * all, so recognising one from an hour ago buys nothing and an unbounded set on a long-lived
+ * socket is a leak.
+ */
+const SENT_WAMID_WINDOW = 256;
 
 /**
  * What the pairing is doing, for a caller that must ASK rather than be told.
@@ -160,6 +169,60 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
   private lastCloseError?: unknown;
   /** The pairing, as a caller may ask for it. Never handed out mutable. */
   private pairingState: WhatsAppPairingState = { status: "idle" };
+
+  /**
+   * The JIDs that ARE this account, normalised. Empty until a socket reports who it logged in as.
+   *
+   * Empty means "not learned yet", and `isDispatchable` reads that as refusing everything this
+   * account sent — the same behaviour as before self-chat support existed. A backend that
+   * guessed here would answer in a stranger's conversation.
+   */
+  private selfJids: ReadonlySet<string> = new Set();
+
+  /**
+   * Ids this backend sent, most recent last. This is what stops the agent answering itself.
+   *
+   * Bounded because it is a loop guard, not a log: an unbounded set on a long-lived socket is a
+   * leak, and nothing needs to recognise an echo from an hour ago — WhatsApp delivers our own
+   * message back within seconds or not at all.
+   */
+  private sentWamids = new Set<string>();
+
+  /** Record one id we sent, evicting the oldest once the window is full. @internal */
+  private rememberSent(wamid: string): void {
+    this.sentWamids.add(wamid);
+    while (this.sentWamids.size > SENT_WAMID_WINDOW) {
+      const oldest = this.sentWamids.values().next();
+      if (oldest.done === true) break;
+      this.sentWamids.delete(oldest.value);
+    }
+  }
+
+  /**
+   * Learn which JIDs are this account, from the socket that just logged in.
+   *
+   * Both forms are recorded: the phone JID and the LID. The self-chat is addressed by LID —
+   * measured on a real account, where a note-to-self arrived on `231116569108705@lid` while the
+   * account's phone JID was `553598838687` — so recording only one leaves the self-chat
+   * unrecognised and the feature silently off.
+   *
+   * @internal
+   */
+  private learnSelfJids(socket: BaileysSocketLike): void {
+    const user = socket.user;
+    const ids = [user?.id, user?.lid]
+      .filter((id): id is string => typeof id === "string" && id.length > 0)
+      .map((id) => normalizeWhatsAppId(id))
+      .filter((id) => id.length > 0);
+    this.selfJids = new Set(ids);
+    if (process.env.THEOKIT_WHATSAPP_TRACE === "1") {
+      // Whether the real library populates `user` at all is the one thing a fake socket cannot
+      // answer, and an empty set here means self-notes are refused with nothing logged.
+      process.stderr.write(
+        `[whatsapp-baileys][trace] selfJids learned: ${ids.length === 0 ? "(none)" : ids.join(", ")}\n`,
+      );
+    }
+  }
   private inboundHandler?: (event: WhatsAppInboundEvent) => Promise<void>;
   private statusHandler?: (receipt: WhatsAppStatusReceipt) => Promise<void>;
   /**
@@ -252,6 +315,7 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
     // socket is a live session, not an unreferenced object.
     if (this.socket !== undefined && this.socket !== socket) endQuietly(this.socket);
     this.socket = socket;
+    this.learnSelfJids(socket);
     this.connected = true;
     return true;
   }
@@ -279,9 +343,43 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
     });
   }
 
+  /**
+   * Trace one inbound batch BEFORE any filter, when `THEOKIT_WHATSAPP_TRACE=1`.
+   *
+   * Two independent filters can discard an envelope — the batch `type` here and `fromMe` inside
+   * `normalizeBaileysMessage` — and from outside, both look identical: nothing happens. Telling
+   * them apart by reading the code is guessing; this is how you find out which one fired.
+   *
+   * Deliberately content-free. A Baileys session pairs a REAL account carrying real
+   * conversations, so the trace records shape (type, direction, group, has-text) and the last
+   * four digits of the jid, never the message and never a full contact number.
+   *
+   * @internal
+   */
+  private traceBatch(payload: { type?: string; messages?: unknown[] }): void {
+    if (process.env.THEOKIT_WHATSAPP_TRACE !== "1") return;
+    const messages = payload.messages ?? [];
+    const rows = messages.map((raw) => {
+      const key = (raw as { key?: Record<string, unknown> } | undefined)?.key ?? {};
+      const jid = typeof key.remoteJid === "string" ? key.remoteJid : "";
+      const message = (raw as { message?: unknown } | undefined)?.message;
+      return [
+        `fromMe=${String(key.fromMe === true)}`,
+        `jid=…${jid.replace(/\D/g, "").slice(-4)}`,
+        `group=${String(jid.endsWith("@g.us"))}`,
+        `hasMessage=${String(message !== null && message !== undefined)}`,
+      ].join(" ");
+    });
+    process.stderr.write(
+      `[whatsapp-baileys][trace] upsert type=${payload.type ?? "(none)"} n=${messages.length}` +
+        (rows.length === 0 ? "\n" : `\n  ${rows.join("\n  ")}\n`),
+    );
+  }
+
   /** Route this socket's inbound batches into the handler, while it is still current. @internal */
   private subscribeInbound(socket: BaileysSocketLike, isCurrent: () => boolean): void {
     socket.ev.on("messages.upsert", (payload) => {
+      this.traceBatch(payload as { type?: string; messages?: unknown[] });
       // A batch typed anything other than `notify` is history being replayed, not live
       // traffic. Answering replayed history is the defect #11 records in the email backend.
       if (payload.type !== undefined && payload.type !== "notify") return;
@@ -493,6 +591,7 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
           };
         }
         const wamid = outcome?.key?.id;
+        if (wamid !== undefined) this.rememberSent(wamid);
         return wamid !== undefined ? { ok: true, wamid } : { ok: true };
       })
       .catch((err: unknown) => ({
@@ -541,7 +640,10 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
   private dispatchInbound(raw: unknown): void {
     const handler = this.inboundHandler;
     if (handler === undefined) return;
-    const event = normalizeBaileysMessage(raw);
+    const event = normalizeBaileysMessage(raw, {
+      selfJids: this.selfJids,
+      sentWamids: this.sentWamids,
+    });
     if (event === undefined) return;
     void handler(event).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);

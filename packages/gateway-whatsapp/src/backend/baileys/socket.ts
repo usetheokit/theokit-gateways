@@ -57,6 +57,14 @@ export interface BaileysSocketLike {
     jid: string,
     content: { text: string },
   ): Promise<{ key?: { id?: string } } | undefined>;
+  /**
+   * Who this socket logged in as — present once the connection opens.
+   *
+   * Optional because a socket that never opened has no identity to report, and because tests
+   * replace this object wholesale. The backend reads BOTH ids: the self-chat is addressed by
+   * `lid`, not by `id`, so knowing only one leaves it unrecognised.
+   */
+  readonly user?: { readonly id?: string; readonly lid?: string };
   end?(error?: Error): void;
 }
 

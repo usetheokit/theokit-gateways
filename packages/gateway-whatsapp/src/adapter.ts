@@ -412,6 +412,12 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
    * first thing a mistyped allowlist causes is an operator wondering why the bot went mute.
    */
   private isRefusedBySenderAllowlist(inbound: WhatsAppInboundEvent): boolean {
+    // The allowlist answers "may this STRANGER reach the agent?", and the account owner writing
+    // in their own self-chat is not one. It also cannot answer it here: the self-chat reports the
+    // account's LID as the sender, while an operator writes a phone number — measured on a real
+    // paired session. Reading the flag rather than the address keeps the exemption tied to the
+    // backend's own decision, so a stranger arriving on a LID is still refused.
+    if (inbound.fromSelf === true) return false;
     if (this.allowedSenders === undefined) return false;
     if (isSenderAllowed(inbound.fromPhone, this.allowedSenders)) return false;
     process.stderr.write(

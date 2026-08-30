@@ -97,6 +97,88 @@ describe("normalizeBaileysMessage", () => {
     ).toBeUndefined();
   });
 
+  describe("a message the account owner typed to themselves", () => {
+    /**
+     * The note-to-self pattern, which is what the whole gateway family exists for: you write to
+     * yourself on whichever surface is at hand and an agent answers there.
+     *
+     * MEASURED against a real paired account on 2026-08-30. The envelope arrives as live traffic —
+     * `upsert type=notify`, with content — and was discarded for one reason only: `fromMe`. But
+     * `fromMe` does not mean "we sent it"; it means "this ACCOUNT sent it", and a human typing on
+     * their own phone is not the bot answering its own reply. The blanket refusal was broader than
+     * the rationale written beside it, and the difference is exactly this use case.
+     *
+     * The narrow rule needs two facts one envelope cannot carry, so the backend supplies them:
+     * which JIDs ARE this account, and which message ids this backend sent.
+     */
+    const SELF = new Set(["553598838687", "231116569108705"]);
+
+    it("dispatches it when the id is not one we sent, and marks it as the owner's own", () => {
+      const event = normalizeBaileysMessage(
+        envelope({ key: { remoteJid: "553598838687@s.whatsapp.net", fromMe: true, id: "TYPED" } }),
+        { selfJids: SELF },
+      );
+
+      // `fromSelf` exists because the sender identity alone cannot carry this. A self-note in the
+      // self-chat reports the account's LID as its sender — MEASURED on a real session, where
+      // `selfJids` learned `553598838687, 231116569108705` and the note arrived on the LID. An
+      // allowlist written with a phone number therefore drops it, and nobody can be expected to
+      // look up their own LID. The flag lets the layer that owns the policy answer the question
+      // it is actually being asked: is this a stranger, or the owner?
+      expect(event).toMatchObject({ wamid: "TYPED", fromPhone: "553598838687", text: "hello" });
+      expect(event?.fromSelf).toBe(true);
+    });
+
+    it("leaves fromSelf unset on an ordinary inbound", () => {
+      // Absent rather than `false`, so a consumer reading the field cannot mistake "someone else
+      // wrote this" for "we did not check".
+      expect(normalizeBaileysMessage(envelope())?.fromSelf).toBeUndefined();
+    });
+
+    it("dispatches it when the self-chat is addressed by LID", () => {
+      // The self-chat's remoteJid is the account's own LID, not its phone JID — measured, and the
+      // reason `selfJids` is a SET rather than one id.
+      const event = normalizeBaileysMessage(
+        envelope({ key: { remoteJid: "231116569108705:51@lid", fromMe: true, id: "VIA_LID" } }),
+        { selfJids: SELF },
+      );
+
+      expect(event).toMatchObject({ wamid: "VIA_LID" });
+    });
+
+    it("still refuses the reply this backend itself sent", () => {
+      // The hazard the blanket rule existed for, kept — and now aimed at what actually causes it.
+      expect(
+        normalizeBaileysMessage(
+          envelope({ key: { remoteJid: "553598838687@s.whatsapp.net", fromMe: true, id: "OURS" } }),
+          { selfJids: SELF, sentWamids: new Set(["OURS"]) },
+        ),
+      ).toBeUndefined();
+    });
+
+    it("refuses a message the owner sent to SOMEBODY ELSE", () => {
+      // Answering here would put the agent into a conversation with a third party, on the owner's
+      // behalf, triggered by the owner's own words. Only the self-chat is the agent's business.
+      expect(
+        normalizeBaileysMessage(
+          envelope({ key: { remoteJid: "5511999999999@s.whatsapp.net", fromMe: true, id: "TO_ANA" } }),
+          { selfJids: SELF },
+        ),
+      ).toBeUndefined();
+    });
+
+    it("refuses everything from this account when the backend does not know its own JIDs", () => {
+      // An empty set means "unknown", and the safe reading of not knowing which chat is the
+      // self-chat is not "treat every chat as the self-chat".
+      expect(
+        normalizeBaileysMessage(
+          envelope({ key: { remoteJid: "553598838687@s.whatsapp.net", fromMe: true, id: "X" } }),
+          { selfJids: new Set() },
+        ),
+      ).toBeUndefined();
+    });
+  });
+
   it("drops the status feed — by the status rule, and again by id normalisation", () => {
     // Over-determined, and stated rather than hidden: an audit found this test passing whether
     // or not the status rule exists, because `normalizeWhatsAppId("status@broadcast")` strips

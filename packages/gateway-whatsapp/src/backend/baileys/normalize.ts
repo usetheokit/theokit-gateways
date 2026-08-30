@@ -144,26 +144,74 @@ function resolveParties(
 }
 
 /**
+ * What the backend knows that a single envelope cannot carry.
+ *
+ * Both fields are optional and an absent one means "unknown", never "anything goes": with no
+ * context the guard below behaves exactly as it did before this type existed.
+ *
+ * @public
+ */
+export interface BaileysDispatchContext {
+  /**
+   * The JIDs that ARE this account, normalised — its phone JID and its LID.
+   *
+   * A set rather than one id because the self-chat is addressed by LID, not by phone JID, and
+   * both forms reach the socket. An EMPTY set means the backend has not learned them yet, and
+   * the safe reading of "we do not know which chat is the self-chat" is not "every chat is".
+   */
+  readonly selfJids?: ReadonlySet<string>;
+  /** Message ids this backend sent. Its own echoes — the thing that must never be answered. */
+  readonly sentWamids?: ReadonlySet<string>;
+}
+
+/**
  * Should this envelope reach a handler at all?
  *
- * Refused: anything we sent (or the bot answers its own replies, forever — a lesson every
- * backend in this package learned separately), and the status feed, which is never a
- * conversation.
+ * Refused: the status feed, which is never a conversation, and the replies THIS BACKEND sent —
+ * or the bot answers itself, forever, a lesson every backend in this package learned separately.
+ *
+ * The second refusal used to be spelled `fromMe`, and that was broader than the reason written
+ * beside it. `fromMe` does not mean "we sent it"; it means "this ACCOUNT sent it", which includes
+ * the human typing on their own phone. Measured against a real paired account on 2026-08-30: a
+ * note-to-self arrives as live traffic (`upsert type=notify`, with content) and was discarded for
+ * that reason alone — foreclosing the note-to-self agent, which is what this gateway family exists
+ * for. Every other gateway here answers it, because there the bot is a separate identity; on
+ * WhatsApp the paired account IS the person.
+ *
+ * So the refusal now aims at what actually causes the loop — an id we sent — and stays inside the
+ * self-chat. A message the owner sent to SOMEBODY ELSE is still refused: answering there would put
+ * the agent into a third party's conversation, in the owner's name, triggered by the owner's own
+ * words.
  */
-function isDispatchable(key: Record<string, unknown>, remoteJid: string): boolean {
-  if (key.fromMe === true) return false;
-  return remoteJid !== STATUS_BROADCAST_JID;
+function isDispatchable(
+  key: Record<string, unknown>,
+  remoteJid: string,
+  wamid: string,
+  ctx: BaileysDispatchContext | undefined,
+): "no" | "yes" | "yes-from-self" {
+  if (remoteJid === STATUS_BROADCAST_JID) return "no";
+  if (key.fromMe !== true) return "yes";
+
+  const selfJids = ctx?.selfJids;
+  if (selfJids === undefined || selfJids.size === 0) return "no";
+  if (!selfJids.has(normalizeWhatsAppId(remoteJid))) return "no";
+  return ctx?.sentWamids?.has(wamid) === true ? "no" : "yes-from-self";
 }
 
 /**
  * Normalise one inbound envelope, or refuse it.
  *
- * Refused: anything we sent (`fromMe`), the status feed, any content that is not text, and
- * anything whose sender cannot be identified. That last one matters most — an event with an
- * unidentifiable sender would reach an allowlist with nothing to match against, and the safe
- * reading of "we do not know who sent this" is not "let it through".
+ * Refused: the replies this backend sent, messages this account sent OUTSIDE its own self-chat,
+ * the status feed, any content that is not text, and anything whose sender cannot be identified.
+ * That last one matters most — an event with an unidentifiable sender would reach an allowlist
+ * with nothing to match against, and the safe reading of "we do not know who sent this" is not
+ * "let it through". See {@link BaileysDispatchContext} for what the backend must supply before a
+ * note-to-self can be answered at all.
  */
-export function normalizeBaileysMessage(raw: unknown): WhatsAppInboundEvent | undefined {
+export function normalizeBaileysMessage(
+  raw: unknown,
+  ctx?: BaileysDispatchContext,
+): WhatsAppInboundEvent | undefined {
   const envelope = asObject(raw) as RawEnvelope | undefined;
   const key = envelope === undefined ? undefined : asObject(envelope.key);
   if (key === undefined) return undefined;
@@ -171,7 +219,8 @@ export function normalizeBaileysMessage(raw: unknown): WhatsAppInboundEvent | un
   const remoteJid = asText(key.remoteJid);
   const wamid = asText(key.id);
   if (remoteJid === undefined || wamid === undefined) return undefined;
-  if (!isDispatchable(key, remoteJid)) return undefined;
+  const verdict = isDispatchable(key, remoteJid, wamid, ctx);
+  if (verdict === "no") return undefined;
 
   const text = extractText(envelope?.message);
   if (text === undefined) return undefined;
@@ -193,6 +242,7 @@ export function normalizeBaileysMessage(raw: unknown): WhatsAppInboundEvent | un
     receivedAt: seconds * 1_000,
     backend: "baileys",
     raw,
+    ...(verdict === "yes-from-self" ? { fromSelf: true } : {}),
     ...(contactName !== undefined ? { contactName } : {}),
   };
 }

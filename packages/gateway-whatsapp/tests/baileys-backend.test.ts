@@ -29,6 +29,11 @@ class FakeSocket implements BaileysSocketLike {
   sendError?: Error;
   /** What the socket answers a send with. Overridden to reach the id-less acknowledgement. */
   ack?: () => { key?: { id?: string } } | undefined;
+  /**
+   * Who this socket logged in as. Unset by default, which is the honest default: a socket that
+   * never opened has no identity, and the backend must treat "unknown" as "answer nobody".
+   */
+  user?: { id?: string; lid?: string };
 
   readonly ev = {
     on: <K extends keyof BaileysEventMap>(
@@ -743,6 +748,96 @@ describe("WhatsAppBaileysBackend — the window before a socket exists", () => {
     expect(Date.now() - startedAt, "waited out the connect timeout").toBeLessThan(1_000);
     expect(socket.ended, "a socket delivered after disconnect was left running").toBe(true);
   }, 30_000);
+});
+
+describe("WhatsAppBaileysBackend — a note the account owner wrote to themselves", () => {
+  /**
+   * The pattern the whole gateway family exists for, and the one WhatsApp made hardest: you
+   * write to yourself and an agent answers there.
+   *
+   * MEASURED against a real paired account on 2026-08-30 — the envelope arrives as live traffic
+   * (`upsert type=notify`, with content) and used to be discarded solely for `fromMe`. These
+   * tests cover the BACKEND half of the narrowed guard: learning which JIDs are this account,
+   * and remembering the ids it sent so it never answers its own reply.
+   */
+  const SELF_PN = "553598838687@s.whatsapp.net";
+  const SELF_LID = "231116569108705:51@lid";
+
+  /** An envelope the account owner typed to themselves, addressed the way the self-chat is. */
+  function selfNote(id: string, jid: string = SELF_LID): unknown {
+    return {
+      key: { remoteJid: jid, fromMe: true, id },
+      messageTimestamp: 1_700_000_000,
+      pushName: "Paulo",
+      message: { conversation: "o que e o TheoKit?" },
+    };
+  }
+
+  it("answers a note to self once it has learned its own JIDs", async () => {
+    const { backend, socket } = makeBackend();
+    socket.user = { id: "553598838687:51@s.whatsapp.net", lid: "231116569108705:51@lid" };
+    const seen: string[] = [];
+    backend.onInbound(async (event) => {
+      seen.push(event.text);
+    });
+
+    const connecting = backend.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    socket.open();
+    await connecting;
+
+    socket.emit("messages.upsert", { type: "notify", messages: [selfNote("TYPED")] });
+    await vi.waitFor(() => expect(seen).toHaveLength(1));
+
+    expect(seen[0]).toBe("o que e o TheoKit?");
+  });
+
+  it("refuses the reply it sent itself, which is the loop the old blanket rule prevented", async () => {
+    const { backend, socket } = makeBackend();
+    socket.user = { id: "553598838687:51@s.whatsapp.net", lid: "231116569108705:51@lid" };
+    const seen: string[] = [];
+    backend.onInbound(async (event) => {
+      seen.push(event.text);
+    });
+
+    const connecting = backend.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    socket.open();
+    await connecting;
+
+    // Send, then feed the very id the socket acknowledged straight back as inbound — which is
+    // exactly what WhatsApp does with our own message on every linked device.
+    const sent = await backend.send({ to: "553598838687", isGroup: false, text: "answer" });
+    expect(sent.ok).toBe(true);
+    const ourId = (sent as { wamid?: string }).wamid;
+    expect(ourId).toBeDefined();
+
+    socket.emit("messages.upsert", { type: "notify", messages: [selfNote(ourId as string)] });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(seen).toHaveLength(0);
+  });
+
+  it("answers nobody while it has not learned who it is", async () => {
+    // A socket that reports no identity leaves `selfJids` empty, and empty must mean "refuse",
+    // never "treat every chat as the self-chat" — the difference between silence and the agent
+    // speaking inside a stranger's conversation.
+    const { backend, socket } = makeBackend();
+    const seen: string[] = [];
+    backend.onInbound(async (event) => {
+      seen.push(event.text);
+    });
+
+    const connecting = backend.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    socket.open();
+    await connecting;
+
+    socket.emit("messages.upsert", { type: "notify", messages: [selfNote("TYPED", SELF_PN)] });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(seen).toHaveLength(0);
+  });
 });
 
 describe("WhatsAppBaileysBackend — pairing a caller can ASK about", () => {
