@@ -73,19 +73,17 @@ describe("splitForMattermost", () => {
 
 describe("splitForMattermost — the boundaries and the fallback, which nothing pinned", () => {
   it("breaks at a space when there is no newline anywhere", () => {
-    // The third boundary in the list, and the only one no test exercised: emptying `" "` killed
-    // nothing. It is the break point of a long paragraph with no line breaks — the ordinary shape
-    // of a chat message — and without it a word is cut in half.
+    // Mattermost posts stop at 16383 and this wrapper cuts at a 16000 safe window. Almost nothing
+    // reaches it, which is why no test had ever pushed a boundary-free paragraph through — and why
+    // emptying `" "` in `boundaries` cost nothing here until now.
     const head = "a".repeat(12000);
 
     expect(splitForMattermost(`${head} ${"b".repeat(8000)}`)[0]).toBe(head);
   });
 
   it("prefers the last boundary over filling the window", () => {
-    // `lastResort: "last-boundary"`. Measured: with the only space 4000 characters in, this setting
-    // breaks there and leaves the rest of the window unused, where the fallback fills the window
-    // and cuts mid-word. Every existing case had its boundary near the limit or none at all, so
-    // the two were indistinguishable and the setting was free to be emptied.
+    // The trade this setting makes: 12000 characters of window given up to avoid splitting a word.
+    // With the boundary near the limit, as every existing case had it, the choice is invisible.
     const head = "a".repeat(4000);
 
     expect(splitForMattermost(`${head} ${"b".repeat(16000)}`)[0]).toBe(head);

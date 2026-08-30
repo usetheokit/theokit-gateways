@@ -58,19 +58,17 @@ describe("splitForTeams", () => {
 
 describe("splitForTeams — the boundaries and the fallback, which nothing pinned", () => {
   it("breaks at a space when there is no newline anywhere", () => {
-    // The third boundary in the list, and the only one no test exercised: emptying `" "` killed
-    // nothing. It is the break point of a long paragraph with no line breaks — the ordinary shape
-    // of a chat message — and without it a word is cut in half.
+    // Teams allows 8000 characters, so reaching the cap takes a long answer — and a long answer
+    // pasted as one block is exactly the shape with no newline to break on. The space boundary was
+    // the only rung nothing exercised.
     const head = "a".repeat(6000);
 
     expect(splitForTeams(`${head} ${"b".repeat(4000)}`)[0]).toBe(head);
   });
 
   it("prefers the last boundary over filling the window", () => {
-    // `lastResort: "last-boundary"`. Measured: with the only space 2000 characters in, this setting
-    // breaks there and leaves the rest of the window unused, where the fallback fills the window
-    // and cuts mid-word. Every existing case had its boundary near the limit or none at all, so
-    // the two were indistinguishable and the setting was free to be emptied.
+    // A boundary a quarter of the way in is still preferred over a full window: half a word split
+    // across two Teams messages renders as two words, and no reader can tell it was one.
     const head = "a".repeat(2000);
 
     expect(splitForTeams(`${head} ${"b".repeat(8000)}`)[0]).toBe(head);
