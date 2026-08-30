@@ -254,15 +254,35 @@ describe("the web bridge script", () => {
       cwd: dir,
       stdio: ["pipe", "pipe", "pipe"],
     });
+    let stderr = "";
     child.stdout.on("data", () => undefined);
-    child.stderr.on("data", () => undefined);
+    child.stderr.on("data", (c: Buffer) => {
+      stderr += c.toString("utf8");
+    });
 
-    // Long enough for puppeteer to have launched the browser — the state in which the hang
-    // happens. Killing before that proves nothing, because there is nothing to close yet.
-    await new Promise((resolve) => setTimeout(resolve, 6_000));
+    // WAIT FOR THE STATE, do not guess at how long it takes to reach.
+    //
+    // The first version slept six seconds, which is what launching Chromium costs on the machine
+    // this was written on and nothing like what it costs on a shared CI runner — the test failed
+    // there on its first run. A fixed sleep calibrated on one machine is a timing assumption
+    // wearing a test's clothes.
+    //
+    // The QR line is the real signal: the bridge writes it once the browser is up AND WhatsApp Web
+    // has rendered the login page, which is precisely the state the hang was measured in. Polling
+    // for it is bounded, and reaching the bound is not a pass — a bridge that never got there must
+    // still die on SIGTERM, so the run continues and the message says which state it was in.
+    const deadline = Date.now() + 45_000;
+    while (!stderr.includes("Scan this QR") && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    const browserWasUp = stderr.includes("Scan this QR");
 
     const exited = await new Promise<boolean>((resolve) => {
-      const timer = setTimeout(() => resolve(false), 10_000);
+      // Generous against the bridge's OWN deadline, which is five seconds: `shutdown()` races
+      // `client.destroy()` against a timer and exits either way. Twenty seconds is four times
+      // that, and before the fix this never resolved true at any length — `exit` did not fire at
+      // all. Widening it cannot turn a broken shutdown into a passing test.
+      const timer = setTimeout(() => resolve(false), 20_000);
       child.once("exit", () => {
         clearTimeout(timer);
         resolve(true);
@@ -271,8 +291,11 @@ describe("the web bridge script", () => {
     });
 
     if (!exited) child.kill("SIGKILL");
-    expect(exited, "the bridge ignored SIGTERM and had to be killed").toBe(true);
-  }, 40_000);
+    expect(
+      exited,
+      `the bridge ignored SIGTERM and had to be killed (browser up: ${browserWasUp})`,
+    ).toBe(true);
+  }, 90_000);
 
   it("leaves no session directory in the package it was spawned from", async (ctx) => {
     // LocalAuth writes `.wwebjs_auth/` relative to cwd. Running the bridge from the package

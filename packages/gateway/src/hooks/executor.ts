@@ -73,7 +73,12 @@ function assertHook(entry: unknown, index: number): void {
 
 export class HookExecutor {
   constructor(private readonly hooks: ReadonlyArray<GatewayHook>) {
-    hooks.forEach(assertHook);
+    // The arguments are named rather than inherited from `forEach`, which passes three. Today
+    // `assertHook` takes two and the array is discarded harmlessly; the day it grows a third
+    // parameter it would silently receive the whole array instead of whatever was intended.
+    hooks.forEach((hook, index) => {
+      assertHook(hook, index);
+    });
   }
 
   /**
