@@ -630,3 +630,18 @@ dod:
   - the per-plan cost of the gate is measured and stated, so the next person knows what it buys and what it costs
 > Registered 2026-08-30 as the followup ADR-3 of B-020's plan promised. Registering it is what
 > makes the dismissal a decision rather than an omission.
+
+> **Merged in 2026-08-30 (G2 dedup, no new id): the cap fires even where a runner EXISTS.**
+> `_mutation.py` looks for `stryker.config.json` in `manifest_dir` — the directory of the
+> manifest it detected, which in a pnpm workspace is the repo root. `packages/gateway/stryker.config.json`
+> is therefore invisible to it, and the package that DOES have a runner is reported as having
+> none. Measured the same day: that config drives 458 mutants at **95.63%** (427 killed,
+> 11 timeout, 20 survivors, all enumerated as equivalent in `packages/gateway/tests/MUTATION.md`).
+>
+> This matters to the DoD above rather than beside it: the second bullet asks that the cap stop
+> firing for the packages that get a runner, and configuring one does not make it stop. Fixing
+> the detector's root-only lookup is a precondition of the bullet, not a separate wish.
+>
+> The fix belongs to the kit repository, not here — `.claude/` is an installed plugin and is not
+> versioned by this repo, so a change written into it would protect exactly this checkout
+> (`cycle-maintenance` § `ITEM_VERIFIED_LOCAL`).
