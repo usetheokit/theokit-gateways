@@ -49,9 +49,9 @@ own quality gates.
 
 ## Index
 
-20 items — **Open** 4 · **In flight** 0 · **Closed** 16
+21 items — **Open** 5 · **In flight** 0 · **Closed** 16
 
-### Open (4)
+### Open (5)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -59,6 +59,7 @@ own quality gates.
 | [`B-018`](#b-018--a-theokit-app-writes-268-lines-of-channel-joinery-the-framework-should-own----) | A theokit app writes 268 lines of channel joinery the framework should own | `triaged` | — |
 | [`B-019`](#b-019--agent-output-reaches-a-chat-channel-through-a-presenter-nobody-wrote----) | Agent output reaches a chat channel through a presenter nobody wrote | `triaged` | — |
 | [`B-020`](#b-020--eight-of-ten-adapters-ignore-outboundmessageformat-so-a-caller-cannot-rely-on-it----) | Eight of ten adapters ignore `OutboundMessage.format`, so a caller cannot rely on it | `triaged` | — |
+| [`B-021`](#b-021--check_alignment_gatepy-reads-a-b-nnn-mentioned-in-prose-as-a-citation----) | `check_alignment_gate.py` reads a `B-NNN` mentioned in prose as a citation | `raw` | — |
 
 ### In flight (0)
 
@@ -594,3 +595,21 @@ dod:
   - every adapter either honours `format` or declares in its own docblock that the platform has no rich text, so the count of silent ignorers reaches 0
   - the count is stated in the package README so a consumer learns it without reading ten adapters
 > Registered 2026-08-30 during the Squad loop on B-018/B-019. Dedup gate G2 matched B-019 on the word `format`; read and REJECTED as a merge — B-019 is the presenter translating the text (`**x**` -> `*x*`), this is the adapter telling the platform how to parse it. Both halves are needed: perfectly translated text still arrives unparsed on the eight that ignore the flag. B-019's own `## Out of scope` names this as a separate item.
+
+## B-021 — `check_alignment_gate.py` reads a `B-NNN` mentioned in prose as a citation   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: bug
+source: human
+evidence: `_committed_work_id()` at `.claude/skills/plan-confidence/scripts/check_alignment_gate.py:98` runs `_ITEM_RE.findall(content)` over the WHOLE plan body and takes the first match as the id the plan is answerable to. A plan that mentions another item to say it is NOT that item — "this does not substitute for B-018, B-019 or B-020" — is therefore read as implementing B-018, and inherits that item's alignment verdict. Reproduced 2026-08-30: an ad-hoc plan citing no item scored INVALID with `alignment_not_reached` as a HARD cap, where `rules/alignment-threshold.md` prescribes a soft floor of 89 for exactly that case.
+why_now: the false positive pushes an author toward the one action the gate exists to prevent. The only way to clear it is to delete the mention — which produces a plan with no `B-NNN` in it, indistinguishable from the deliberate omission the rule calls "a one-line bypass". A checker whose false positive is repaired by performing the bypass teaches the bypass.
+status: raw
+dod:
+  - a plan mentioning an id in prose, without a frontmatter or Goal citation, is treated as ad-hoc and takes the soft floor rather than the hard cap
+  - a regression test covers both a real citation and a prose mention, since the difference between them is the whole defect
+  - the fix does not widen the ad-hoc path: a plan whose frontmatter or Goal names an item is still hard-capped when that item is unaligned
+> Registered 2026-08-30, found while attempting an ad-hoc fix during the B-018/B-019 loop.
+> The kit lives under `.claude/`, which this repository does not version — so per
+> `cycle-maintenance.md` this item can only ever reach ITEM_VERIFIED_LOCAL here, and the fix
+> belongs in the kit's own repository to reach anyone else.
