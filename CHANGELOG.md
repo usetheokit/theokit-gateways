@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **backlog:** B-023 — ten of eleven packages run their suite without a typechecker, so a type error in a package's own tests reports a green suite (#B-023)
 - **backlog:** B-020 and B-021 measured and triaged — eight adapters ignoring a declared `format` field, and an alignment gate that reads a disclaimer as a citation (#B-020, #B-021)
 - **gateway:** a cross-adapter gate fails when an adapter never reads the `format` its own contract declares — 8 of 10 do not, and two real phones received literal asterisks because of it (#B-020)
 - **discovery:** B-019's measurement falsified the architecture review's proposed presenter mechanism before any code was written — all 8 splitters already split inside `sendMessage`, so consuming them would have shipped a silent double split (#B-019)

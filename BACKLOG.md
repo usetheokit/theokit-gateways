@@ -49,9 +49,9 @@ own quality gates.
 
 ## Index
 
-22 items — **Open** 6 · **In flight** 0 · **Closed** 16
+23 items — **Open** 7 · **In flight** 0 · **Closed** 16
 
-### Open (6)
+### Open (7)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -61,6 +61,7 @@ own quality gates.
 | [`B-020`](#b-020--eight-of-ten-adapters-ignore-outboundmessageformat-so-a-caller-cannot-rely-on-it----) | Eight of ten adapters ignore `OutboundMessage.format`, so a caller cannot rely on it | `triaged` | — |
 | [`B-021`](#b-021--check_alignment_gatepy-reads-a-b-nnn-mentioned-in-prose-as-a-citation----) | `check_alignment_gate.py` reads a `B-NNN` mentioned in prose as a citation | `triaged` | — |
 | [`B-022`](#b-022--eleven-of-twelve-packages-have-no-mutation-runner----) | Eleven of twelve packages have no mutation runner | `raw` | — |
+| [`B-023`](#b-023--ten-of-eleven-packages-run-their-suite-without-a-typechecker----) | Ten of eleven packages run their suite without a typechecker | `raw` | — |
 
 ### In flight (0)
 
@@ -645,3 +646,20 @@ dod:
 > The fix belongs to the kit repository, not here — `.claude/` is an installed plugin and is not
 > versioned by this repo, so a change written into it would protect exactly this checkout
 > (`cycle-maintenance` § `ITEM_VERIFIED_LOCAL`).
+
+## B-023 — Ten of eleven packages run their suite without a typechecker   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: evolve
+source: human
+evidence: `@theokit/gateway`'s `test` is `tsc --noEmit && vitest run`; the other ten are `vitest run` alone. Measured 2026-08-30 by enumerating `scripts.test` across `packages/*/package.json`.
+why_now: a contravariant mock parameter in `packages/gateway-teams/tests/adapter.test.ts:456` typechecked as an error and the package's own suite reported 65 passed. It was found by `run_validation.py` running the root `typecheck` script, three phases downstream of where it was written — after `/implement`, after `/code-quality`, on the way into `/review`. The root `pnpm -r run typecheck` does cover every package, so the type IS checked eventually; what is missing is that the check runs where the author is looking. A green suite in ten of eleven packages says nothing about types, and the author reads the suite.
+status: raw
+dod:
+  - a type error introduced in any package's tests fails that package's own `test` script, not only the root `typecheck`
+  - the cost is measured and stated — `tsc --noEmit` per package on every `pnpm -r test` run, against the current suite time
+  - if some package is deliberately excluded, the reason is written where the exclusion is
+> Registered 2026-08-30 during B-020's `/review` pre-conditions. Gate G2 ran: `typecheck` and `tsc`
+> matched no existing item; B-021 and B-022 matched only on the repository name. Not merged into
+> B-022 — that one is about mutation runners, a different tool answering a different question.

@@ -453,9 +453,11 @@ describe("TeamsAdapter — html is not markdown, and a rejected activity degrade
     const { adapter, fakeApp } = makeAdapter();
     await adapter.connect();
     let attempt = 0;
-    fakeApp.send.mockImplementation(async (_id: string, activity: { textFormat?: string }) => {
+    // `_activity` is `unknown` on the mock's signature, and a narrower parameter type here is
+    // refused by TS (contravariance) — so widen and narrow inside, rather than at the boundary.
+    fakeApp.send.mockImplementation(async (_id: string, activity: unknown) => {
       attempt += 1;
-      if (activity.textFormat !== undefined) {
+      if ((activity as { textFormat?: string }).textFormat !== undefined) {
         throw Object.assign(new Error("bad activity"), { statusCode: 400 });
       }
       return { id: "sent-plain" };
