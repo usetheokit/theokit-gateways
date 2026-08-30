@@ -260,6 +260,16 @@ describe("the web bridge script", () => {
       stderr += c.toString("utf8");
     });
 
+    // Attached NOW, not after the wait below. The first version registered it just before
+    // signalling, and on a runner with no browser to launch the bridge exits on its own within
+    // seconds — so the listener arrived after the event and then waited twenty seconds for
+    // something that had already happened. The test reported "ignored SIGTERM" about a process
+    // that had been dead the whole time.
+    let died = false;
+    child.once("exit", () => {
+      died = true;
+    });
+
     // WAIT FOR THE STATE, do not guess at how long it takes to reach.
     //
     // The first version slept six seconds, which is what launching Chromium costs on the machine
@@ -272,9 +282,18 @@ describe("the web bridge script", () => {
     // for it is bounded, and reaching the bound is not a pass — a bridge that never got there must
     // still die on SIGTERM, so the run continues and the message says which state it was in.
     const deadline = Date.now() + 45_000;
-    while (!stderr.includes("Scan this QR") && Date.now() < deadline) {
+    while (!stderr.includes("Scan this QR") && !died && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
+
+    // A bridge that died before it could be signalled cannot answer the question this test asks,
+    // and pretending otherwise would report a pass or a failure about an event that never
+    // occurred. It happens on a runner where puppeteer has no browser to launch. Say so.
+    ctx.skip(
+      died,
+      `the bridge exited before it could be signalled — no browser in this environment: ${stderr.trim().slice(-200)}`,
+    );
+
     const browserWasUp = stderr.includes("Scan this QR");
 
     const exited = await new Promise<boolean>((resolve) => {
