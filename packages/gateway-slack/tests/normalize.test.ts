@@ -201,6 +201,34 @@ describe("normalizeSlackEvent — bot loop guard (D275)", () => {
     expect(r, "another bot's broadcast reached the handler").toBeUndefined();
   });
 
+  it("keeps a message a human posted THROUGH an app, which also carries bot_id", () => {
+    // The regression that widening the guard caused, caught by the live suite in the release gate
+    // and not by any unit test — which is why it is one now.
+    //
+    // `chat.postMessage` with an `xoxp-` USER token produces a message whose author is the human
+    // (`user`) and which ALSO carries the app's `bot_id`. Dropping everything with `bot_id` drops
+    // those: workflow posts, integrations, and the integration suite's own inbound probe, which
+    // had passed in 927ms and began timing out at 30s.
+    //
+    // The discriminator is the human author. `bot_id` with no `user` is a bot talking; `bot_id`
+    // WITH a `user` is a person using a tool.
+    const r = normalizeSlackEvent(
+      mkBody({
+        channel: "C1",
+        ts: "100.1",
+        user: "U_HUMAN",
+        bot_id: "B_APP",
+        text: `<@${BOT}> posted through an integration`,
+        channel_type: "channel",
+      }),
+      BOT,
+    );
+
+    expect(r?.text, "a human posting through an app was dropped as a bot").toContain(
+      "posted through an integration",
+    );
+  });
+
   it("keeps a HUMAN thread broadcast, which is what the allowance is for", () => {
     // The other side of the same guard: widening it to drop every message carrying `bot_id` must
     // not cost the case `thread_broadcast` was allowed through for.
