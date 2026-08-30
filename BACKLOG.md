@@ -57,7 +57,7 @@ own quality gates.
 |---|---|---|---|
 | [`B-017`](#b-017--bridge-starts-fails-intermittently-on-chromium-profile-cleanup----) | `bridge-starts` fails intermittently on Chromium profile cleanup | `raw` | — |
 | [`B-018`](#b-018--a-theokit-app-writes-268-lines-of-channel-joinery-the-framework-should-own----) | A theokit app writes 268 lines of channel joinery the framework should own | `triaged` | — |
-| [`B-019`](#b-019--agent-output-reaches-a-chat-channel-through-a-presenter-nobody-wrote----) | Agent output reaches a chat channel through a presenter nobody wrote | `raw` | — |
+| [`B-019`](#b-019--agent-output-reaches-a-chat-channel-through-a-presenter-nobody-wrote----) | Agent output reaches a chat channel through a presenter nobody wrote | `triaged` | — |
 
 ### In flight (0)
 
@@ -570,9 +570,9 @@ domain: theokit-gateways
 repo: theokit-gateways
 suggested_mode: evolve
 source: human
-evidence: `appteste/server/agent-loop.ts` — 50 lines that consume the agent's event stream and produce one chat message. Its first version took every frame carrying a `delta`, so a reply arrived on a real phone as `"TheOi! 👋"`, the `"The"` being a fragment of the model's reasoning. theokit already ships `Presenter<TOut>` + `PresenterRegistry` keyed by surface, with three implementations (web, terminal, json) over a canonical `AgentOutputEvent`. Meanwhile 8 of 10 gateway packages carry a `split.ts` with a hardcoded limit (`TELEGRAM_MAX_MESSAGE = 4096`, `DISCORD_MAX_MESSAGE = 2000`), which is presentation living in a transport package because there was nowhere else.
+evidence: records/discoveries/opportunities/gateways-channel-presenter-opportunity.md — SHIPPABLE_WITH_CAVEATS. The plan hypothesis was FALSIFIED (2 of 3 conditions fired) and replaced: the presenter must not touch splitting at all. Originally `appteste/server/agent-loop.ts` — 50 lines that consume the agent's event stream and produce one chat message. Its first version took every frame carrying a `delta`, so a reply arrived on a real phone as `"TheOi! 👋"`, the `"The"` being a fragment of the model's reasoning. theokit already ships `Presenter<TOut>` + `PresenterRegistry` keyed by surface, with three implementations (web, terminal, json) over a canonical `AgentOutputEvent`. Meanwhile 8 of 10 gateway packages carry a `split.ts` with a hardcoded limit (`TELEGRAM_MAX_MESSAGE = 4096`, `DISCORD_MAX_MESSAGE = 2000`), which is presentation living in a transport package because there was nowhere else.
 why_now: the reasoning leak reached a real user, and the dialect gap is user-visible — `**Bom Sucesso (MG)**` was delivered with literal asterisks on LINE and WhatsApp. Kept SEPARATE from B-018 deliberately: the presenter carries an unresolved ownership question (split rules belong to the transport, event translation to the framework) and coupling the two would hold the better-evidenced change hostage to the larger one.
-status: raw
+status: triaged
 dod:
   - one channel presenter exists as `Presenter<OutboundMessage>`, registered under the channel id, consuming the adapter's existing splitter rather than replacing it
   - agent output never exposes reasoning or non-user-facing events on a channel, covered by a test that fails on the current hand-written loop
