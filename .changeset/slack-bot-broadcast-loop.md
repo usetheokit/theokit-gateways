@@ -12,8 +12,11 @@ broadcasting a thread reply is a real message; a bot doing it is not, and it arr
 
 Two agents in the same channel, both replying with broadcast, answer each other indefinitely.
 
-The guard now drops any message carrying `bot_id`, which is what "bot loop guard" was always meant
-to say. A human `thread_broadcast` is unaffected and has its own test.
+The guard now drops a message that carries `bot_id` AND has no human author. Both halves matter: a
+message from a bot has a `bot_id` and nobody behind it, while `chat.postMessage` with a USER token —
+workflow posts, integrations, anything a person drives through an app — carries the app's `bot_id`
+with the human named as the author. The first attempt dropped everything with `bot_id` and took
+those with it; the live suite caught that in the release gate, and both directions now have a test.
 
 Found by mutation testing: every mutant of that line survived, which is what a subsumed condition
 looks like from the outside.
