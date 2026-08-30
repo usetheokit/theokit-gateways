@@ -217,8 +217,25 @@ describe("createBaileysSocket — the error type", () => {
   it("raises this package's ConfigurationError, not a bare Error", async () => {
     // A caller branches on the structured `code`; a bare Error forces string matching on a
     // message, which is what every adapter in this repository stopped doing.
-    await expect(
-      createBaileysSocket({ sessionDir: "/tmp/x", specifier: "baileys-does-not-exist" }),
-    ).rejects.toBeInstanceOf(ConfigurationError);
+    const raised = await createBaileysSocket({
+      sessionDir: "/tmp/x",
+      specifier: "baileys-does-not-exist",
+    }).then(
+      () => undefined,
+      (err: unknown) => err,
+    );
+
+    expect(raised).toBeInstanceOf(ConfigurationError);
+    // `toBeInstanceOf` alone is what `rules/testing.md` § 4.1 calls half a negative case: it proves
+    // the type and not the diagnostic, and the diagnostic is the whole reason for a typed error.
+    // Both were free to be emptied — measured, mutating the name and the package tag killed no
+    // test — and an error reading `: ` in a log is worse than a bare Error, not better.
+    expect((raised as Error).name).toBe("ConfigurationError");
+    // This watches the message THIS call site writes, not the constructor's prefix — every call
+    // site passes an explicit `message`, so the prefix argument is never reached from here. The
+    // prefix has its own test in errors.test.ts.
+    expect((raised as Error).message, "the error does not say which package raised it").toContain(
+      "gateway-whatsapp",
+    );
   });
 });

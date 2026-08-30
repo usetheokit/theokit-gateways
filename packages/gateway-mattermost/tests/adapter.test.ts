@@ -86,26 +86,34 @@ function installMockHandle(adapter: MattermostAdapter, handle: MockHandle): void
 }
 
 describe("MattermostAdapter constructor", () => {
+  // Both fields raise the SAME ConfigurationError from the same constructor, so checking the type
+  // alone stays green if it reports the wrong one — and the field name is the whole diagnostic. The
+  // separate "carries actionable code" case is folded in: it re-ran the accessToken path the second
+  // case covers, and left `base_url_required` unverified by anything.
+  const configErrorCode = (fn: () => unknown): string => {
+    try {
+      fn();
+    } catch (err) {
+      expect(err, "threw something that is not a ConfigurationError").toBeInstanceOf(
+        ConfigurationError,
+      );
+      return (err as ConfigurationError).code;
+    }
+    throw new Error("expected a ConfigurationError, nothing was thrown");
+  };
+
   it("throws on empty baseUrl", () => {
-    expect(() => new MattermostAdapter({ baseUrl: "", accessToken: "tok" })).toThrow(
-      ConfigurationError,
+    expect(configErrorCode(() => new MattermostAdapter({ baseUrl: "", accessToken: "tok" }))).toBe(
+      "base_url_required",
     );
   });
 
   it("throws on empty accessToken (D401)", () => {
     expect(
-      () => new MattermostAdapter({ baseUrl: "https://mm.acme.com", accessToken: "" }),
-    ).toThrow(ConfigurationError);
-  });
-
-  it("ConfigurationError carries actionable code", () => {
-    try {
-      new MattermostAdapter({ baseUrl: "https://x.com", accessToken: "" });
-    } catch (err) {
-      expect((err as ConfigurationError).code).toBe("access_token_required");
-      return;
-    }
-    throw new Error("did not throw");
+      configErrorCode(
+        () => new MattermostAdapter({ baseUrl: "https://mm.acme.com", accessToken: "" }),
+      ),
+    ).toBe("access_token_required");
   });
 });
 
@@ -388,5 +396,42 @@ describe("MattermostAdapter lifecycle", () => {
     const handle = makeMockHandle();
     installMockHandle(adapter, handle);
     expect(adapter.getClient()).toBe(handle);
+  });
+});
+
+describe("MattermostAdapter — the format the caller declared", () => {
+  /**
+   * Mattermost renders markdown natively, so `format: "markdown"` needs nothing sent. The
+   * interesting case is the opposite one: a caller declaring `plain` is saying the text is
+   * NOT markup, and sending it raw makes a user's literal `*asterisks*` render as italic.
+   *
+   * That is why "the platform has no flag" is not the same as "the field does nothing here".
+   */
+  it("escapes markdown characters when the caller declares plain", async () => {
+    const handle = makeMockHandle();
+    const adapter = new MattermostAdapter({ baseUrl: "https://mm.acme.com", accessToken: "tok" });
+    installMockHandle(adapter, handle);
+
+    await adapter.sendMessage({
+      channel: { id: "chan-1", type: "group" },
+      text: "literal *asterisks* and _underscores_",
+      format: "plain",
+    });
+
+    expect(handle.posts[0]?.message).toBe("literal \\*asterisks\\* and \\_underscores\\_");
+  });
+
+  it("sends markdown untouched, because the platform parses it natively", async () => {
+    const handle = makeMockHandle();
+    const adapter = new MattermostAdapter({ baseUrl: "https://mm.acme.com", accessToken: "tok" });
+    installMockHandle(adapter, handle);
+
+    await adapter.sendMessage({
+      channel: { id: "chan-1", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(handle.posts[0]?.message).toBe("**bold**");
   });
 });

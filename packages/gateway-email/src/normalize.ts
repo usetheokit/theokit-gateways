@@ -81,7 +81,11 @@ export async function normalizeEmail(
 
   const fromEntries = addressesFrom(parsed.from as AddressObject | undefined);
   const fromAddress = (fromEntries[0]?.address ?? "anonymous").toLowerCase().trim();
-  const fromName = fromEntries[0]?.name;
+  // Trimmed, and empty means ABSENT. mailparser reports `name: ""` for a bare `From: a@b` — not
+  // `undefined` — so testing only for undefined carried an empty display name into every event
+  // without one. The convention two lines down is the same: `addr.length > 0`.
+  const trimmedName = fromEntries[0]?.name?.trim();
+  const fromName = trimmedName !== undefined && trimmedName.length > 0 ? trimmedName : undefined;
 
   const botAddrLc = opts.botAddress.toLowerCase().trim();
   const recipients: string[] = [];

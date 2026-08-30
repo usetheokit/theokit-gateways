@@ -160,11 +160,86 @@ export class MatrixAdapter extends BasePlatformAdapter {
           },
         };
       }
-      const res = await this.client.sendTextMessage(roomId, out.text);
+      const res = await this.sendHonouringFormat(roomId, out);
       return { ok: true, messageId: res.event_id };
     } catch (err) {
       return mapMatrixError(err);
     }
+  }
+
+  /**
+   * Send `out`, letting the caller's declared `format` decide the shape.
+   *
+   * Matrix carries markup in `formatted_body` and declares its type in `format`, whose only
+   * value is `org.matrix.custom.html`. That declaration is a promise to every client that the
+   * field IS HTML — so only `format: "html"` may use it.
+   *
+   * **`markdown` deliberately does not.** The first version of this method put the caller's
+   * markdown into `formatted_body` and declared it HTML, which was worse than the bug it meant
+   * to fix: `**bold**` still rendered as literal asterisks because markdown is not HTML, AND a
+   * `<div>` anywhere in the text was parsed as a tag and dropped, so the reader received words
+   * the sender never wrote and lost the ones they did. Caught in review; the test that
+   * "proved" it was asserting the defect.
+   *
+   * So Matrix joins LINE, SMS and WhatsApp: it has no markdown mode, and the honest handling is
+   * to say once that the declaration is being dropped rather than to fake it.
+   *
+   * Falls back to `sendTextMessage` when the client does not expose `sendMessage`: it is
+   * optional on {@link MatrixSdkClient} because a consumer may inject a narrower double, and
+   * losing the formatting is better than losing the message.
+   *
+   * @internal
+   */
+  private async sendHonouringFormat(
+    roomId: string,
+    out: OutboundMessage,
+  ): Promise<{ event_id: string }> {
+    const client = this.client as MatrixSdkClient;
+    if (out.format !== "html" || client.sendMessage === undefined) {
+      this.warnFormatUnsupported(out.format);
+      return await client.sendTextMessage(roomId, out.text);
+    }
+    try {
+      return await client.sendMessage(roomId, {
+        msgtype: "m.text",
+        body: out.text,
+        format: "org.matrix.custom.html",
+        formatted_body: out.text,
+      });
+    } catch (err) {
+      // ADR-2: an undelivered message is worse than an unformatted one — the caller loses the
+      // content and the user sees nothing, which is strictly worse than losing the markup.
+      //
+      // The discrimination is the whole guard. A bare `catch` would swallow an expired token as
+      // a formatting problem and retry into the same 401, turning an actionable error into a
+      // silent double failure. Only a request the server judged malformed is retried.
+      if (!isMalformedRequest(err)) throw err;
+      process.stderr.write(
+        "[gateway-matrix] homeserver rejected the formatted body; retrying as plain text\n",
+      );
+      return await client.sendTextMessage(roomId, out.text);
+    }
+  }
+
+  /** Whether the "no markdown mode here" warning has already been emitted. */
+  private warnedAboutFormat = false;
+
+  /**
+   * Say, once, that a declared `markdown` has nowhere to go on this platform.
+   *
+   * Matrix's only markup type is HTML. A caller declaring `markdown` is asking for something
+   * the protocol does not have, and putting the markdown in the HTML field would corrupt it.
+   *
+   * @internal
+   */
+  private warnFormatUnsupported(format: OutboundMessage["format"]): void {
+    if (format === undefined || format === "plain" || format === "html") return;
+    if (this.warnedAboutFormat) return;
+    this.warnedAboutFormat = true;
+    process.stderr.write(
+      `[gateway-matrix] format="${format}" was declared, and Matrix has no markdown mode — ` +
+        "its only markup type is HTML. Sending as plain text; this is logged once.\n",
+    );
   }
 
   onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
@@ -258,6 +333,19 @@ interface MatrixRestError {
   errcode?: string;
   message?: string;
   name?: string;
+}
+
+/**
+ * Did the homeserver judge the REQUEST malformed, as opposed to refusing the sender?
+ *
+ * Narrow by construction: a 400 with `M_BAD_JSON` or `M_INVALID_PARAM` is the server saying it
+ * could not parse what it was given. A 401, 403 or 429 is about who is asking or how often,
+ * and retrying those without markup would fail identically while reporting the wrong cause.
+ */
+function isMalformedRequest(err: unknown): boolean {
+  const e = err as MatrixRestError;
+  if (e.httpStatus !== 400) return false;
+  return e.errcode === "M_BAD_JSON" || e.errcode === "M_INVALID_PARAM";
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: error mapping ladder is exhaustive — each branch maps one Matrix errcode/HTTP status to one canonical code; splitting hurts traceability.

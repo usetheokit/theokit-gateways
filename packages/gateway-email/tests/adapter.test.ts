@@ -127,21 +127,45 @@ class FakeSmtp implements ISmtpClient {
 function mk(extra: Partial<typeof VALID_OPTS> & Record<string, unknown> = {}) {
   const imap = new FakeImap();
   const smtp = new FakeSmtp();
+  // How many times connect() built its clients. `connect()` is guarded by `this.connected`, so this
+  // counter is the only place the difference between "the guard held" and "the guard latched" is
+  // visible from outside: both leave connect() answering true.
+  const built = { imap: 0, smtp: 0 };
   const adapter = new EmailAdapter({
     ...VALID_OPTS,
     ...extra,
-    __imapFactory: () => imap,
-    __smtpFactory: () => smtp,
+    __imapFactory: () => {
+      built.imap += 1;
+      return imap;
+    },
+    __smtpFactory: () => {
+      built.smtp += 1;
+      return smtp;
+    },
   });
-  return { adapter, imap, smtp };
+  return { adapter, imap, smtp, built };
 }
 
 describe("EmailAdapter", () => {
+  // These two spies were installed and never read. Silencing a log is not the same as checking it,
+  // and here it hid the sharper problem below: `expect(received.length).toBe(0)` cannot tell a
+  // message the FILTER dropped from one that never arrived — a parse failure, a drain that threw,
+  // an adapter that stopped fetching. Both give zero. The warn line naming the filter is the only
+  // thing that separates them, and it was going into a spy nobody looked at.
+  let warned: string[] = [];
+  let errored: string[] = [];
   let warnSpy: ReturnType<typeof vi.spyOn>;
   let errorSpy: ReturnType<typeof vi.spyOn>;
+  const logOf = (xs: string[]): string => xs.join("\n");
   beforeEach(() => {
-    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    warned = [];
+    errored = [];
+    warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation((...a: unknown[]) => void warned.push(a.map(String).join(" ")));
+    errorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation((...a: unknown[]) => void errored.push(a.map(String).join(" ")));
   });
   afterEach(() => {
     warnSpy.mockRestore();
@@ -160,10 +184,14 @@ describe("EmailAdapter", () => {
 
   describe("constructor", () => {
     for (const key of ["address", "password", "imapHost", "smtpHost"] as const) {
+      // The message, not just the type: all four fields raise the SAME TypeError from the same loop,
+      // so the type alone would still pass if the check reported the wrong field — and the field name
+      // is the entire content of the diagnostic for whoever mis-configured the adapter.
+      const named = new RegExp(`^EmailAdapter: ${key} is required and must be a non-empty string$`);
       it(`throws TypeError when ${key} is empty`, () => {
         expect(() => {
           new EmailAdapter({ ...VALID_OPTS, [key]: "" });
-        }).toThrow(TypeError);
+        }).toThrow(named);
       });
       it(`throws TypeError when ${key} is missing`, () => {
         const opts = { ...VALID_OPTS } as Record<string, string>;
@@ -171,7 +199,7 @@ describe("EmailAdapter", () => {
         expect(() => {
           // @ts-expect-error — deliberately invalid
           new EmailAdapter(opts);
-        }).toThrow(TypeError);
+        }).toThrow(named);
       });
     }
   });
@@ -199,6 +227,9 @@ describe("EmailAdapter", () => {
       imap.connectError = new Error("network unreachable");
       const ok = await adapter.connect();
       expect(ok).toBe(false);
+      // `false` is the contract; the reason is what an operator has to act on. Without this, a
+      // connect that fails silently is indistinguishable from one that reports why.
+      expect(logOf(errored), "connect failed without saying why").toContain("network unreachable");
     });
 
     it("returns false on SMTP verify failure", async () => {
@@ -206,13 +237,37 @@ describe("EmailAdapter", () => {
       smtp.verifyError = new Error("auth bad");
       const ok = await adapter.connect();
       expect(ok).toBe(false);
+      expect(logOf(errored), "SMTP verify failed without saying why").toContain("auth bad");
     });
 
     it("is idempotent — second connect returns true without reinit", async () => {
-      const { adapter } = mk();
+      const { adapter, built } = mk();
       await adapter.connect();
       const ok2 = await adapter.connect();
       expect(ok2).toBe(true);
+
+      // "without reinit" is the half the assertion above cannot see: a second connect that DID
+      // rebuild both clients also answers true, and would leak an IMAP connection per call.
+      expect(built, "connect() rebuilt its clients on the second call").toEqual({
+        imap: 1,
+        smtp: 1,
+      });
+      await adapter.disconnect();
+    });
+
+    it("reconnects after an explicit disconnect", async () => {
+      // The guard must be a guard, not a latch. `disconnect()` clears `connected`, and if it ever
+      // stops doing so, connect() returns true without building anything — the adapter goes deaf
+      // with no error anywhere. Removing that one line leaves the whole suite green without this.
+      const { adapter, built } = mk();
+      await adapter.connect();
+      await adapter.disconnect();
+      await adapter.connect();
+
+      expect(built, "the second connect() did not rebuild its clients").toEqual({
+        imap: 2,
+        smtp: 2,
+      });
       await adapter.disconnect();
     });
   });
@@ -256,6 +311,9 @@ describe("EmailAdapter", () => {
       });
       await adapter._drainNow();
       expect(received.length).toBe(0);
+      // ...and dropped BY THE LOOPBACK FILTER. Zero deliveries is also what a parse failure or a
+      // dead drain produces, and either would make this test green while the guard was gone.
+      expect(logOf(warned), "nothing was dropped by the loopback filter").toContain("loopback");
       // Thread store also untouched.
       expect(adapter._threadStoreSize).toBe(0);
       await adapter.disconnect();
@@ -356,6 +414,9 @@ describe("EmailAdapter", () => {
       });
       await adapter._drainNow();
       expect(received.length).toBe(0);
+      expect(logOf(warned), "bob was not dropped by the allowlist").toContain(
+        "sender not in allowlist: bob@x.com",
+      );
       await adapter.disconnect();
     });
 
@@ -773,5 +834,120 @@ describe("EmailAdapter", () => {
       expect(received).toHaveLength(1);
       await adapter.disconnect();
     });
+  });
+});
+
+describe("EmailAdapter — the format the caller declared", () => {
+  /**
+   * `html` rides ALONGSIDE `text` as a multipart alternative, never instead of it: a
+   * plain-text reader shows the text part, so a client that cannot render HTML still gets
+   * the message. Sending html-only would make the mail unreadable in exactly the clients
+   * this field is supposed to serve.
+   */
+  it("sends an html part alongside text when the caller declares a format", async () => {
+    const { adapter, smtp } = mk();
+    await adapter.connect();
+
+    const res = await adapter.sendMessage({
+      channel: { id: "someone@example.com", type: "dm" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(smtp.sent[0]?.text).toBe("**bold**");
+    expect(smtp.sent[0]?.html).toBeDefined();
+  });
+
+  it("sends text only when no format is declared", async () => {
+    const { adapter, smtp } = mk();
+    await adapter.connect();
+
+    await adapter.sendMessage({
+      channel: { id: "someone@example.com", type: "dm" },
+      text: "plain",
+    });
+
+    expect(smtp.sent[0]?.html).toBeUndefined();
+  });
+
+  it("escapes the text it puts in the html part", async () => {
+    // The html part is escaped and wrapped, not rendered: a markdown renderer is a dependency
+    // this package does not have. Without escaping, a message containing `<script>` would
+    // become one in the recipient's client.
+    const { adapter, smtp } = mk();
+    await adapter.connect();
+
+    await adapter.sendMessage({
+      channel: { id: "someone@example.com", type: "dm" },
+      text: "<script>alert(1)</script>",
+      format: "markdown",
+    });
+
+    expect(smtp.sent[0]?.html).not.toContain("<script>");
+    expect(smtp.sent[0]?.html).toContain("&lt;script&gt;");
+  });
+});
+
+describe("EmailAdapter — the html path is a trust boundary", () => {
+  it("passes html through unescaped, because the caller declared it as html", async () => {
+    // Documented, not accidental. Escaping here would make `format: "html"` meaningless, and
+    // sanitising would need an HTML parser in a package with no runtime dependencies. The
+    // safe declaration for untrusted text is `markdown`, which escapes — asserted above.
+    const { adapter, smtp } = mk();
+    await adapter.connect();
+
+    await adapter.sendMessage({
+      channel: { id: "someone@example.com", type: "dm" },
+      text: "<b>bold</b>",
+      format: "html",
+    });
+
+    expect(smtp.sent[0]?.html).toBe("<b>bold</b>");
+  });
+});
+
+describe("EmailAdapter — a server that refuses the html part", () => {
+  it("retries with text only, because a plain-text reader would never have seen the difference", async () => {
+    const { adapter, smtp } = mk();
+    await adapter.connect();
+    let attempt = 0;
+    const original = smtp.send.bind(smtp);
+    smtp.send = async (opts) => {
+      attempt += 1;
+      if (opts.html !== undefined) throw new Error("html part rejected");
+      return await original(opts);
+    };
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const res = await adapter.sendMessage({
+      channel: { id: "someone@example.com", type: "dm" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(attempt).toBe(2);
+    stderr.mockRestore();
+  });
+
+  it("does NOT retry a send that had no html part", async () => {
+    // Without the guard this would retry every failure once, doubling the latency of an
+    // unrelated outage and reporting a formatting problem where there is none.
+    const { adapter, smtp } = mk();
+    await adapter.connect();
+    let attempt = 0;
+    smtp.send = async () => {
+      attempt += 1;
+      throw new Error("smtp down");
+    };
+
+    const res = await adapter.sendMessage({
+      channel: { id: "someone@example.com", type: "dm" },
+      text: "plain",
+    });
+
+    expect(res.ok).toBe(false);
+    expect(attempt).toBe(1);
   });
 });

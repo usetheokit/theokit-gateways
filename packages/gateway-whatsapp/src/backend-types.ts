@@ -33,6 +33,16 @@ export interface WhatsAppInboundEvent {
   readonly text: string;
   /** Receipt timestamp (ms since epoch). */
   readonly receivedAt: number;
+  /**
+   * The account owner wrote this to themselves — a note-to-self, not a message from a stranger.
+   *
+   * Absent means "somebody else", never "not checked": only the path that deliberately admits a
+   * `fromMe` message inside the self-chat sets it. A consumer applying a sender policy should read
+   * this BEFORE an allowlist, because the sender identity cannot carry the answer — the self-chat
+   * reports the account's LID, and no user can be expected to look up their own LID to allowlist
+   * themselves.
+   */
+  readonly fromSelf?: boolean;
   /** Backend that emitted this event. */
   readonly backend: "cloud" | "web" | "baileys";
   /** Raw envelope for the escape hatch. */

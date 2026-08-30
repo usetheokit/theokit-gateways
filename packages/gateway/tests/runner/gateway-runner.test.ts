@@ -47,6 +47,12 @@ describe("GatewayRunner (T1.3)", () => {
     await runner.start();
     expect(a.connected).toBe(true);
     expect(b.connected).toBe(true);
+    // ...and starting again is a no-op, not a second connect. Nothing checked the guard, so a
+    // supervisor that calls start() twice — a restart hook, a retried bootstrap — would open a
+    // second session per adapter and the platform would deliver every event twice.
+    await runner.start();
+    expect(a.connectCount, "start() connected the adapter twice").toBe(1);
+    expect(b.connectCount).toBe(1);
     await runner.stop();
   });
 
@@ -66,7 +72,16 @@ describe("GatewayRunner (T1.3)", () => {
   });
 
   it("handler throw does not crash runner", async () => {
-    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    // Surviving the throw is half the contract; REPORTING it is the other half, and only the second
+    // half was left unchecked. "test passes if we reach here" is satisfied just as well by a runner
+    // that swallows the error in silence — the failure mode `rules/error-handling.md` § 5 names
+    // first, and the one this suite would never have seen, because installing the spy is what makes
+    // the log invisible in the first place.
+    const writes: string[] = [];
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation((s) => {
+      writes.push(String(s));
+      return true;
+    });
     const a = new MockAdapter("telegram");
     const runner = new GatewayRunner({
       adapters: [a],
@@ -76,10 +91,46 @@ describe("GatewayRunner (T1.3)", () => {
     });
     await runner.start();
     await a.emit(tg());
-    // No throw escapes — test passes if we reach here.
     expect(a.connected).toBe(true);
     await runner.stop();
     stderr.mockRestore();
+
+    const logged = writes.join("");
+    expect(logged, "the handler throw was swallowed without a word").toContain("boom");
+  });
+
+  it("start() closes the adapters it already opened when another refuses", async () => {
+    // Justified by absence, not by appetite for another test: mutation testing reported THREE
+    // mutants with no coverage at all on this rollback, so the whole recovery path — the catch, the
+    // disconnect of what was already open, the rethrow — was reachable by no test in the suite. A
+    // broken rollback leaks a live platform connection on every failed start, and the process that
+    // failed to start is exactly the one nobody is watching.
+    const ok = new MockAdapter("telegram");
+    const refuses = new MockAdapter("discord");
+    refuses.connectResult = false;
+    const runner = new GatewayRunner({ adapters: [ok, refuses], handler: async () => {} });
+
+    await expect(runner.start()).rejects.toThrow(/discord/);
+    expect(ok.connected, "the adapter that DID connect was left open").toBe(false);
+    expect(ok.disconnectCount, "rollback did not disconnect it exactly once").toBe(1);
+    // The refusal is a `false` return, not a throw, so nothing should have been rolled back on it.
+    expect(refuses.disconnectCount).toBe(0);
+  });
+
+  it("the drain set shrinks back to empty as dispatches settle", async () => {
+    // Mutation testing reported that both `inflight.delete` callbacks and one of the two `add` calls
+    // could be removed with nothing failing, because `stop()` drains correctly either way: settled
+    // promises resolve immediately whether or not anyone took them out of the set. What breaks is
+    // only visible over TIME — a runner that never empties the set accumulates one promise per
+    // message received, for the life of the process, and a gateway is a process that stays up.
+    const a = new MockAdapter("telegram");
+    const runner = new GatewayRunner({ adapters: [a], handler: async () => {} });
+    await runner.start();
+    for (let i = 0; i < 5; i++) await a.emit(tg());
+    await runner.stop();
+    expect(runner._inflightSize, "settled dispatches were never removed from the drain set").toBe(
+      0,
+    );
   });
 
   it("stop disconnects all adapters", async () => {
@@ -167,6 +218,11 @@ describe("GatewayRunner (T1.3)", () => {
   it("EC-D: block:true with message triggers reply then short-circuits", async () => {
     const a = new MockAdapter("telegram");
     let handlerCalled = false;
+    // The hook is handed the EVENT, and nothing checked that. A pre_inbound hook exists to decide
+    // ABOUT something — rate-limit this sender, refuse this channel — so a context arriving empty
+    // breaks every real hook. Every hook in this suite ignored its argument and returned the same
+    // verdict regardless, which is exactly the shape that cannot notice.
+    let sawEventId: unknown;
     const runner = new GatewayRunner({
       adapters: [a],
       handler: async () => {
@@ -175,14 +231,19 @@ describe("GatewayRunner (T1.3)", () => {
       hooks: [
         {
           name: "deny",
-          pre_inbound: () => ({ block: true, message: "rate-limited" }),
+          pre_inbound: (ctx) => {
+            sawEventId = ctx.event?.id;
+            return { block: true, message: "rate-limited" };
+          },
         },
       ],
     });
     await runner.start();
-    await a.emit(tg());
+    const event = tg();
+    await a.emit(event);
     expect(a.sent.map((s) => s.text)).toEqual(["rate-limited"]);
     expect(handlerCalled).toBe(false);
+    expect(sawEventId, "pre_inbound was handed a context with no event").toBe(event.id);
     await runner.stop();
   });
 
@@ -198,9 +259,28 @@ describe("GatewayRunner (T1.3)", () => {
     });
     await runner.start();
     await a.emit(tg());
+    // `sent` only records what sendMessage ACCEPTED, and it rejects empty text — so it reads as 0
+    // whether the runner stayed quiet or tried to reply with a message that does not exist. The
+    // attempt is what the guard is about, and sendMessage's own call count is what shows it.
+    expect(a.sendAttempts, "the runner tried to reply with a message it does not have").toBe(0);
     expect(a.sent).toHaveLength(0);
     expect(handlerCalled).toBe(false);
     await runner.stop();
+
+    // An EMPTY message is the other half of the same guard, and it is the half a real hook produces:
+    // `message: ""` comes out of a template that rendered to nothing, not out of a hook that chose
+    // to stay silent. Only the `length > 0` half rejects it, and with `message` undefined above the
+    // first half short-circuits before that half is ever reached.
+    const b = new MockAdapter("telegram");
+    const empty = new GatewayRunner({
+      adapters: [b],
+      handler: async () => {},
+      hooks: [{ name: "deny", pre_inbound: () => ({ block: true, message: "" }) }],
+    });
+    await empty.start();
+    await b.emit(tg());
+    expect(b.sendAttempts, "the runner tried to reply with an empty message").toBe(0);
+    await empty.stop();
   });
 
   it("post_outbound fires with the event, the outbound and the adapter's result", async () => {
@@ -260,7 +340,11 @@ describe("GatewayRunner (T1.3)", () => {
   it("post_outbound observes the send without altering the result the handler receives", async () => {
     // Fire-and-forget means the hook watches the delivery; it does not intercept
     // it. A hook that throws must not turn a delivered reply into a failed one.
-    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const writes: string[] = [];
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation((s) => {
+      writes.push(String(s));
+      return true;
+    });
     const a = new MockAdapter("telegram");
     let replyResult: SendResult | undefined;
     const runner = new GatewayRunner({
@@ -283,6 +367,13 @@ describe("GatewayRunner (T1.3)", () => {
 
     expect(replyResult).toEqual({ ok: true, messageId: "mock-1" });
     stderr.mockRestore();
+
+    // Not intercepting is not the same as not noticing. The reply assertion above holds equally for
+    // a runner that drops the hook's failure on the floor, which would leave an audit hook broken
+    // in production with nothing anywhere saying so.
+    const logged = writes.join("");
+    expect(logged, "the post_outbound hook failure was swallowed").toContain("broken-audit");
+    expect(logged).toContain("hook blew up");
   });
 
   it("EC-D: the auto-reply on a blocking hook also fires post_outbound", async () => {
@@ -323,16 +414,27 @@ describe("GatewayRunner (T1.3)", () => {
     await runner.stop();
 
     expect(seen).toHaveLength(1);
+    expect(seen[0]?.result.ok, "a delivery that reached no transport reported success").toBe(false);
     expect(seen[0]?.result.error?.code).toBe("no_adapter");
+    // The code says a route was missing; only the message says WHICH platform had none, and that is
+    // the whole diagnostic for an operator staring at an audit log full of failed deliveries.
+    expect(seen[0]?.result.error?.message, "the failure does not name the platform").toBe(
+      "no adapter for discord",
+    );
   });
 
   it("EC-E: stop drains in-flight handlers before disconnect", async () => {
     const a = new MockAdapter("telegram");
     let handlerDone = false;
+    let disconnectedWhileHandlerRan = false;
     const runner = new GatewayRunner({
       adapters: [a],
       handler: async () => {
         await new Promise((r) => setTimeout(r, 50));
+        // Read INSIDE the handler: this is the only moment at which "before disconnect" can be
+        // observed. Checking afterwards cannot tell an adapter disconnected early from one
+        // disconnected on time, because by then both look identical.
+        disconnectedWhileHandlerRan = a.disconnectCount > 0;
         handlerDone = true;
       },
     });
@@ -340,8 +442,16 @@ describe("GatewayRunner (T1.3)", () => {
     const inflight = a.emit(tg());
     // Initiate stop while handler is mid-flight.
     const stopP = runner.stop();
-    await Promise.all([inflight, stopP]);
-    expect(handlerDone).toBe(true);
+
+    // Awaited ALONE, and that is the whole assertion. The previous version awaited the handler
+    // promise alongside it, which finishes the handler by itself — so `handlerDone` was true
+    // whether or not stop() had drained anything, and mutation testing proved it: removing
+    // `inflight.add(work)` from the runner left this test green.
+    await stopP;
+    expect(handlerDone, "stop() returned while a handler was still running").toBe(true);
+    expect(disconnectedWhileHandlerRan, "the adapter was disconnected mid-handler").toBe(false);
+
+    await inflight;
   });
 
   it("EC-E: stop force-disconnects after drain timeout", async () => {
@@ -405,20 +515,34 @@ describe("GatewayRunner (T1.3)", () => {
         return true;
       });
     const a = new MockAdapter("telegram");
+    const reported: Array<{ id: unknown; message: unknown }> = [];
     const runner = new GatewayRunner({
       adapters: [a],
       handler: async () => {
         // Include something that looks like a token.
         throw new Error("auth failed bearer sk-abc123def456ghi789jkl");
       },
+      // An on_error hook is how a real deployment reaches Sentry, and it is handed the event and the
+      // error. Nothing checked either, so both could arrive empty: the log line below would still be
+      // written and still be redacted, while every error report carried no error.
+      hooks: [
+        {
+          name: "sentry",
+          on_error: (ctx) => void reported.push({ id: ctx.event?.id, message: ctx.error?.message }),
+        },
+      ],
     });
     await runner.start();
-    await a.emit(tg());
+    const event = tg();
+    await a.emit(event);
     await runner.stop();
     const combined = writes.join("");
     expect(combined).toContain("handler error");
     // The literal token string should NOT appear unredacted.
     expect(combined).not.toContain("sk-abc123def456ghi789jkl");
+    expect(reported, "on_error was handed a context with no event and no error").toEqual([
+      { id: event.id, message: "auth failed bearer sk-abc123def456ghi789jkl" },
+    ]);
     stderr.mockRestore();
   });
 
@@ -442,6 +566,35 @@ describe("GatewayRunner (T1.3)", () => {
     await a.emit(tg("/skill foo"));
     await a.emit(tg("/skill"));
     expect(calls).toEqual(["/skills", "/skill", "/skill"]);
+    await runner.stop();
+  });
+
+  it("EC-A: matches on any configured prefix, not only the first", async () => {
+    // `commandPrefixes` exists to accept more than one, and every test until now passed one — so the
+    // search that picks WHICH prefix a message used was never asked to choose. A search that always
+    // answered "the first" behaved identically under a single-prefix config, and Mattermost and
+    // Slack both conventionally use "!" alongside "/".
+    const a = new MockAdapter("telegram");
+    const calls: string[] = [];
+    const runner = new GatewayRunner({
+      adapters: [a],
+      handler: async () => {
+        calls.push("default");
+      },
+      commandPrefixes: ["/", "!"],
+    });
+    runner.command("ping", async () => {
+      calls.push("ping");
+    });
+    await runner.start();
+    await a.emit(tg("/ping"));
+    await a.emit(tg("!ping"));
+    await a.emit(tg("ping"));
+    expect(calls, "a command on the second prefix did not reach its handler").toEqual([
+      "ping",
+      "ping",
+      "default",
+    ]);
     await runner.stop();
   });
 

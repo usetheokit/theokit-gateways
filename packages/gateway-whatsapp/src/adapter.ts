@@ -202,6 +202,35 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
   private connected = false;
   private handler?: (event: GatewayMessageEvent) => Promise<void>;
   private statusHandler?: (receipt: WhatsAppStatusReceipt) => Promise<void>;
+
+  /** Whether the "this platform carries no format flag" warning has already been emitted. */
+  private warnedAboutFormat = false;
+
+  /**
+   * Say, once, that a declared `format` has nowhere to go on this platform.
+   *
+   * WhatsApp's emphasis is INLINE — `*bold*`, `_italic_` — carried in the message text itself,
+   * with no field on the request to set and no escape sequence to suppress it. So a caller
+   * declaring `markdown` has already put the syntax in the text, and one declaring `html` is
+   * asking for something the platform does not have.
+   *
+   * Reading the field is what turns a silent discard into a stated one — the swallowed-error
+   * shape `rules/error-handling.md` refuses.
+   *
+   * @internal
+   */
+  private warnFormatUnsupported(format: string | undefined): void {
+    // The "is there anything to say" question lives here rather than at the call site: a
+    // `sendMessage` already at its complexity limit should ask one thing, not three.
+    if (format === undefined || format === "plain") return;
+    if (this.warnedAboutFormat) return;
+    this.warnedAboutFormat = true;
+    process.stderr.write(
+      `[whatsapp] format="${format}" was declared, and WhatsApp cannot carry it as a flag — ` +
+        "its emphasis is inline in the text. Sending as-is; this is logged once.\n",
+    );
+  }
+
   // EC-H: track unsubscribe handles so onInbound REPLACES instead of stacks.
   private inboundUnsubscribe?: () => void;
   private statusUnsubscribe?: () => void;
@@ -380,6 +409,9 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
       return { ok: false, error: { code: "empty_text", message: "Empty text rejected." } };
     }
     // EC-8: split filters empty parts internally.
+    // WhatsApp has no formatting flag: emphasis is inline in the text. Reading the field
+    // is what makes the discard visible rather than silent.
+    this.warnFormatUnsupported(out.format);
     const parts = splitForWhatsApp(out.text);
     if (parts.length === 0) {
       return {
@@ -412,6 +444,12 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
    * first thing a mistyped allowlist causes is an operator wondering why the bot went mute.
    */
   private isRefusedBySenderAllowlist(inbound: WhatsAppInboundEvent): boolean {
+    // The allowlist answers "may this STRANGER reach the agent?", and the account owner writing
+    // in their own self-chat is not one. It also cannot answer it here: the self-chat reports the
+    // account's LID as the sender, while an operator writes a phone number — measured on a real
+    // paired session. Reading the flag rather than the address keeps the exemption tied to the
+    // backend's own decision, so a stranger arriving on a LID is still refused.
+    if (inbound.fromSelf === true) return false;
     if (this.allowedSenders === undefined) return false;
     if (isSenderAllowed(inbound.fromPhone, this.allowedSenders)) return false;
     process.stderr.write(

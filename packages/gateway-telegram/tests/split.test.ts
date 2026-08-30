@@ -35,6 +35,28 @@ describe("splitForTelegram (T5.1)", () => {
     }
   });
 
+  it.each([
+    ["**", "bold"],
+    ["__", "underline"],
+    ["~~", "strike"],
+    ["`", "code"],
+  ])("EC-J: moves a %s span wholly into the next chunk when the cut lands inside it", (marker) => {
+    // The two EC-J tests around this one build input that is balanced EVERYWHERE — `"**bold** "`
+    // repeated — so every cut lands between pairs and `count % 2 === 0` holds whether or not the
+    // balancer runs. Measured 2026-08-30: emptying `markers` to `[]` killed neither, and so did
+    // gutting `countOccurrences`. The whole EC-J feature was undetectable.
+    //
+    // This puts the opening marker at 3900 and the closing one 300 characters later, so the
+    // 4000-char window falls INSIDE the span. Without balancing the first chunk ends with an odd
+    // marker count and Telegram answers the send with a markdown_parse_error 400.
+    const head = "a".repeat(3900);
+    const text = `${head}${marker}${"x".repeat(300)}${marker}${"b".repeat(500)}`;
+    const parts = splitForTelegram(text);
+
+    expect(parts[0], "the chunk was cut inside the span instead of before it").toBe(head);
+    expect(parts[1]?.startsWith(marker), "the span did not move to the next chunk").toBe(true);
+  });
+
   it("EC-J: balances backticks when input is split-eligible", () => {
     const code = "`x` ".repeat(1500); // 6000 chars, balanced
     const parts = splitForTelegram(code);
@@ -43,6 +65,30 @@ describe("splitForTelegram (T5.1)", () => {
       const count = (p.match(/`/g) ?? []).length;
       expect(count % 2).toBe(0);
     }
+  });
+
+  it("returns text at exactly the 4096 cap whole, and splits the next character", () => {
+    // `text.length <= TELEGRAM_MAX_MESSAGE`. Nothing used the boundary, so `<=` and `<` were
+    // indistinguishable — and off by one there means a 4096-character reply, which is the exact
+    // size Telegram accepts, gets split into two messages for no reason.
+    expect(splitForTelegram("a".repeat(4096))).toHaveLength(1);
+    expect(splitForTelegram("a".repeat(4097)).map((p) => p.length)).toEqual([4000, 97]);
+  });
+
+  it("rejects a paragraph break that sits too early and falls to the last newline", () => {
+    // `if (boundary < SAFE_CHUNK / 2)`. A `\n\n` in the first half of the window would waste more
+    // than half the message, so the splitter declines it and looks for a plain newline instead.
+    // No test had a paragraph break that early, so the whole heuristic — and the `/ 2` in it —
+    // was free: nothing distinguished it from taking any boundary it found.
+    const text = `${"a".repeat(500)}\n\n${"b".repeat(3000)}\n${"c".repeat(2000)}`;
+
+    // 3502 is the plain newline, not 500 (the paragraph break) and not 4000 (the hard window).
+    expect(splitForTelegram(text).map((p) => p.length)).toEqual([3502, 2000]);
+  });
+
+  it("cuts at the window when no boundary is usable at all", () => {
+    // The third rung: neither a paragraph break nor a newline, so the window itself is the cut.
+    expect(splitForTelegram("a".repeat(9000)).map((p) => p.length)).toEqual([4000, 4000, 1000]);
   });
 
   it("prefers paragraph break boundary when available", () => {

@@ -107,12 +107,38 @@ jobs:
       # Each pin carries the version it resolved to on 2026-08-21, read from the action's own
       # tags rather than assumed from the ref name. Majors are deliberately unchanged: pinning
       # freezes what already runs, upgrading is a separate decision with its own risk.
+      # Mint a short-lived token from the `theokit-release` GitHub App. GitHub does not
+      # start workflow runs from GITHUB_TOKEN-authored events, so a Version Packages pull
+      # request opened with that token arrives with none of its required checks running,
+      # and a required check that never reports cannot be satisfied. An App-authored event
+      # does start them. Proven on theokit-ui: 0/3 required checks became 3/3, the pull
+      # request reached CLEAN by itself, and 1.10.1 published with no manual gesture.
+      #
+      # The token is minted per run and expires with it. What is long-lived is the App's
+      # private key, an organization secret scoped to three repository permissions. NOT used
+      # for npm — the eleven packages still publish over OIDC with no token at all.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          # Narrow the token to what this job does rather than inheriting whatever the
+          # installation holds. zizmor flags the unrestricted form as high severity.
+          permission-contents: write
+          permission-pull-requests: write
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked]
         with:
           # The one checkout in this repository that keeps its credential, and not
           # by oversight: changesets/action pushes the version commit and the
           # release tags with the git CLI, which authenticates from exactly this
           # persisted token. `persist-credentials: false` breaks the release.
+          #
+          # It must be the APP's token. The push of `changeset-release/main` is what the
+          # pull request is opened against, so a push carrying the Actions bot's credential
+          # produces a bot-authored branch and the checks stay dormant even though the pull
+          # request was opened by the App. Both halves have to be the App or neither is.
+          token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
 
       # A publish here authenticates with OIDC, not a token: each of the eleven
@@ -171,7 +197,7 @@ jobs:
       # 11.9.0 is the newest npm that clears the OIDC floor and avoids both.
       # Measured in theokit-di; see that repository's release.yml for the numbers.
       - name: Install an npm that speaks OIDC (>= 11.5.1) but tolerates the publish flags
-        run: npm install -g npm@11.9.0 # zizmor: ignore[adhoc-packages] — bootstrapping npm itself; no lockfile can cover it
+        uses: usetheokit/shared-workflows/actions/npm-oidc@v1 # zizmor: ignore[unpinned-uses]
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       # Publishing used to be reachable without the suite ever running: this job
@@ -206,19 +232,27 @@ jobs:
       #
       #   gh pr create --base main --head changeset-release/main --title "Version Packages"
       #
-      # To stop it recurring, enable Settings -> Actions -> General -> "Allow
-      # GitHub Actions to create and approve pull requests". The other way out
-      # is a PAT in place of GITHUB_TOKEN, which is worse: a long-lived
-      # credential replacing the per-run token this action already gets.
+      # BOTH REMEDIES NAMED ABOVE HAVE SINCE BEEN OVERTAKEN, and the note is corrected
+      # rather than deleted because the diagnosis above still holds.
+      #
+      # The setting it points at — "Allow GitHub Actions to create and approve pull
+      # requests" — is now enabled for this repository and at the organization level, so
+      # the pull request does get created. That was necessary and not sufficient: it fixes
+      # the pull request not being CREATED, and leaves the pull request opening with no
+      # checks RUNNING, which is a different failure with the same appearance.
+      #
+      # The refusal of a PAT stands and was right. What changed is that a third option now
+      # exists: the App token above. It is not a PAT — it belongs to no person, carries
+      # three repository permissions, and is revocable without touching anyone's access.
       - name: Create Release Pull Request or Publish
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           publish: pnpm changeset publish
           version: pnpm changeset version
         env:
-          # The only credential left, and it is GitHub's own: changesets uses it to
-          # open the version pull request. Nothing here authenticates to npm.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The App's token, so the Version Packages pull request is authored by the App
+          # and its required checks actually run. Nothing here authenticates to npm.
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           # NPM_CONFIG_PROVENANCE is gone: `publishConfig.provenance: true` now sits
           # in all eleven manifests, so provenance is declared beside the package it
           # describes rather than in an environment variable this file has to

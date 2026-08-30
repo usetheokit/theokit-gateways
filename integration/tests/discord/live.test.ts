@@ -78,7 +78,7 @@ describeLive(DISCORD, "outbound", () => {
         channel: { id: required("DISCORD_TEST_CHANNEL_ID"), type: "group" },
         text: `${marker} outbound ok`,
       });
-      expect(result.ok).toBe(true);
+      expect(result.ok, JSON.stringify(result.error)).toBe(true);
       expect(result.messageId).toBeDefined();
     } finally {
       await adapter.disconnect();
@@ -96,7 +96,7 @@ describeLive(DISCORD, "outbound", () => {
         channel: { id: required("DISCORD_TEST_CHANNEL_ID"), type: "group" },
         text: `${marker} ${"paragraph.\n\n".repeat(400)}`,
       });
-      expect(result.ok).toBe(true);
+      expect(result.ok, JSON.stringify(result.error)).toBe(true);
     } finally {
       await adapter.disconnect();
     }

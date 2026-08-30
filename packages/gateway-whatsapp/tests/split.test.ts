@@ -31,6 +31,30 @@ describe("splitForWhatsApp", () => {
     expect(out[0]).toBe(part1);
   });
 
+  it("breaks at a space when there is no newline anywhere", () => {
+    // The third boundary in the list, and the only one no test exercised: emptying `" "` in
+    // `boundaries` killed nothing, so WhatsApp's last-choice break point was unproven. It is the
+    // one that decides whether a long paragraph with no line breaks — the ordinary shape of a
+    // chat message — splits between words or through one.
+    const first = "a".repeat(3000);
+    const second = "b".repeat(2000);
+    const out = splitForWhatsApp(`${first} ${second}`);
+
+    expect(out[0], "the space boundary was ignored and a word was cut").toBe(first);
+  });
+
+  it("prefers the last boundary over filling the window", () => {
+    // `lastResort: "last-boundary"`. Measured: with the only space 1000 chars in and a 4096
+    // window, this setting breaks at 1000 and leaves 3000 characters unused, where the fallback
+    // fills the window and cuts mid-word. Every existing test had its boundary near the limit or
+    // no boundary at all, so the two were indistinguishable and the setting could be emptied.
+    const short = "a".repeat(1000);
+    const long = "b".repeat(4000);
+    const out = splitForWhatsApp(`${short} ${long}`);
+
+    expect(out[0], "the window was filled instead of breaking at the last boundary").toBe(short);
+  });
+
   it("test_split_hard_cut_at_4096_when_no_boundary", () => {
     const text = "a".repeat(10_000);
     const out = splitForWhatsApp(text);

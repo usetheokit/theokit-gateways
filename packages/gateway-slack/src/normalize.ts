@@ -41,7 +41,13 @@ function shouldSkipEvent(e: BoltMessageBody["event"], botUserId: string | undefi
   if (e.type !== "message") return true;
   // D275 bot loop guard
   if (e.user !== undefined && botUserId !== undefined && e.user === botUserId) return true;
-  if (e.bot_id !== undefined && e.subtype === "bot_message") return true;
+  // Any message carrying `bot_id` came from a bot or an app, and none of them should drive the
+  // agent. The condition used to be `bot_id !== undefined && subtype === "bot_message"`, which the
+  // NEXT line already covers — every subtype but `thread_broadcast` is dropped there — so this
+  // guard was dead, and the single case it did not reach was a bot's `thread_broadcast`. That is
+  // exactly the loop it is named for: two agents in one channel, both replying with broadcast,
+  // answer each other forever. Measured 2026-08-30; deleting the whole line changed no test.
+  if (e.bot_id !== undefined) return true;
   // Skip subtypes that aren't user messages — but keep "thread_broadcast".
   if (e.subtype !== undefined && e.subtype !== "thread_broadcast") return true;
   return false;

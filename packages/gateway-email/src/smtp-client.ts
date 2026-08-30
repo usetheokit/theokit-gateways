@@ -27,6 +27,14 @@ export interface SmtpSendOptions {
   readonly to: string;
   readonly subject: string;
   readonly text: string;
+  /**
+   * The same message as HTML, sent alongside `text` as a multipart alternative.
+   *
+   * Present only when the caller declared a format the platform can render. A client that
+   * cannot display HTML falls back to `text`, which is why both are sent rather than one
+   * replacing the other — an HTML-only mail is unreadable in a plain-text reader.
+   */
+  readonly html?: string;
   /** Message-ID (without `<>`) we're replying to. */
   readonly inReplyTo?: string;
   /** References chain (without `<>`). Will be serialized with braces. */
@@ -67,6 +75,9 @@ export class SmtpClient implements ISmtpClient {
       subject: opts.subject,
       text: opts.text,
     };
+    if (opts.html !== undefined) {
+      mail.html = opts.html;
+    }
     if (opts.inReplyTo !== undefined) {
       mail.inReplyTo = `<${opts.inReplyTo}>`;
     }

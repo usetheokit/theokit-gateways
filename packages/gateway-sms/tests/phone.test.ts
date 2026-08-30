@@ -20,12 +20,18 @@ describe("normalizeE164 (D391, EC-6)", () => {
     expect(normalizeE164("+18001234567")).toBe("+18001234567");
   });
 
+  // Empty and malformed both raise `invalid_phone_number`, so the code cannot separate them and the
+  // type certainly cannot. The message is what tells a caller whether the field was left blank or
+  // filled in wrongly — two different fixes — and asserting it is what keeps the two cases below
+  // from being the same test written twice.
   it("throws on invalid input", () => {
-    expect(() => normalizeE164("not-a-phone")).toThrow(ConfigurationError);
+    expect(() => normalizeE164("not-a-phone")).toThrow(
+      /^gateway-sms: invalid phone number "not-a-phone"$/,
+    );
   });
 
   it("throws on empty input", () => {
-    expect(() => normalizeE164("")).toThrow(ConfigurationError);
+    expect(() => normalizeE164("")).toThrow(/^gateway-sms: phone number is empty$/);
   });
 
   it("ConfigurationError carries code=invalid_phone_number", () => {

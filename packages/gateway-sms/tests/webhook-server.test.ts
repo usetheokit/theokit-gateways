@@ -95,6 +95,15 @@ async function post(
   return { status: res.status, text: await res.text() };
 }
 
+/** A port nothing is listening on, so the restart test can probe a known address. */
+async function freePort(): Promise<number> {
+  const probe = createServer();
+  await new Promise<void>((resolve) => probe.listen(0, "127.0.0.1", () => resolve()));
+  const { port } = probe.address() as AddressInfo;
+  await new Promise<void>((resolve) => probe.close(() => resolve()));
+  return port;
+}
+
 describe("createWebhookServer — auth boundary", () => {
   it("rejects an unverified request with 401 and never dispatches", async () => {
     const app = express();
@@ -229,15 +238,26 @@ describe("createWebhookServer — mounting", () => {
     expect((await post(base, "/sms/twilio", FORM_BODY)).status).toBe(404);
   });
 
-  it("start() and stop() are idempotent when the caller owns the app", async () => {
-    const app = express();
-    const { adapter } = makeAdapter({ verify: true });
-    const server = await createWebhookServer({ adapter, app });
-    await server.start();
+  it("serves again after a stop — start() is not a one-way door", async () => {
+    // `started` and `stopped` are latched and never reset, so a `start()` after a `stop()` returns
+    // without creating a listener and the server is silently dead. The idempotence test above cannot
+    // catch it: it does start-start-stop-stop and never start-stop-start.
+    //
+    // Asserted on the OWNED-listener path, because that is where a listener exists to lose — and
+    // observed from outside, by whether the endpoint answers, since the interface exposes no handle.
+    const port = await freePort();
+    const { adapter } = makeAdapter();
+    const server = await createWebhookServer({ adapter, port });
+
     await server.start();
     await server.stop();
-    await server.stop();
-    // No listener is managed in injected-app mode, so this must not throw or hang.
-    expect(true).toBe(true);
+    await server.start();
+
+    try {
+      const res = await post(`http://127.0.0.1:${port}`, "/sms/twilio", FORM_BODY);
+      expect(res.status, "the endpoint stopped answering after a restart").toBe(204);
+    } finally {
+      await server.stop();
+    }
   });
 });

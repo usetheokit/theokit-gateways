@@ -70,3 +70,22 @@ describe("splitForMattermost", () => {
     expect(splitForMattermost("")).toEqual([""]);
   });
 });
+
+describe("splitForMattermost — the boundaries and the fallback, which nothing pinned", () => {
+  it("breaks at a space when there is no newline anywhere", () => {
+    // Mattermost posts stop at 16383 and this wrapper cuts at a 16000 safe window. Almost nothing
+    // reaches it, which is why no test had ever pushed a boundary-free paragraph through — and why
+    // emptying `" "` in `boundaries` cost nothing here until now.
+    const head = "a".repeat(12000);
+
+    expect(splitForMattermost(`${head} ${"b".repeat(8000)}`)[0]).toBe(head);
+  });
+
+  it("prefers the last boundary over filling the window", () => {
+    // The trade this setting makes: 12000 characters of window given up to avoid splitting a word.
+    // With the boundary near the limit, as every existing case had it, the choice is invisible.
+    const head = "a".repeat(4000);
+
+    expect(splitForMattermost(`${head} ${"b".repeat(16000)}`)[0]).toBe(head);
+  });
+});

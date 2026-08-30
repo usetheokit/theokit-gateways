@@ -10,6 +10,15 @@ export interface MatrixSdkClient extends MatrixClientLike {
   startClient(opts: { initialSyncLimit: number }): Promise<void>;
   stopClient(): void;
   sendTextMessage(roomId: string, text: string): Promise<{ event_id: string }>;
+  /**
+   * Send a message whose content object the caller composes.
+   *
+   * `sendTextMessage` is a convenience that hard-codes `msgtype: m.text` and a bare `body`, so
+   * it has nowhere to put `formatted_body` — the field Matrix documents for markup. Honouring
+   * `OutboundMessage.format` therefore needs the general call, not a new argument on the
+   * convenience one.
+   */
+  sendMessage?(roomId: string, content: Record<string, unknown>): Promise<{ event_id: string }>;
   getRoomIdForAlias(alias: string): Promise<{ room_id: string }>;
   getRoom(roomId: string): MatrixRoomLike | null;
   isRoomEncrypted?(roomId: string): boolean;

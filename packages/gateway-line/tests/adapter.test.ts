@@ -58,35 +58,50 @@ function installMockClient(adapter: LineAdapter, client: LineSdkClient): void {
   (adapter as unknown as { connected: boolean }).connected = true;
 }
 
+// One helper, one assertion, and it checks the pair that matters: the error TYPE and the `code` a
+// caller branches on. Every field below raises the SAME ConfigurationError, so a check on the type
+// alone stays green if the constructor reports the WRONG field — and the field is the entire content
+// of the diagnostic. `code` rather than the message because it is the machine-readable half of the
+// contract; the prose is free to be reworded.
+function configErrorCode(fn: () => unknown): string {
+  try {
+    fn();
+  } catch (err) {
+    expect(err, "threw something that is not a ConfigurationError").toBeInstanceOf(
+      ConfigurationError,
+    );
+    return (err as ConfigurationError).code;
+  }
+  throw new Error("expected a ConfigurationError, nothing was thrown");
+}
+
 describe("LineAdapter constructor", () => {
+  // The "carries actionable code" case that used to close this block is folded in: it re-tested the
+  // channelSecret path the first case already covers, and only ONE of the two fields had its code
+  // checked at all — an adapter that reported `channel_secret_required` for a missing access token
+  // passed the whole block.
   it("throws on empty channelSecret (D408)", () => {
     expect(
-      () =>
-        new LineAdapter({
-          channelSecret: "",
-          channelAccessToken: "tok",
-        }),
-    ).toThrow(ConfigurationError);
+      configErrorCode(
+        () =>
+          new LineAdapter({
+            channelSecret: "",
+            channelAccessToken: "tok",
+          }),
+      ),
+    ).toBe("channel_secret_required");
   });
 
   it("throws on empty channelAccessToken", () => {
     expect(
-      () =>
-        new LineAdapter({
-          channelSecret: "secret",
-          channelAccessToken: "",
-        }),
-    ).toThrow(ConfigurationError);
-  });
-
-  it("ConfigurationError carries actionable code", () => {
-    try {
-      new LineAdapter({ channelSecret: "", channelAccessToken: "tok" });
-    } catch (err) {
-      expect((err as ConfigurationError).code).toBe("channel_secret_required");
-      return;
-    }
-    throw new Error("did not throw");
+      configErrorCode(
+        () =>
+          new LineAdapter({
+            channelSecret: "secret",
+            channelAccessToken: "",
+          }),
+      ),
+    ).toBe("access_token_required");
   });
 });
 
@@ -513,6 +528,28 @@ describe("LineAdapter lifecycle", () => {
     await adapter.disconnect();
   });
 
+  it("reconnects after an explicit disconnect", async () => {
+    // The guard on connect() must be a guard, not a latch: `disconnect()` clears `connected`, and
+    // if it ever stops, connect() answers true without building a client — the adapter goes deaf
+    // and nothing reports it. Removing that one line left all 84 tests in this package green.
+    let built = 0;
+    const adapter = new LineAdapter({
+      channelSecret: "s",
+      channelAccessToken: "t",
+      __clientFactory: () => {
+        built += 1;
+        return makeMockClient();
+      },
+    });
+
+    expect(await adapter.connect()).toBe(true);
+    await adapter.disconnect();
+    expect(await adapter.connect()).toBe(true);
+
+    expect(built, "the second connect() never built a client").toBe(2);
+    await adapter.disconnect();
+  });
+
   it("connect() reports failure when LINE rejects the access token", async () => {
     // Building a LINE client performs no I/O whatsoever, so connect() used to
     // answer true for any string and the failure surfaced at the first send —
@@ -591,7 +628,14 @@ describe("LineAdapter lifecycle", () => {
     const adapter = new LineAdapter({ channelSecret: "s", channelAccessToken: "t" });
     await adapter.disconnect();
     await adapter.disconnect();
-    expect(adapter.platform).toBe("line");
+
+    // The assertion used to be `adapter.platform`, which no `disconnect()` can change. The two
+    // awaits above did carry "does not throw" on their own, but the name claims more than that:
+    // after tearing down twice the adapter must be coherently DISCONNECTED, not half-torn-down.
+    // A send is the only place that state is observable from outside.
+    const r = await adapter.sendMessage({ channel: { id: "U-alice", type: "dm" }, text: "hi" });
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe("not_connected");
   });
 
   it("sendMessage before connect() reports not_connected instead of throwing", async () => {
@@ -599,5 +643,37 @@ describe("LineAdapter lifecycle", () => {
     const r = await adapter.sendMessage({ channel: { id: "U-alice", type: "dm" }, text: "hi" });
     expect(r.ok).toBe(false);
     expect(r.error?.code).toBe("not_connected");
+  });
+});
+
+describe("LineAdapter — the format the caller declared", () => {
+  /**
+   * This is the platform where the silence was OBSERVED. An agent answered
+   * `**Bom Sucesso (MG)**` on 2026-08-30 and the person read literal asterisks, because a LINE
+   * text message carries `{ type: "text", text }` and nothing else — and the adapter dropped
+   * the declared intent without a word.
+   *
+   * The fix is not formatting the text; that is the presenter's job (B-019). It is refusing to
+   * discard the field in silence.
+   */
+  it("warns once that a LINE text message cannot carry a declared format", async () => {
+    const client = makeMockClient();
+    const adapter = new LineAdapter({
+      channelSecret: "s",
+      channelAccessToken: "t",
+      __clientFactory: () => client,
+    });
+    await adapter.connect();
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await adapter.sendMessage({ channel: { id: "U1", type: "dm" }, text: "a", format: "markdown" });
+    await adapter.sendMessage({ channel: { id: "U1", type: "dm" }, text: "b", format: "markdown" });
+
+    const warned = stderr.mock.calls
+      .map((c) => String(c[0]))
+      .filter((l) => l.includes("cannot carry it"));
+    expect(warned, "warned per message instead of once").toHaveLength(1);
+    stderr.mockRestore();
+    await adapter.disconnect();
   });
 });

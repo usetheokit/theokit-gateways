@@ -56,3 +56,52 @@ describe("mapTeamsError", () => {
     expect(mapTeamsError({ statusCode: 429 }).code).toBe("rate_limit");
   });
 });
+
+/**
+ * The status ladder, rung by rung.
+ *
+ * The cases above take one status per branch and none of the boundaries. Measured by mutation
+ * testing on 2026-08-30: `408` and `404` were reachable by nothing, `>= 500` was indistinguishable
+ * from `> 500` because no case used exactly 500, and a status the ladder does NOT recognise never
+ * met the code that falls past it.
+ */
+describe("mapTeamsError — every rung of the status ladder", () => {
+  const cases: Array<[number, string]> = [
+    [401, "auth_failed"],
+    [403, "auth_failed"],
+    [429, "rate_limit"],
+    [408, "timeout"],
+    [400, "invalid_request"],
+    [404, "invalid_request"],
+    // 500 exactly is the first valid value of the `>= 500` branch, and the one an off-by-one gets
+    // wrong. 503 is the status a throttled or restarting Bot Framework actually returns.
+    [500, "server_error"],
+    [503, "server_error"],
+  ];
+
+  it.each(cases)("maps status %i to %s", (status, expected) => {
+    expect(mapTeamsError({ status, message: "x" }).code).toBe(expected);
+  });
+
+  it("falls past a status it does not recognise instead of inventing a code for it", () => {
+    // `codeForTeamsStatus` returns undefined and the ladder continues to the network-text check
+    // and then to `unknown`. Nothing reached that path: every case used a status the ladder knows.
+    expect(mapTeamsError({ status: 302, message: "moved" }).code).toBe("unknown");
+    // ...and a status it does not know still lets the network check speak, which is the reason the
+    // ladder continues rather than returning early.
+    expect(mapTeamsError({ status: 302, message: "fetch failed" }).code).toBe("server_error");
+  });
+
+  it("carries the original text through, and says something when there is none", () => {
+    // Every branch returns `message`, and only one case read it. The `String(err)` fallback for an
+    // error with no message, and the "Unknown error" for null, were both free to become "" — an
+    // error whose code is set and whose text is empty is the one a reader cannot act on.
+    expect(mapTeamsError({ status: 401, message: "token expired at 12:04" }).message).toBe(
+      "token expired at 12:04",
+    );
+    expect(mapTeamsError(null).message).toBe("Unknown error");
+    expect(mapTeamsError(undefined).message).toBe("Unknown error");
+    expect(mapTeamsError("a bare string").message).toBe("a bare string");
+    expect(mapTeamsError({ status: 500 }).message.length).toBeGreaterThan(0);
+  });
+});

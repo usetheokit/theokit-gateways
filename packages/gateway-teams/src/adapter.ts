@@ -72,6 +72,46 @@ async function createDefaultTeamsApp(opts: {
   });
 }
 
+/**
+ * Ask Entra for a bot token, which is the only thing that proves the three credentials.
+ *
+ * The SDK's `initialize()` validates none of them — measured 2026-08-28, a client id of all zeros
+ * and an invented secret initialized happily — so without this, `connect()` reports a connection it
+ * has never established. Every sibling adapter already asks its platform first (LINE calls
+ * `getBotInfo()`, WhatsApp asks Meta); Teams was the one that did not.
+ *
+ * Uses the documented client-credentials endpoint rather than the SDK's `TokenManager`, which is
+ * not exported from the package. Reaching into `dist/token-manager` would bind this adapter to an
+ * unpublished path; the OAuth2 request is a public Microsoft contract and is what that class issues
+ * underneath.
+ */
+async function fetchBotToken(opts: {
+  clientId: string;
+  clientSecret: string;
+  tenantId: string;
+}): Promise<{ ok: boolean; status: number; error?: string }> {
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: opts.clientId,
+    client_secret: opts.clientSecret,
+    scope: "https://api.botframework.com/.default",
+  });
+  const res = await fetch(
+    `https://login.microsoftonline.com/${encodeURIComponent(opts.tenantId)}/oauth2/v2.0/token`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+      signal: AbortSignal.timeout(15_000),
+    },
+  );
+  if (res.ok) return { ok: true, status: res.status };
+  // Entra names the reason in `error`; carrying it is what turns "connect failed" into something
+  // a reader can act on.
+  const detail = (await res.text().catch(() => "")).slice(0, 200);
+  return { ok: false, status: res.status, error: detail };
+}
+
 export class TeamsAdapter extends BasePlatformAdapter {
   readonly platform = "teams" as const;
   private readonly opts: TeamsAdapterOptions;
@@ -141,6 +181,25 @@ export class TeamsAdapter extends BasePlatformAdapter {
         });
       });
       await this.app.initialize();
+
+      // initialize() proves nothing about the credentials; ask Microsoft before claiming a
+      // connection. EC-7 still holds below: a rejection returns false, it does not throw.
+      const verify = this.opts.__tokenFetcher ?? fetchBotToken;
+      const token = await verify({
+        clientId: this.opts.clientId,
+        clientSecret: this.opts.clientSecret,
+        tenantId: this.opts.tenantId,
+      });
+      if (!token.ok) {
+        console.error(
+          `[teams] connect failed: Microsoft rejected the credential (${token.status})${token.error === undefined ? "" : `: ${token.error}`}`,
+        );
+        await this.app.stop?.();
+        this.app = undefined;
+        this.connected = false;
+        return false;
+      }
+
       this.connected = true;
       return true;
     } catch (err) {
@@ -188,14 +247,60 @@ export class TeamsAdapter extends BasePlatformAdapter {
     }
     let lastActivityId: string | undefined;
     for (const part of parts) {
-      try {
-        const result = await this.app.send(out.channel.id, { type: "message", text: part });
-        lastActivityId = result?.id;
-      } catch (err) {
-        return { ok: false, error: mapTeamsError(err) };
-      }
+      const sent = await this.sendPartHonouringFormat(out.channel.id, part, out.format);
+      if (sent.ok !== true) return sent;
+      lastActivityId = sent.messageId ?? lastActivityId;
     }
     return lastActivityId !== undefined ? { ok: true, messageId: lastActivityId } : { ok: true };
+  }
+
+  /**
+   * Send one part with the caller's declared format, degrading to plain text if the service
+   * refuses the markup.
+   *
+   * Extracted from {@link TeamsAdapter.sendMessage} because that method was doing three jobs —
+   * validate, split, deliver — and the third carries a nested try/catch that pushed the whole
+   * method to cognitive complexity 14 against a ceiling of 10. Extracting is the fix; a
+   * `biome-ignore` would have kept the reason for the number and removed the report of it.
+   *
+   * ADR-2: an undelivered message is worse than an unformatted one, so only a payload the
+   * service judged malformed (HTTP 400) is retried. A 401 or a 429 rises unchanged — retrying
+   * those without markup fails identically while reporting the wrong cause.
+   *
+   * @internal
+   */
+  private async sendPartHonouringFormat(
+    channelId: string,
+    part: string,
+    format: OutboundMessage["format"],
+  ): Promise<SendResult> {
+    if (this.app === undefined) {
+      return {
+        ok: false,
+        error: { code: "not_connected", message: "TeamsAdapter not connected." },
+      };
+    }
+    try {
+      // Teams parses markup only when the activity says so. Without `textFormat` the caller's
+      // declared `format` was discarded and markdown arrived as characters.
+      const result = await this.app.send(channelId, {
+        type: "message",
+        text: part,
+        ...activityFormat(format),
+      });
+      return { ok: true, messageId: result?.id };
+    } catch (err) {
+      if (!isMalformedActivity(err)) return { ok: false, error: mapTeamsError(err) };
+      process.stderr.write(
+        "[gateway-teams] the service rejected the formatted activity; retrying as plain text\n",
+      );
+      try {
+        const retry = await this.app.send(channelId, { type: "message", text: part });
+        return { ok: true, messageId: retry?.id };
+      } catch (retryErr) {
+        return { ok: false, error: mapTeamsError(retryErr) };
+      }
+    }
   }
 
   onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
@@ -246,4 +351,32 @@ export class TeamsAdapter extends BasePlatformAdapter {
   get _seenConversationsSize(): number {
     return this.seenConversations.size;
   }
+}
+
+/**
+ * The `textFormat` fragment for a declared format, or nothing.
+ *
+ * A named function rather than a spread ternary inside the activity literal: `sendMessage` was
+ * already at its cognitive-complexity limit, and a branch buried in an object literal is the
+ * kind a reader skims past.
+ */
+function activityFormat(format: OutboundMessage["format"]): { textFormat?: "markdown" | "xml" } {
+  // Teams has TWO markup types and they are not interchangeable. Declaring `html` as markdown
+  // — which the first version did — makes the tags render literally AND emphasises any `*` or
+  // `_` in the payload, so the caller gets the opposite of both intentions. Caught in review.
+  if (format === "markdown") return { textFormat: "markdown" };
+  if (format === "html") return { textFormat: "xml" };
+  return {};
+}
+
+/**
+ * Did the service judge the ACTIVITY malformed, as opposed to refusing the caller?
+ *
+ * Narrow by construction: only a 400. A 401, 403 or 429 is about who is asking or how often,
+ * and a retry without markup would fail identically while reporting a formatting problem where
+ * there is an authentication one.
+ */
+function isMalformedActivity(err: unknown): boolean {
+  const e = err as { statusCode?: number; status?: number };
+  return (e.statusCode ?? e.status) === 400;
 }

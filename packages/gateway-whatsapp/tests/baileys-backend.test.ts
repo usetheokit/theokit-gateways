@@ -29,6 +29,11 @@ class FakeSocket implements BaileysSocketLike {
   sendError?: Error;
   /** What the socket answers a send with. Overridden to reach the id-less acknowledgement. */
   ack?: () => { key?: { id?: string } } | undefined;
+  /**
+   * Who this socket logged in as. Unset by default, which is the honest default: a socket that
+   * never opened has no identity, and the backend must treat "unknown" as "answer nobody".
+   */
+  user?: { id?: string; lid?: string };
 
   readonly ev = {
     on: <K extends keyof BaileysEventMap>(
@@ -743,4 +748,175 @@ describe("WhatsAppBaileysBackend — the window before a socket exists", () => {
     expect(Date.now() - startedAt, "waited out the connect timeout").toBeLessThan(1_000);
     expect(socket.ended, "a socket delivered after disconnect was left running").toBe(true);
   }, 30_000);
+});
+
+describe("WhatsAppBaileysBackend — a note the account owner wrote to themselves", () => {
+  /**
+   * The pattern the whole gateway family exists for, and the one WhatsApp made hardest: you
+   * write to yourself and an agent answers there.
+   *
+   * MEASURED against a real paired account on 2026-08-30 — the envelope arrives as live traffic
+   * (`upsert type=notify`, with content) and used to be discarded solely for `fromMe`. These
+   * tests cover the BACKEND half of the narrowed guard: learning which JIDs are this account,
+   * and remembering the ids it sent so it never answers its own reply.
+   */
+  const SELF_PN = "553598838687@s.whatsapp.net";
+  const SELF_LID = "231116569108705:51@lid";
+
+  /** An envelope the account owner typed to themselves, addressed the way the self-chat is. */
+  function selfNote(id: string, jid: string = SELF_LID): unknown {
+    return {
+      key: { remoteJid: jid, fromMe: true, id },
+      messageTimestamp: 1_700_000_000,
+      pushName: "Paulo",
+      message: { conversation: "o que e o TheoKit?" },
+    };
+  }
+
+  it("answers a note to self once it has learned its own JIDs", async () => {
+    const { backend, socket } = makeBackend();
+    socket.user = { id: "553598838687:51@s.whatsapp.net", lid: "231116569108705:51@lid" };
+    const seen: string[] = [];
+    backend.onInbound(async (event) => {
+      seen.push(event.text);
+    });
+
+    const connecting = backend.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    socket.open();
+    await connecting;
+
+    socket.emit("messages.upsert", { type: "notify", messages: [selfNote("TYPED")] });
+    await vi.waitFor(() => expect(seen).toHaveLength(1));
+
+    expect(seen[0]).toBe("o que e o TheoKit?");
+  });
+
+  it("refuses the reply it sent itself, which is the loop the old blanket rule prevented", async () => {
+    const { backend, socket } = makeBackend();
+    socket.user = { id: "553598838687:51@s.whatsapp.net", lid: "231116569108705:51@lid" };
+    const seen: string[] = [];
+    backend.onInbound(async (event) => {
+      seen.push(event.text);
+    });
+
+    const connecting = backend.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    socket.open();
+    await connecting;
+
+    // Send, then feed the very id the socket acknowledged straight back as inbound — which is
+    // exactly what WhatsApp does with our own message on every linked device.
+    const sent = await backend.send({ to: "553598838687", isGroup: false, text: "answer" });
+    expect(sent.ok).toBe(true);
+    const ourId = (sent as { wamid?: string }).wamid;
+    expect(ourId).toBeDefined();
+
+    socket.emit("messages.upsert", { type: "notify", messages: [selfNote(ourId as string)] });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(seen).toHaveLength(0);
+  });
+
+  it("answers nobody while it has not learned who it is", async () => {
+    // A socket that reports no identity leaves `selfJids` empty, and empty must mean "refuse",
+    // never "treat every chat as the self-chat" — the difference between silence and the agent
+    // speaking inside a stranger's conversation.
+    const { backend, socket } = makeBackend();
+    const seen: string[] = [];
+    backend.onInbound(async (event) => {
+      seen.push(event.text);
+    });
+
+    const connecting = backend.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    socket.open();
+    await connecting;
+
+    socket.emit("messages.upsert", { type: "notify", messages: [selfNote("TYPED", SELF_PN)] });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(seen).toHaveLength(0);
+  });
+});
+
+describe("WhatsAppBaileysBackend — pairing a caller can ASK about", () => {
+  // `onQr` is PUSH: it fires when WhatsApp issues a code, which is a moment the caller does not
+  // choose. A screen is PULL — it loads whenever someone opens it and has to ask what the state is
+  // right now. With only the callback, showing a QR in a UI means the app keeping its own copy and
+  // its own notion of whether the pairing already succeeded, which is the framework's bookkeeping
+  // living in every consumer.
+  const tick = () => new Promise((r) => setTimeout(r, 10));
+
+  function pairingBackend() {
+    const socket = new FakeSocket();
+    let issue: ((qr: string) => void) | undefined;
+    const backend = new WhatsAppBaileysBackend({
+      sessionDir: "/tmp/does-not-matter",
+      connectTimeoutMs: 500,
+      socketFactory: async (opts) => {
+        // The backend must ALWAYS supply one, or it cannot record what it never sees.
+        issue = opts.onQr;
+        return socket;
+      },
+    });
+    return { backend, socket, issue: (qr: string) => issue?.(qr) };
+  }
+
+  it("is idle before connect, holds the newest QR while waiting, and clears it once open", async () => {
+    const { backend, socket, issue } = pairingBackend();
+    expect(backend.pairing).toEqual({ status: "idle" });
+
+    const connecting = backend.connect();
+    await tick();
+
+    issue("QR-ONE");
+    expect(backend.pairing.status).toBe("awaiting_scan");
+    expect(backend.pairing.qr).toBe("QR-ONE");
+    expect(typeof backend.pairing.qrAt).toBe("number");
+
+    // WhatsApp reissues every ~20s, and a screen showing the previous square is a screen showing
+    // something that no longer works.
+    issue("QR-TWO");
+    expect(backend.pairing.qr).toBe("QR-TWO");
+
+    socket.open();
+    await connecting;
+    expect(backend.pairing.status).toBe("connected");
+    expect(backend.pairing.qr, "a connected pairing still offered a code to scan").toBeUndefined();
+  });
+
+  it("still delivers every QR to a caller's own onQr", async () => {
+    // Recording must not replace. An app wiring `onQr` to a log or a websocket keeps working.
+    const seen: string[] = [];
+    const socket = new FakeSocket();
+    let issue: ((qr: string) => void) | undefined;
+    const backend = new WhatsAppBaileysBackend({
+      sessionDir: "/tmp/does-not-matter",
+      connectTimeoutMs: 500,
+      onQr: (qr) => seen.push(qr),
+      socketFactory: async (opts) => {
+        issue = opts.onQr;
+        return socket;
+      },
+    });
+    const connecting = backend.connect();
+    await tick();
+    issue?.("QR-A");
+    issue?.("QR-B");
+    socket.open();
+    await connecting;
+    expect(seen, "the caller's own onQr stopped being called").toEqual(["QR-A", "QR-B"]);
+  });
+
+  it("reports closed when the socket dies before anyone scans", async () => {
+    const { backend, socket, issue } = pairingBackend();
+    const connecting = backend.connect();
+    await tick();
+    issue("QR-ONE");
+    socket.emit("connection.update", { connection: "close" });
+    await connecting;
+    expect(backend.pairing.status).toBe("closed");
+    expect(backend.pairing.qr, "a dead socket still advertised its stale QR").toBeUndefined();
+  });
 });

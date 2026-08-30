@@ -56,19 +56,35 @@ export function describeLive(
 /**
  * Declare a suite that can only pass with a publicly reachable HTTPS endpoint.
  *
- * Webhook platforms cannot receive anything on a laptop: the platform dials in,
- * so without a tunnel there is no inbound to assert. Saying that out loud beats
- * a locally-served request that proves the test's own fixture works.
+ * Webhook platforms cannot receive anything on a laptop: the platform dials in, so without a tunnel
+ * there is no inbound to assert. Saying that out loud beats a locally-served request that proves the
+ * test's own fixture works.
+ *
+ * It now HONOURS `INTEGRATION_PUBLIC_URL` instead of only naming it. The skip message has always
+ * told the reader to set that variable, and nothing read it — `describeLiveInbound` skipped every
+ * webhook platform unconditionally, so following the instruction changed nothing and the suite kept
+ * reporting a remedy that did not work. A skip that misdirects is worse than one that just refuses.
  */
 export function describeLiveInbound(spec: PlatformSpec, name: string, body: () => void): void {
-  if (spec.transport === "webhook") {
+  if (spec.transport !== "webhook") {
+    describeLive(spec, name, body);
+    return;
+  }
+  const publicUrl = process.env.INTEGRATION_PUBLIC_URL ?? "";
+  if (publicUrl === "") {
     describe.skip(
-      `${spec.label} — ${name} [skipped: ${spec.label} delivers inbound by webhook; set INTEGRATION_PUBLIC_URL to a tunnel that reaches this process]`,
+      `${spec.label} — ${name} [skipped: ${spec.label} delivers inbound by webhook; set INTEGRATION_PUBLIC_URL to a tunnel that reaches this machine]`,
       body,
     );
     return;
   }
   describeLive(spec, name, body);
+}
+
+/** The public base URL a webhook platform can dial, or undefined when none is declared. */
+export function publicUrl(): string | undefined {
+  const value = process.env.INTEGRATION_PUBLIC_URL ?? "";
+  return value === "" ? undefined : value.replace(/\/$/, "");
 }
 
 /** Poll `check` until it returns a value, or give up. Used for inbound round trips. */

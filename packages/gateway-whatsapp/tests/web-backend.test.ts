@@ -78,7 +78,18 @@ describe("WhatsAppWebBackend — connect", () => {
       spawnFactory: () => handle,
       connectTimeoutMs: 50, // short for the test
     });
-    await expect(backend.connect()).rejects.toBeInstanceOf(WhatsAppConnectTimeoutError);
+    const raised = await backend.connect().then(
+      () => undefined,
+      (err: unknown) => err,
+    );
+
+    expect(raised).toBeInstanceOf(WhatsAppConnectTimeoutError);
+    // The message names the timeout AND the likely cause. Asserting only the type left both free:
+    // "QR code not scanned?" is the sentence that stops an operator debugging the network when the
+    // real answer is that nobody scanned the code.
+    expect((raised as Error).name).toBe("WhatsAppConnectTimeoutError");
+    expect((raised as Error).message).toContain("50ms");
+    expect((raised as Error).message).toContain("QR code not scanned");
   });
 });
 
@@ -322,6 +333,10 @@ describe("WhatsAppWebBackend — spawning the real bridge", () => {
       await expect(backend.connect()).rejects.toMatchObject({
         name: "WhatsAppBridgeError",
         code: "peer_missing",
+        // The prefix the constructor adds. Without it the message is whatever the bridge said on
+        // its own protocol, with nothing naming WHICH component failed — and this error reaches a
+        // consumer who has never heard of the bridge. It was free to be emptied: nothing read it.
+        message: expect.stringContaining("WhatsApp web bridge could not start"),
       });
 
       // The point is the speed: a timeout would have taken 30s.

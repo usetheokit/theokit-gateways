@@ -47,7 +47,10 @@ function scratchDir(): string {
 }
 
 afterEach(() => {
-  if (scratch !== undefined) rmSync(scratch, { recursive: true, force: true });
+  // Retried because a grandchild that escaped the process group can create a file between the
+  // walk and the rmdir, and that is an ENOTEMPTY no `force` flag covers.
+  if (scratch !== undefined)
+    rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   scratch = undefined;
 });
 
@@ -95,7 +98,26 @@ async function runBridge(cwd: string, ms: number, specifier?: string): Promise<B
   });
 
   const alive = code === null;
-  if (alive) child.kill("SIGKILL");
+  if (alive) {
+    // SIGTERM, not SIGKILL, and then WAIT. The bridge closes Chromium on SIGTERM under its own
+    // deadline; SIGKILL cannot be caught, so it orphans the whole browser tree, and the orphans
+    // keep writing leveldb into the scratch directory `afterEach` is removing — an ENOTEMPTY that
+    // only ever surfaced under a full-suite run.
+    //
+    // Firing a signal is not the same as the process being gone: this is the lesson the
+    // `close`-over-`exit` choice above already records, applied to the path that lacked it.
+    child.kill("SIGTERM");
+    const closed = await new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), 8_000);
+      child.once("close", () => {
+        clearTimeout(timer);
+        resolve(true);
+      });
+    });
+    // Only if the bridge ignored its own deadline. The dedicated SIGTERM test above is what
+    // notices when that becomes the normal path rather than the fallback.
+    if (!closed) child.kill("SIGKILL");
+  }
   return { alive, code, stdout, stderr };
 }
 
@@ -214,6 +236,85 @@ describe("the web bridge script", () => {
     expect(errors[0]?.message ?? "").toContain("not installed");
     expect(errors[0]?.code).toBe("peer_missing");
   }, 20_000);
+
+  it("exits on SIGTERM instead of hanging with Chromium still alive", async (ctx) => {
+    // Measured 2026-08-30: SIGTERM did not terminate the bridge at all — `exit` never fired, and
+    // eleven Chromium processes stayed up. puppeteer installs its own SIGTERM handler by default,
+    // which replaces Node's terminate-on-signal and then waits on a browser close that can never
+    // arrive while WhatsApp Web is still loading. The bridge installed no handler of its own, so
+    // it inherited that behaviour.
+    //
+    // The consequence is not confined to tests: any supervisor — systemd, Docker, pm2, a parent
+    // Node process — stops a child with SIGTERM. Every such stop left a hung bridge and a leaked
+    // browser tree, and only SIGKILL got out of it, which cannot close anything cleanly.
+    ctx.skip(!whatsAppWebInstalled(), "whatsapp-web.js (optional peer) is not installed here");
+
+    const dir = scratchDir();
+    const child = spawn(process.execPath, [BRIDGE, "--session", "vitest-sigterm"], {
+      cwd: dir,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stderr = "";
+    child.stdout.on("data", () => undefined);
+    child.stderr.on("data", (c: Buffer) => {
+      stderr += c.toString("utf8");
+    });
+
+    // Attached NOW, not after the wait below. The first version registered it just before
+    // signalling, and on a runner with no browser to launch the bridge exits on its own within
+    // seconds — so the listener arrived after the event and then waited twenty seconds for
+    // something that had already happened. The test reported "ignored SIGTERM" about a process
+    // that had been dead the whole time.
+    let died = false;
+    child.once("exit", () => {
+      died = true;
+    });
+
+    // WAIT FOR THE STATE, do not guess at how long it takes to reach.
+    //
+    // The first version slept six seconds, which is what launching Chromium costs on the machine
+    // this was written on and nothing like what it costs on a shared CI runner — the test failed
+    // there on its first run. A fixed sleep calibrated on one machine is a timing assumption
+    // wearing a test's clothes.
+    //
+    // The QR line is the real signal: the bridge writes it once the browser is up AND WhatsApp Web
+    // has rendered the login page, which is precisely the state the hang was measured in. Polling
+    // for it is bounded, and reaching the bound is not a pass — a bridge that never got there must
+    // still die on SIGTERM, so the run continues and the message says which state it was in.
+    const deadline = Date.now() + 45_000;
+    while (!stderr.includes("Scan this QR") && !died && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    // A bridge that died before it could be signalled cannot answer the question this test asks,
+    // and pretending otherwise would report a pass or a failure about an event that never
+    // occurred. It happens on a runner where puppeteer has no browser to launch. Say so.
+    ctx.skip(
+      died,
+      `the bridge exited before it could be signalled — no browser in this environment: ${stderr.trim().slice(-200)}`,
+    );
+
+    const browserWasUp = stderr.includes("Scan this QR");
+
+    const exited = await new Promise<boolean>((resolve) => {
+      // Generous against the bridge's OWN deadline, which is five seconds: `shutdown()` races
+      // `client.destroy()` against a timer and exits either way. Twenty seconds is four times
+      // that, and before the fix this never resolved true at any length — `exit` did not fire at
+      // all. Widening it cannot turn a broken shutdown into a passing test.
+      const timer = setTimeout(() => resolve(false), 20_000);
+      child.once("exit", () => {
+        clearTimeout(timer);
+        resolve(true);
+      });
+      child.kill("SIGTERM");
+    });
+
+    if (!exited) child.kill("SIGKILL");
+    expect(
+      exited,
+      `the bridge ignored SIGTERM and had to be killed (browser up: ${browserWasUp})`,
+    ).toBe(true);
+  }, 90_000);
 
   it("leaves no session directory in the package it was spawned from", async (ctx) => {
     // LocalAuth writes `.wwebjs_auth/` relative to cwd. Running the bridge from the package
