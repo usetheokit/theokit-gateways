@@ -7,6 +7,8 @@ import { ConfigurationError } from "../src/errors.js";
 import type { MatrixEventLike, MatrixRoomLike } from "../src/types.js";
 
 function makeMockClient(): MatrixSdkClient & {
+  /** How many times `stopClient()` was called — the observable behind "idempotent". */
+  stopped: number;
   sent: Array<{ roomId: string; text: string }>;
   listeners: Array<(e: MatrixEventLike, r: MatrixRoomLike) => void>;
   failNextSendWith?: { httpStatus?: number; errcode?: string; message?: string };
@@ -20,6 +22,7 @@ function makeMockClient(): MatrixSdkClient & {
   const encryptedRooms = new Set<string>();
   const resolved: Record<string, string> = {};
   const c = {
+    stopped: 0,
     sent,
     listeners,
     encryptedRooms,
@@ -44,7 +47,10 @@ function makeMockClient(): MatrixSdkClient & {
       return undefined;
     },
     stopClient() {
-      // noop in tests
+      // Counted, not a noop: "idempotent" is a claim about HOW MANY times the client is stopped,
+      // and a test that only checks for the absence of a throw cannot see a second stop. The
+      // sibling `gateway-mattermost` asserts `handle.closed === 1` for the same reason.
+      (c as unknown as { stopped: number }).stopped += 1;
     },
     async sendTextMessage(roomId: string, text: string) {
       const self = this as unknown as {
@@ -496,10 +502,15 @@ describe("MatrixAdapter lifecycle", () => {
       accessToken: "t",
       userId: "@bot:matrix.org",
     });
-    adapter._installClient(makeMockClient());
+    const client = makeMockClient();
+    adapter._installClient(client);
     await adapter.disconnect();
     await adapter.disconnect();
-    // no throw is the assertion.
+
+    // "no throw" was the whole assertion here, and it cannot tell an idempotent disconnect from one
+    // that stops an already-stopped client — the second stop would throw nowhere and pass. The count
+    // is what carries the claim.
+    expect(client.stopped, "the client was stopped more than once").toBe(1);
   });
 
   it("getClient returns the underlying client (escape hatch)", () => {

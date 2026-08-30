@@ -143,11 +143,15 @@ describe("TeamsAdapter — lifecycle", () => {
   });
 
   it("test_disconnect_idempotent — second call is noop", async () => {
-    const { adapter } = makeAdapter();
+    const { adapter, fakeApp } = makeAdapter();
     await adapter.connect();
     await adapter.disconnect();
     await adapter.disconnect();
-    // No throw.
+
+    // "No throw" was the whole assertion, and it cannot see the thing the name promises: a second
+    // `app.stop()` would throw nowhere either. The spy was already on the fake — the test just
+    // never read it.
+    expect(fakeApp.stop).toHaveBeenCalledTimes(1);
   });
 
   it("test_disconnect_clears_seen_conversations", async () => {
