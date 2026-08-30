@@ -49,9 +49,9 @@ own quality gates.
 
 ## Index
 
-21 items — **Open** 5 · **In flight** 0 · **Closed** 16
+22 items — **Open** 6 · **In flight** 0 · **Closed** 16
 
-### Open (5)
+### Open (6)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -60,6 +60,7 @@ own quality gates.
 | [`B-019`](#b-019--agent-output-reaches-a-chat-channel-through-a-presenter-nobody-wrote----) | Agent output reaches a chat channel through a presenter nobody wrote | `triaged` | — |
 | [`B-020`](#b-020--eight-of-ten-adapters-ignore-outboundmessageformat-so-a-caller-cannot-rely-on-it----) | Eight of ten adapters ignore `OutboundMessage.format`, so a caller cannot rely on it | `triaged` | — |
 | [`B-021`](#b-021--check_alignment_gatepy-reads-a-b-nnn-mentioned-in-prose-as-a-citation----) | `check_alignment_gate.py` reads a `B-NNN` mentioned in prose as a citation | `triaged` | — |
+| [`B-022`](#b-022--eleven-of-twelve-packages-have-no-mutation-runner----) | Eleven of twelve packages have no mutation runner | `raw` | — |
 
 ### In flight (0)
 
@@ -613,3 +614,19 @@ dod:
 > The kit lives under `.claude/`, which this repository does not version — so per
 > `cycle-maintenance.md` this item can only ever reach ITEM_VERIFIED_LOCAL here, and the fix
 > belongs in the kit's own repository to reach anyone else.
+
+## B-022 — Eleven of twelve packages have no mutation runner   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: evolve
+source: human
+evidence: none-yet
+why_now: `/code-quality` returns FAIL_SOFT with `soft_cap_mutation_unconfigured_typescript` on every plan, because `packages/gateway/stryker.config.json` is the only mutation runner in a twelve-package workspace. B-020's plan dismissed that cap by ADR rather than fixing it, and an ADR-dismissed cap is a promise to come back. The dismissal's own reasoning names the constraint: a Stryker run was measured at 1347s in a consumer, and `run_structural.py` invokes `/code-quality` internally, so an unconditional gate would put ~22 minutes on every plan score — a gate people bypass.
+status: raw
+dod:
+  - a mutation runner is configured for the packages whose critical paths justify one, chosen by measurement rather than by covering all twelve
+  - `/code-quality` stops returning `soft_cap_mutation_unconfigured_typescript` for those packages, or the remaining ones are declared with a reason
+  - the per-plan cost of the gate is measured and stated, so the next person knows what it buys and what it costs
+> Registered 2026-08-30 as the followup ADR-3 of B-020's plan promised. Registering it is what
+> makes the dismissal a decision rather than an omission.
