@@ -137,6 +137,33 @@ describe("TelegramAdapter (T5.1)", () => {
     expect(stop, "stop() ran on a bot that never started").not.toHaveBeenCalled();
   });
 
+  it("reconnects after an explicit disconnect", async () => {
+    // The guard on connect() must be a guard, not a latch. `disconnect()` clears `connected`; if it
+    // ever stops, connect() answers true, calls neither init() nor start(), and the bot is deaf
+    // while every health check reads green. Removing that line left this whole package passing.
+    //
+    // init/start/stop are stubbed for the same reason the connect-failure test above stubs init:
+    // the real ones reach api.telegram.org, and a unit test that needs the network fails when the
+    // network is slow rather than when the code is wrong.
+    const init = vi.spyOn(adapter.getBot(), "init").mockResolvedValue(undefined);
+    const start = vi.spyOn(adapter.getBot(), "start").mockResolvedValue(undefined);
+    const stop = vi.spyOn(adapter.getBot(), "stop").mockResolvedValue(undefined);
+
+    try {
+      expect(await adapter.connect()).toBe(true);
+      await adapter.disconnect();
+      expect(await adapter.connect()).toBe(true);
+
+      expect(init, "the second connect() never re-initialised the bot").toHaveBeenCalledTimes(2);
+      expect(start, "the second connect() never restarted polling").toHaveBeenCalledTimes(2);
+      await adapter.disconnect();
+    } finally {
+      init.mockRestore();
+      start.mockRestore();
+      stop.mockRestore();
+    }
+  });
+
   it("startTyping with non-numeric id is a noop (does NOT throw)", async () => {
     // "noop" is a claim that the platform is never called, and `adapter.platform` cannot see it.
     // `Number("not-numeric")` is NaN, and sending a chat action for chat NaN is a request Telegram

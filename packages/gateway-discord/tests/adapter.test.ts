@@ -7,7 +7,7 @@
  * 2026-08-17, and it pointed at a path that had already stopped existing.
  */
 
-import { GatewayIntentBits } from "discord.js";
+import { Events, GatewayIntentBits } from "discord.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_DISCORD_INTENTS, DiscordAdapter } from "../src/adapter.js";
@@ -128,6 +128,33 @@ describe("DiscordAdapter (T6.1)", () => {
     await adapter.disconnect();
 
     expect(destroy, "destroy() ran on a client that never connected").not.toHaveBeenCalled();
+  });
+
+  it("reconnects after an explicit disconnect", async () => {
+    // The guard on connect() must be a guard, not a latch. `disconnect()` clears `connected`, and
+    // if it ever stops, connect() answers true, calls login() on nothing, and the bot is deaf while
+    // every health check reads green. Removing that one line left this whole package passing.
+    //
+    // login() is stubbed because the real one reaches Discord: it resolves the ClientReady the
+    // adapter is waiting on, which is what a successful login does, without the network.
+    const client = adapter.getBot();
+    const login = vi.spyOn(client, "login").mockImplementation(async (token?: string) => {
+      client.emit(Events.ClientReady, client as never);
+      return token ?? "";
+    });
+    const destroy = vi.spyOn(client, "destroy").mockResolvedValue(undefined);
+
+    try {
+      expect(await adapter.connect()).toBe(true);
+      await adapter.disconnect();
+      expect(await adapter.connect()).toBe(true);
+
+      expect(login, "the second connect() never logged in again").toHaveBeenCalledTimes(2);
+      await adapter.disconnect();
+    } finally {
+      login.mockRestore();
+      destroy.mockRestore();
+    }
   });
 
   it("connect() with bad token returns false (does NOT throw)", async () => {
