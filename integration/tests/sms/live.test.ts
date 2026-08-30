@@ -79,7 +79,7 @@ describeLive(SMS, "outbound", () => {
         channel: { id: required("SMS_TEST_RECIPIENT"), type: "dm" },
         text: `${marker} ok`,
       });
-      expect(result.ok).toBe(true);
+      expect(result.ok, JSON.stringify(result.error)).toBe(true);
     } finally {
       await adapter.disconnect();
     }

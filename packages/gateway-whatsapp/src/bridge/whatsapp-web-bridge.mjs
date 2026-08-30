@@ -164,6 +164,42 @@ client.on("disconnected", (reason) => {
   emitError(`DISCONNECTED: ${reason}`);
 });
 
+/**
+ * Close the browser and leave, under a deadline.
+ *
+ * The deadline is the point. `client.destroy()` closes Chromium, and while WhatsApp Web is still
+ * loading it can wait forever — so an unbounded shutdown is a process that never exits. Racing it
+ * against a timer means the browser is closed properly when that is possible and the bridge leaves
+ * regardless, which is what a supervisor waiting on the exit is owed.
+ */
+let shuttingDown = false;
+async function shutdown(code) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  await Promise.race([
+    client.destroy().catch(() => undefined),
+    new Promise((resolve) => setTimeout(resolve, 5_000)),
+  ]);
+  process.exit(code);
+}
+
+/**
+ * Own the termination signals.
+ *
+ * Measured 2026-08-30: without these, SIGTERM did not stop the bridge at all — the process stayed
+ * up and eleven Chromium processes with it. puppeteer registers its own SIGTERM/SIGINT/SIGHUP
+ * handlers by default, and registering ANY handler removes Node's terminate-on-signal default; the
+ * bridge then inherited a shutdown that could hang and had no deadline of its own.
+ *
+ * Registering last wins for the exit: puppeteer's handler still runs and closes what it can, and
+ * this one guarantees the process actually leaves.
+ */
+for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
+  process.on(signal, () => {
+    void shutdown(0);
+  });
+}
+
 const rl = createInterface({ input: process.stdin });
 rl.on("line", async (line) => {
   let cmd;
@@ -173,12 +209,7 @@ rl.on("line", async (line) => {
     return;
   }
   if (cmd?.cmd === "shutdown") {
-    try {
-      await client.destroy();
-    } catch {
-      /* ignore */
-    }
-    process.exit(0);
+    await shutdown(0);
   }
   if (cmd?.cmd === "send") {
     const msgId = cmd.msgId;

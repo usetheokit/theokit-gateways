@@ -81,12 +81,21 @@ function makeCorpus(): string[] {
 const CORPUS = makeCorpus();
 
 describe("chunkByGrapheme — input validation (fail fast)", () => {
+  // The message is asserted, not just the type. `rules/error-handling.md` § 2 requires a typed error
+  // WITH the context to act on it, and `rules/testing.md` § 4.1 says a negative case asserts the
+  // specific error and message rather than merely that something throws. Both calls below raise the
+  // same RangeError from the same helper, so only the label distinguishes "which argument was wrong"
+  // — and a caller reading `must be a positive integer, received 0` cannot act on it without one.
   it("throws on non-positive limit", () => {
-    expect(() => chunkByGrapheme("abc", { limit: 0 })).toThrow(RangeError);
-    expect(() => chunkByGrapheme("abc", { limit: -1 })).toThrow(/positive integer/);
+    expect(() => chunkByGrapheme("abc", { limit: 0 })).toThrow(
+      /^chunkByGrapheme: limit must be a positive integer, received 0$/,
+    );
+    expect(() => chunkByGrapheme("abc", { limit: -1 })).toThrow(RangeError);
   });
   it("throws on non-positive partLimit", () => {
-    expect(() => chunkByGrapheme("abc", { limit: 100, partLimit: 0 })).toThrow(/partLimit/);
+    expect(() => chunkByGrapheme("abc", { limit: 100, partLimit: 0 })).toThrow(
+      /^chunkByGrapheme: partLimit must be a positive integer, received 0$/,
+    );
   });
   it("accepts a valid partLimit below limit", () => {
     expect(() => chunkByGrapheme("abc", { limit: 100, partLimit: 92 })).not.toThrow();
@@ -114,9 +123,33 @@ describe("chunkByGrapheme reproduces the adapter oracles byte-for-byte", () => {
 describe("chunkByGrapheme — never severs a grapheme", () => {
   it("keeps 🦊 (surrogate pair) intact across chunk edges", () => {
     const text = `${"🦊".repeat(2000)}`; // each 🦊 = 2 UTF-16 units
-    for (const c of chunkByGrapheme(text, { limit: 1000 })) {
+    const parts = chunkByGrapheme(text, { limit: 1000 });
+    for (const c of parts) {
       const last = c.charCodeAt(c.length - 1);
-      expect(last >= 0xd800 && last <= 0xdbff).toBe(false);
+      const first = c.charCodeAt(0);
+      // Both ends. A severed pair leaves a trailing HIGH surrogate on one chunk and a leading LOW
+      // surrogate on the next, so checking only the tail sees half of every break.
+      expect(last >= 0xd800 && last <= 0xdbff, "chunk ends on a lone high surrogate").toBe(false);
+      expect(first >= 0xdc00 && first <= 0xdfff, "chunk starts on a lone low surrogate").toBe(
+        false,
+      );
     }
+    expect(parts.join(""), "rejoining the chunks did not reproduce the input").toBe(text);
+  });
+
+  it("emits an oversized part rather than severing a grapheme that cannot fit", () => {
+    // 👨‍👩‍👧‍👦 is ONE grapheme of 11 UTF-16 units. With partLimit 5 it fits in no part at all, which is the
+    // only input where the walk reaches its `buf` push with nothing buffered. The contract has to
+    // give somewhere, and it gives on the limit, never on the grapheme: SMS would rather send one
+    // part over its window than a part ending in half a family. Nothing stated that until now, so
+    // dropping the empty-buffer guard — emitting a phantom "" part before every oversized one — was
+    // invisible, and an adapter counting parts for its `(i/N)` prefix would have counted the phantom.
+    const family = "👨‍👩‍👧‍👦";
+    const parts = chunkByGrapheme(family.repeat(3), { limit: 5, partLimit: 5 });
+    expect(parts).toEqual([family, family, family]);
+    expect(
+      parts.every((p) => p.length > 0),
+      "an empty part was emitted",
+    ).toBe(true);
   });
 });

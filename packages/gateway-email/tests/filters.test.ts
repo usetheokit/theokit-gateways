@@ -64,6 +64,29 @@ describe("isAutomatedSender (D332)", () => {
   it("test_filter_case_insensitive", () => {
     expect(isAutomatedSender("NOREPLY@example.com", noHeaders)).toBe(true);
   });
+
+  it.each([
+    // RFC 3834 defines `no` as the value that says a message is NOT auto-submitted. A client that
+    // sets it honestly must not be silenced BECAUSE it was honest.
+    ["Auto-Submitted", "no"],
+    ["Precedence", "normal"],
+    ["X-Auto-Response-Suppress", "None"],
+  ])("lets a human through when %s is present but says otherwise", (header, value) => {
+    // Every existing case supplies a header whose value MATCHES, so `typeof x === "string" && …`
+    // was indistinguishable from `typeof x === "string" || …`: with no header both are false, and
+    // with a matching header both are true. Only a header that is present and does not match
+    // separates them — and under `||` that sender is blocked, which is a human going unanswered.
+    expect(isAutomatedSender("alice@example.com", new Map([[header, value]]))).toBe(false);
+  });
+
+  it("blocks a noreply address only at the START of the local part", () => {
+    // `/^(noreply|…)@/`. Without the anchor, any address CONTAINING one of those words matches —
+    // `not-noreply@example.com` and `team-notifications@example.com` are real addresses belonging
+    // to real people, and blocking them is silent: the bot simply never answers.
+    expect(isAutomatedSender("noreply@example.com", noHeaders)).toBe(true);
+    expect(isAutomatedSender("not-noreply@example.com", noHeaders)).toBe(false);
+    expect(isAutomatedSender("team-notifications@example.com", noHeaders)).toBe(false);
+  });
 });
 
 describe("isAllowedSender (D333 + EC-3)", () => {

@@ -36,6 +36,15 @@ function makeFakeApp() {
   };
 }
 
+/**
+ * A credential Microsoft accepts.
+ *
+ * `connect()` asks Entra whether the three credentials are real, so a unit test that does not
+ * inject this reaches the network and is rejected — these credentials are `client-1` / `secret-1`.
+ * Injecting it keeps the assertion on the behaviour under test and keeps I/O out of a unit test.
+ */
+const acceptedCredential = async () => ({ ok: true, status: 200 });
+
 function makeAdapter(opts: { botDisplayName?: string } = {}) {
   const fakeApp = makeFakeApp();
   const adapter = new TeamsAdapter({
@@ -44,6 +53,7 @@ function makeAdapter(opts: { botDisplayName?: string } = {}) {
     tenantId: "tenant-1",
     botDisplayName: opts.botDisplayName,
     __appFactory: () => fakeApp as never,
+    __tokenFetcher: acceptedCredential,
   });
   return { adapter, fakeApp };
 }
@@ -127,16 +137,21 @@ describe("TeamsAdapter — lifecycle", () => {
       clientSecret: "s",
       tenantId: "t",
       __appFactory: () => failApp as never,
+      __tokenFetcher: acceptedCredential,
     });
     expect(await adapter.connect()).toBe(false);
   });
 
   it("test_disconnect_idempotent — second call is noop", async () => {
-    const { adapter } = makeAdapter();
+    const { adapter, fakeApp } = makeAdapter();
     await adapter.connect();
     await adapter.disconnect();
     await adapter.disconnect();
-    // No throw.
+
+    // "No throw" was the whole assertion, and it cannot see the thing the name promises: a second
+    // `app.stop()` would throw nowhere either. The spy was already on the fake — the test just
+    // never read it.
+    expect(fakeApp.stop).toHaveBeenCalledTimes(1);
   });
 
   it("test_disconnect_clears_seen_conversations", async () => {
@@ -384,5 +399,104 @@ describe("TeamsAdapter — sendMessage", () => {
     expect(r.ok).toBe(true);
     expect(r.messageId).toBe(`act-${i}`); // last call's id
     expect((fakeApp.send as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("TeamsAdapter — the format the caller declared", () => {
+  /**
+   * The activity carries `textFormat`, and without it Teams renders markup as characters.
+   * `OutboundMessage.format` was read by nobody here, so a caller saying "this is markdown"
+   * was telling the adapter something it discarded.
+   */
+  it("sets textFormat on the activity when the caller declares markdown", async () => {
+    const { adapter, fakeApp } = makeAdapter();
+    await adapter.connect();
+
+    const res = await adapter.sendMessage({
+      channel: { id: "conv-1", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(res.ok).toBe(true);
+    const activity = fakeApp.send.mock.calls[0]?.[1] as { textFormat?: string };
+    expect(activity.textFormat).toBe("markdown");
+  });
+
+  it("omits textFormat when no format is declared", async () => {
+    // The absence is the assertion: sending `textFormat` unconditionally would ask Teams to
+    // parse markup in a message the caller never said contained any.
+    const { adapter, fakeApp } = makeAdapter();
+    await adapter.connect();
+
+    await adapter.sendMessage({ channel: { id: "conv-1", type: "group" }, text: "plain" });
+
+    const activity = fakeApp.send.mock.calls[0]?.[1] as { textFormat?: string };
+    expect(activity.textFormat).toBeUndefined();
+  });
+});
+
+describe("TeamsAdapter — html is not markdown, and a rejected activity degrades", () => {
+  it("declares html as xml, the type Teams actually has for it", async () => {
+    // Review found `html` being declared as markdown: the tags render literally AND any `*` or
+    // `_` in the payload is emphasised, so the caller gets the opposite of both intentions.
+    const { adapter, fakeApp } = makeAdapter();
+    await adapter.connect();
+
+    await adapter.sendMessage({
+      channel: { id: "conv-1", type: "group" },
+      text: "<b>save</b>",
+      format: "html",
+    });
+
+    const activity = fakeApp.send.mock.calls[0]?.[1] as { textFormat?: string };
+    expect(activity.textFormat).toBe("xml");
+  });
+
+  it("retries as plain text when the service rejects the formatted activity", async () => {
+    const { adapter, fakeApp } = makeAdapter();
+    await adapter.connect();
+    let attempt = 0;
+    // `_activity` is `unknown` on the mock's signature, and a narrower parameter type here is
+    // refused by TS (contravariance) — so widen and narrow inside, rather than at the boundary.
+    fakeApp.send.mockImplementation(async (_id: string, activity: unknown) => {
+      attempt += 1;
+      if ((activity as { textFormat?: string }).textFormat !== undefined) {
+        throw Object.assign(new Error("bad activity"), { statusCode: 400 });
+      }
+      return { id: "sent-plain" };
+    });
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const res = await adapter.sendMessage({
+      channel: { id: "conv-1", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(attempt).toBe(2);
+    stderr.mockRestore();
+  });
+
+  it("does NOT retry when the service refuses the caller", async () => {
+    // The discrimination is the point: retrying a 401 without markup fails identically and
+    // reports a formatting problem where there is an authentication one.
+    const { adapter, fakeApp } = makeAdapter();
+    await adapter.connect();
+    let attempt = 0;
+    fakeApp.send.mockImplementation(async () => {
+      attempt += 1;
+      throw Object.assign(new Error("unauthorized"), { statusCode: 401 });
+    });
+
+    const res = await adapter.sendMessage({
+      channel: { id: "conv-1", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(res.ok).toBe(false);
+    expect(attempt, "retried a failure that was never about formatting").toBe(1);
   });
 });

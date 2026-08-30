@@ -7,11 +7,14 @@
 // meaning exist in both files and can honestly be compared.
 
 import { createRequire } from "node:module";
-import { join } from "node:path";
 
-import { ROOT } from "./published-entries.mjs";
-
-const ts = createRequire(import.meta.url)(join(ROOT, "node_modules/typescript"));
+// Resolved BY NAME, never by path. Requiring a directory bypasses the package's `exports` map —
+// Node only consults `exports` when resolving a bare specifier — so a path-require depends on the
+// package still declaring `main`, and on the package manager having hoisted it to the root. Both
+// assumptions broke at once on 2026-08-28: pnpm is free to place the package anywhere, and
+// TypeScript 7 ships `exports` with no `main`, so the path form fails outright. The name form asks
+// Node to do what Node does, and works under either layout.
+const ts = createRequire(import.meta.url)("typescript");
 
 /**
  * @param {string} file a `.d.ts` or the `.js` beside it

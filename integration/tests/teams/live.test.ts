@@ -73,7 +73,7 @@ describeLive(TEAMS, "outbound", () => {
         channel: { id: required("TEAMS_TEST_CONVERSATION_ID"), type: "group" },
         text: `${marker} outbound ok`,
       });
-      expect(result.ok).toBe(true);
+      expect(result.ok, JSON.stringify(result.error)).toBe(true);
     } finally {
       await adapter.disconnect();
     }

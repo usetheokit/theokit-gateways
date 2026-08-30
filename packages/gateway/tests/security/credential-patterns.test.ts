@@ -47,6 +47,13 @@ const SECRETS: ReadonlyArray<readonly [string, string]> = [
   ["matrix access token", ["syt", "dGhlb2tpdA", "ZxWvUtSrQpOnMlKjIhGf", "3AbCdE"].join("_")],
   ["whatsapp access token", "EAA" + "Gm0PX4ZCpsBA1ZBcDeFgHiJkLmNoPqRsTuVwXyZaBcDeFgHiJkLmNoPqRs"],
   ["teams client secret", ["Abc8Q", "dEfGhIjKlMnOpQrStUvWxYz0123456789_"].join("~")],
+  // The same shape with the OPTIONAL character before the tilde absent. Entra prefixes vary in
+  // width, `[A-Za-z0-9]?` is what admits both, and with only the wider form present the `?` could be
+  // dropped — masking the 5-character prefix and leaking the 4-character one.
+  [
+    "teams client secret with the short prefix",
+    ["Abc8", "dEfGhIjKlMnOpQrStUvWxYz0123456789_"].join("~"),
+  ],
 ];
 
 // Identifiers a developer reads an error log to find. Redacting one costs a debugging session, and
@@ -69,12 +76,39 @@ const MUST_SURVIVE: ReadonlyArray<readonly [string, string]> = [
 
 describe("maskShapes", () => {
   it.each(SECRETS)("masks a %s entirely, leaving no run of it", (_name, secret) => {
-    const out = maskShapes(`connect failed: ${secret}`);
+    // The secret is NOT last, and that placement is load-bearing. At end-of-string every trailing
+    // lookahead passes vacuously — there is nothing to look ahead at — so `(?![A-Za-z0-9_-])` and its
+    // inverse behave identically and six of the seven anchors were unobservable. A following
+    // character is what makes the anchor mean something.
+    const out = maskShapes(`connect failed: ${secret} (401)`);
     for (let i = 0; i + 6 <= secret.length; i++) {
       expect(out, `a run of the secret survived: ${secret.slice(i, i + 6)}`).not.toContain(
         secret.slice(i, i + 6),
       );
     }
+    // The secret is GONE — and what stands in its place is the documented marker. Absence alone is
+    // also what a replacement of "" produces, which deletes the surrounding evidence instead of
+    // masking it, and every assertion above is equally happy either way.
+    expect(out, "the secret vanished instead of being masked").toBe("connect failed: *** (401)");
+  });
+
+  it.each(SECRETS)("does not mask a %s glued to a longer identifier", (_name, secret) => {
+    // The other side of every pattern's leading anchor. All six open with a negative lookbehind
+    // whose job is to refuse a match starting mid-identifier, and nothing ever put a character
+    // there — so the anchors could be inverted, or dropped, and the suite stayed green. Redacting a
+    // value that merely CONTAINS a token-shaped run costs a debugging session, the same cost
+    // MUST_SURVIVE prevents from the other direction.
+    //
+    // The prefix width is measured, not picked. An anchor can only refuse what the leading segment's
+    // width cannot ABSORB: Discord's first segment is `{23,28}` and its fixture is 24 characters, so
+    // four glued characters are simply eaten by the range and the match still starts at the prefix.
+    // Five is the first width that cannot be, and eight leaves margin if a fixture is retuned. Note
+    // which way absorption errs — it masks a superset, so the failure it causes is over-redaction,
+    // never a leak; that is why this is a boundary worth pinning rather than a hole worth patching.
+    const glued = `request abcdefgh${secret} aborted`;
+    expect(maskShapes(glued), "the leading anchor did not refuse a mid-identifier match").toBe(
+      glued,
+    );
   });
 
   it.each(MUST_SURVIVE)("leaves a %s alone", (_name, value) => {
@@ -96,6 +130,12 @@ describe("redactSecrets", () => {
   it("masks a bare credential the SDK does not recognise", () => {
     const secret = ["syt", "dGhlb2tpdA", "ZxWvUtSrQpOnMlKjIhGf", "3AbCdE"].join("_");
     expect(redactSecrets(`connect failed: ${secret}`)).not.toContain("ZxWvUt");
+    // The signature is `unknown` and the docblock promises "anything stringifiable", but every call
+    // in the suite handed it a string, so the `String(value)` branch was never taken. The log sites
+    // pass `(err as Error).message` today; the first one that passes the Error itself would hit an
+    // untested path in the code that keeps secrets out of logs.
+    expect(redactSecrets(new Error(`connect failed: ${secret}`))).not.toContain("ZxWvUt");
+    expect(redactSecrets({ toString: () => `boom ${secret}` })).not.toContain("ZxWvUt");
   });
 
   it("still applies the SDK's own patterns", () => {
@@ -113,6 +153,27 @@ describe("redactSecrets", () => {
     const ours = ["syt", "dGhlb2tpdA", "ZxWvUtSrQpOnMlKjIhGf", "3AbCdE"].join("_");
     redactSecrets(`warm up ${ours}`);
     expect(Security.redact(`elsewhere ${ours}`)).toContain(ours);
+  });
+});
+
+describe("the shapes we cover", () => {
+  it("names each one and what else it would eat", () => {
+    // The symmetric half of the gate below. `uncovered` has been required to name its field and say
+    // why since it existed; `covered` was required to do neither, so every label and every
+    // `alsoMatches` note could be emptied without a single test noticing. That note is not decoration
+    // — it is what tells a developer whose value got masked whether the pattern is doing its job or
+    // is too wide, and an empty one turns the catalogue into a list of regexes nobody can review.
+    for (const shape of CREDENTIAL_SHAPES.covered) {
+      expect(shape.field.length, "a covered shape must name its field").toBeGreaterThan(0);
+      expect(shape.field, `${shape.field} must name the package it belongs to`).toContain(
+        "gateway-",
+      );
+      expect(
+        shape.alsoMatches.length,
+        `${shape.field} must say what else it would eat`,
+      ).toBeGreaterThan(20);
+    }
+    expect(CREDENTIAL_SHAPES.covered.length).toBeGreaterThan(0);
   });
 });
 

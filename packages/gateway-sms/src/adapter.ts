@@ -29,6 +29,37 @@ import { splitForSMS } from "./split.js";
 import type { SMSAdapterOptions } from "./types.js";
 
 export class SMSAdapter extends BasePlatformAdapter {
+  /**
+   * Whether the "this medium carries no formatting" warning has already been emitted.
+   *
+   * Once per adapter, not once per message: a gateway answering a busy channel would turn a
+   * useful diagnostic into a log flood, and a flooded log is one nobody reads — the same
+   * reason the group-mention and allowlist drops elsewhere in this family log once.
+   */
+  private warnedAboutFormat = false;
+
+  /**
+   * Say, once, that a declared format is being dropped.
+   *
+   * `OutboundMessage.format` is the caller stating intent, and this medium has nowhere to put
+   * it: no flag, no markup, no alternative part. Discarding it in silence is the swallowed-
+   * error shape `rules/error-handling.md` refuses — nothing fails, and the caller learns their
+   * formatting never arrived from a user, weeks later.
+   *
+   * @internal
+   */
+  private warnFormatUnsupported(format: string | undefined): void {
+    // The "is there anything to say" question lives here rather than at the call site: a
+    // `sendMessage` already at its complexity limit should ask one thing, not three.
+    if (format === undefined || format === "plain") return;
+    if (this.warnedAboutFormat) return;
+    this.warnedAboutFormat = true;
+    process.stderr.write(
+      `[gateway-sms] format="${format}" was declared, and SMS cannot carry it — ` +
+        "the medium is plain text. Sending unformatted; this is logged once.\n",
+    );
+  }
+
   readonly platform = "sms" as const;
   private readonly backend: SMSBackend;
   private inboundHandler: ((event: GatewayMessageEvent) => Promise<void>) | undefined;
@@ -78,6 +109,10 @@ export class SMSAdapter extends BasePlatformAdapter {
     // Send sequentially so the recipient sees them in order; concurrent
     // submit would still cost the same but breaks ordering at carriers.
     let lastResult: SendResult | undefined;
+    // SMS is plain text by definition. Reading the field is not ceremony: it is what turns a
+    // silent discard into a stated one.
+    this.warnFormatUnsupported(out.format);
+
     for (const part of parts) {
       lastResult = await this.backend.sendMessage(toE164, part);
       if (lastResult.ok !== true) {

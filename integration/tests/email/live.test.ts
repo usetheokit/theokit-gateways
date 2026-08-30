@@ -148,7 +148,7 @@ describeLive(EMAIL, "outbound", () => {
       channel: { id: required("EMAIL_TEST_RECIPIENT"), type: "dm" },
       text: `${marker} outbound ok`,
     });
-    expect(result.ok).toBe(true);
+    expect(result.ok, JSON.stringify(result.error)).toBe(true);
     expect(result.messageId).toBeDefined();
   }, 180_000);
 

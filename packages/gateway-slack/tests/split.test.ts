@@ -88,3 +88,23 @@ function assertNoLoneSurrogate(c: string): void {
     expect(next >= 0xdc00 && next <= 0xdfff).toBe(true);
   }
 }
+
+describe("splitForSlack — the boundaries and the fallback, which nothing pinned", () => {
+  it("breaks at a space when there is no newline anywhere", () => {
+    // Slack's 4000-character cap is the tightest of the chat platforms, so an ordinary answer of a
+    // few paragraphs reaches it. Emptying `" "` in `boundaries` killed no test, and it is the only
+    // break point a single unbroken paragraph has.
+    const head = "a".repeat(3000);
+
+    expect(splitForSlack(`${head} ${"b".repeat(2000)}`)[0]).toBe(head);
+  });
+
+  it("prefers the last boundary over filling the window", () => {
+    // With the only space 1000 in, `last-boundary` breaks there and leaves 3000 of the window
+    // unused rather than cutting a word. Every existing case put its boundary near the limit, so
+    // the setting could be emptied unnoticed.
+    const head = "a".repeat(1000);
+
+    expect(splitForSlack(`${head} ${"b".repeat(4000)}`)[0]).toBe(head);
+  });
+});

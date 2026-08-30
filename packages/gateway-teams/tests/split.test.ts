@@ -55,3 +55,22 @@ describe("splitForTeams", () => {
     expect(splitForTeams("hi")).toEqual(["hi"]);
   });
 });
+
+describe("splitForTeams — the boundaries and the fallback, which nothing pinned", () => {
+  it("breaks at a space when there is no newline anywhere", () => {
+    // Teams allows 8000 characters, so reaching the cap takes a long answer — and a long answer
+    // pasted as one block is exactly the shape with no newline to break on. The space boundary was
+    // the only rung nothing exercised.
+    const head = "a".repeat(6000);
+
+    expect(splitForTeams(`${head} ${"b".repeat(4000)}`)[0]).toBe(head);
+  });
+
+  it("prefers the last boundary over filling the window", () => {
+    // A boundary a quarter of the way in is still preferred over a full window: half a word split
+    // across two Teams messages renders as two words, and no reader can tell it was one.
+    const head = "a".repeat(2000);
+
+    expect(splitForTeams(`${head} ${"b".repeat(8000)}`)[0]).toBe(head);
+  });
+});

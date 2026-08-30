@@ -92,6 +92,9 @@ export class LineAdapter extends BasePlatformAdapter {
     }
     // For DMs: channel.id IS the userId. For groups/rooms: channel.id is groupId/roomId — push API still uses the channel id.
     const targetId = out.channel.id;
+    // A LINE text message has no markup field. Reading the field is what makes the
+    // discard visible — this is the platform where the silence was observed.
+    this.warnFormatUnsupported(out.format);
     const parts = splitForLine(out.text);
     // Reply API: only the FIRST batch can use the one-shot replyToken; subsequent calls fall back to push.
     const token = this.replyCache.take(targetId);
@@ -119,6 +122,34 @@ export class LineAdapter extends BasePlatformAdapter {
     }
     if (lastErr !== undefined) return lastErr;
     return { ok: true, ...(messageId !== undefined ? { messageId } : {}) };
+  }
+
+  /** Whether the "this platform has no text formatting" warning has already been emitted. */
+  private warnedAboutFormat = false;
+
+  /**
+   * Say, once, that a declared `format` has nowhere to go on this platform.
+   *
+   * A LINE text message carries `{ type: "text", text }` and nothing else — no markup field,
+   * no parse flag, no alternative part. Flex Messages can render styled content, but they are a
+   * different message type with a different payload, not a flag on this one.
+   *
+   * This is the platform whose silence was OBSERVED: an agent answered
+   * `**Bom Sucesso (MG)**` and the person read literal asterisks, because the adapter dropped
+   * the caller's declared intent without saying so.
+   *
+   * @internal
+   */
+  private warnFormatUnsupported(format: string | undefined): void {
+    // The "is there anything to say" question lives here rather than at the call site: a
+    // `sendMessage` already at its complexity limit should ask one thing, not three.
+    if (format === undefined || format === "plain") return;
+    if (this.warnedAboutFormat) return;
+    this.warnedAboutFormat = true;
+    process.stderr.write(
+      `[gateway-line] format="${format}" was declared, and a LINE text message cannot carry it — ` +
+        "there is no markup field on this message type. Sending as-is; this is logged once.\n",
+    );
   }
 
   onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {

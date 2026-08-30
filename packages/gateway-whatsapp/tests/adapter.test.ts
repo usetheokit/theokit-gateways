@@ -277,6 +277,10 @@ describe("WhatsAppAdapter — sendMessage", () => {
     });
     expect(r.ok).toBe(true);
     expect(backend.sends).toHaveLength(1);
+    // ...carrying the message, to the recipient it was addressed to. Counting the sends proves the
+    // text was not split; it does not prove anything reached the right number with the right words,
+    // and an adapter that sent "" to somebody else would have counted exactly the same.
+    expect(backend.sends[0]).toMatchObject({ to: "5511888", text: "hello" });
   });
 
   it("send error stops remaining parts (T4.3 + EC-8)", async () => {
@@ -316,6 +320,40 @@ describe("WhatsAppAdapter — sender allowlist", () => {
     adapter.onInbound(async (event) => void seen.push(event.text));
 
     await backend.emitInbound(inboundFrom("5511000000000@s.whatsapp.net", "from a stranger"));
+
+    expect(seen).toEqual([]);
+    stderr.mockRestore();
+  });
+
+  it("delivers the owner's own note even though the allowlist names a phone number", async () => {
+    // The allowlist answers "may this STRANGER reach the agent?". A note-to-self is not from a
+    // stranger, and it cannot answer that question anyway: MEASURED on a real paired session,
+    // the self-chat reports the account's LID (`231116569108705`) as the sender while the operator
+    // wrote their phone number in the allowlist. Asking the allowlist here mutes the one use case
+    // the pairing exists for, and no user can be expected to look up their own LID.
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend, { allowedSenders: "553598838687" });
+    const seen: string[] = [];
+    adapter.onInbound(async (event) => void seen.push(event.text));
+
+    await backend.emitInbound({
+      ...inboundFrom("231116569108705@lid", "note to self"),
+      fromSelf: true,
+    });
+
+    expect(seen).toEqual(["note to self"]);
+  });
+
+  it("still refuses a stranger whose id happens to look like a LID", async () => {
+    // The exemption is the FLAG, not the address shape — otherwise anyone reaching the socket on
+    // a LID would bypass the allowlist entirely.
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend, { allowedSenders: "553598838687" });
+    const seen: string[] = [];
+    adapter.onInbound(async (event) => void seen.push(event.text));
+
+    await backend.emitInbound(inboundFrom("999999999999999@lid", "not the owner"));
 
     expect(seen).toEqual([]);
     stderr.mockRestore();
@@ -561,5 +599,32 @@ describe("WhatsAppAdapter — a stale unsubscribe must be a no-op", () => {
     });
 
     expect(seen).toEqual(["second"]);
+  });
+});
+
+describe("WhatsAppAdapter — a format the platform cannot carry as a flag", () => {
+  it("warns once that the declared format has nowhere to go", async () => {
+    // WhatsApp's emphasis is inline (`*bold*`), so there is no request field to set. The
+    // honest handling is to say the intent is being dropped — once, not per message.
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend, { botPhoneId: "5511999999999" });
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await adapter.sendMessage({
+      channel: { id: "5511000000000", type: "dm" },
+      text: "a",
+      format: "html",
+    });
+    await adapter.sendMessage({
+      channel: { id: "5511000000000", type: "dm" },
+      text: "b",
+      format: "html",
+    });
+
+    const warned = stderr.mock.calls
+      .map((c) => String(c[0]))
+      .filter((l) => l.includes("cannot carry it as a flag"));
+    expect(warned, "warned per message instead of once").toHaveLength(1);
+    stderr.mockRestore();
   });
 });

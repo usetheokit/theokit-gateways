@@ -36,7 +36,8 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:mutation": "stryker run"
   },
   "peerDependencies": {
     "@slack/bolt": "^4.0.0 || ^5.0.0",
@@ -44,11 +45,13 @@
   },
   "devDependencies": {
     "@slack/bolt": "^4.6.0",
+    "@stryker-mutator/core": "10",
+    "@stryker-mutator/vitest-runner": "10",
     "@theokit/gateway": "workspace:*",
-    "@theokit/sdk": "^4.53.1",
+    "@theokit/sdk": "^4.62.0",
     "tsup": "^8.5.0",
-    "typescript": "^5.8.0",
-    "vitest": "^4.1.8",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.11",
     "zod": "^4.0.0"
   },
   "publishConfig": {

@@ -175,6 +175,51 @@ describe("normalizeSlackEvent — bot loop guard (D275)", () => {
     expect(r).toBeUndefined();
   });
 
+  it("drops ANOTHER bot's thread broadcast, which is the loop the guard is named for", () => {
+    // Found by mutation testing on 2026-08-30. Every mutant of the `bot_id` guard survived, and
+    // the reason was worse than a missing test: the guard is `bot_id !== undefined && subtype ===
+    // "bot_message"`, and the NEXT line already drops every subtype except `thread_broadcast`. So
+    // the guard was subsumed — deleting the whole line left all 78 tests green — and the one case
+    // it did not cover is the one it was written for.
+    //
+    // `thread_broadcast` is deliberately allowed through, because a human broadcasting a thread
+    // reply is a real message. A BOT broadcasting one is not, and it arrived at the handler. Two
+    // agents in the same channel, both replying with broadcast, answer each other forever.
+    const r = normalizeSlackEvent(
+      mkBody({
+        channel: "C1",
+        ts: "100.1",
+        bot_id: "B_OTHER",
+        subtype: "thread_broadcast",
+        thread_ts: "99.1",
+        text: `<@${BOT}> what do you think?`,
+        channel_type: "channel",
+      }),
+      BOT,
+    );
+
+    expect(r, "another bot's broadcast reached the handler").toBeUndefined();
+  });
+
+  it("keeps a HUMAN thread broadcast, which is what the allowance is for", () => {
+    // The other side of the same guard: widening it to drop every message carrying `bot_id` must
+    // not cost the case `thread_broadcast` was allowed through for.
+    const r = normalizeSlackEvent(
+      mkBody({
+        channel: "C1",
+        ts: "100.1",
+        user: "U_HUMAN",
+        subtype: "thread_broadcast",
+        thread_ts: "99.1",
+        text: `<@${BOT}> what do you think?`,
+        channel_type: "channel",
+      }),
+      BOT,
+    );
+
+    expect(r?.text).toContain("what do you think?");
+  });
+
   it("drops edited messages and other non-user subtypes", () => {
     const r = normalizeSlackEvent(
       mkBody({

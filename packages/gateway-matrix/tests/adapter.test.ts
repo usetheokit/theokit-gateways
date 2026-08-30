@@ -7,6 +7,8 @@ import { ConfigurationError } from "../src/errors.js";
 import type { MatrixEventLike, MatrixRoomLike } from "../src/types.js";
 
 function makeMockClient(): MatrixSdkClient & {
+  /** How many times `stopClient()` was called — the observable behind "idempotent". */
+  stopped: number;
   sent: Array<{ roomId: string; text: string }>;
   listeners: Array<(e: MatrixEventLike, r: MatrixRoomLike) => void>;
   failNextSendWith?: { httpStatus?: number; errcode?: string; message?: string };
@@ -20,6 +22,7 @@ function makeMockClient(): MatrixSdkClient & {
   const encryptedRooms = new Set<string>();
   const resolved: Record<string, string> = {};
   const c = {
+    stopped: 0,
     sent,
     listeners,
     encryptedRooms,
@@ -44,7 +47,10 @@ function makeMockClient(): MatrixSdkClient & {
       return undefined;
     },
     stopClient() {
-      // noop in tests
+      // Counted, not a noop: "idempotent" is a claim about HOW MANY times the client is stopped,
+      // and a test that only checks for the absence of a throw cannot see a second stop. The
+      // sibling `gateway-mattermost` asserts `handle.closed === 1` for the same reason.
+      (c as unknown as { stopped: number }).stopped += 1;
     },
     async sendTextMessage(roomId: string, text: string) {
       const self = this as unknown as {
@@ -98,48 +104,64 @@ function makeRoom(memberCount = 2, roomId = "!r:server"): MatrixRoomLike {
   return { roomId, getJoinedMemberCount: () => memberCount };
 }
 
+// One helper, one assertion, and it checks the pair that matters: the error TYPE and the `code` a
+// caller branches on. Every field below raises the SAME ConfigurationError, so a check on the type
+// alone stays green if the constructor reports the WRONG field — and the field is the entire content
+// of the diagnostic. `code` rather than the message because it is the machine-readable half of the
+// contract; the prose is free to be reworded.
+function configErrorCode(fn: () => unknown): string {
+  try {
+    fn();
+  } catch (err) {
+    expect(err, "threw something that is not a ConfigurationError").toBeInstanceOf(
+      ConfigurationError,
+    );
+    return (err as ConfigurationError).code;
+  }
+  throw new Error("expected a ConfigurationError, nothing was thrown");
+}
+
 describe("MatrixAdapter constructor", () => {
+  // The separate "carries actionable code" case that used to close this block is folded in: it
+  // re-tested the homeserver path the first case already covers, and asserted strictly less than
+  // what all three now assert.
   it("throws on empty homeserverUrl", () => {
     expect(
-      () =>
-        new MatrixAdapter({
-          homeserverUrl: "",
-          accessToken: "t",
-          userId: "@bot:matrix.org",
-        }),
-    ).toThrow(ConfigurationError);
+      configErrorCode(
+        () =>
+          new MatrixAdapter({
+            homeserverUrl: "",
+            accessToken: "t",
+            userId: "@bot:matrix.org",
+          }),
+      ),
+    ).toBe("homeserver_url_required");
   });
 
   it("throws on empty accessToken", () => {
     expect(
-      () =>
-        new MatrixAdapter({
-          homeserverUrl: "https://matrix.org",
-          accessToken: "",
-          userId: "@bot:matrix.org",
-        }),
-    ).toThrow(ConfigurationError);
+      configErrorCode(
+        () =>
+          new MatrixAdapter({
+            homeserverUrl: "https://matrix.org",
+            accessToken: "",
+            userId: "@bot:matrix.org",
+          }),
+      ),
+    ).toBe("access_token_required");
   });
 
   it("throws on userId without @ prefix", () => {
     expect(
-      () =>
-        new MatrixAdapter({
-          homeserverUrl: "https://matrix.org",
-          accessToken: "t",
-          userId: "bot:matrix.org",
-        }),
-    ).toThrow(ConfigurationError);
-  });
-
-  it("ConfigurationError carries actionable code", () => {
-    try {
-      new MatrixAdapter({ homeserverUrl: "", accessToken: "t", userId: "@bot:m" });
-    } catch (err) {
-      expect((err as ConfigurationError).code).toBe("homeserver_url_required");
-      return;
-    }
-    throw new Error("did not throw");
+      configErrorCode(
+        () =>
+          new MatrixAdapter({
+            homeserverUrl: "https://matrix.org",
+            accessToken: "t",
+            userId: "bot:matrix.org",
+          }),
+      ),
+    ).toBe("user_id_required");
   });
 });
 
@@ -400,6 +422,29 @@ describe("MatrixAdapter lifecycle", () => {
     stderr.mockRestore();
   });
 
+  it("reconnects after an explicit disconnect", async () => {
+    // A guard that never clears is a latch: connect() would answer true forever while building
+    // nothing, leaving a bot that is silent and looks healthy. Deleting the clear in disconnect()
+    // left every test in this package passing until this one existed.
+    let built = 0;
+    const adapter = new MatrixAdapter({
+      homeserverUrl: "https://matrix.example.org",
+      accessToken: "t",
+      userId: "@bot:example.org",
+      __clientFactory: () => {
+        built += 1;
+        return makeMockClient();
+      },
+    });
+
+    expect(await adapter.connect()).toBe(true);
+    await adapter.disconnect();
+    expect(await adapter.connect()).toBe(true);
+
+    expect(built, "the second connect() never built a client").toBe(2);
+    await adapter.disconnect();
+  });
+
   describe("teardown aborts do not kill the host process (issue #12)", () => {
     /** Connects with a stubbed global fetch and hands back the SDK's fetchFn. */
     async function connectCapturingFetchFn(): Promise<{
@@ -480,10 +525,15 @@ describe("MatrixAdapter lifecycle", () => {
       accessToken: "t",
       userId: "@bot:matrix.org",
     });
-    adapter._installClient(makeMockClient());
+    const client = makeMockClient();
+    adapter._installClient(client);
     await adapter.disconnect();
     await adapter.disconnect();
-    // no throw is the assertion.
+
+    // "no throw" was the whole assertion here, and it cannot tell an idempotent disconnect from one
+    // that stops an already-stopped client — the second stop would throw nowhere and pass. The count
+    // is what carries the claim.
+    expect(client.stopped, "the client was stopped more than once").toBe(1);
   });
 
   it("getClient returns the underlying client (escape hatch)", () => {
@@ -495,5 +545,182 @@ describe("MatrixAdapter lifecycle", () => {
     const client = makeMockClient();
     adapter._installClient(client);
     expect(adapter.getClient()).toBe(client);
+  });
+});
+
+describe("MatrixAdapter — the format the caller declared", () => {
+  /**
+   * Matrix declares its markup type in `format`, and the only value is
+   * `org.matrix.custom.html`. That is a promise to every client that `formatted_body` IS HTML.
+   *
+   * The first version of this feature broke that promise: it put the caller's MARKDOWN there
+   * and declared it HTML. Review demonstrated the cost — `Use <div> for 5 < 3` arrives with the
+   * tag parsed and dropped, so the reader loses words the sender wrote — and the test that
+   * "proved" the feature was asserting exactly that defect.
+   */
+  it("sends formatted_body only when the caller declares html", async () => {
+    const sent: Array<Record<string, unknown>> = [];
+    const client = makeMockClient();
+    (client as unknown as { sendMessage: unknown }).sendMessage = async (
+      _roomId: string,
+      content: Record<string, unknown>,
+    ) => {
+      sent.push(content);
+      return { event_id: "$formatted" };
+    };
+    const adapter = new MatrixAdapter({
+      homeserverUrl: "https://matrix.example.org",
+      accessToken: "t",
+      userId: "@bot:example.org",
+      __clientFactory: () => client,
+    });
+    await adapter.connect();
+
+    const res = await adapter.sendMessage({
+      channel: { id: "!room:example.org", type: "group" },
+      text: "<b>bold</b>",
+      format: "html",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.format).toBe("org.matrix.custom.html");
+    expect(sent[0]?.formatted_body).toBe("<b>bold</b>");
+  });
+
+  it("never puts markdown in the HTML field, and says so once", async () => {
+    // The regression for the defect above. Markdown in `formatted_body` renders as literal
+    // asterisks anyway — so the branch bought nothing and cost content corruption.
+    const sent: Array<Record<string, unknown>> = [];
+    const client = makeMockClient();
+    (client as unknown as { sendMessage: unknown }).sendMessage = async (
+      _roomId: string,
+      content: Record<string, unknown>,
+    ) => {
+      sent.push(content);
+      return { event_id: "$nope" };
+    };
+    const adapter = new MatrixAdapter({
+      homeserverUrl: "https://matrix.example.org",
+      accessToken: "t",
+      userId: "@bot:example.org",
+      __clientFactory: () => client,
+    });
+    await adapter.connect();
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await adapter.sendMessage({
+      channel: { id: "!room:example.org", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+    await adapter.sendMessage({
+      channel: { id: "!room:example.org", type: "group" },
+      text: "**more**",
+      format: "markdown",
+    });
+
+    expect(sent, "markdown reached the HTML field").toHaveLength(0);
+    const warned = stderr.mock.calls
+      .map((c) => String(c[0]))
+      .filter((l) => l.includes("no markdown mode"));
+    expect(warned, "warned per message instead of once").toHaveLength(1);
+    stderr.mockRestore();
+  });
+
+  it("leaves a plain message on the convenience call, with the formatted path available", async () => {
+    // The reviewer proved the previous version of this test was vacuous: the mock had no
+    // `sendMessage` at all, so the plain path was forced no matter what the adapter decided.
+    // Deleting the guard left all 53 tests green. The mock now HAS the formatted path, so the
+    // assertion is that the adapter chose not to take it.
+    const sent: Array<Record<string, unknown>> = [];
+    const client = makeMockClient();
+    (client as unknown as { sendMessage: unknown }).sendMessage = async (
+      _roomId: string,
+      content: Record<string, unknown>,
+    ) => {
+      sent.push(content);
+      return { event_id: "$should-not-happen" };
+    };
+    const adapter = new MatrixAdapter({
+      homeserverUrl: "https://matrix.example.org",
+      accessToken: "t",
+      userId: "@bot:example.org",
+      __clientFactory: () => client,
+    });
+    await adapter.connect();
+
+    const res = await adapter.sendMessage({
+      channel: { id: "!room:example.org", type: "group" },
+      text: "plain words",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(sent, "a plain message took the formatted path").toHaveLength(0);
+  });
+});
+
+describe("MatrixAdapter — markup the homeserver refuses", () => {
+  /**
+   * ADR-2 of the B-020 plan: an undelivered message is worse than an unformatted one. The
+   * caller loses the content and the user sees nothing, which is a strictly worse outcome
+   * than losing the bold.
+   *
+   * The catch is narrow on purpose. A bare `catch` here would swallow an expired token as a
+   * formatting problem and retry into the same 401, turning an actionable error into a silent
+   * double failure — the risk the plan's Drawbacks section names.
+   */
+  it("retries without the markup when the homeserver rejects the formatted body", async () => {
+    const client = makeMockClient();
+    let formattedAttempts = 0;
+    (client as unknown as { sendMessage: unknown }).sendMessage = async () => {
+      formattedAttempts += 1;
+      throw Object.assign(new Error("bad html"), { httpStatus: 400, errcode: "M_BAD_JSON" });
+    };
+    const adapter = new MatrixAdapter({
+      homeserverUrl: "https://matrix.example.org",
+      accessToken: "t",
+      userId: "@bot:example.org",
+      __clientFactory: () => client,
+    });
+    await adapter.connect();
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const res = await adapter.sendMessage({
+      channel: { id: "!room:example.org", type: "group" },
+      text: "<b>bold</b>",
+      format: "html",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(formattedAttempts).toBe(1);
+    const logged = stderr.mock.calls.map((c) => String(c[0])).join("");
+    expect(logged).toContain("gateway-matrix");
+    stderr.mockRestore();
+  });
+
+  it("does NOT retry when the failure is a permission error", async () => {
+    // The discrimination is the point. Retrying a 403 without markup would fail identically
+    // and report a formatting problem where there is an authentication one.
+    const client = makeMockClient();
+    (client as unknown as { sendMessage: unknown }).sendMessage = async () => {
+      throw Object.assign(new Error("forbidden"), { httpStatus: 403, errcode: "M_FORBIDDEN" });
+    };
+    const adapter = new MatrixAdapter({
+      homeserverUrl: "https://matrix.example.org",
+      accessToken: "t",
+      userId: "@bot:example.org",
+      __clientFactory: () => client,
+    });
+    await adapter.connect();
+
+    const res = await adapter.sendMessage({
+      channel: { id: "!room:example.org", type: "group" },
+      text: "<b>bold</b>",
+      format: "html",
+    });
+
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe("permission_denied");
   });
 });

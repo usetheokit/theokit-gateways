@@ -39,6 +39,29 @@ function reportDrainFailure(err: unknown): void {
   console.error("[email] drain failed:", err instanceof Error ? err.message : err);
 }
 
+/**
+ * The HTML alternative for a message whose caller declared a format.
+ *
+ * Two paths, and they carry different trust.
+ *
+ * `markdown` is ESCAPED and wrapped, never rendered: a markdown-to-HTML renderer is a
+ * dependency this package does not have and does not need for the field to stop being
+ * discarded. What the caller declared reaches the wire; converting the syntax is the
+ * presenter's job, not the transport's.
+ *
+ * `html` is passed THROUGH, because that is what the caller declared it to be — escaping it
+ * would make the value meaningless. **This is a trust boundary and it is the caller's to
+ * hold.** A consumer whose text is influenced by untrusted input must not set
+ * `format: "html"`; `markdown` is the safe declaration and it escapes. The alternative —
+ * sanitising here — would need an HTML parser in a package that has no runtime dependencies,
+ * and would silently alter a payload the caller said was already HTML.
+ */
+function htmlPartFor(text: string, format: "markdown" | "html"): string {
+  if (format === "html") return text;
+  const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<pre>${escaped}</pre>`;
+}
+
 export class EmailAdapter extends BasePlatformAdapter {
   readonly platform = "email" as const;
   private readonly options: EmailAdapterOptions;
@@ -178,14 +201,35 @@ export class EmailAdapter extends BasePlatformAdapter {
         ? { name: this.options.fromName, address: this.options.address }
         : this.options.address;
     try {
-      const messageId = await this.smtp.send({
+      const base = {
         from,
         to,
         subject,
         text: out.text,
         ...(inReplyTo !== undefined ? { inReplyTo } : {}),
         ...(references !== undefined ? { references } : {}),
-      });
+      };
+      // Sent ALONGSIDE `text`, never instead of it: a plain-text reader shows the text part, so
+      // a client that cannot render HTML still gets the message.
+      const html =
+        out.format === "markdown" || out.format === "html"
+          ? htmlPartFor(out.text, out.format)
+          : undefined;
+
+      let messageId: string;
+      try {
+        messageId = await this.smtp.send(html === undefined ? base : { ...base, html });
+      } catch (err) {
+        // ADR-2: an undelivered message is worse than an unformatted one. A server that refuses
+        // the html part still accepts the text one, and the recipient reading a plain-text
+        // client would never have seen the difference. Only attempted when there WAS an html
+        // part — otherwise this would retry a send that failed for some entirely other reason.
+        if (html === undefined) throw err;
+        process.stderr.write(
+          "[gateway-email] the server rejected the html part; retrying with text only\n",
+        );
+        messageId = await this.smtp.send(base);
+      }
       return { ok: true, messageId };
     } catch (err) {
       return { ok: false, error: mapEmailError(err) };

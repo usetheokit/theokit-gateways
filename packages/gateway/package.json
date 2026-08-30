@@ -1,7 +1,7 @@
 {
   "name": "@theokit/gateway",
   "version": "0.8.0",
-  "description": "Multi-platform messaging gateway core for @theokit/sdk — transport-agnostic primitives (BasePlatformAdapter, MessageEvent, SessionRouter, DeliveryRouter, GatewayRunner, hooks). Inspired by hermes-agent/gateway. ADRs D170-D181.",
+  "description": "Multi-platform messaging gateway core for @theokit/sdk \u2014 transport-agnostic primitives (BasePlatformAdapter, MessageEvent, SessionRouter, DeliveryRouter, GatewayRunner, hooks). Inspired by hermes-agent/gateway. ADRs D170-D181.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -45,10 +45,10 @@
   "devDependencies": {
     "@stryker-mutator/core": "10",
     "@stryker-mutator/vitest-runner": "10",
-    "@theokit/sdk": "^4.53.1",
+    "@theokit/sdk": "^4.62.0",
     "tsup": "^8.5.0",
-    "typescript": "^5.8.0",
-    "vitest": "^4.1.8",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.11",
     "zod": "^4.0.0"
   },
   "publishConfig": {

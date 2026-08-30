@@ -14,7 +14,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, workspace]
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
@@ -37,25 +37,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-        # No `version:` here on purpose. The action reads `packageManager` from
-        # package.json, which is already the single authority on the pnpm version.
-        # Pinning it a second time in this file creates two places to update, and
-        # once they disagree action-setup aborts with ERR_PNPM_BAD_PM_VERSION.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'pnpm'
-          # The cache key must change when the package manager does. setup-node keys the
-          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
-          # identical and the job restores a store the new pnpm reads as inconsistent —
-          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
-          # package.json carries `packageManager`, so including it ties the cache to the
-          # pnpm that wrote it.
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            package.json
-      - run: pnpm install --frozen-lockfile
+      # The install spine — Node, the package manager this repository DECLARES, a cache keyed
+      # so it cannot outlive that manager, and a frozen install. Shared because it was the
+      # same four steps in nine repositories, and because the knowledge inside them was not:
+      # theokit-sdk pinned pnpm 9.15.0 in four workflows while its manifest said 10.34.1, so
+      # every gate there validated a tree no contributor had (usetheokit/theokit-sdk#415).
+      #
+      # @v1 is a moving major and the blanket SHA-pinning policy is suppressed for it: that
+      # policy defends against a THIRD PARTY moving a ref under us, and this is the same
+      # organisation. What a SHA would buy is a guarantee we already have; what it would cost
+      # is one correction becoming nine pull requests. What the action RUNS stays pinned —
+      # every action inside it by digest, and the package manager by this repository's manifest.
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
 
       # Every step is a hard gate: no `continue-on-error`, because a step that
       # cannot fail the build is a step that is not checking anything.
@@ -117,6 +110,14 @@ jobs:
       # tolerate. This asks the question in milliseconds instead of at publish.
       - name: Published packages declare the repository npm verifies
         run: pnpm quality:repository-field
+
+      # What we EXERCISE must fall inside what we PROMISE. `gateway-mattermost` declared
+      # `@mattermost/client ^9` while its tests loaded a newer client and went green every run;
+      # nothing compared the two, so a consumer installing the adapter beside a current client hit
+      # ERESOLVE, reached for --legacy-peer-deps, and had an unrelated peer silently dropped from
+      # their tree (#79). Reads package.json only, needs no network.
+      - name: Peer ranges admit the version their package loads
+        run: pnpm quality:peer-range
 
       # Three questions the source typecheck cannot answer: do the imports our READMEs tell a reader
       # to write actually resolve, is any docblock stranded above another (attaching to nothing), and

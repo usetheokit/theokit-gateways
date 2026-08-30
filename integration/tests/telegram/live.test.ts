@@ -67,7 +67,7 @@ describeLive(TELEGRAM, "outbound", () => {
         channel: { id: required("TELEGRAM_TEST_CHAT_ID"), type: "dm" },
         text: `${marker} outbound ok`,
       });
-      expect(result.ok).toBe(true);
+      expect(result.ok, JSON.stringify(result.error)).toBe(true);
       expect(result.messageId).toBeDefined();
     } finally {
       await adapter.disconnect();
@@ -87,7 +87,7 @@ describeLive(TELEGRAM, "outbound", () => {
         channel: { id: required("TELEGRAM_TEST_CHAT_ID"), type: "dm" },
         text: long,
       });
-      expect(result.ok).toBe(true);
+      expect(result.ok, JSON.stringify(result.error)).toBe(true);
     } finally {
       await adapter.disconnect();
     }

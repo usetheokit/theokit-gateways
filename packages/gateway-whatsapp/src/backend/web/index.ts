@@ -5,6 +5,18 @@
  * EC-6 absorbed: `connect()` races against a 120s timeout so unattended QR
  * pairings fail fast instead of hanging the app.
  *
+ * **THE CONSUMER MUST PROVIDE A BROWSER.** `whatsapp-web.js` drives a real Chrome through
+ * Puppeteer, and this package ships none: the repository leaves `puppeteer` out of
+ * `pnpm.onlyBuiltDependencies`, so its postinstall never downloads one. Without a browser the
+ * bridge starts, cannot find Chrome, and says so in its own protocol rather than crashing —
+ * which is the whole of the B-002 fix, and is still not a connection. Set
+ * `PUPPETEER_EXECUTABLE_PATH` to a Chrome or Chromium you already have; the bridge is spawned
+ * without an explicit `env`, so it inherits yours.
+ *
+ * B-002 asked for exactly this sentence or for a buildable `puppeteer`, and shipped with
+ * neither. Measured 2026-08-29: with the variable set, the bridge reaches WhatsApp and issues
+ * a pairing QR. {@link WhatsAppBaileysBackend} needs no browser, which is why it exists.
+ *
  * @public
  */
 

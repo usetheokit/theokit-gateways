@@ -22,6 +22,7 @@ export {
 export {
   WhatsAppBaileysBackend,
   type WhatsAppBaileysBackendOptions,
+  type WhatsAppPairingState,
 } from "./backend/baileys/index.js";
 export {
   type BaileysSocketFactory,

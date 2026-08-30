@@ -49,23 +49,26 @@ own quality gates.
 
 ## Index
 
-16 items — **Open** 5 · **In flight** 0 · **Closed** 11
+24 items — **Open** 8 · **In flight** 0 · **Closed** 16
 
-### Open (5)
+### Open (8)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
-| [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility----) | The SDK sits in the middle of the triad wired to a single utility | `raw` | — |
-| [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive----) | The published packages carry 1 critical and 19 high advisories, all transitive | `raw` | — |
-| [`B-014`](#b-014--a-unit-test-calls-the-real-telegram-api-and-fails-when-the-network-is-slow----) | A unit test calls the real Telegram API and fails when the network is slow | `raw` | — |
-| [`B-015`](#b-015--the-published-declarations-cite-75-adr-ids-that-resolve-nowhere----) | The published declarations cite 75 ADR ids that resolve nowhere | `raw` | — |
-| [`B-016`](#b-016--pnpm-qualitydocs-writes-into-the-repo-root-and-the-output-is-not-ignored----) | `pnpm quality:docs` writes into the repo root and the output is not ignored | `raw` | — |
+| [`B-017`](#b-017--bridge-starts-fails-intermittently-on-chromium-profile-cleanup----) | `bridge-starts` fails intermittently on Chromium profile cleanup | `raw` | — |
+| [`B-018`](#b-018--a-theokit-app-writes-268-lines-of-channel-joinery-the-framework-should-own----) | A theokit app writes 268 lines of channel joinery the framework should own | `triaged` | — |
+| [`B-019`](#b-019--agent-output-reaches-a-chat-channel-through-a-presenter-nobody-wrote----) | Agent output reaches a chat channel through a presenter nobody wrote | `triaged` | — |
+| [`B-020`](#b-020--eight-of-ten-adapters-ignore-outboundmessageformat-so-a-caller-cannot-rely-on-it----) | Eight of ten adapters ignore `OutboundMessage.format`, so a caller cannot rely on it | `triaged` | — |
+| [`B-021`](#b-021--check_alignment_gatepy-reads-a-b-nnn-mentioned-in-prose-as-a-citation----) | `check_alignment_gate.py` reads a `B-NNN` mentioned in prose as a citation | `triaged` | — |
+| [`B-022`](#b-022--eleven-of-twelve-packages-have-no-mutation-runner----) | Eleven of twelve packages have no mutation runner | `raw` | — |
+| [`B-023`](#b-023--ten-of-eleven-packages-run-their-suite-without-a-typechecker----) | Ten of eleven packages run their suite without a typechecker | `raw` | — |
+| [`B-024`](#b-024--the-line-and-sms-webhook-servers-are-the-same-file-twice----) | The LINE and SMS webhook servers are the same file twice | `raw` | — |
 
 ### In flight (0)
 
 _None._
 
-### Closed (11)
+### Closed (16)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -80,6 +83,11 @@ _None._
 | [`B-009`](#b-009--theokits-channel-seam-names-our-packages-as-the-translator-and-no-adapter-can-translate----) | TheoKit's channel seam names our packages as the translator, and no adapter can translate | `shipped` | — |
 | [`B-010`](#b-010--ten-adapters-use-seven-different-names-for-the-same-credential----) | Ten adapters use seven different names for the same credential | `shipped` | — |
 | [`B-011`](#b-011--nothing-documents-how-the-three-repositories-fit-together---x) | Nothing documents how the three repositories fit together | `shipped` | — |
+| [`B-012`](#b-012--the-sdk-sits-in-the-middle-of-the-triad-wired-to-a-single-utility---x) | The SDK sits in the middle of the triad wired to a single utility | `shipped` | — |
+| [`B-013`](#b-013--the-published-packages-carry-1-critical-and-19-high-advisories-all-transitive---x) | The published packages carry 1 critical and 19 high advisories, all transitive | `shipped` | — |
+| [`B-014`](#b-014--a-unit-test-calls-the-real-telegram-api-and-fails-when-the-network-is-slow---x) | A unit test calls the real Telegram API and fails when the network is slow | `shipped` | — |
+| [`B-015`](#b-015--the-published-declarations-cite-75-adr-ids-that-resolve-nowhere---x) | The published declarations cite 75 ADR ids that resolve nowhere | `shipped` | — |
+| [`B-016`](#b-016--pnpm-qualitydocs-writes-into-the-repo-root-and-the-output-is-not-ignored---x) | `pnpm quality:docs` writes into the repo root and the output is not ignored | `shipped` | — |
 
 <!-- BACKLOG-INDEX:END -->
 
@@ -124,6 +132,15 @@ dod:
   - either `puppeteer` is buildable so a browser exists, or the backend states in its own docblock that the consumer must provide one
 
 > Registered 2026-08-22 by `/discover --mode evolve` (sweep finding on B-001).
+>
+> **2026-08-29 — the third DoD bullet was never met, and the item shipped anyway.** It asked
+> for either a buildable `puppeteer` or a docblock saying the consumer must supply a browser;
+> neither existed. `pnpm.onlyBuiltDependencies` still omits `puppeteer`, and the backend's
+> docblock said nothing, so a consumer met the gap as a bridge that starts and cannot connect.
+> Found by probing the bridge directly: with `PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome`
+> it reaches WhatsApp and issues a pairing QR. Closed now by the docblock at
+> `src/backend/web/index.ts` and a "Choosing a backend" section in the package README — the
+> documentation half of the bullet, since the browser half remains a deliberate non-download.
 
 
 ## B-003 — The adapter's docblock promises factories that do not exist   [x]
@@ -422,7 +439,7 @@ dod:
 > the pnpm-11 test skips that window with the pins named. Version Packages then passed 23/23 — the
 > first time that gate has been green; #200 merged with 12 failures and #73 with 14.
 
-## B-012 — The SDK sits in the middle of the triad wired to a single utility   [ ]
+## B-012 — The SDK sits in the middle of the triad wired to a single utility   [x]
 
 domain: theokit-gateways
 repo: packages/gateway
@@ -430,7 +447,8 @@ suggested_mode: evolve
 source: human
 evidence: the entire `@theokit/sdk` surface consumed by all eleven packages is `Security.redact`, called in two files (`packages/gateway/src/runner/gateway-runner.ts:227`, `packages/gateway/src/hooks/executor.ts:53`), both for redacting an error message before it reaches a log. Meanwhile nine `tsup.config.ts` files mark the SDK external and — until B-007 — all eleven `package.json` files declared a peer on it.
 why_now: the triad theokit → theokit-sdk → theokit-gateways is asserted by the build configuration and by the dependency declarations, but the code only ever asks the SDK to redact a string. Either the relationship is real and something is missing from it, or it is one utility function and nine build configs plus eleven manifests are describing a coupling that does not exist. B-007 already removed ten of those manifests' claims; the question of what the SDK is FOR here is still open.
-status: triaged
+status: shipped
+shipped_as: `@theokit/gateway@0.8.0` (PR #77)
 opportunity: `.claude/knowledge-base/discoveries/opportunities/gateway-sdk-redaction-consistency-opportunity.md` (SHIPPABLE_WITH_CAVEATS, 89)
 measured: `Security.redact` changes 1 of the 11 credential shapes this repo holds, and on a Telegram token the parametric matcher redacts the PUBLIC bot id while preserving the secret half — `token=***:AAF-…`. Mode reclassified evolve → review.
 dod:
@@ -438,7 +456,9 @@ dod:
   - the build configuration and the manifests agree with what the source actually imports
   - if the answer is "one utility", the dependency is either justified in writing or removed
 
-## B-013 — The published packages carry 1 critical and 19 high advisories, all transitive   [ ]
+> **ACCEPTANCE** — installed `@theokit/gateway@0.8.0` from the registry. `redactSecrets('connect failed: token=<telegram token>')` returns `token=***`; the secret half no longer reaches the log, where before the public bot id was removed and the secret kept. `password=<passphrase>` still returns `password=***` — the first attempt had degraded that to `password=hunter…aple`. A dashless UUID passes through untouched. 6 shapes covered, 6 rows recorded as deliberately uncovered.
+
+## B-013 — The published packages carry 1 critical and 19 high advisories, all transitive   [x]
 
 domain: theokit-gateways
 repo: theokit-gateways
@@ -446,7 +466,8 @@ suggested_mode: review
 source: human
 evidence: `pnpm audit --audit-level=moderate` exits 1 with **43 vulnerabilities — 4 low, 19 moderate, 19 high, 1 critical**. The critical is `form-data` `<2.5.4` (unsafe random for the multipart boundary). Named highs include the Matrix JavaScript SDK key-history sharing issue, `form-data` CRLF injection, a Nodemailer raw-option bypass, an `undici` WebSocket DoS reached via `packages__gateway-discord>discord.js>undici` (GHSA-v3r7-h72x-cjcm), `brace-expansion` exponential expansion, and `js-yaml` quadratic merge-key chains. Every one is transitive — none is declared in any of our `package.json` files.
 why_now: found by running the audit as the `/deps-audit` phase of B-008's plan cycle. Eleven of our packages are published on npm, so anyone installing `@theokit/gateway-discord` or `@theokit/gateway-matrix` today pulls these advisories into their own tree. `osv-scanner` is not installed on this machine, so the cross-check the deps-audit golden rule asks for was NOT run — the count above comes from one scanner only and may be incomplete.
-status: raw
+status: shipped
+shipped_as: `@theokit/gateway-email@0.2.0` (PR #77)
 dod:
   - the critical advisory is gone from a fresh install of every published package, or carries an allowlist entry with a sunset and a written reason
   - each remaining high is either resolved, or recorded with why it is unreachable from our code paths
@@ -458,7 +479,9 @@ dod:
 > the wrong change — and swallowing the finding because it was inconvenient is the failure the
 > single registry exists to prevent.
 
-## B-014 — A unit test calls the real Telegram API and fails when the network is slow   [ ]
+> **ACCEPTANCE** — the item's premise was refuted by measurement: the 43 advisories describe a contributor's tree, since every platform SDK is an optional peer. Installing all eleven published packages yields 2 high and no critical. Both were the nodemailer peer, now `^9.0.1`. The critical (`form-data <2.5.4` via plivo) never reached a consumer and is pinned by an override — verified after regenerating the lockfile, which a first attempt had not done while documenting the fix as verified.
+
+## B-014 — A unit test calls the real Telegram API and fails when the network is slow   [x]
 
 domain: theokit-gateways
 repo: packages/gateway-telegram
@@ -466,7 +489,8 @@ suggested_mode: bug
 source: human
 evidence: `packages/gateway-telegram/tests/adapter.test.ts:101` — `EC-I: connect() with bad token resolves to false (does NOT throw)` calls `adapter.connect()`, which reaches grammy's `bot.init()` and therefore `api.telegram.org`. Measured over three consecutive `pnpm -r test` runs on an unchanged tree: exit 0, exit 0, exit **1** — `× EC-I: connect() with bad token resolves to false (does NOT throw) 5024ms`, `Test Files 1 failed | 3 passed (4)`. The failure is a 5s timeout, not an assertion.
 why_now: found while running the gates for B-008, on a tree whose only changes are type declarations in a different package. `rules/testing.md § 6` names network in a unit test as an anti-pattern and says a flaky test is a bug to fix or delete; this one is both. It also makes every future gate run on this repository a coin flip, so any red it produces will be dismissed as "just the flaky one" — which is how a real regression gets waved through.
-status: raw
+status: shipped
+shipped_as: `@theokit/gateway-telegram@0.2.3` (PR #77)
 dod:
   - the test asserts the same behaviour without reaching the network
   - `pnpm -r test` passes 10 consecutive times on an unchanged tree
@@ -475,7 +499,9 @@ dod:
 > Registered 2026-08-23 during B-008's gate run. Not folded into B-008: that change is type-level
 > and in a different package, and blocking it on a pre-existing flake would punish the wrong work.
 
-## B-015 — The published declarations cite 75 ADR ids that resolve nowhere   [ ]
+> **ACCEPTANCE** — the test no longer touches the network; the full suite ran green 10 consecutive times by exit code, and reverting `connect()` to rethrow turns it red. The contract widened: the old test survived deleting the log line and survived returning false without calling `init()`.
+
+## B-015 — The published declarations cite 75 ADR ids that resolve nowhere   [x]
 
 domain: theokit-gateways
 repo: theokit-gateways
@@ -483,7 +509,8 @@ suggested_mode: review
 source: human
 evidence: `packages/gateway/dist/index.d.ts` cites 24 `D###` ids while `packages/gateway/src/README.md:52-59` defines only D170–D177; 17 of them resolve nowhere (D101, D274, D308, D325, D335, D339, D389, D391, D397, D399, D402, D405, D409, D410, D413, D416, D421). Across all eleven `packages/*/dist/index.d.ts` the figure is 75 distinct unresolvable ids.
 why_now: found while verifying that B-008 removed the two ids a reviewer had flagged. It did — and left the identical defect 17 times in the same file, which is how a fix comes to look complete while the class of defect is untouched. These are shipped to npm: a consumer reading our published declaration is pointed at decisions they cannot open, and we cannot tell which ones still describe the code.
-status: raw
+status: shipped
+shipped_as: no published surface changed (PR #75)
 dod:
   - every `D###` cited in a published `.d.ts` resolves to a document in the repository, or the citation is removed
   - a gate fails the build when a new unresolvable id enters a published declaration
@@ -491,7 +518,9 @@ dod:
 
 > Registered 2026-08-24. Pre-existing and unrelated to B-008's change; not folded into it.
 
-## B-016 — `pnpm quality:docs` writes into the repo root and the output is not ignored   [ ]
+> **ACCEPTANCE** — `docs/adr/decision-ids.md` accounts for all 76 cited ids; `pnpm quality:adr-citations` exits 1 on an unaccounted citation and refuses to report over a partial build. The lost count is ratcheted at 59 and may only fall.
+
+## B-016 — `pnpm quality:docs` writes into the repo root and the output is not ignored   [x]
 
 domain: theokit-gateways
 repo: tools
@@ -499,9 +528,159 @@ suggested_mode: bug
 source: human
 evidence: running `pnpm quality:docs` creates `.doc-probes/` under package roots (observed at `packages/gateway-line/.doc-probes/`); `.gitignore` does not list it. An interrupted run therefore leaves untracked files behind in a tree that was clean.
 why_now: two separate agents hit it during B-008's review and one of them had to clean it by hand. A quality gate that dirties the working tree makes `git status --porcelain` unusable as a pre-condition check — and `cycle-review` uses exactly that check to refuse to review an unstable tree.
-status: raw
+status: shipped
+shipped_as: no published surface changed (PR #75)
 dod:
   - `pnpm quality:docs` leaves `git status --porcelain` empty, whether it completes or is interrupted
   - or the probe directory is ignored and cleaned on exit
 
 > Registered 2026-08-24 during B-008's review. Pre-existing.
+
+> **ACCEPTANCE** — `pnpm quality:docs` leaves `git status` clean; injecting a throw leaves zero directories; the refusal branch that `process.exit` puts beyond any `finally` cleans up itself, proven by a test that runs the gate with no npx on PATH.
+
+## B-017 — `bridge-starts` fails intermittently on Chromium profile cleanup   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: bug
+source: human
+evidence: `tests/bridge-starts.test.ts` — `Error: ENOTEMPTY: directory not empty, rmdir '/tmp/wa-bridge-XX6ZgI/.wwebjs_auth/session-vitest-start-check/Default'`. Failed 2 of 4 consecutive runs on 2026-08-30 (03:00, 03:20); passed on the runs in between with no code change.
+why_now: found while running the suite for the Baileys self-message work. A test that fails on a cleanup race makes the suite unusable as a gate — `cycle-review` and `run_validation.py` both read a red suite as "the branch is broken", so the next person to hit this either re-runs until green (which trains the team to ignore red) or stops trusting the gate. `rules/testing.md` § 3 is explicit: a flaky test is a bug.
+status: raw
+dod:
+  - the test passes 20 consecutive runs, or its teardown waits for the spawned Chromium to exit before removing the profile directory
+  - if the race cannot be closed, the test is removed rather than left flaky, and what it used to prove is stated in the removal commit
+> Registered 2026-08-30. Pre-existing and unrelated to the Baileys change measured alongside it: the failure is in the whatsapp-web.js bridge, which that work does not touch.
+
+## B-018 — A theokit app writes 268 lines of channel joinery the framework should own   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: evolve
+source: human
+evidence: records/discoveries/opportunities/gateways-channel-descriptor-opportunity.md — SHIPPABLE, falsification evaluated, all 3 conditions unsatisfied. Originally measured in `appteste` on theokit 0.62.0, counting lines that are neither blank nor comment-only. 537 total across 12 files, classified by owner: 268 framework gap (catalog 114, lifecycle 74, webhook dispatch 51, validator bridge 19, leftovers 10), 50 a hand-written presenter, 86 mixed, 133 legitimate app concern. Supporting measurements: `startTyping` is on the base adapter contract, implemented by 1 of 10 adapters and called by nobody; `OutboundMessage.format` is honoured by 2 of 10, and the agent's `**bold**` reached LINE and WhatsApp as literal asterisks; 8 of 10 packages carry a `split.ts` with a hardcoded limit.
+why_now: eight channels were driven end to end in one session and every one of them needed the same five joins written by hand — a catalog entry, a lifecycle entry, a parse branch, a send branch, and in one case a validator bridge. Adding a channel costs four edits in every consuming app, which fails Open/Closed at the app boundary. Two of the joins are already filed as defects (#83 webhook ingest, #84 reply addressing); this item is the shape they share.
+status: triaged
+dod:
+  - a structural descriptor exists that describes required CONFIG (not env var names) and carries no import from theokit, proven by one socket channel and one webhook channel
+  - the test app's catalog, validator bridge, parse branch and send branch are deleted for those two channels, with the LOC delta measured
+  - one invalid channel configuration does not prevent healthy channels from starting
+  - webhook payloads enter through a public supported API rather than an `@internal` one
+  - existing direct consumers of the gateway packages still work without theokit
+> Registered 2026-08-30 after the architecture review. Scoped as a bounded spike by the reviewer, not a commitment to the full design: the 537 lines are measured, the descriptor is a hypothesis.
+
+## B-019 — Agent output reaches a chat channel through a presenter nobody wrote   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: evolve
+source: human
+evidence: records/discoveries/opportunities/gateways-channel-presenter-opportunity.md — SHIPPABLE_WITH_CAVEATS. The plan hypothesis was FALSIFIED (2 of 3 conditions fired) and replaced: the presenter must not touch splitting at all. Originally `appteste/server/agent-loop.ts` — 50 lines that consume the agent's event stream and produce one chat message. Its first version took every frame carrying a `delta`, so a reply arrived on a real phone as `"TheOi! 👋"`, the `"The"` being a fragment of the model's reasoning. theokit already ships `Presenter<TOut>` + `PresenterRegistry` keyed by surface, with three implementations (web, terminal, json) over a canonical `AgentOutputEvent`. Meanwhile 8 of 10 gateway packages carry a `split.ts` with a hardcoded limit (`TELEGRAM_MAX_MESSAGE = 4096`, `DISCORD_MAX_MESSAGE = 2000`), which is presentation living in a transport package because there was nowhere else.
+why_now: the reasoning leak reached a real user, and the dialect gap is user-visible — `**Bom Sucesso (MG)**` was delivered with literal asterisks on LINE and WhatsApp. Kept SEPARATE from B-018 deliberately: the presenter carries an unresolved ownership question (split rules belong to the transport, event translation to the framework) and coupling the two would hold the better-evidenced change hostage to the larger one.
+status: triaged
+dod:
+  - one channel presenter exists as `Presenter<OutboundMessage>`, registered under the channel id, consuming the adapter's existing splitter rather than replacing it
+  - agent output never exposes reasoning or non-user-facing events on a channel, covered by a test that fails on the current hand-written loop
+  - formatting and splitting are deterministic for the selected channel
+> Registered 2026-08-30 after the architecture review.
+
+## B-020 — Eight of ten adapters ignore `OutboundMessage.format`, so a caller cannot rely on it   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: bug
+source: human
+evidence: packages/gateway/tests/lint/adapter-contract.test.ts — a FAILING test naming all 8 offenders by package; records/discoveries/opportunities/gateways-format-ignored-opportunity.md (SHIPPABLE_WITH_CAVEATS)
+why_now: measured during the end-to-end validation on 2026-08-30 and then SEEN on two real phones. The agent answered `**Bom Sucesso (MG)**` and both LINE and WhatsApp delivered literal asterisks, because neither adapter reads `out.format`. `BasePlatformAdapter`'s `OutboundMessage` declares `format?: "plain" | "markdown" | "html"` and calls it a rendering hint; only telegram (`adapter.ts:123`) and slack (`adapter.ts:181`) do anything with it, and both merely map the flag to a transport field. A hint that 8 of 10 implementations ignore is not a hint, it is a field that lies — and a caller reading the base contract has no way to learn which adapters will act on it.
+status: triaged
+dod:
+  - a test that FAILS on the current state, asserting a markdown outbound reaches each adapter's transport call with the platform's own formatting flag set
+  - every adapter either honours `format` or declares in its own docblock that the platform has no rich text, so the count of silent ignorers reaches 0
+  - the count is stated in the package README so a consumer learns it without reading ten adapters
+> Registered 2026-08-30 during the Squad loop on B-018/B-019. Dedup gate G2 matched B-019 on the word `format`; read and REJECTED as a merge — B-019 is the presenter translating the text (`**x**` -> `*x*`), this is the adapter telling the platform how to parse it. Both halves are needed: perfectly translated text still arrives unparsed on the eight that ignore the flag. B-019's own `## Out of scope` names this as a separate item.
+
+## B-021 — `check_alignment_gate.py` reads a `B-NNN` mentioned in prose as a citation   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: bug
+source: human
+evidence: records/discoveries/opportunities/kit-alignment-gate-prose-citation-opportunity.md (SHIPPABLE) — reproduced with two fixtures differing by one sentence, where the sentence is a DISCLAIMER. Cause: `_committed_work_id()` at `.claude/skills/plan-confidence/scripts/check_alignment_gate.py:98` runs `_ITEM_RE.findall(content)` over the WHOLE plan body and takes the first match as the id the plan is answerable to. A plan that mentions another item to say it is NOT that item — "this does not substitute for B-018, B-019 or B-020" — is therefore read as implementing B-018, and inherits that item's alignment verdict. Reproduced 2026-08-30: an ad-hoc plan citing no item scored INVALID with `alignment_not_reached` as a HARD cap, where `rules/alignment-threshold.md` prescribes a soft floor of 89 for exactly that case.
+why_now: the false positive pushes an author toward the one action the gate exists to prevent. The only way to clear it is to delete the mention — which produces a plan with no `B-NNN` in it, indistinguishable from the deliberate omission the rule calls "a one-line bypass". A checker whose false positive is repaired by performing the bypass teaches the bypass.
+status: triaged
+dod:
+  - a plan mentioning an id in prose, without a frontmatter or Goal citation, is treated as ad-hoc and takes the soft floor rather than the hard cap
+  - a regression test covers both a real citation and a prose mention, since the difference between them is the whole defect
+  - the fix does not widen the ad-hoc path: a plan whose frontmatter or Goal names an item is still hard-capped when that item is unaligned
+> Registered 2026-08-30, found while attempting an ad-hoc fix during the B-018/B-019 loop.
+> The kit lives under `.claude/`, which this repository does not version — so per
+> `cycle-maintenance.md` this item can only ever reach ITEM_VERIFIED_LOCAL here, and the fix
+> belongs in the kit's own repository to reach anyone else.
+
+## B-022 — Eleven of twelve packages have no mutation runner   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: evolve
+source: human
+evidence: none-yet
+why_now: `/code-quality` returns FAIL_SOFT with `soft_cap_mutation_unconfigured_typescript` on every plan, because `packages/gateway/stryker.config.json` is the only mutation runner in a twelve-package workspace. B-020's plan dismissed that cap by ADR rather than fixing it, and an ADR-dismissed cap is a promise to come back. The dismissal's own reasoning names the constraint: a Stryker run was measured at 1347s in a consumer, and `run_structural.py` invokes `/code-quality` internally, so an unconditional gate would put ~22 minutes on every plan score — a gate people bypass.
+status: raw
+dod:
+  - a mutation runner is configured for the packages whose critical paths justify one, chosen by measurement rather than by covering all twelve
+  - `/code-quality` stops returning `soft_cap_mutation_unconfigured_typescript` for those packages, or the remaining ones are declared with a reason
+  - the per-plan cost of the gate is measured and stated, so the next person knows what it buys and what it costs
+> Registered 2026-08-30 as the followup ADR-3 of B-020's plan promised. Registering it is what
+> makes the dismissal a decision rather than an omission.
+
+> **Merged in 2026-08-30 (G2 dedup, no new id): the cap fires even where a runner EXISTS.**
+> `_mutation.py` looks for `stryker.config.json` in `manifest_dir` — the directory of the
+> manifest it detected, which in a pnpm workspace is the repo root. `packages/gateway/stryker.config.json`
+> is therefore invisible to it, and the package that DOES have a runner is reported as having
+> none. Measured the same day: that config drives 458 mutants at **95.63%** (427 killed,
+> 11 timeout, 20 survivors, all enumerated as equivalent in `packages/gateway/tests/MUTATION.md`).
+>
+> This matters to the DoD above rather than beside it: the second bullet asks that the cap stop
+> firing for the packages that get a runner, and configuring one does not make it stop. Fixing
+> the detector's root-only lookup is a precondition of the bullet, not a separate wish.
+>
+> The fix belongs to the kit repository, not here — `.claude/` is an installed plugin and is not
+> versioned by this repo, so a change written into it would protect exactly this checkout
+> (`cycle-maintenance` § `ITEM_VERIFIED_LOCAL`).
+
+## B-023 — Ten of eleven packages run their suite without a typechecker   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: evolve
+source: human
+evidence: `@theokit/gateway`'s `test` is `tsc --noEmit && vitest run`; the other ten are `vitest run` alone. Measured 2026-08-30 by enumerating `scripts.test` across `packages/*/package.json`.
+why_now: a contravariant mock parameter in `packages/gateway-teams/tests/adapter.test.ts:456` typechecked as an error and the package's own suite reported 65 passed. It was found by `run_validation.py` running the root `typecheck` script, three phases downstream of where it was written — after `/implement`, after `/code-quality`, on the way into `/review`. The root `pnpm -r run typecheck` does cover every package, so the type IS checked eventually; what is missing is that the check runs where the author is looking. A green suite in ten of eleven packages says nothing about types, and the author reads the suite.
+status: raw
+dod:
+  - a type error introduced in any package's tests fails that package's own `test` script, not only the root `typecheck`
+  - the cost is measured and stated — `tsc --noEmit` per package on every `pnpm -r test` run, against the current suite time
+  - if some package is deliberately excluded, the reason is written where the exclusion is
+> Registered 2026-08-30 during B-020's `/review` pre-conditions. Gate G2 ran: `typecheck` and `tsc`
+> matched no existing item; B-021 and B-022 matched only on the repository name. Not merged into
+> B-022 — that one is about mutation runners, a different tool answering a different question.
+
+## B-024 — The LINE and SMS webhook servers are the same file twice   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: evolve
+source: human
+evidence: `packages/gateway-line/src/webhook-server.ts` (162 lines) and `packages/gateway-sms/src/webhook-server.ts` (174) share 101 identical lines ignoring indentation — measured 2026-08-30 with `comm -12` over both files sorted. What is shared is the lazy `express` loader, the raw-body capture middleware including its comment about the drained-stream hang, and the `start()`/`stop()` lifecycle. What differs is signature verification, body parsing and routing, which are genuinely per-platform.
+why_now: the duplication has already been paid for. Commit `11000cc` fixed a write-once latch that made `start()` after `stop()` return without creating a listener — a server that reports success and answers nothing — and it had to fix it in BOTH files, because the latch is in the half that is copied. That is the DRY test stated in `~/.claude/CLAUDE.md` § 12 exactly: if changing it here means changing it there, the knowledge is duplicated. It surfaced again on 2026-08-30 as the largest block of duplicated production code in the promotion of `workspace` to `develop`.
+status: raw
+dod:
+  - the shared half lives in one place, and a change to the lifecycle or the raw-body capture is written once
+  - the per-platform half — verify, parse, route — stays in its own package, because it is not shared knowledge
+  - where the shared half lives is decided with a written reason: the core has no HTTP concern today and `express` is a peer of exactly these two packages, so adding it to `@theokit/gateway` is a boundary change and not a move
+  - the 21 existing tests across both packages still pass, and the latch regression test still fails when the fix is reverted
+> Registered 2026-08-30 while getting the promotion PR past SonarCloud. Gate G2 ran: `webhook-server`
+> and `webhook server` matched no existing item. Deliberately NOT done inside that pull request — an
+> architectural boundary decided under a metric's deadline, unreviewed, in a 56-commit promotion, is
+> the tail wagging the dog. `sonar.cpd.exclusions` narrows duplication detection to production code
+> and states this item as the reason.

@@ -9,6 +9,7 @@
     "typecheck": "echo 'no TypeScript in tools/ \u2014 the gates are .mjs' && exit 0"
   },
   "devDependencies": {
-    "vitest": "^4.1.8"
+    "typescript": "5.9.3",
+    "vitest": "^4.1.11"
   }
 }

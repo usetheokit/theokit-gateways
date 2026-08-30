@@ -145,6 +145,35 @@ function makeCorpus(): string[] {
   corpus.push(`${"a".repeat(1899)}😀${"b".repeat(200)}`);
   // Non-\n/non-space whitespace in the strip position — distinguishes /^\s+/ from /^\n+/.
   corpus.push(`${"x".repeat(3990)} \t\r\f${"y".repeat(500)}`);
+  // A boundary that exists but sits BEFORE half the window, with none after it. This is the only
+  // shape that separates `lastResort: "last-boundary"` from `"window"`: with a boundary at index 2
+  // and nothing later, last-boundary cuts at 2 and window cuts at the limit. Every other corpus
+  // entry has either a usable boundary or none at all, so both modes agreed on all of them and the
+  // branch that chooses between them was never observed — mutation testing found it alive.
+  corpus.push(`ab ${"x".repeat(5000)}`);
+  corpus.push(`ab\n${"x".repeat(5000)}`);
+  corpus.push(`ab\n\n${"x".repeat(5000)}`);
+  // A tail that VANISHES once stripLeading runs: the cut lands exactly where the trailing whitespace
+  // begins, so the remainder is stripped to "". Every other entry leaves something after the last
+  // cut, so the `length > 0` guards before the final push were never observed — mutating them to
+  // `>= 0` appends an empty chunk and nothing noticed.
+  corpus.push(`${"x".repeat(4000)}\n\n\n`);
+  corpus.push(`${"x".repeat(4096)}\n\n`);
+  corpus.push(`${"x".repeat(1900)}\n\n`);
+  // A boundary sitting EXACTLY on the half-window acceptance threshold (`cut >= window * 0.5`), with
+  // a weaker boundary further along. Only this shape separates `>=` from `>`: at 2000 the newline is
+  // accepted and the search stops, while one unit either side the answer is the same under both.
+  corpus.push(`${"a".repeat(2000)}\n${"b".repeat(999)} ${"c".repeat(2000)}`);
+  // A remainder of EXACTLY the window after the first cut, splittable. `while (remaining > safe)` and
+  // `>=` agree on every other entry: with no boundary left they both stop, and with nothing left the
+  // extra pass emits nothing. Here the leftover is exactly 4000 AND has a space at its midpoint, so
+  // the off-by-one costs a real chunk.
+  corpus.push(`${"x".repeat(4000)}${"a".repeat(2000)} ${"b".repeat(1999)}`);
+  // A boundary at exactly half of DISCORD's 1900 window. The half-window test is `cut < window*0.5`,
+  // and the entry above pins the sibling comparison inside searchBoundary; this one pins the caller.
+  // It has to be Discord: the families whose lastResort is "last-boundary" keep the same cut either
+  // way, so the off-by-one is only observable where the fallback is the window itself.
+  corpus.push(`${"a".repeat(950)}\n${"b".repeat(2000)}`);
   return corpus;
 }
 
@@ -157,14 +186,56 @@ describe("chunkText — single-chunk fast path", () => {
   it("returns empty string as a single chunk by default", () => {
     expect(chunkText("", { limit: 100 })).toEqual([""]);
   });
+
+  it("splits on the documented defaults when only a limit is given", () => {
+    // Justified by a gap, not by a wish for another test: every other case here passes an explicit
+    // `boundaries` / `stripLeading` / `lastResort`, and the one call that omits them ("hello", under
+    // the limit) returns on the fast path before any of them is read. So the DEFAULTS on the
+    // splitting path had no coverage at all, and mutation testing said so — six mutants survived
+    // across the two default declarations, meaning the documented contract could be changed to
+    // anything and every test would still pass.
+    //
+    // `boundaries = ["\n\n", "\n", " "]`: with a space inside the window, the cut takes it rather
+    // than slicing mid-word.
+    const words = `${"a".repeat(30)} ${"b".repeat(30)}`;
+    expect(chunkText(words, { limit: 40 })).toEqual(["a".repeat(30), ` ${"b".repeat(30)}`]);
+
+    // `stripLeading = /^\n+/`: newlines that begin a continuation chunk are dropped, and other
+    // leading whitespace is NOT — a default of /^\s+/ would eat the space and fail here.
+    const lines = `${"a".repeat(30)}\n\n ${"b".repeat(20)}`;
+    expect(chunkText(lines, { limit: 32 })).toEqual(["a".repeat(30), ` ${"b".repeat(20)}`]);
+
+    // ...and it is ANCHORED. Above, the newlines happen to sit at the head of the continuation, so
+    // an unanchored /\n+/ would strip the same characters and look identical. Here the cut lands on
+    // a space and the newline is further in, where only the anchor keeps it: an unanchored pattern
+    // deletes a line break from the middle of the user's message.
+    const inner = `${"a".repeat(30)} ${"b".repeat(30)}\n${"c".repeat(5)}`;
+    expect(chunkText(inner, { limit: 40 })).toEqual([
+      "a".repeat(30),
+      ` ${"b".repeat(30)}\n${"c".repeat(5)}`,
+    ]);
+
+    // `lastResort = "window"`: with no boundary anywhere, the cut falls on the window rather than
+    // on the last (failed) boundary search, so chunks come out exactly `limit` long.
+    expect(chunkText("x".repeat(25), { limit: 10 })).toEqual([
+      "x".repeat(10),
+      "x".repeat(10),
+      "xxxxx",
+    ]);
+  });
   it("drops an all-whitespace single chunk when trimParts is set", () => {
     expect(chunkText("   ", { limit: 100, trimParts: true })).toEqual([]);
   });
 });
 
 describe("chunkText — input validation (fail fast)", () => {
+  // The message is asserted, not just the type. `rules/error-handling.md` § 2 requires a typed error
+  // WITH enough context to act on, and `limit` and `safeLimit` raise the SAME RangeError from the
+  // same helper — the label is the only thing telling a caller which of the two they got wrong.
   it("throws on non-positive limit instead of hanging", () => {
-    expect(() => chunkText("abc", { limit: 0 })).toThrow(RangeError);
+    expect(() => chunkText("abc", { limit: 0 })).toThrow(
+      /^chunkText: limit must be a positive integer, received 0$/,
+    );
     expect(() => chunkText("abc", { limit: -5 })).toThrow(/positive integer/);
     expect(() => chunkText("abc", { limit: 1.5 })).toThrow(RangeError);
   });
@@ -172,7 +243,9 @@ describe("chunkText — input validation (fail fast)", () => {
     expect(() => chunkText("abc", { limit: 100, safeLimit: 200 })).toThrow(/safeLimit/);
   });
   it("throws on non-positive safeLimit", () => {
-    expect(() => chunkText("abc", { limit: 100, safeLimit: 0 })).toThrow(RangeError);
+    expect(() => chunkText("abc", { limit: 100, safeLimit: 0 })).toThrow(
+      /^chunkText: safeLimit must be a positive integer, received 0$/,
+    );
   });
   it("accepts safeLimit === limit and safeLimit < limit", () => {
     expect(() => chunkText("abc", { limit: 100, safeLimit: 100 })).not.toThrow();
@@ -209,12 +282,63 @@ describe("chunkText reproduces the adapter oracles byte-for-byte", () => {
 });
 
 describe("chunkText — surrogate guard", () => {
-  it("never splits an emoji in the middle (Slack family)", () => {
-    const text = `${"a".repeat(3999)}😀${"b".repeat(200)}`;
-    for (const c of slackViaCore(text)) {
-      // A chunk must not end with a lone high surrogate.
-      const last = c.charCodeAt(c.length - 1);
-      expect(last >= 0xd800 && last <= 0xdbff).toBe(false);
+  it("never splits an astral character in the middle (Slack family)", () => {
+    // Three characters, not one, and the choice is the point. `guardSurrogate` tests
+    // `code >= 0xdc00 && code <= 0xdfff`, so only a low surrogate sitting ON one of those bounds can
+    // tell `>=` from `>` or `<=` from `<`. 😀 is U+1F600, whose low surrogate is 0xDE00 — comfortably
+    // inside the range, so it passes either way and the boundary was never exercised. U+10000 and
+    // U+103FF are the two characters whose low surrogates ARE the bounds.
+    const cases: ReadonlyArray<readonly [string, string]> = [
+      ["\u{1F600}", "grinning face, low surrogate 0xDE00 — mid-range"],
+      ["\u{10000}", "linear B syllable, low surrogate 0xDC00 — the lower bound"],
+      ["\u{103FF}", "old italic letter, low surrogate 0xDFFF — the upper bound"],
+    ];
+
+    for (const [astral, why] of cases) {
+      // Placed so the 4000-char window falls between the two code units of the pair.
+      const text = `${"a".repeat(3999)}${astral}${"b".repeat(200)}`;
+      const parts = slackViaCore(text);
+
+      for (const c of parts) {
+        const first = c.charCodeAt(0);
+        const last = c.charCodeAt(c.length - 1);
+        // Both ends, not just the tail: a cut severs a pair into a trailing HIGH surrogate on one
+        // chunk and a leading LOW surrogate on the next, and checking one end sees half the damage.
+        expect(
+          last >= 0xd800 && last <= 0xdbff,
+          `${why}: chunk ends on a lone high surrogate`,
+        ).toBe(false);
+        expect(
+          first >= 0xdc00 && first <= 0xdfff,
+          `${why}: chunk starts on a lone low surrogate`,
+        ).toBe(false);
+      }
+
+      // The property the two checks above are proxies for: nothing was lost or altered. A guard that
+      // stepped back too far, or not far enough, changes the text even when no chunk ends badly.
+      expect(parts.join(""), `${why}: rejoining the chunks did not reproduce the input`).toBe(text);
     }
+
+    // The other half of the claim, and the half that was missing: the guard must NOT fire where
+    // there is nothing to protect. Every assertion above still holds for a guard that steps back
+    // unconditionally — the text rejoins, no chunk ends on half a pair, and every chunk is merely
+    // one unit shorter than it should be. So the window is checked on BMP-only text, where the cut
+    // is exactly the window or the guard stole a character that fits.
+    const plain = "a".repeat(4200);
+    expect(
+      slackViaCore(plain)[0]?.length,
+      "the surrogate guard stepped back on text that has no surrogates",
+    ).toBe(4000);
+
+    // ASCII alone does not test the guard's UPPER bound: 'a' is below 0xDC00, so dropping the
+    // `code <= 0xdfff` half changes nothing for it. Only a character ABOVE the surrogate range tells
+    // the two apart, and the realistic one is fullwidth — U+FF21 is ordinary Japanese text, not an
+    // exotic input, and a guard missing its ceiling would quietly shorten every chunk edge that
+    // lands on one.
+    const fullwidth = `${"a".repeat(4000)}${"Ａ".repeat(200)}`;
+    expect(
+      slackViaCore(fullwidth)[0]?.length,
+      "the surrogate guard fired on U+FF21, which is above the surrogate range",
+    ).toBe(4000);
   });
 });

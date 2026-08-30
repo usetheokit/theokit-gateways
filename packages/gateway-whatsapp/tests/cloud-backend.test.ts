@@ -520,12 +520,20 @@ describe("WhatsAppCloudBackend.sendTemplate — the method the contract cannot r
   });
 
   it("sends once connected", async () => {
-    const backend = makeBackend(makeFetchConnectedOk());
+    const fakeFetch = makeFetchConnectedOk();
+    const backend = makeBackend(fakeFetch);
     expect(await backend.connect()).toBe(true);
 
     const result = await backend.sendTemplate("5511999999999", "hello_world", "en_US");
 
     expect(result.ok).toBe(true);
     expect(result.wamid).toBe("wamid.x");
+    // The RECIPIENT, which the response cannot tell us. `wamid.x` comes back from the fake whatever
+    // number the request carried, so reading the result proves the reply was parsed and nothing
+    // about where the template went — and the failure that matters here is a template delivered to
+    // somebody else. Call 0 is the credential check; the template POST is call 1.
+    const init = (fakeFetch as ReturnType<typeof vi.fn>).mock.calls[1]![1] as RequestInit;
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    expect(body.to, "the template went to a different number").toBe("5511999999999");
   });
 });

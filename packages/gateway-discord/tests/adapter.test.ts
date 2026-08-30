@@ -7,7 +7,7 @@
  * 2026-08-17, and it pointed at a path that had already stopped existing.
  */
 
-import { GatewayIntentBits } from "discord.js";
+import { Events, GatewayIntentBits } from "discord.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_DISCORD_INTENTS, DiscordAdapter } from "../src/adapter.js";
@@ -118,9 +118,43 @@ describe("DiscordAdapter (T6.1)", () => {
   });
 
   it("disconnect is idempotent on never-connected", async () => {
+    // `adapter.platform` was the assertion here, and it is a constant that no `disconnect()` can
+    // change — the test read green whatever the adapter did. What "on never-connected" actually
+    // claims is that the underlying client is never torn down when it was never brought up, so
+    // that is what is watched.
+    const destroy = vi.spyOn(adapter.getBot(), "destroy");
+
     await adapter.disconnect();
     await adapter.disconnect();
-    expect(adapter.platform).toBe("discord");
+
+    expect(destroy, "destroy() ran on a client that never connected").not.toHaveBeenCalled();
+  });
+
+  it("reconnects after an explicit disconnect", async () => {
+    // The guard on connect() must be a guard, not a latch. `disconnect()` clears `connected`, and
+    // if it ever stops, connect() answers true, calls login() on nothing, and the bot is deaf while
+    // every health check reads green. Removing that one line left this whole package passing.
+    //
+    // login() is stubbed because the real one reaches Discord: it resolves the ClientReady the
+    // adapter is waiting on, which is what a successful login does, without the network.
+    const client = adapter.getBot();
+    const login = vi.spyOn(client, "login").mockImplementation(async (token?: string) => {
+      client.emit(Events.ClientReady, client as never);
+      return token ?? "";
+    });
+    const destroy = vi.spyOn(client, "destroy").mockResolvedValue(undefined);
+
+    try {
+      expect(await adapter.connect()).toBe(true);
+      await adapter.disconnect();
+      expect(await adapter.connect()).toBe(true);
+
+      expect(login, "the second connect() never logged in again").toHaveBeenCalledTimes(2);
+      await adapter.disconnect();
+    } finally {
+      login.mockRestore();
+      destroy.mockRestore();
+    }
   });
 
   it("connect() with bad token returns false (does NOT throw)", async () => {
@@ -147,5 +181,82 @@ describe("DiscordAdapter — a throwing handler", () => {
     const written = stderr.mock.calls.map((c) => String(c[0])).join("");
     expect(written).toContain("[discord] handler threw: user handler blew up");
     stderr.mockRestore();
+  });
+});
+
+describe("DiscordAdapter — the format the caller declared", () => {
+  /**
+   * Discord's new code shipped with zero tests and two defects, both found in review. Its
+   * byte-identical Mattermost twin had tests and both defects were visible there — which is
+   * the argument for these existing at all.
+   */
+  function adapterSending(sent: string[]) {
+    const adapter = new DiscordAdapter({ token: "t" });
+    const channel = {
+      isTextBased: () => true,
+      send: async ({ content }: { content: string }) => {
+        sent.push(content);
+        return { id: `m${sent.length}` };
+      },
+    };
+    (adapter as unknown as { client: unknown }).client = {
+      channels: { fetch: async () => channel },
+    };
+    (adapter as unknown as { connected: boolean }).connected = true;
+    return adapter;
+  }
+
+  it("escapes markdown when the caller declares plain", async () => {
+    const sent: string[] = [];
+    await adapterSending(sent).sendMessage({
+      channel: { id: "c1", type: "group" },
+      text: "literal *asterisks*",
+      format: "plain",
+    });
+
+    expect(sent[0]).toBe("literal \\*asterisks\\*");
+  });
+
+  it("escapes a backslash the caller already typed, before the markers it guards", async () => {
+    // The inversion found in review: without escaping `\` first, `a\*b` becomes `a\\*b`, the
+    // renderer eats `\\` as one literal backslash, and the `*` it guarded is left bare — so
+    // text sent as `plain` arrives italicised.
+    const sent: string[] = [];
+    await adapterSending(sent).sendMessage({
+      channel: { id: "c1", type: "group" },
+      text: "a\\*b",
+      format: "plain",
+    });
+
+    expect(sent[0]).toBe("a\\\\\\*b");
+  });
+
+  it("sends markdown untouched, because the platform parses it natively", async () => {
+    const sent: string[] = [];
+    await adapterSending(sent).sendMessage({
+      channel: { id: "c1", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(sent[0]).toBe("**bold**");
+  });
+
+  it("never cuts an escape pair across a message boundary", async () => {
+    // Escaping before splitting inflates the string, so the hard window cut can land between a
+    // backslash and its character: message 1 ends in a stray backslash the user never typed and
+    // message 2 opens with a bare marker. Split first, escape per chunk.
+    const sent: string[] = [];
+    await adapterSending(sent).sendMessage({
+      channel: { id: "c1", type: "group" },
+      text: `${"x".repeat(1899)}*bold*${"y".repeat(300)}`,
+      format: "plain",
+    });
+
+    expect(sent.length).toBeGreaterThan(1);
+    for (const [i, chunk] of sent.entries()) {
+      const trailing = /\\+$/.exec(chunk)?.[0].length ?? 0;
+      expect(trailing % 2, `message ${i + 1} ends mid-escape-pair`).toBe(0);
+    }
   });
 });

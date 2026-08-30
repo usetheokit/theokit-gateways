@@ -24,6 +24,19 @@ describe("normalizeWhatsAppId", () => {
     expect(normalizeWhatsAppId("5511999999999:12@s.whatsapp.net")).toBe("5511999999999");
   });
 
+  it("drops the whole domain, digits included, instead of folding them into the number", () => {
+    // The same defect as the device suffix above, one field over. Every WhatsApp domain is
+    // letters — `s.whatsapp.net`, `g.us`, `lid`, `c.us` — so the digit-strip alone appears to do
+    // the job and the domain-strip looked untestable: mutation testing showed `/@.*$/` could
+    // shrink to `/@.$/` and no test noticed.
+    //
+    // It is reachable because this function is exported and normalises ALLOWLIST ENTRIES too,
+    // which an operator types by hand and may point at anything. When it fails, the failure is
+    // silent and wrong in the dangerous direction: the digits merge into the number, so an entry
+    // matches an identity nobody wrote down.
+    expect(normalizeWhatsAppId("551199@host9.example9.net9")).toBe("551199");
+  });
+
   it("accepts the shapes a human actually types", () => {
     expect(normalizeWhatsAppId("+55 (11) 99999-9999")).toBe("5511999999999");
     expect(normalizeWhatsAppId("  +5511999999999  ")).toBe("5511999999999");
@@ -55,6 +68,22 @@ describe("parseAllowedSenders", () => {
 
   it("keeps the wildcard as a wildcard instead of stripping it to nothing", () => {
     expect(parseAllowedSenders("*").has("*")).toBe(true);
+  });
+
+  it("keeps a wildcard that a human spaced out in the list", () => {
+    // Every other entry survives losing the trim, because normalisation strips whitespace along
+    // with every other non-digit. The wildcard is the one that does not: it is compared
+    // LITERALLY, so " *" is not the wildcard, normalises to "" and is dropped as blank. The
+    // operator then gets an allowlist quietly NARROWER than the one they configured — the entry
+    // meant to admit everyone is the only one that vanishes, and nothing reports it.
+    //
+    // Found by mutation testing on 2026-08-30: deleting `.trim()` killed no test, because every
+    // wildcard case in this file was written without a space around it. An env var typed by a
+    // human is where the space comes from.
+    const set = parseAllowedSenders("5511999999999, *");
+
+    expect(set.has("*"), "a spaced wildcard was dropped instead of trimmed").toBe(true);
+    expect(isSenderAllowed("5522888888888@s.whatsapp.net", set)).toBe(true);
   });
 
   it("returns an empty set for undefined or blank input", () => {
