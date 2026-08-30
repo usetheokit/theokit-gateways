@@ -67,11 +67,18 @@ describe("subscribeToTimeline", () => {
   it("wraps the listener with filter and returns unsubscribe", () => {
     let registered: ((e: MatrixEventLike, r: MatrixRoomLike) => void) | undefined;
     let removed: ((e: MatrixEventLike, r: MatrixRoomLike) => void) | undefined;
+    let onEvent: string | undefined;
+    let offEvent: string | undefined;
     const client = {
-      on(_evt: "Room.timeline", l: (e: MatrixEventLike, r: MatrixRoomLike) => void) {
+      // The event NAME is recorded, not discarded. It was `_evt` — unread — so `"Room.timeline"`
+      // could be the empty string in both calls with this test still green, and an adapter that
+      // subscribes under the wrong name receives nothing at all while looking perfectly wired.
+      on(evt: string, l: (e: MatrixEventLike, r: MatrixRoomLike) => void) {
+        onEvent = evt;
         registered = l;
       },
-      off(_evt: "Room.timeline", l: (e: MatrixEventLike, r: MatrixRoomLike) => void) {
+      off(evt: string, l: (e: MatrixEventLike, r: MatrixRoomLike) => void) {
+        offEvent = evt;
         removed = l;
       },
     };
@@ -89,5 +96,8 @@ describe("subscribeToTimeline", () => {
     expect(handler).toHaveBeenCalledTimes(1);
     sub.unsubscribe();
     expect(removed).toBe(registered);
+    // Subscribing and unsubscribing must name the SAME event, and it must be the one Matrix emits.
+    expect(onEvent).toBe("Room.timeline");
+    expect(offEvent).toBe("Room.timeline");
   });
 });

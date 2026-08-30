@@ -39,7 +39,19 @@ describe("AliasCache (D419)", () => {
       getRoomIdForAlias: vi.fn(async () => ({ room_id: "!r:s" })),
     };
     const cache = new AliasCache();
-    await expect(cache.resolve(client, "general:matrix.org")).rejects.toThrow(ConfigurationError);
+    const raised = await cache.resolve(client, "general:matrix.org").then(
+      () => undefined,
+      (err: unknown) => err,
+    );
+
+    expect(raised).toBeInstanceOf(ConfigurationError);
+    // `rejects.toThrow(Type)` alone is half a negative case (`rules/testing.md` § 4.1): the typed
+    // code and the message were both free to be emptied, and they are the whole diagnostic. The
+    // message is what tells a caller that a room reference must open with `!` or `#` — without it
+    // they are looking at a rejected string and no reason.
+    expect((raised as { code?: string }).code).toBe("invalid_room_ref");
+    expect((raised as Error).message).toContain("general:matrix.org");
+    expect((raised as Error).message).toContain("expected");
   });
 
   it("clear() empties the cache", async () => {

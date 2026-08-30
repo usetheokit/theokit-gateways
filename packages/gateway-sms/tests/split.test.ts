@@ -92,5 +92,42 @@ describe("splitForSMS (D393, EC-7)", () => {
       // partLimit. Failing loudly beats emitting parts that are all prefix.
       expect(() => splitForSMS("x".repeat(100), 4)).toThrow(RangeError);
     });
+
+    it("rejects a limit that leaves EXACTLY nothing, not only one that goes negative", () => {
+      // `partLimit <= 0`. The prefix reserves 6 characters, so a limit of 6 leaves precisely zero
+      // payload — the first value that must be refused, and the one an off-by-one lets through to
+      // emit parts that are all prefix and no message. The existing case uses 4, where `<` and
+      // `<=` agree.
+      // The MESSAGE, not just the type. Measured: relaxing the guard to `< 0` still throws a
+      // RangeError at this limit — but from two layers down, reading "partLimit must be a positive
+      // integer, received 0". That is an internal invariant leaking to a caller who set a limit,
+      // and it names neither the limit nor what to do. Asserting only the type cannot tell the two
+      // apart, which is why this boundary read as covered while the guard was free to move.
+      expect(() => splitForSMS("x".repeat(100), 6)).toThrow(/limit 6 is too small to carry an SMS/);
+
+      // Measured, not assumed: 7 and 8 also throw, for a DIFFERENT and equally correct reason —
+      // the payload fits on the first pass, the part count widens the prefix past the cap, and the
+      // second pass hits the same guard. 10 is the first limit that settles. Writing 7 here as the
+      // "passing" side would have asserted a boundary that is not the one the guard defends.
+      expect(() => splitForSMS("x".repeat(100), 10)).not.toThrow();
+    });
+
+    it("says WHICH limit is too small and by how much", () => {
+      // `toThrow(RangeError)` alone is half a negative case (`rules/testing.md` § 4.1). The whole
+      // message could be emptied with the test above still green, and it is the only thing that
+      // tells an operator their configured limit is the problem rather than their message.
+      const raised = (() => {
+        try {
+          splitForSMS("x".repeat(100), 4);
+          return undefined;
+        } catch (err) {
+          return err as Error;
+        }
+      })();
+
+      expect(raised).toBeInstanceOf(RangeError);
+      expect(raised?.message).toContain("limit 4");
+      expect(raised?.message).toContain("6");
+    });
   });
 });
