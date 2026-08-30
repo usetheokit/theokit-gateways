@@ -516,15 +516,15 @@ describe("MatrixAdapter lifecycle", () => {
 
 describe("MatrixAdapter — the format the caller declared", () => {
   /**
-   * `OutboundMessage.format` is declared on the base contract and this adapter discarded it.
-   * Matrix documents `formatted_body` + `format: "org.matrix.custom.html"` for markup, so the
-   * field has somewhere real to go — and until it did, a caller saying "this is markdown" was
-   * telling the adapter something it threw away.
+   * Matrix declares its markup type in `format`, and the only value is
+   * `org.matrix.custom.html`. That is a promise to every client that `formatted_body` IS HTML.
    *
-   * Behavioural, not structural: the cross-adapter gate proves the field is READ, and these
-   * prove it reaches the wire.
+   * The first version of this feature broke that promise: it put the caller's MARKDOWN there
+   * and declared it HTML. Review demonstrated the cost — `Use <div> for 5 < 3` arrives with the
+   * tag parsed and dropped, so the reader loses words the sender wrote — and the test that
+   * "proved" the feature was asserting exactly that defect.
    */
-  it("sends formatted_body when the caller declares markdown", async () => {
+  it("sends formatted_body only when the caller declares html", async () => {
     const sent: Array<Record<string, unknown>> = [];
     const client = makeMockClient();
     (client as unknown as { sendMessage: unknown }).sendMessage = async (
@@ -544,20 +544,70 @@ describe("MatrixAdapter — the format the caller declared", () => {
 
     const res = await adapter.sendMessage({
       channel: { id: "!room:example.org", type: "group" },
-      text: "**bold**",
-      format: "markdown",
+      text: "<b>bold</b>",
+      format: "html",
     });
 
     expect(res.ok).toBe(true);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.format).toBe("org.matrix.custom.html");
-    expect(sent[0]?.formatted_body).toBe("**bold**");
+    expect(sent[0]?.formatted_body).toBe("<b>bold</b>");
   });
 
-  it("leaves a plain message on the convenience call, with no format field", async () => {
-    // The absence matters as much as the presence: a plain message carrying an empty
-    // `formatted_body` would ask the homeserver to parse markup that is not there.
+  it("never puts markdown in the HTML field, and says so once", async () => {
+    // The regression for the defect above. Markdown in `formatted_body` renders as literal
+    // asterisks anyway — so the branch bought nothing and cost content corruption.
+    const sent: Array<Record<string, unknown>> = [];
     const client = makeMockClient();
+    (client as unknown as { sendMessage: unknown }).sendMessage = async (
+      _roomId: string,
+      content: Record<string, unknown>,
+    ) => {
+      sent.push(content);
+      return { event_id: "$nope" };
+    };
+    const adapter = new MatrixAdapter({
+      homeserverUrl: "https://matrix.example.org",
+      accessToken: "t",
+      userId: "@bot:example.org",
+      __clientFactory: () => client,
+    });
+    await adapter.connect();
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await adapter.sendMessage({
+      channel: { id: "!room:example.org", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+    await adapter.sendMessage({
+      channel: { id: "!room:example.org", type: "group" },
+      text: "**more**",
+      format: "markdown",
+    });
+
+    expect(sent, "markdown reached the HTML field").toHaveLength(0);
+    const warned = stderr.mock.calls
+      .map((c) => String(c[0]))
+      .filter((l) => l.includes("no markdown mode"));
+    expect(warned, "warned per message instead of once").toHaveLength(1);
+    stderr.mockRestore();
+  });
+
+  it("leaves a plain message on the convenience call, with the formatted path available", async () => {
+    // The reviewer proved the previous version of this test was vacuous: the mock had no
+    // `sendMessage` at all, so the plain path was forced no matter what the adapter decided.
+    // Deleting the guard left all 53 tests green. The mock now HAS the formatted path, so the
+    // assertion is that the adapter chose not to take it.
+    const sent: Array<Record<string, unknown>> = [];
+    const client = makeMockClient();
+    (client as unknown as { sendMessage: unknown }).sendMessage = async (
+      _roomId: string,
+      content: Record<string, unknown>,
+    ) => {
+      sent.push(content);
+      return { event_id: "$should-not-happen" };
+    };
     const adapter = new MatrixAdapter({
       homeserverUrl: "https://matrix.example.org",
       accessToken: "t",
@@ -572,6 +622,7 @@ describe("MatrixAdapter — the format the caller declared", () => {
     });
 
     expect(res.ok).toBe(true);
+    expect(sent, "a plain message took the formatted path").toHaveLength(0);
   });
 });
 
@@ -603,8 +654,8 @@ describe("MatrixAdapter — markup the homeserver refuses", () => {
 
     const res = await adapter.sendMessage({
       channel: { id: "!room:example.org", type: "group" },
-      text: "**bold**",
-      format: "markdown",
+      text: "<b>bold</b>",
+      format: "html",
     });
 
     expect(res.ok).toBe(true);
@@ -631,8 +682,8 @@ describe("MatrixAdapter — markup the homeserver refuses", () => {
 
     const res = await adapter.sendMessage({
       channel: { id: "!room:example.org", type: "group" },
-      text: "**bold**",
-      format: "markdown",
+      text: "<b>bold</b>",
+      format: "html",
     });
 
     expect(res.ok).toBe(false);

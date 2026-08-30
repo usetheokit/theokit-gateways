@@ -97,8 +97,11 @@ export class MattermostAdapter extends BasePlatformAdapter {
       let lastId: string | undefined;
       // Mattermost parses markdown natively, so `markdown` needs no flag; `plain` is the
       // case that needs work, because raw text would be parsed anyway.
-      const body = out.format === "plain" ? escapeMarkdown(out.text) : out.text;
-      for (const chunk of splitForMattermost(body)) {
+      // Split first, escape per chunk — the same ordering Discord needs, for the same reason:
+      // a cut between a backslash and its character produces a stray backslash in one message
+      // and a bare marker in the next.
+      for (const raw of splitForMattermost(out.text)) {
+        const chunk = out.format === "plain" ? escapeMarkdown(raw) : raw;
         const post = await this.handle.client.createPost({
           channel_id: out.channel.id,
           message: chunk,
@@ -255,5 +258,10 @@ function mapMattermostError(err: unknown): SendResult {
  * and whose escaping is more visible than the problem it solves.
  */
 function escapeMarkdown(text: string): string {
-  return text.replace(/([*_`~])/g, "\\$1");
+  // The backslash comes FIRST, and that ordering is the whole correctness of this function.
+  // Without it a backslash already in the caller's text is left bare: `a\*b` escapes to `a\\*b`,
+  // the renderer consumes `\\` as one literal backslash, and the `*` it was guarding is left
+  // naked — so text sent explicitly as `plain` arrives italicised, the exact inversion this
+  // function exists to prevent. Caught in review.
+  return text.replace(/([\\*_`~])/g, "\\$1");
 }

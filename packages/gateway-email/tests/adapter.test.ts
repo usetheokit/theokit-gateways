@@ -873,3 +873,48 @@ describe("EmailAdapter — the html path is a trust boundary", () => {
     expect(smtp.sent[0]?.html).toBe("<b>bold</b>");
   });
 });
+
+describe("EmailAdapter — a server that refuses the html part", () => {
+  it("retries with text only, because a plain-text reader would never have seen the difference", async () => {
+    const { adapter, smtp } = mk();
+    await adapter.connect();
+    let attempt = 0;
+    const original = smtp.send.bind(smtp);
+    smtp.send = async (opts) => {
+      attempt += 1;
+      if (opts.html !== undefined) throw new Error("html part rejected");
+      return await original(opts);
+    };
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const res = await adapter.sendMessage({
+      channel: { id: "someone@example.com", type: "dm" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(attempt).toBe(2);
+    stderr.mockRestore();
+  });
+
+  it("does NOT retry a send that had no html part", async () => {
+    // Without the guard this would retry every failure once, doubling the latency of an
+    // unrelated outage and reporting a formatting problem where there is none.
+    const { adapter, smtp } = mk();
+    await adapter.connect();
+    let attempt = 0;
+    smtp.send = async () => {
+      attempt += 1;
+      throw new Error("smtp down");
+    };
+
+    const res = await adapter.sendMessage({
+      channel: { id: "someone@example.com", type: "dm" },
+      text: "plain",
+    });
+
+    expect(res.ok).toBe(false);
+    expect(attempt).toBe(1);
+  });
+});

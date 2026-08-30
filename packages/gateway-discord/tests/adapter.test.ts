@@ -149,3 +149,80 @@ describe("DiscordAdapter — a throwing handler", () => {
     stderr.mockRestore();
   });
 });
+
+describe("DiscordAdapter — the format the caller declared", () => {
+  /**
+   * Discord's new code shipped with zero tests and two defects, both found in review. Its
+   * byte-identical Mattermost twin had tests and both defects were visible there — which is
+   * the argument for these existing at all.
+   */
+  function adapterSending(sent: string[]) {
+    const adapter = new DiscordAdapter({ token: "t" });
+    const channel = {
+      isTextBased: () => true,
+      send: async ({ content }: { content: string }) => {
+        sent.push(content);
+        return { id: `m${sent.length}` };
+      },
+    };
+    (adapter as unknown as { client: unknown }).client = {
+      channels: { fetch: async () => channel },
+    };
+    (adapter as unknown as { connected: boolean }).connected = true;
+    return adapter;
+  }
+
+  it("escapes markdown when the caller declares plain", async () => {
+    const sent: string[] = [];
+    await adapterSending(sent).sendMessage({
+      channel: { id: "c1", type: "group" },
+      text: "literal *asterisks*",
+      format: "plain",
+    });
+
+    expect(sent[0]).toBe("literal \\*asterisks\\*");
+  });
+
+  it("escapes a backslash the caller already typed, before the markers it guards", async () => {
+    // The inversion found in review: without escaping `\` first, `a\*b` becomes `a\\*b`, the
+    // renderer eats `\\` as one literal backslash, and the `*` it guarded is left bare — so
+    // text sent as `plain` arrives italicised.
+    const sent: string[] = [];
+    await adapterSending(sent).sendMessage({
+      channel: { id: "c1", type: "group" },
+      text: "a\\*b",
+      format: "plain",
+    });
+
+    expect(sent[0]).toBe("a\\\\\\*b");
+  });
+
+  it("sends markdown untouched, because the platform parses it natively", async () => {
+    const sent: string[] = [];
+    await adapterSending(sent).sendMessage({
+      channel: { id: "c1", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(sent[0]).toBe("**bold**");
+  });
+
+  it("never cuts an escape pair across a message boundary", async () => {
+    // Escaping before splitting inflates the string, so the hard window cut can land between a
+    // backslash and its character: message 1 ends in a stray backslash the user never typed and
+    // message 2 opens with a bare marker. Split first, escape per chunk.
+    const sent: string[] = [];
+    await adapterSending(sent).sendMessage({
+      channel: { id: "c1", type: "group" },
+      text: `${"x".repeat(1899)}*bold*${"y".repeat(300)}`,
+      format: "plain",
+    });
+
+    expect(sent.length).toBeGreaterThan(1);
+    for (const [i, chunk] of sent.entries()) {
+      const trailing = /\\+$/.exec(chunk)?.[0].length ?? 0;
+      expect(trailing % 2, `message ${i + 1} ends mid-escape-pair`).toBe(0);
+    }
+  });
+});

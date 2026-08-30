@@ -33,7 +33,7 @@
 // that day `pnpm quality:dts-typechecks` starts failing for the opposite reason — v5 imports
 // `InspectContext`, which the `@types/node@22` this repository pins does not have — so the gate
 // raises its hand rather than leaving a stale shim shipping forever.
-import type { InspectOptions } from "util";
+import type { InspectOptions } from "node:util";
 
 declare module "util" {
   interface InspectOptionsStylized extends InspectOptions {

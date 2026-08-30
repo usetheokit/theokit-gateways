@@ -23,9 +23,9 @@ to read ten packages to learn which — so the classes are stated here.
 |---|---|
 | telegram | sets `parse_mode` |
 | slack | sets `mrkdwn` |
-| matrix | sends `formatted_body` + `format`, and retries as plain text if the homeserver refuses the markup |
+| matrix | `html` only: sends `formatted_body` + `format: org.matrix.custom.html`, retrying as plain text if the homeserver refuses it. **`markdown` is dropped with a warning** — `formatted_body` promises HTML, and putting markdown there renders literal asterisks AND silently eats any `<tag>` in the text |
 | teams | sets `textFormat` on the activity |
-| email | sends an escaped `html` part **alongside** `text`, never instead of it |
+| email | sends an `html` part **alongside** `text`, never instead of it. `html` passes through verbatim (the caller owns that trust boundary); `markdown` is HTML-escaped into a `<pre>` block, so it is preserved and readable, not parsed |
 | discord, mattermost | markdown is native, so `markdown` needs no flag; **`plain` escapes** `*_\`~` so a user's literal asterisks stay literal |
 | line, sms, whatsapp | the platform carries no formatting on this message type — the adapter logs once that the declared format was dropped, rather than discarding it in silence |
 

@@ -431,3 +431,66 @@ describe("TeamsAdapter — the format the caller declared", () => {
     expect(activity.textFormat).toBeUndefined();
   });
 });
+
+describe("TeamsAdapter — html is not markdown, and a rejected activity degrades", () => {
+  it("declares html as xml, the type Teams actually has for it", async () => {
+    // Review found `html` being declared as markdown: the tags render literally AND any `*` or
+    // `_` in the payload is emphasised, so the caller gets the opposite of both intentions.
+    const { adapter, fakeApp } = makeAdapter();
+    await adapter.connect();
+
+    await adapter.sendMessage({
+      channel: { id: "conv-1", type: "group" },
+      text: "<b>save</b>",
+      format: "html",
+    });
+
+    const activity = fakeApp.send.mock.calls[0]?.[1] as { textFormat?: string };
+    expect(activity.textFormat).toBe("xml");
+  });
+
+  it("retries as plain text when the service rejects the formatted activity", async () => {
+    const { adapter, fakeApp } = makeAdapter();
+    await adapter.connect();
+    let attempt = 0;
+    fakeApp.send.mockImplementation(async (_id: string, activity: { textFormat?: string }) => {
+      attempt += 1;
+      if (activity.textFormat !== undefined) {
+        throw Object.assign(new Error("bad activity"), { statusCode: 400 });
+      }
+      return { id: "sent-plain" };
+    });
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const res = await adapter.sendMessage({
+      channel: { id: "conv-1", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(attempt).toBe(2);
+    stderr.mockRestore();
+  });
+
+  it("does NOT retry when the service refuses the caller", async () => {
+    // The discrimination is the point: retrying a 401 without markup fails identically and
+    // reports a formatting problem where there is an authentication one.
+    const { adapter, fakeApp } = makeAdapter();
+    await adapter.connect();
+    let attempt = 0;
+    fakeApp.send.mockImplementation(async () => {
+      attempt += 1;
+      throw Object.assign(new Error("unauthorized"), { statusCode: 401 });
+    });
+
+    const res = await adapter.sendMessage({
+      channel: { id: "conv-1", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(res.ok).toBe(false);
+    expect(attempt, "retried a failure that was never about formatting").toBe(1);
+  });
+});

@@ -135,7 +135,11 @@ export class DiscordAdapter extends BasePlatformAdapter {
         },
       };
     }
-    const chunks = splitForDiscord(bodyFor(out));
+    // Split FIRST, escape each chunk. The other order lets `splitForDiscord`'s hard window cut
+    // land between a backslash and the character it guards: message 1 ends in a stray backslash
+    // the user never typed, and message 2 opens with a bare `*` that Discord parses as markup.
+    // Demonstrated in review against the real splitter.
+    const chunks = splitForDiscord(out.text).map((chunk) => bodyFor(out.format, chunk));
     let lastId: string | undefined;
     for (const chunk of chunks) {
       try {
@@ -251,6 +255,17 @@ function mapSendError(err: unknown): SendResult {
 }
 
 /**
+ * The text to send, with the caller's declared format applied.
+ *
+ * Discord parses markdown natively, so `markdown` needs no flag. `plain` is the caller stating
+ * the text is NOT markup, and sending it raw would parse it anyway — a user's literal
+ * `*asterisks*` arriving as italic.
+ */
+function bodyFor(format: OutboundMessage["format"], text: string): string {
+  return format === "plain" ? escapeMarkdown(text) : text;
+}
+
+/**
  * Escape the characters this platform would otherwise parse as markup.
  *
  * Called only when the caller declared `format: "plain"` — an explicit statement that the text
@@ -261,17 +276,11 @@ function mapSendError(err: unknown): SendResult {
  * would also touch `#`, `>` and `-` at line starts, which are far more common in ordinary prose
  * and whose escaping is more visible than the problem it solves.
  */
-/**
- * The text to send, with the caller's declared format applied.
- *
- * Discord parses markdown natively, so `markdown` needs no flag. `plain` is the caller stating
- * the text is NOT markup, and sending it raw would parse it anyway — a user's literal
- * `*asterisks*` arriving as italic.
- */
-function bodyFor(out: OutboundMessage): string {
-  return out.format === "plain" ? escapeMarkdown(out.text) : out.text;
-}
-
 function escapeMarkdown(text: string): string {
-  return text.replace(/([*_`~])/g, "\\$1");
+  // The backslash comes FIRST, and that ordering is the whole correctness of this function.
+  // Without it a backslash already in the caller's text is left bare: `a\*b` escapes to `a\\*b`,
+  // the renderer consumes `\\` as one literal backslash, and the `*` it was guarding is left
+  // naked — so text sent explicitly as `plain` arrives italicised, the exact inversion this
+  // function exists to prevent. Caught in review.
+  return text.replace(/([\\*_`~])/g, "\\$1");
 }

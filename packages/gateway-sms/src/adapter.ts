@@ -110,9 +110,7 @@ export class SMSAdapter extends BasePlatformAdapter {
     // submit would still cost the same but breaks ordering at carriers.
     let lastResult: SendResult | undefined;
     // SMS is plain text by definition. Reading the field is not ceremony: it is what turns a
-
     // silent discard into a stated one.
-
     this.warnFormatUnsupported(out.format);
 
     for (const part of parts) {

@@ -198,16 +198,6 @@ function isDispatchable(
   return ctx?.sentWamids?.has(wamid) === true ? "no" : "yes-from-self";
 }
 
-/**
- * Normalise one inbound envelope, or refuse it.
- *
- * Refused: the replies this backend sent, messages this account sent OUTSIDE its own self-chat,
- * the status feed, any content that is not text, and anything whose sender cannot be identified.
- * That last one matters most — an event with an unidentifiable sender would reach an allowlist
- * with nothing to match against, and the safe reading of "we do not know who sent this" is not
- * "let it through". See {@link BaileysDispatchContext} for what the backend must supply before a
- * note-to-self can be answered at all.
- */
 /** The envelope's addressing, once every field it needs has been read and none was missing. */
 interface Addressed {
   readonly key: Record<string, unknown>;
@@ -233,6 +223,16 @@ function addressingOf(envelope: RawEnvelope | undefined): Addressed | undefined 
   return { key, remoteJid, wamid };
 }
 
+/**
+ * Normalise one inbound envelope, or refuse it.
+ *
+ * Refused: the replies this backend sent, messages this account sent OUTSIDE its own self-chat,
+ * the status feed, any content that is not text, and anything whose sender cannot be identified.
+ * That last one matters most — an event with an unidentifiable sender would reach an allowlist
+ * with nothing to match against, and the safe reading of "we do not know who sent this" is not
+ * "let it through". See {@link BaileysDispatchContext} for what the backend must supply before a
+ * note-to-self can be answered at all.
+ */
 export function normalizeBaileysMessage(
   raw: unknown,
   ctx?: BaileysDispatchContext,

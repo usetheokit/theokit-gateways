@@ -85,10 +85,9 @@ const byOwner = {};
 for (const r of rows) byOwner[r.owner] = (byOwner[r.owner] ?? 0) + r.loc;
 const total = rows.reduce((a, r) => a + r.loc, 0);
 
-process.stdout.write(
-  JSON.stringify(
-    { metric: "lines neither blank nor comment-only", root, rows, byOwner, total },
-    null,
-    2,
-  ) + "\n",
+const report = JSON.stringify(
+  { metric: "lines neither blank nor comment-only", root, rows, byOwner, total },
+  null,
+  2,
 );
+process.stdout.write(`${report}\n`);

@@ -9,18 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **BREAKING (behaviour):** all ten adapters now read `OutboundMessage.format`, where two did. A consumer passing `format: "markdown"` received plain text and will now receive parsed markup — Telegram `parse_mode`, Slack `mrkdwn`, Matrix `formatted_body`, Teams `textFormat`, an escaped `html` part on Email. Discord and Mattermost escape `*_`~` when `plain` is declared, so a user's literal asterisks stay literal. LINE, SMS and WhatsApp carry no formatting on their message type and now log once that the declared format was dropped, instead of discarding it in silence (#B-020)
 ### Added
 - **backlog:** B-020 and B-021 measured and triaged — eight adapters ignoring a declared `format` field, and an alignment gate that reads a disclaimer as a citation (#B-020, #B-021)
-### Added
 - **gateway:** a cross-adapter gate fails when an adapter never reads the `format` its own contract declares — 8 of 10 do not, and two real phones received literal asterisks because of it (#B-020)
-### Added
 - **discovery:** B-019's measurement falsified the architecture review's proposed presenter mechanism before any code was written — all 8 splitters already split inside `sendMessage`, so consuming them would have shipped a silent double split (#B-019)
-### Added
 - **tools:** `measure-app-joinery.mjs` counts the channel joinery a consuming app carries, under one stated metric, so a later run can subtract from it rather than re-measure (#B-018)
-### Added
 - **gateway-whatsapp:** the unofficial (Baileys) backend answers a note the account owner writes to themselves. It used to discard every message the paired account sent, which foreclosed the one pattern a paired personal account is for (#84)
+
+### Changed
+- **BREAKING (behaviour):** all ten adapters now read `OutboundMessage.format`, where two did. A consumer passing `format: "markdown"` received plain text; it is now acted on wherever the platform can act on it — Telegram `parse_mode`, Slack `mrkdwn`, Teams `textFormat`. Matrix and Email cannot: `formatted_body` promises HTML, so markdown there would render literal asterisks and drop any `<tag>` in the text, and Email escapes markdown into a `<pre>` part rather than parsing it. Both say so once instead of faking it. Discord and Mattermost escape `*_`~` when `plain` is declared, so a user's literal asterisks stay literal. LINE, SMS and WhatsApp carry no formatting on their message type and now log once that the declared format was dropped, instead of discarding it in silence (#B-020)
 
 ### Fixed
 - **gateway-whatsapp:** the package README named two backends where three ship, pinned a version (`0.1.0`) the package left behind four releases ago (`0.3.2`), and said nothing about the browser the `whatsapp-web.js` backend requires. It now has a "Choosing a backend" table with what each one needs and what has actually been exercised, and the version claim is gone rather than re-pinned. `WhatsAppWebBackend`'s docblock states that the consumer must supply a Chrome — this repository leaves `puppeteer` out of `pnpm.onlyBuiltDependencies`, so no browser is downloaded and the bridge starts, fails to find one, and reports it in its own protocol. B-002 asked for exactly that sentence or for a buildable `puppeteer` and shipped with neither; the item now records the gap and its closing. Measured 2026-08-29: with `PUPPETEER_EXECUTABLE_PATH` set the bridge reaches WhatsApp and issues a pairing QR, and `WhatsAppBaileysBackend` reaches the same point in 1441 ms with no browser at all

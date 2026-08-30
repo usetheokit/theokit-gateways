@@ -247,20 +247,60 @@ export class TeamsAdapter extends BasePlatformAdapter {
     }
     let lastActivityId: string | undefined;
     for (const part of parts) {
-      try {
-        // Teams parses markup only when the activity says so. Without `textFormat` the
-        // caller's declared `format` was discarded and markdown arrived as characters.
-        const result = await this.app.send(out.channel.id, {
-          type: "message",
-          text: part,
-          ...activityFormat(out.format),
-        });
-        lastActivityId = result?.id;
-      } catch (err) {
-        return { ok: false, error: mapTeamsError(err) };
-      }
+      const sent = await this.sendPartHonouringFormat(out.channel.id, part, out.format);
+      if (sent.ok !== true) return sent;
+      lastActivityId = sent.messageId ?? lastActivityId;
     }
     return lastActivityId !== undefined ? { ok: true, messageId: lastActivityId } : { ok: true };
+  }
+
+  /**
+   * Send one part with the caller's declared format, degrading to plain text if the service
+   * refuses the markup.
+   *
+   * Extracted from {@link TeamsAdapter.sendMessage} because that method was doing three jobs —
+   * validate, split, deliver — and the third carries a nested try/catch that pushed the whole
+   * method to cognitive complexity 14 against a ceiling of 10. Extracting is the fix; a
+   * `biome-ignore` would have kept the reason for the number and removed the report of it.
+   *
+   * ADR-2: an undelivered message is worse than an unformatted one, so only a payload the
+   * service judged malformed (HTTP 400) is retried. A 401 or a 429 rises unchanged — retrying
+   * those without markup fails identically while reporting the wrong cause.
+   *
+   * @internal
+   */
+  private async sendPartHonouringFormat(
+    channelId: string,
+    part: string,
+    format: OutboundMessage["format"],
+  ): Promise<SendResult> {
+    if (this.app === undefined) {
+      return {
+        ok: false,
+        error: { code: "not_connected", message: "TeamsAdapter not connected." },
+      };
+    }
+    try {
+      // Teams parses markup only when the activity says so. Without `textFormat` the caller's
+      // declared `format` was discarded and markdown arrived as characters.
+      const result = await this.app.send(channelId, {
+        type: "message",
+        text: part,
+        ...activityFormat(format),
+      });
+      return { ok: true, messageId: result?.id };
+    } catch (err) {
+      if (!isMalformedActivity(err)) return { ok: false, error: mapTeamsError(err) };
+      process.stderr.write(
+        "[gateway-teams] the service rejected the formatted activity; retrying as plain text\n",
+      );
+      try {
+        const retry = await this.app.send(channelId, { type: "message", text: part });
+        return { ok: true, messageId: retry?.id };
+      } catch (retryErr) {
+        return { ok: false, error: mapTeamsError(retryErr) };
+      }
+    }
   }
 
   onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
@@ -320,6 +360,23 @@ export class TeamsAdapter extends BasePlatformAdapter {
  * already at its cognitive-complexity limit, and a branch buried in an object literal is the
  * kind a reader skims past.
  */
-function activityFormat(format: OutboundMessage["format"]): { textFormat?: "markdown" } {
-  return format === "markdown" || format === "html" ? { textFormat: "markdown" } : {};
+function activityFormat(format: OutboundMessage["format"]): { textFormat?: "markdown" | "xml" } {
+  // Teams has TWO markup types and they are not interchangeable. Declaring `html` as markdown
+  // — which the first version did — makes the tags render literally AND emphasises any `*` or
+  // `_` in the payload, so the caller gets the opposite of both intentions. Caught in review.
+  if (format === "markdown") return { textFormat: "markdown" };
+  if (format === "html") return { textFormat: "xml" };
+  return {};
+}
+
+/**
+ * Did the service judge the ACTIVITY malformed, as opposed to refusing the caller?
+ *
+ * Narrow by construction: only a 400. A 401, 403 or 429 is about who is asking or how often,
+ * and a retry without markup would fail identically while reporting a formatting problem where
+ * there is an authentication one.
+ */
+function isMalformedActivity(err: unknown): boolean {
+  const e = err as { statusCode?: number; status?: number };
+  return (e.statusCode ?? e.status) === 400;
 }
