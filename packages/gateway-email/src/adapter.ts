@@ -42,10 +42,19 @@ function reportDrainFailure(err: unknown): void {
 /**
  * The HTML alternative for a message whose caller declared a format.
  *
- * `html` is escaped and wrapped rather than converted: a markdown-to-HTML renderer is a
+ * Two paths, and they carry different trust.
+ *
+ * `markdown` is ESCAPED and wrapped, never rendered: a markdown-to-HTML renderer is a
  * dependency this package does not have and does not need for the field to stop being
  * discarded. What the caller declared reaches the wire; converting the syntax is the
- * presenter's job (B-019), not the transport's.
+ * presenter's job, not the transport's.
+ *
+ * `html` is passed THROUGH, because that is what the caller declared it to be — escaping it
+ * would make the value meaningless. **This is a trust boundary and it is the caller's to
+ * hold.** A consumer whose text is influenced by untrusted input must not set
+ * `format: "html"`; `markdown` is the safe declaration and it escapes. The alternative —
+ * sanitising here — would need an HTML parser in a package that has no runtime dependencies,
+ * and would silently alter a payload the caller said was already HTML.
  */
 function htmlPartFor(text: string, format: "markdown" | "html"): string {
   if (format === "html") return text;

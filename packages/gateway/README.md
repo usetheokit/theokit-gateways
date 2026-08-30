@@ -16,7 +16,7 @@ pnpm add @theokit/gateway-discord discord.js
 
 ## How each adapter treats `OutboundMessage.format`
 
-All ten read it. What they can DO with it differs by platform, and a consumer should not have
+**All ten honour it** — they read the field and let it decide what the platform receives. What they can DO with it differs by platform, and a consumer should not have
 to read ten packages to learn which — so the classes are stated here.
 
 | Platform | What it does with `format` |

@@ -303,8 +303,9 @@ function emptyTextGuardVerdict(source: string): string | undefined {
  * Extracted from the `it` so the assertion is one line: a test whose body branches is a test
  * whose failure needs reading twice before you know what broke.
  */
-async function adaptersIgnoringFormat(): Promise<string[]> {
+async function adaptersIgnoringFormat(): Promise<{ ignoring: string[]; examined: number }> {
   const ignoring: string[] = [];
+  let examined = 0;
   for (const pkg of await adapterPackages()) {
     if (NO_RICH_TEXT.has(pkg)) continue;
     const source = await readFile(join(PACKAGES_DIR, pkg, "src", "adapter.ts"), "utf8").catch(
@@ -314,9 +315,10 @@ async function adaptersIgnoringFormat(): Promise<string[]> {
       ignoring.push(`${pkg}: no adapter.ts`);
       continue;
     }
+    examined += 1;
     if (!/\bout\.format\b/.test(source)) ignoring.push(pkg);
   }
-  return ignoring;
+  return { ignoring, examined };
 }
 
 describe("cross-adapter contract", () => {
@@ -546,7 +548,13 @@ describe("cross-adapter contract", () => {
     // correctly. Per-package tests prove the mapping; this one catches the silent ignore that no
     // single package's suite can be asked to notice — the same divergence class as the guards
     // above.
-    const ignoring = await adaptersIgnoringFormat();
+    const { ignoring, examined } = await adaptersIgnoringFormat();
+
+    // The count first, because an empty offender list means two different things: ten adapters
+    // read the field, or the gate read nothing. Without this assertion a rename of `src/` or a
+    // path change would turn the gate green by making it blind — the vacuous pass the credential
+    // gate in this file documents having survived once already.
+    expect(examined, "packages examined — a gate that reads nothing reports no offenders").toBe(10);
 
     expect(ignoring, "adapters that never read the `format` their own contract declares").toEqual(
       [],

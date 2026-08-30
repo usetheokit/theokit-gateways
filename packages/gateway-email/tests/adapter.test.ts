@@ -855,3 +855,21 @@ describe("EmailAdapter — the format the caller declared", () => {
     expect(smtp.sent[0]?.html).toContain("&lt;script&gt;");
   });
 });
+
+describe("EmailAdapter — the html path is a trust boundary", () => {
+  it("passes html through unescaped, because the caller declared it as html", async () => {
+    // Documented, not accidental. Escaping here would make `format: "html"` meaningless, and
+    // sanitising would need an HTML parser in a package with no runtime dependencies. The
+    // safe declaration for untrusted text is `markdown`, which escapes — asserted above.
+    const { adapter, smtp } = mk();
+    await adapter.connect();
+
+    await adapter.sendMessage({
+      channel: { id: "someone@example.com", type: "dm" },
+      text: "<b>bold</b>",
+      format: "html",
+    });
+
+    expect(smtp.sent[0]?.html).toBe("<b>bold</b>");
+  });
+});
