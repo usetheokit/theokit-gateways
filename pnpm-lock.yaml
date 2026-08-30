@@ -103,7 +103,7 @@ importers:
         version: 10.0.0(@types/node@26.4.0)
       '@stryker-mutator/vitest-runner':
         specifier: '10'
-        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12)))
+        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.27.7)(tsx@4.23.12)))
       '@theokit/sdk':
         specifier: ^4.62.0
         version: 4.62.0(@types/ws@8.18.1)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))
@@ -115,13 +115,19 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12))
+        version: 4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.27.7)(tsx@4.23.12))
       zod:
         specifier: ^4.0.0
         version: 4.4.3
 
   packages/gateway-discord:
     devDependencies:
+      '@stryker-mutator/core':
+        specifier: '10'
+        version: 10.0.0(@types/node@26.4.0)
+      '@stryker-mutator/vitest-runner':
+        specifier: '10'
+        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12)))
       '@theokit/gateway':
         specifier: workspace:*
         version: link:../gateway
@@ -146,6 +152,12 @@ importers:
 
   packages/gateway-email:
     devDependencies:
+      '@stryker-mutator/core':
+        specifier: '10'
+        version: 10.0.0(@types/node@26.4.0)
+      '@stryker-mutator/vitest-runner':
+        specifier: '10'
+        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12)))
       '@theokit/gateway':
         specifier: workspace:*
         version: link:../gateway
@@ -186,6 +198,12 @@ importers:
         specifier: ^9.0.0
         version: 9.9.0
     devDependencies:
+      '@stryker-mutator/core':
+        specifier: '10'
+        version: 10.0.0(@types/node@26.4.0)
+      '@stryker-mutator/vitest-runner':
+        specifier: '10'
+        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12)))
       '@theokit/gateway':
         specifier: workspace:*
         version: link:../gateway
@@ -217,6 +235,12 @@ importers:
         specifier: ^32.0.0
         version: 32.4.0
     devDependencies:
+      '@stryker-mutator/core':
+        specifier: '10'
+        version: 10.0.0(@types/node@26.4.0)
+      '@stryker-mutator/vitest-runner':
+        specifier: '10'
+        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12)))
       '@theokit/gateway':
         specifier: workspace:*
         version: link:../gateway
@@ -245,6 +269,12 @@ importers:
       '@mattermost/client':
         specifier: 11.9.0
         version: 11.9.0(@mattermost/types@11.9.0(typescript@5.9.3))(typescript@5.9.3)
+      '@stryker-mutator/core':
+        specifier: '10'
+        version: 10.0.0(@types/node@26.4.0)
+      '@stryker-mutator/vitest-runner':
+        specifier: '10'
+        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12)))
       '@theokit/gateway':
         specifier: workspace:*
         version: link:../gateway
@@ -269,6 +299,12 @@ importers:
       '@slack/bolt':
         specifier: ^4.6.0
         version: 4.7.3(@types/express@5.0.6)(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+      '@stryker-mutator/core':
+        specifier: '10'
+        version: 10.0.0(@types/node@26.4.0)
+      '@stryker-mutator/vitest-runner':
+        specifier: '10'
+        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12)))
       '@theokit/gateway':
         specifier: workspace:*
         version: link:../gateway
@@ -290,6 +326,12 @@ importers:
 
   packages/gateway-sms:
     devDependencies:
+      '@stryker-mutator/core':
+        specifier: '10'
+        version: 10.0.0(@types/node@26.4.0)
+      '@stryker-mutator/vitest-runner':
+        specifier: '10'
+        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12)))
       '@theokit/gateway':
         specifier: workspace:*
         version: link:../gateway
@@ -332,6 +374,12 @@ importers:
       '@microsoft/teams.apps':
         specifier: ^2.0.15
         version: 2.0.15
+      '@stryker-mutator/core':
+        specifier: '10'
+        version: 10.0.0(@types/node@26.4.0)
+      '@stryker-mutator/vitest-runner':
+        specifier: '10'
+        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12)))
       '@theokit/gateway':
         specifier: workspace:*
         version: link:../gateway
@@ -353,6 +401,12 @@ importers:
 
   packages/gateway-telegram:
     devDependencies:
+      '@stryker-mutator/core':
+        specifier: '10'
+        version: 10.0.0(@types/node@26.4.0)
+      '@stryker-mutator/vitest-runner':
+        specifier: '10'
+        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12)))
       '@theokit/gateway':
         specifier: workspace:*
         version: link:../gateway
@@ -389,7 +443,7 @@ importers:
         version: 10.0.0(@types/node@26.4.0)
       '@stryker-mutator/vitest-runner':
         specifier: '10'
-        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.27.7)(tsx@4.23.12)))
+        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12)))
       '@theokit/gateway':
         specifier: workspace:*
         version: link:../gateway
@@ -404,7 +458,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.27.7)(tsx@4.23.12))
+        version: 4.1.11(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12))
       zod:
         specifier: ^4.0.0
         version: 4.4.3

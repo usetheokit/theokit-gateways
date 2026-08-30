@@ -21,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING (behaviour):** all ten adapters now read `OutboundMessage.format`, where two did. A consumer passing `format: "markdown"` received plain text; it is now acted on wherever the platform can act on it — Telegram `parse_mode`, Slack `mrkdwn`, Teams `textFormat`. Matrix and Email cannot: `formatted_body` promises HTML, so markdown there would render literal asterisks and drop any `<tag>` in the text, and Email escapes markdown into a `<pre>` part rather than parsing it. Both say so once instead of faking it. Discord and Mattermost escape `*_`~` when `plain` is declared, so a user's literal asterisks stay literal. LINE, SMS and WhatsApp carry no formatting on their message type and now log once that the declared format was dropped, instead of discarding it in silence (#B-020)
 
 ### Fixed
+- **all ten adapters:** mutation testing is wired into every one of them, where only the core had
+  it. The first measurement is the finding: discord 62.50%, email 62.42%, teams 70.43%, slack
+  76.40%, line 81.13%, telegram 81.75%, sms 83.72%, mattermost 85.42%, matrix 91.53% — against
+  95.63% for the core, and 242 mutants that no test in the repository could kill. `test:mutation`
+  stays out of `test`, so CI never pays for it (#B-024)
+- **gateway-email:** the SMTP error ladder took one representative per branch and never read a
+  message, so every untaken alternative was free — `EAUTHENTICATION` beside `EAUTH`, `ESOCKET` and
+  `ETLS` beside `ECONNECTION`, 530 beside 535, 451 and 452 beside 421, and the two numeric
+  fallthroughs that nothing reached. The mapper's own comment calls the ladder exhaustive; the test
+  is now exhaustive too, and 62.42% became 75.82% (#B-024)
+- **gateway-discord:** splitting on a single newline — what a code block or a list breaks on — was
+  pinned by nothing, and the leading-newline strip could lose its anchor and start eating newlines
+  from the middle of a continuation (#B-024)
 - **gateway-whatsapp:** the first mutation measurement ever taken on an adapter package scored
   73.96%, against 95.63% for the core — 44 mutants that no test could kill. It is 95.86% now, and
   the seven that remain are enumerated with a proven reason in `tests/MUTATION.md`. The gap was not

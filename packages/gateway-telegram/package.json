@@ -36,13 +36,16 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:mutation": "stryker run"
   },
   "peerDependencies": {
     "@theokit/gateway": ">=0.6.0 <1.0.0",
     "grammy": "^1.30.0"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "10",
+    "@stryker-mutator/vitest-runner": "10",
     "@theokit/gateway": "workspace:*",
     "@theokit/sdk": "^4.62.0",
     "grammy": "^1.30.0",

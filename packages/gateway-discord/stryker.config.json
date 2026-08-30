@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "pnpm",
+  "testRunner": "vitest",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "vitest": {
+    "related": false
+  },
+  "reporters": ["json", "html", "clear-text", "progress"],
+  "mutate": ["src/split.ts"],
+  "concurrency": 2,
+  "coverageAnalysis": "perTest",
+  "disableTypeChecks": true,
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "thresholds": {
+    "high": 90,
+    "low": 60,
+    "break": 0
+  },
+  "_comment": "Run from this package (pnpm --filter <name> run test:mutation); deliberately NOT wired into `test`, so `pnpm -r run test` in CI never pays for it. Pattern copied from packages/gateway. mutate is scoped to the files that are pure logic — normalisation, filtering, splitting, error mapping, parsing. adapter.ts is excluded everywhere: it is I/O orchestration whose tests drive fakes, and mutating it measures the fakes. break is 0 until the FIRST run produces a number; a break threshold must be a measured baseline, and setting one before measuring would be a threshold about a hope. Once measured it becomes a ratchet: raise it when the score rises, never lower it to make a red run green under an unchanged scope."
+}

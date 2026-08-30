@@ -37,7 +37,8 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:mutation": "stryker run"
   },
   "peerDependencies": {
     "@microsoft/teams.apps": "^2.0.0",
@@ -45,6 +46,8 @@
   },
   "devDependencies": {
     "@microsoft/teams.apps": "^2.0.15",
+    "@stryker-mutator/core": "10",
+    "@stryker-mutator/vitest-runner": "10",
     "@theokit/gateway": "workspace:*",
     "@theokit/sdk": "^4.62.0",
     "tsup": "^8.5.0",
