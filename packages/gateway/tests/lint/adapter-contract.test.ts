@@ -63,6 +63,21 @@ const CREDENTIAL_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["gateway-whatsapp", ["accessToken", "appSecret"]],
 ]);
 
+
+/**
+ * Platforms whose wire format carries no rich text, so ignoring `format` is CORRECT there.
+ *
+ * Declared rather than inferred, for the reason `CREDENTIAL_FIELDS` is: a check that guessed which
+ * platforms have formatting would either exempt one that does or demand it of one that cannot, and
+ * a vacuous pass looks exactly like a real one. Each entry is a claim about the platform, not about
+ * our code, and each must be defensible from that platform's own documentation.
+ *
+ * Empty today, deliberately. Every one of the ten platforms this repository speaks renders SOME
+ * markup — LINE has emoji-only decoration and no bold, which is a reason to translate the text, not
+ * a reason for the adapter to discard the caller's declared intent.
+ */
+const NO_RICH_TEXT: ReadonlySet<string> = new Set([]);
+
 /** Every documentation fault for one package's credential fields, or none. */
 async function credentialFaults(pkg: string, fields: readonly string[]): Promise<string[]> {
   const source = await optionsSource(pkg);
@@ -494,6 +509,41 @@ describe("cross-adapter contract", () => {
     expect(
       faults,
       "credential fields whose docblock does not say what they are or where they come from",
+    ).toEqual([]);
+  });
+
+
+  it("reads out.format in every adapter whose platform has rich text", async () => {
+    // `OutboundMessage.format` is declared `"plain" | "markdown" | "html"` on the base contract and
+    // documented as a rendering hint. Measured 2026-08-30: two adapters read it and eight do not,
+    // so a caller reading the base type cannot tell which of the ten will act on the field.
+    //
+    // This is not a style complaint. The agent answered `**Bom Sucesso (MG)**` and both LINE and
+    // WhatsApp delivered literal asterisks to a real phone, because neither adapter looks at the
+    // field and neither tells the platform how to parse what it was given.
+    //
+    // A structural gate, honestly: it proves the adapter READS the field, not that it maps it
+    // correctly. Per-package tests prove the mapping; this one catches the silent ignore that no
+    // single package's suite can be asked to notice — the same divergence class as the guards
+    // above.
+    const pkgs = await adapterPackages();
+    const ignoring: string[] = [];
+
+    for (const pkg of pkgs) {
+      if (NO_RICH_TEXT.has(pkg)) continue;
+      const source = await readFile(join(PACKAGES_DIR, pkg, "src", "adapter.ts"), "utf8").catch(
+        () => undefined,
+      );
+      if (source === undefined) {
+        ignoring.push(`${pkg}: no adapter.ts`);
+        continue;
+      }
+      if (!/\bout\.format\b/.test(source)) ignoring.push(pkg);
+    }
+
+    expect(
+      ignoring,
+      "adapters that never read the `format` their own contract declares",
     ).toEqual([]);
   });
 

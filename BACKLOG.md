@@ -49,15 +49,16 @@ own quality gates.
 
 ## Index
 
-19 items — **Open** 3 · **In flight** 0 · **Closed** 16
+20 items — **Open** 4 · **In flight** 0 · **Closed** 16
 
-### Open (3)
+### Open (4)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
 | [`B-017`](#b-017--bridge-starts-fails-intermittently-on-chromium-profile-cleanup----) | `bridge-starts` fails intermittently on Chromium profile cleanup | `raw` | — |
 | [`B-018`](#b-018--a-theokit-app-writes-268-lines-of-channel-joinery-the-framework-should-own----) | A theokit app writes 268 lines of channel joinery the framework should own | `triaged` | — |
 | [`B-019`](#b-019--agent-output-reaches-a-chat-channel-through-a-presenter-nobody-wrote----) | Agent output reaches a chat channel through a presenter nobody wrote | `triaged` | — |
+| [`B-020`](#b-020--eight-of-ten-adapters-ignore-outboundmessageformat-so-a-caller-cannot-rely-on-it----) | Eight of ten adapters ignore `OutboundMessage.format`, so a caller cannot rely on it | `triaged` | — |
 
 ### In flight (0)
 
@@ -578,3 +579,18 @@ dod:
   - agent output never exposes reasoning or non-user-facing events on a channel, covered by a test that fails on the current hand-written loop
   - formatting and splitting are deterministic for the selected channel
 > Registered 2026-08-30 after the architecture review.
+
+## B-020 — Eight of ten adapters ignore `OutboundMessage.format`, so a caller cannot rely on it   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: bug
+source: human
+evidence: packages/gateway/tests/lint/adapter-contract.test.ts — a FAILING test naming all 8 offenders by package; records/discoveries/opportunities/gateways-format-ignored-opportunity.md (SHIPPABLE_WITH_CAVEATS)
+why_now: measured during the end-to-end validation on 2026-08-30 and then SEEN on two real phones. The agent answered `**Bom Sucesso (MG)**` and both LINE and WhatsApp delivered literal asterisks, because neither adapter reads `out.format`. `BasePlatformAdapter`'s `OutboundMessage` declares `format?: "plain" | "markdown" | "html"` and calls it a rendering hint; only telegram (`adapter.ts:123`) and slack (`adapter.ts:181`) do anything with it, and both merely map the flag to a transport field. A hint that 8 of 10 implementations ignore is not a hint, it is a field that lies — and a caller reading the base contract has no way to learn which adapters will act on it.
+status: triaged
+dod:
+  - a test that FAILS on the current state, asserting a markdown outbound reaches each adapter's transport call with the platform's own formatting flag set
+  - every adapter either honours `format` or declares in its own docblock that the platform has no rich text, so the count of silent ignorers reaches 0
+  - the count is stated in the package README so a consumer learns it without reading ten adapters
+> Registered 2026-08-30 during the Squad loop on B-018/B-019. Dedup gate G2 matched B-019 on the word `format`; read and REJECTED as a merge — B-019 is the presenter translating the text (`**x**` -> `*x*`), this is the adapter telling the platform how to parse it. Both halves are needed: perfectly translated text still arrives unparsed on the eight that ignore the flag. B-019's own `## Out of scope` names this as a separate item.
