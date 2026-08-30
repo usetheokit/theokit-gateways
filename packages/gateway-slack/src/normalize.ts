@@ -41,13 +41,19 @@ function shouldSkipEvent(e: BoltMessageBody["event"], botUserId: string | undefi
   if (e.type !== "message") return true;
   // D275 bot loop guard
   if (e.user !== undefined && botUserId !== undefined && e.user === botUserId) return true;
-  // Any message carrying `bot_id` came from a bot or an app, and none of them should drive the
-  // agent. The condition used to be `bot_id !== undefined && subtype === "bot_message"`, which the
-  // NEXT line already covers — every subtype but `thread_broadcast` is dropped there — so this
-  // guard was dead, and the single case it did not reach was a bot's `thread_broadcast`. That is
-  // exactly the loop it is named for: two agents in one channel, both replying with broadcast,
-  // answer each other forever. Measured 2026-08-30; deleting the whole line changed no test.
-  if (e.bot_id !== undefined) return true;
+  // A message from a bot has `bot_id` and NO human author. That pairing is the whole rule, and
+  // both halves were learned the hard way on 2026-08-30.
+  //
+  // The condition was `bot_id !== undefined && subtype === "bot_message"`, which the NEXT line
+  // already covers — every subtype but `thread_broadcast` is dropped there — so the guard was dead,
+  // and the one case it never reached was a bot's `thread_broadcast`: two agents in a channel, both
+  // replying with broadcast, answering each other forever.
+  //
+  // Widening it to `bot_id !== undefined` alone then over-corrected, and the live suite caught it
+  // where no unit test did. `chat.postMessage` with a USER token produces a message authored by the
+  // human AND carrying the app's `bot_id` — workflow posts, integrations, anything a person drives
+  // through an app. Those are people talking, and they were being dropped.
+  if (e.bot_id !== undefined && e.user === undefined) return true;
   // Skip subtypes that aren't user messages — but keep "thread_broadcast".
   if (e.subtype !== undefined && e.subtype !== "thread_broadcast") return true;
   return false;
