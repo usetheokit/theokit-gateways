@@ -426,10 +426,15 @@ describe("GatewayRunner (T1.3)", () => {
   it("EC-E: stop drains in-flight handlers before disconnect", async () => {
     const a = new MockAdapter("telegram");
     let handlerDone = false;
+    let disconnectedWhileHandlerRan = false;
     const runner = new GatewayRunner({
       adapters: [a],
       handler: async () => {
         await new Promise((r) => setTimeout(r, 50));
+        // Read INSIDE the handler: this is the only moment at which "before disconnect" can be
+        // observed. Checking afterwards cannot tell an adapter disconnected early from one
+        // disconnected on time, because by then both look identical.
+        disconnectedWhileHandlerRan = a.disconnectCount > 0;
         handlerDone = true;
       },
     });
@@ -437,8 +442,16 @@ describe("GatewayRunner (T1.3)", () => {
     const inflight = a.emit(tg());
     // Initiate stop while handler is mid-flight.
     const stopP = runner.stop();
-    await Promise.all([inflight, stopP]);
-    expect(handlerDone).toBe(true);
+
+    // Awaited ALONE, and that is the whole assertion. The previous version awaited the handler
+    // promise alongside it, which finishes the handler by itself — so `handlerDone` was true
+    // whether or not stop() had drained anything, and mutation testing proved it: removing
+    // `inflight.add(work)` from the runner left this test green.
+    await stopP;
+    expect(handlerDone, "stop() returned while a handler was still running").toBe(true);
+    expect(disconnectedWhileHandlerRan, "the adapter was disconnected mid-handler").toBe(false);
+
+    await inflight;
   });
 
   it("EC-E: stop force-disconnects after drain timeout", async () => {
