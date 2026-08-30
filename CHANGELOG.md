@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **tools:** `measure-app-joinery.mjs` counts the channel joinery a consuming app carries, under one stated metric, so a later run can subtract from it rather than re-measure (#B-018)
+### Added
 - **gateway-whatsapp:** the unofficial (Baileys) backend answers a note the account owner writes to themselves. It used to discard every message the paired account sent, which foreclosed the one pattern a paired personal account is for (#84)
 
 ### Fixed

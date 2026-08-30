@@ -49,13 +49,15 @@ own quality gates.
 
 ## Index
 
-17 items — **Open** 1 · **In flight** 0 · **Closed** 16
+19 items — **Open** 3 · **In flight** 0 · **Closed** 16
 
-### Open (1)
+### Open (3)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
 | [`B-017`](#b-017--bridge-starts-fails-intermittently-on-chromium-profile-cleanup----) | `bridge-starts` fails intermittently on Chromium profile cleanup | `raw` | — |
+| [`B-018`](#b-018--a-theokit-app-writes-268-lines-of-channel-joinery-the-framework-should-own----) | A theokit app writes 268 lines of channel joinery the framework should own | `triaged` | — |
+| [`B-019`](#b-019--agent-output-reaches-a-chat-channel-through-a-presenter-nobody-wrote----) | Agent output reaches a chat channel through a presenter nobody wrote | `raw` | — |
 
 ### In flight (0)
 
@@ -544,3 +546,35 @@ dod:
   - the test passes 20 consecutive runs, or its teardown waits for the spawned Chromium to exit before removing the profile directory
   - if the race cannot be closed, the test is removed rather than left flaky, and what it used to prove is stated in the removal commit
 > Registered 2026-08-30. Pre-existing and unrelated to the Baileys change measured alongside it: the failure is in the whatsapp-web.js bridge, which that work does not touch.
+
+## B-018 — A theokit app writes 268 lines of channel joinery the framework should own   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: evolve
+source: human
+evidence: records/discoveries/opportunities/gateways-channel-descriptor-opportunity.md — SHIPPABLE, falsification evaluated, all 3 conditions unsatisfied. Originally measured in `appteste` on theokit 0.62.0, counting lines that are neither blank nor comment-only. 537 total across 12 files, classified by owner: 268 framework gap (catalog 114, lifecycle 74, webhook dispatch 51, validator bridge 19, leftovers 10), 50 a hand-written presenter, 86 mixed, 133 legitimate app concern. Supporting measurements: `startTyping` is on the base adapter contract, implemented by 1 of 10 adapters and called by nobody; `OutboundMessage.format` is honoured by 2 of 10, and the agent's `**bold**` reached LINE and WhatsApp as literal asterisks; 8 of 10 packages carry a `split.ts` with a hardcoded limit.
+why_now: eight channels were driven end to end in one session and every one of them needed the same five joins written by hand — a catalog entry, a lifecycle entry, a parse branch, a send branch, and in one case a validator bridge. Adding a channel costs four edits in every consuming app, which fails Open/Closed at the app boundary. Two of the joins are already filed as defects (#83 webhook ingest, #84 reply addressing); this item is the shape they share.
+status: triaged
+dod:
+  - a structural descriptor exists that describes required CONFIG (not env var names) and carries no import from theokit, proven by one socket channel and one webhook channel
+  - the test app's catalog, validator bridge, parse branch and send branch are deleted for those two channels, with the LOC delta measured
+  - one invalid channel configuration does not prevent healthy channels from starting
+  - webhook payloads enter through a public supported API rather than an `@internal` one
+  - existing direct consumers of the gateway packages still work without theokit
+> Registered 2026-08-30 after the architecture review. Scoped as a bounded spike by the reviewer, not a commitment to the full design: the 537 lines are measured, the descriptor is a hypothesis.
+
+## B-019 — Agent output reaches a chat channel through a presenter nobody wrote   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: evolve
+source: human
+evidence: `appteste/server/agent-loop.ts` — 50 lines that consume the agent's event stream and produce one chat message. Its first version took every frame carrying a `delta`, so a reply arrived on a real phone as `"TheOi! 👋"`, the `"The"` being a fragment of the model's reasoning. theokit already ships `Presenter<TOut>` + `PresenterRegistry` keyed by surface, with three implementations (web, terminal, json) over a canonical `AgentOutputEvent`. Meanwhile 8 of 10 gateway packages carry a `split.ts` with a hardcoded limit (`TELEGRAM_MAX_MESSAGE = 4096`, `DISCORD_MAX_MESSAGE = 2000`), which is presentation living in a transport package because there was nowhere else.
+why_now: the reasoning leak reached a real user, and the dialect gap is user-visible — `**Bom Sucesso (MG)**` was delivered with literal asterisks on LINE and WhatsApp. Kept SEPARATE from B-018 deliberately: the presenter carries an unresolved ownership question (split rules belong to the transport, event translation to the framework) and coupling the two would hold the better-evidenced change hostage to the larger one.
+status: raw
+dod:
+  - one channel presenter exists as `Presenter<OutboundMessage>`, registered under the channel id, consuming the adapter's existing splitter rather than replacing it
+  - agent output never exposes reasoning or non-user-facing events on a channel, covered by a test that fails on the current hand-written loop
+  - formatting and splitting are deterministic for the selected channel
+> Registered 2026-08-30 after the architecture review.
