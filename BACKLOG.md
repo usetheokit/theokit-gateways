@@ -49,9 +49,9 @@ own quality gates.
 
 ## Index
 
-23 items — **Open** 7 · **In flight** 0 · **Closed** 16
+24 items — **Open** 8 · **In flight** 0 · **Closed** 16
 
-### Open (7)
+### Open (8)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -62,6 +62,7 @@ own quality gates.
 | [`B-021`](#b-021--check_alignment_gatepy-reads-a-b-nnn-mentioned-in-prose-as-a-citation----) | `check_alignment_gate.py` reads a `B-NNN` mentioned in prose as a citation | `triaged` | — |
 | [`B-022`](#b-022--eleven-of-twelve-packages-have-no-mutation-runner----) | Eleven of twelve packages have no mutation runner | `raw` | — |
 | [`B-023`](#b-023--ten-of-eleven-packages-run-their-suite-without-a-typechecker----) | Ten of eleven packages run their suite without a typechecker | `raw` | — |
+| [`B-024`](#b-024--the-line-and-sms-webhook-servers-are-the-same-file-twice----) | The LINE and SMS webhook servers are the same file twice | `raw` | — |
 
 ### In flight (0)
 
@@ -663,3 +664,23 @@ dod:
 > Registered 2026-08-30 during B-020's `/review` pre-conditions. Gate G2 ran: `typecheck` and `tsc`
 > matched no existing item; B-021 and B-022 matched only on the repository name. Not merged into
 > B-022 — that one is about mutation runners, a different tool answering a different question.
+
+## B-024 — The LINE and SMS webhook servers are the same file twice   [ ]
+
+domain: theokit-gateways
+repo: theokit-gateways
+suggested_mode: evolve
+source: human
+evidence: `packages/gateway-line/src/webhook-server.ts` (162 lines) and `packages/gateway-sms/src/webhook-server.ts` (174) share 101 identical lines ignoring indentation — measured 2026-08-30 with `comm -12` over both files sorted. What is shared is the lazy `express` loader, the raw-body capture middleware including its comment about the drained-stream hang, and the `start()`/`stop()` lifecycle. What differs is signature verification, body parsing and routing, which are genuinely per-platform.
+why_now: the duplication has already been paid for. Commit `11000cc` fixed a write-once latch that made `start()` after `stop()` return without creating a listener — a server that reports success and answers nothing — and it had to fix it in BOTH files, because the latch is in the half that is copied. That is the DRY test stated in `~/.claude/CLAUDE.md` § 12 exactly: if changing it here means changing it there, the knowledge is duplicated. It surfaced again on 2026-08-30 as the largest block of duplicated production code in the promotion of `workspace` to `develop`.
+status: raw
+dod:
+  - the shared half lives in one place, and a change to the lifecycle or the raw-body capture is written once
+  - the per-platform half — verify, parse, route — stays in its own package, because it is not shared knowledge
+  - where the shared half lives is decided with a written reason: the core has no HTTP concern today and `express` is a peer of exactly these two packages, so adding it to `@theokit/gateway` is a boundary change and not a move
+  - the 21 existing tests across both packages still pass, and the latch regression test still fails when the fix is reverted
+> Registered 2026-08-30 while getting the promotion PR past SonarCloud. Gate G2 ran: `webhook-server`
+> and `webhook server` matched no existing item. Deliberately NOT done inside that pull request — an
+> architectural boundary decided under a metric's deadline, unreviewed, in a 56-commit promotion, is
+> the tail wagging the dog. `sonar.cpd.exclusions` narrows duplication detection to production code
+> and states this item as the reason.
