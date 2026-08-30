@@ -157,6 +157,39 @@ describe("mapEmailError — every rung of the ladder", () => {
     ).toBe("4.7.0 Too many connections");
   });
 
+  it("treats a bare string as unstructured, even when its words would match a later rule", () => {
+    // The early `typeof err === "string"` return could be deleted with every case above still
+    // green, because none of those strings would be classified differently further down. This one
+    // would: without the early return, "authentication failed" reaches the `/auth/i` rung and comes
+    // back as auth_failed. A string is not a structured error, and guessing a code from its prose
+    // is the kind of confident wrong answer the ladder exists to avoid.
+    expect(mapEmailError("authentication failed").code).toBe("unknown");
+    expect(mapEmailError("authentication failed").message).toBe("authentication failed");
+  });
+
+  it("reads 550 only from an EENVELOPE, not from any message that mentions it", () => {
+    // `code === "EENVELOPE" && /550/.test(message)`. Nothing carried "550" in its TEXT under a
+    // different code, so the left half was free: with it always true, any error whose message
+    // happens to contain those three digits becomes invalid_request — telling the caller to fix a
+    // payload when the socket died.
+    expect(
+      mapEmailError({ code: "ESOCKET", message: "read ECONNRESET after 550 bytes" }).code,
+    ).toBe("server_error");
+  });
+
+  it("ignores a responseCode that is not a number", () => {
+    // `typeof e.responseCode === "number" ? … : undefined`. A library that reports "535" as a
+    // string would, without the guard, be compared loosely by the `>= 500` rung and classified as
+    // a server error — the opposite of an auth failure, and a code that invites a retry.
+    expect(mapEmailError({ responseCode: "535", message: "bad credentials" }).code).toBe("unknown");
+  });
+
+  it("prefers String(err) over an empty message rather than reporting nothing", () => {
+    // `e.message.length > 0`. With `>= 0` an error carrying `message: ""` keeps the empty string,
+    // and the whole point of the fallback is that a reader gets SOMETHING.
+    expect(mapEmailError({ code: "EAUTH", message: "" }).message.length).toBeGreaterThan(0);
+  });
+
   it("says something rather than nothing when the failure carries no text at all", () => {
     // `message` falls back to `String(err)` when the error has none, and to "Unknown error" for
     // null/undefined. Both fallbacks were free to become "" — an error with an empty message is

@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING (behaviour):** all ten adapters now read `OutboundMessage.format`, where two did. A consumer passing `format: "markdown"` received plain text; it is now acted on wherever the platform can act on it — Telegram `parse_mode`, Slack `mrkdwn`, Teams `textFormat`. Matrix and Email cannot: `formatted_body` promises HTML, so markdown there would render literal asterisks and drop any `<tag>` in the text, and Email escapes markdown into a `<pre>` part rather than parsing it. Both say so once instead of faking it. Discord and Mattermost escape `*_`~` when `plain` is declared, so a user's literal asterisks stay literal. LINE, SMS and WhatsApp carry no formatting on their message type and now log once that the declared format was dropped, instead of discarding it in silence (#B-020)
 
 ### Fixed
+- **gateway-email:** 62.42% to 86.71%, the largest gap in the repository. Its automated-sender
+  filter — the loop guard that stops the bot answering auto-replies and mailing lists — could not
+  tell `&&` from `||`, because every test supplied a header whose value MATCHED. Under `||` a
+  message carrying `Auto-Submitted: no`, the RFC 3834 value that means *this is not automatic*, is
+  blocked: a human silenced for being honest. The `noreply@` pattern could also lose its anchor,
+  which blocks `not-noreply@` and `team-notifications@` — real addresses belonging to real people
+  (#B-024)
 - **every adapter now carries a measured mutation ratchet.** The ten first measurements averaged
   79%; they are 89% now, and each `break` is that package's own figure with one mutant of headroom
   — a floor that a real regression trips, never a target. Closed on the way: LINE stamped events
