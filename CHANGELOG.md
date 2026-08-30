@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING (behaviour):** all ten adapters now read `OutboundMessage.format`, where two did. A consumer passing `format: "markdown"` received plain text; it is now acted on wherever the platform can act on it — Telegram `parse_mode`, Slack `mrkdwn`, Teams `textFormat`. Matrix and Email cannot: `formatted_body` promises HTML, so markdown there would render literal asterisks and drop any `<tag>` in the text, and Email escapes markdown into a `<pre>` part rather than parsing it. Both say so once instead of faking it. Discord and Mattermost escape `*_`~` when `plain` is declared, so a user's literal asterisks stay literal. LINE, SMS and WhatsApp carry no formatting on their message type and now log once that the declared format was dropped, instead of discarding it in silence (#B-020)
 
 ### Fixed
+- **gateway-slack:** another bot's `thread_broadcast` reached the handler. The loop guard's own
+  condition was subsumed by the line after it, so it was dead — and the one case it never reached
+  was the loop it is named for: two agents in a channel, both replying with broadcast, answering
+  each other indefinitely (#B-024)
+- **gateway-teams, gateway-slack, gateway-mattermost:** 70.43% / 76.40% / 85.42% measured, and the
+  gaps closed — Teams read a channel id in only one of the two shapes it arrives in, stamped every
+  event with the time it was processed rather than the time it was sent (no test could tell, since
+  only the invalid-timestamp case existed), and its status ladder never reached 408, 404 or 500
+  exactly. Slack's error mapper could return `ok: true` on three of five branches without a single
+  test noticing (#B-024)
 - **all ten adapters:** mutation testing is wired into every one of them, where only the core had
   it. The first measurement is the finding: discord 62.50%, email 62.42%, teams 70.43%, slack
   76.40%, line 81.13%, telegram 81.75%, sms 83.72%, mattermost 85.42%, matrix 91.53% — against

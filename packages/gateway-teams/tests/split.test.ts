@@ -55,3 +55,24 @@ describe("splitForTeams", () => {
     expect(splitForTeams("hi")).toEqual(["hi"]);
   });
 });
+
+describe("splitForTeams — the boundaries and the fallback, which nothing pinned", () => {
+  it("breaks at a space when there is no newline anywhere", () => {
+    // The third boundary in the list, and the only one no test exercised: emptying `" "` killed
+    // nothing. It is the break point of a long paragraph with no line breaks — the ordinary shape
+    // of a chat message — and without it a word is cut in half.
+    const head = "a".repeat(6000);
+
+    expect(splitForTeams(`${head} ${"b".repeat(4000)}`)[0]).toBe(head);
+  });
+
+  it("prefers the last boundary over filling the window", () => {
+    // `lastResort: "last-boundary"`. Measured: with the only space 2000 characters in, this setting
+    // breaks there and leaves the rest of the window unused, where the fallback fills the window
+    // and cuts mid-word. Every existing case had its boundary near the limit or none at all, so
+    // the two were indistinguishable and the setting was free to be emptied.
+    const head = "a".repeat(2000);
+
+    expect(splitForTeams(`${head} ${"b".repeat(8000)}`)[0]).toBe(head);
+  });
+});
