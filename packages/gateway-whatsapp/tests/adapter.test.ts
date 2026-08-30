@@ -601,3 +601,30 @@ describe("WhatsAppAdapter — a stale unsubscribe must be a no-op", () => {
     expect(seen).toEqual(["second"]);
   });
 });
+
+describe("WhatsAppAdapter — a format the platform cannot carry as a flag", () => {
+  it("warns once that the declared format has nowhere to go", async () => {
+    // WhatsApp's emphasis is inline (`*bold*`), so there is no request field to set. The
+    // honest handling is to say the intent is being dropped — once, not per message.
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend, { botPhoneId: "5511999999999" });
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await adapter.sendMessage({
+      channel: { id: "5511000000000", type: "dm" },
+      text: "a",
+      format: "html",
+    });
+    await adapter.sendMessage({
+      channel: { id: "5511000000000", type: "dm" },
+      text: "b",
+      format: "html",
+    });
+
+    const warned = stderr.mock.calls
+      .map((c) => String(c[0]))
+      .filter((l) => l.includes("cannot carry it as a flag"));
+    expect(warned, "warned per message instead of once").toHaveLength(1);
+    stderr.mockRestore();
+  });
+});

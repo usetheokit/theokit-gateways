@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING (behaviour):** all ten adapters now read `OutboundMessage.format`, where two did. A consumer passing `format: "markdown"` received plain text and will now receive parsed markup — Telegram `parse_mode`, Slack `mrkdwn`, Matrix `formatted_body`, Teams `textFormat`, an escaped `html` part on Email. Discord and Mattermost escape `*_`~` when `plain` is declared, so a user's literal asterisks stay literal. LINE, SMS and WhatsApp carry no formatting on their message type and now log once that the declared format was dropped, instead of discarding it in silence (#B-020)
 ### Added
 - **backlog:** B-020 and B-021 measured and triaged — eight adapters ignoring a declared `format` field, and an alignment gate that reads a disclaimer as a citation (#B-020, #B-021)
 ### Added

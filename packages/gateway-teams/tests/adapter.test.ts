@@ -397,3 +397,37 @@ describe("TeamsAdapter — sendMessage", () => {
     expect((fakeApp.send as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe("TeamsAdapter — the format the caller declared", () => {
+  /**
+   * The activity carries `textFormat`, and without it Teams renders markup as characters.
+   * `OutboundMessage.format` was read by nobody here, so a caller saying "this is markdown"
+   * was telling the adapter something it discarded.
+   */
+  it("sets textFormat on the activity when the caller declares markdown", async () => {
+    const { adapter, fakeApp } = makeAdapter();
+    await adapter.connect();
+
+    const res = await adapter.sendMessage({
+      channel: { id: "conv-1", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(res.ok).toBe(true);
+    const activity = fakeApp.send.mock.calls[0]?.[1] as { textFormat?: string };
+    expect(activity.textFormat).toBe("markdown");
+  });
+
+  it("omits textFormat when no format is declared", async () => {
+    // The absence is the assertion: sending `textFormat` unconditionally would ask Teams to
+    // parse markup in a message the caller never said contained any.
+    const { adapter, fakeApp } = makeAdapter();
+    await adapter.connect();
+
+    await adapter.sendMessage({ channel: { id: "conv-1", type: "group" }, text: "plain" });
+
+    const activity = fakeApp.send.mock.calls[0]?.[1] as { textFormat?: string };
+    expect(activity.textFormat).toBeUndefined();
+  });
+});

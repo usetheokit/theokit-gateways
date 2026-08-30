@@ -39,6 +39,20 @@ function reportDrainFailure(err: unknown): void {
   console.error("[email] drain failed:", err instanceof Error ? err.message : err);
 }
 
+/**
+ * The HTML alternative for a message whose caller declared a format.
+ *
+ * `html` is escaped and wrapped rather than converted: a markdown-to-HTML renderer is a
+ * dependency this package does not have and does not need for the field to stop being
+ * discarded. What the caller declared reaches the wire; converting the syntax is the
+ * presenter's job (B-019), not the transport's.
+ */
+function htmlPartFor(text: string, format: "markdown" | "html"): string {
+  if (format === "html") return text;
+  const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<pre>${escaped}</pre>`;
+}
+
 export class EmailAdapter extends BasePlatformAdapter {
   readonly platform = "email" as const;
   private readonly options: EmailAdapterOptions;
@@ -183,6 +197,11 @@ export class EmailAdapter extends BasePlatformAdapter {
         to,
         subject,
         text: out.text,
+        // Sent ALONGSIDE `text`, never instead of it: a plain-text reader shows the text
+        // part, so a client that cannot render HTML still gets the message.
+        ...(out.format === "markdown" || out.format === "html"
+          ? { html: htmlPartFor(out.text, out.format) }
+          : {}),
         ...(inReplyTo !== undefined ? { inReplyTo } : {}),
         ...(references !== undefined ? { references } : {}),
       });

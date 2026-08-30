@@ -248,7 +248,13 @@ export class TeamsAdapter extends BasePlatformAdapter {
     let lastActivityId: string | undefined;
     for (const part of parts) {
       try {
-        const result = await this.app.send(out.channel.id, { type: "message", text: part });
+        // Teams parses markup only when the activity says so. Without `textFormat` the
+        // caller's declared `format` was discarded and markdown arrived as characters.
+        const result = await this.app.send(out.channel.id, {
+          type: "message",
+          text: part,
+          ...activityFormat(out.format),
+        });
         lastActivityId = result?.id;
       } catch (err) {
         return { ok: false, error: mapTeamsError(err) };
@@ -305,4 +311,15 @@ export class TeamsAdapter extends BasePlatformAdapter {
   get _seenConversationsSize(): number {
     return this.seenConversations.size;
   }
+}
+
+/**
+ * The `textFormat` fragment for a declared format, or nothing.
+ *
+ * A named function rather than a spread ternary inside the activity literal: `sendMessage` was
+ * already at its cognitive-complexity limit, and a branch buried in an object literal is the
+ * kind a reader skims past.
+ */
+function activityFormat(format: OutboundMessage["format"]): { textFormat?: "markdown" } {
+  return format === "markdown" || format === "html" ? { textFormat: "markdown" } : {};
 }

@@ -398,3 +398,40 @@ describe("MattermostAdapter lifecycle", () => {
     expect(adapter.getClient()).toBe(handle);
   });
 });
+
+describe("MattermostAdapter — the format the caller declared", () => {
+  /**
+   * Mattermost renders markdown natively, so `format: "markdown"` needs nothing sent. The
+   * interesting case is the opposite one: a caller declaring `plain` is saying the text is
+   * NOT markup, and sending it raw makes a user's literal `*asterisks*` render as italic.
+   *
+   * That is why "the platform has no flag" is not the same as "the field does nothing here".
+   */
+  it("escapes markdown characters when the caller declares plain", async () => {
+    const handle = makeMockHandle();
+    const adapter = new MattermostAdapter({ baseUrl: "https://mm.acme.com", accessToken: "tok" });
+    installMockHandle(adapter, handle);
+
+    await adapter.sendMessage({
+      channel: { id: "chan-1", type: "group" },
+      text: "literal *asterisks* and _underscores_",
+      format: "plain",
+    });
+
+    expect(handle.posts[0]?.message).toBe("literal \\*asterisks\\* and \\_underscores\\_");
+  });
+
+  it("sends markdown untouched, because the platform parses it natively", async () => {
+    const handle = makeMockHandle();
+    const adapter = new MattermostAdapter({ baseUrl: "https://mm.acme.com", accessToken: "tok" });
+    installMockHandle(adapter, handle);
+
+    await adapter.sendMessage({
+      channel: { id: "chan-1", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(handle.posts[0]?.message).toBe("**bold**");
+  });
+});

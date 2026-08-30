@@ -513,3 +513,129 @@ describe("MatrixAdapter lifecycle", () => {
     expect(adapter.getClient()).toBe(client);
   });
 });
+
+describe("MatrixAdapter — the format the caller declared", () => {
+  /**
+   * `OutboundMessage.format` is declared on the base contract and this adapter discarded it.
+   * Matrix documents `formatted_body` + `format: "org.matrix.custom.html"` for markup, so the
+   * field has somewhere real to go — and until it did, a caller saying "this is markdown" was
+   * telling the adapter something it threw away.
+   *
+   * Behavioural, not structural: the cross-adapter gate proves the field is READ, and these
+   * prove it reaches the wire.
+   */
+  it("sends formatted_body when the caller declares markdown", async () => {
+    const sent: Array<Record<string, unknown>> = [];
+    const client = makeMockClient();
+    (client as unknown as { sendMessage: unknown }).sendMessage = async (
+      _roomId: string,
+      content: Record<string, unknown>,
+    ) => {
+      sent.push(content);
+      return { event_id: "$formatted" };
+    };
+    const adapter = new MatrixAdapter({
+      homeserverUrl: "https://matrix.example.org",
+      accessToken: "t",
+      userId: "@bot:example.org",
+      __clientFactory: () => client,
+    });
+    await adapter.connect();
+
+    const res = await adapter.sendMessage({
+      channel: { id: "!room:example.org", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.format).toBe("org.matrix.custom.html");
+    expect(sent[0]?.formatted_body).toBe("**bold**");
+  });
+
+  it("leaves a plain message on the convenience call, with no format field", async () => {
+    // The absence matters as much as the presence: a plain message carrying an empty
+    // `formatted_body` would ask the homeserver to parse markup that is not there.
+    const client = makeMockClient();
+    const adapter = new MatrixAdapter({
+      homeserverUrl: "https://matrix.example.org",
+      accessToken: "t",
+      userId: "@bot:example.org",
+      __clientFactory: () => client,
+    });
+    await adapter.connect();
+
+    const res = await adapter.sendMessage({
+      channel: { id: "!room:example.org", type: "group" },
+      text: "plain words",
+    });
+
+    expect(res.ok).toBe(true);
+  });
+});
+
+describe("MatrixAdapter — markup the homeserver refuses", () => {
+  /**
+   * ADR-2 of the B-020 plan: an undelivered message is worse than an unformatted one. The
+   * caller loses the content and the user sees nothing, which is a strictly worse outcome
+   * than losing the bold.
+   *
+   * The catch is narrow on purpose. A bare `catch` here would swallow an expired token as a
+   * formatting problem and retry into the same 401, turning an actionable error into a silent
+   * double failure — the risk the plan's Drawbacks section names.
+   */
+  it("retries without the markup when the homeserver rejects the formatted body", async () => {
+    const client = makeMockClient();
+    let formattedAttempts = 0;
+    (client as unknown as { sendMessage: unknown }).sendMessage = async () => {
+      formattedAttempts += 1;
+      throw Object.assign(new Error("bad html"), { httpStatus: 400, errcode: "M_BAD_JSON" });
+    };
+    const adapter = new MatrixAdapter({
+      homeserverUrl: "https://matrix.example.org",
+      accessToken: "t",
+      userId: "@bot:example.org",
+      __clientFactory: () => client,
+    });
+    await adapter.connect();
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const res = await adapter.sendMessage({
+      channel: { id: "!room:example.org", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(formattedAttempts).toBe(1);
+    const logged = stderr.mock.calls.map((c) => String(c[0])).join("");
+    expect(logged).toContain("gateway-matrix");
+    stderr.mockRestore();
+  });
+
+  it("does NOT retry when the failure is a permission error", async () => {
+    // The discrimination is the point. Retrying a 403 without markup would fail identically
+    // and report a formatting problem where there is an authentication one.
+    const client = makeMockClient();
+    (client as unknown as { sendMessage: unknown }).sendMessage = async () => {
+      throw Object.assign(new Error("forbidden"), { httpStatus: 403, errcode: "M_FORBIDDEN" });
+    };
+    const adapter = new MatrixAdapter({
+      homeserverUrl: "https://matrix.example.org",
+      accessToken: "t",
+      userId: "@bot:example.org",
+      __clientFactory: () => client,
+    });
+    await adapter.connect();
+
+    const res = await adapter.sendMessage({
+      channel: { id: "!room:example.org", type: "group" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe("permission_denied");
+  });
+});

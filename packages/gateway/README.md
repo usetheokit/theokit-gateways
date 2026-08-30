@@ -13,6 +13,31 @@ pnpm add @theokit/gateway-telegram grammy
 pnpm add @theokit/gateway-discord discord.js
 ```
 
+
+## How each adapter treats `OutboundMessage.format`
+
+All ten read it. What they can DO with it differs by platform, and a consumer should not have
+to read ten packages to learn which — so the classes are stated here.
+
+| Platform | What it does with `format` |
+|---|---|
+| telegram | sets `parse_mode` |
+| slack | sets `mrkdwn` |
+| matrix | sends `formatted_body` + `format`, and retries as plain text if the homeserver refuses the markup |
+| teams | sets `textFormat` on the activity |
+| email | sends an escaped `html` part **alongside** `text`, never instead of it |
+| discord, mattermost | markdown is native, so `markdown` needs no flag; **`plain` escapes** `*_\`~` so a user's literal asterisks stay literal |
+| line, sms, whatsapp | the platform carries no formatting on this message type — the adapter logs once that the declared format was dropped, rather than discarding it in silence |
+
+**What none of them does is convert markdown to a platform's dialect.** `format` states the
+caller's INTENT and lets the transport act on it; translating `**bold**` into WhatsApp's
+`*bold*` is a presentation concern and is tracked separately.
+
+Measured 2026-08-30: before this, two of ten read the field. An agent answered
+`**Bom Sucesso (MG)**` and LINE and WhatsApp delivered literal asterisks, which is what a
+declared-and-ignored field costs at the far end.
+
+
 ## Architecture (5 pieces)
 
 | Module | Responsibility |

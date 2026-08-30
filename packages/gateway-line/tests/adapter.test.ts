@@ -616,3 +616,35 @@ describe("LineAdapter lifecycle", () => {
     expect(r.error?.code).toBe("not_connected");
   });
 });
+
+describe("LineAdapter — the format the caller declared", () => {
+  /**
+   * This is the platform where the silence was OBSERVED. An agent answered
+   * `**Bom Sucesso (MG)**` on 2026-08-30 and the person read literal asterisks, because a LINE
+   * text message carries `{ type: "text", text }` and nothing else — and the adapter dropped
+   * the declared intent without a word.
+   *
+   * The fix is not formatting the text; that is the presenter's job (B-019). It is refusing to
+   * discard the field in silence.
+   */
+  it("warns once that a LINE text message cannot carry a declared format", async () => {
+    const client = makeMockClient();
+    const adapter = new LineAdapter({
+      channelSecret: "s",
+      channelAccessToken: "t",
+      __clientFactory: () => client,
+    });
+    await adapter.connect();
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await adapter.sendMessage({ channel: { id: "U1", type: "dm" }, text: "a", format: "markdown" });
+    await adapter.sendMessage({ channel: { id: "U1", type: "dm" }, text: "b", format: "markdown" });
+
+    const warned = stderr.mock.calls
+      .map((c) => String(c[0]))
+      .filter((l) => l.includes("cannot carry it"));
+    expect(warned, "warned per message instead of once").toHaveLength(1);
+    stderr.mockRestore();
+    await adapter.disconnect();
+  });
+});

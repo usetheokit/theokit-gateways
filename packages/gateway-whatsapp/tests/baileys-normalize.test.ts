@@ -161,7 +161,9 @@ describe("normalizeBaileysMessage", () => {
       // behalf, triggered by the owner's own words. Only the self-chat is the agent's business.
       expect(
         normalizeBaileysMessage(
-          envelope({ key: { remoteJid: "5511999999999@s.whatsapp.net", fromMe: true, id: "TO_ANA" } }),
+          envelope({
+            key: { remoteJid: "5511999999999@s.whatsapp.net", fromMe: true, id: "TO_ANA" },
+          }),
           { selfJids: SELF },
         ),
       ).toBeUndefined();

@@ -340,3 +340,57 @@ describe("inboundToMessageEvent (normalize)", () => {
     expect(event.sms.messageId).toBe("SMx");
   });
 });
+
+describe("SMSAdapter — a format the medium cannot carry", () => {
+  /**
+   * SMS is plain text by definition: there is no flag, no markup, no alternative part. So the
+   * honest handling of `format: "markdown"` is not to pretend — it is to say once that the
+   * caller's declared intent is being dropped.
+   *
+   * `rules/error-handling.md` is the reason. Silently discarding a field the contract declares
+   * is the swallowed-error shape: nothing fails, and the caller learns their formatting never
+   * arrived from a user, weeks later.
+   */
+  it("warns once that the medium cannot carry a declared format", async () => {
+    const adapter = makeAdapterWithMockBackend({
+      sendMessage: async () => ({ ok: true as const, messageId: "sid-1" }),
+      verifySignature: () => true,
+      parseInbound: () => undefined,
+    } as unknown as SMSBackend);
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await adapter.sendMessage({
+      channel: { id: "+14155550199", type: "dm" },
+      text: "**bold**",
+      format: "markdown",
+    });
+    await adapter.sendMessage({
+      channel: { id: "+14155550199", type: "dm" },
+      text: "**more**",
+      format: "markdown",
+    });
+
+    const warnings = stderr.mock.calls
+      .map((c) => String(c[0]))
+      .filter((l) => l.includes("cannot carry"));
+    expect(warnings, "warned per message instead of once").toHaveLength(1);
+    stderr.mockRestore();
+  });
+
+  it("says nothing when no format is declared", async () => {
+    const adapter = makeAdapterWithMockBackend({
+      sendMessage: async () => ({ ok: true as const, messageId: "sid-1" }),
+      verifySignature: () => true,
+      parseInbound: () => undefined,
+    } as unknown as SMSBackend);
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await adapter.sendMessage({ channel: { id: "+14155550199", type: "dm" }, text: "plain" });
+
+    const warnings = stderr.mock.calls
+      .map((c) => String(c[0]))
+      .filter((l) => l.includes("cannot carry"));
+    expect(warnings).toHaveLength(0);
+    stderr.mockRestore();
+  });
+});

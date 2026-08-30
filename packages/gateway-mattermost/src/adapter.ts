@@ -95,7 +95,10 @@ export class MattermostAdapter extends BasePlatformAdapter {
       // among the ten adapters, so anything past Mattermost's 16383-rune cap came
       // back HTTP 400 and the user saw nothing at all.
       let lastId: string | undefined;
-      for (const chunk of splitForMattermost(out.text)) {
+      // Mattermost parses markdown natively, so `markdown` needs no flag; `plain` is the
+      // case that needs work, because raw text would be parsed anyway.
+      const body = out.format === "plain" ? escapeMarkdown(out.text) : out.text;
+      for (const chunk of splitForMattermost(body)) {
         const post = await this.handle.client.createPost({
           channel_id: out.channel.id,
           message: chunk,
@@ -238,4 +241,19 @@ function mapMattermostError(err: unknown): SendResult {
       message: e.message ?? (err instanceof Error ? err.message : String(err)),
     },
   };
+}
+
+/**
+ * Escape the characters this platform would otherwise parse as markup.
+ *
+ * Called only when the caller declared `format: "plain"` — an explicit statement that the text
+ * is NOT markup. Without it, a user's literal `*asterisks*` render as italic on a platform that
+ * parses markdown natively, which is the caller's intent being silently inverted.
+ *
+ * Deliberately narrow: the four characters that open an inline span. A full markdown escaper
+ * would also touch `#`, `>` and `-` at line starts, which are far more common in ordinary prose
+ * and whose escaping is more visible than the problem it solves.
+ */
+function escapeMarkdown(text: string): string {
+  return text.replace(/([*_`~])/g, "\\$1");
 }

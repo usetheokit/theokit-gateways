@@ -160,10 +160,57 @@ export class MatrixAdapter extends BasePlatformAdapter {
           },
         };
       }
-      const res = await this.client.sendTextMessage(roomId, out.text);
+      const res = await this.sendHonouringFormat(roomId, out);
       return { ok: true, messageId: res.event_id };
     } catch (err) {
       return mapMatrixError(err);
+    }
+  }
+
+  /**
+   * Send `out`, letting the caller's declared `format` decide the shape.
+   *
+   * Matrix carries markup in `formatted_body` alongside a `format` discriminator, and
+   * `sendTextMessage` is a convenience that hard-codes a bare `body` with nowhere to put it.
+   * So a formatted message takes the general call and a plain one keeps the convenience —
+   * which also means a plain message never ships an empty `formatted_body`, asking the
+   * homeserver to parse markup that is not there.
+   *
+   * Falls back to the convenience call when the client does not expose `sendMessage`: it is
+   * optional on {@link MatrixSdkClient} because a consumer may inject a narrower double, and
+   * losing the formatting is better than losing the message.
+   *
+   * @internal
+   */
+  private async sendHonouringFormat(
+    roomId: string,
+    out: OutboundMessage,
+  ): Promise<{ event_id: string }> {
+    const wantsMarkup = out.format === "markdown" || out.format === "html";
+    if (!wantsMarkup || this.client?.sendMessage === undefined) {
+      // Non-null: every caller reaches here past the connected guard.
+      return await (this.client as MatrixSdkClient).sendTextMessage(roomId, out.text);
+    }
+    try {
+      return await this.client.sendMessage(roomId, {
+        msgtype: "m.text",
+        body: out.text,
+        format: "org.matrix.custom.html",
+        formatted_body: out.text,
+      });
+    } catch (err) {
+      // ADR-2: an undelivered message is worse than an unformatted one — the caller loses the
+      // content and the user sees nothing, which is strictly worse than losing the bold.
+      //
+      // The discrimination is the whole guard. A bare `catch` would swallow an expired token
+      // as a formatting problem and retry into the same 401, turning an actionable error into
+      // a silent double failure. Only a request the server judged malformed is retried; every
+      // other failure rises to `mapMatrixError`, which already names it.
+      if (!isMalformedRequest(err)) throw err;
+      process.stderr.write(
+        "[gateway-matrix] homeserver rejected the formatted body; retrying as plain text\n",
+      );
+      return await (this.client as MatrixSdkClient).sendTextMessage(roomId, out.text);
     }
   }
 
@@ -258,6 +305,19 @@ interface MatrixRestError {
   errcode?: string;
   message?: string;
   name?: string;
+}
+
+/**
+ * Did the homeserver judge the REQUEST malformed, as opposed to refusing the sender?
+ *
+ * Narrow by construction: a 400 with `M_BAD_JSON` or `M_INVALID_PARAM` is the server saying it
+ * could not parse what it was given. A 401, 403 or 429 is about who is asking or how often,
+ * and retrying those without markup would fail identically while reporting the wrong cause.
+ */
+function isMalformedRequest(err: unknown): boolean {
+  const e = err as MatrixRestError;
+  if (e.httpStatus !== 400) return false;
+  return e.errcode === "M_BAD_JSON" || e.errcode === "M_INVALID_PARAM";
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: error mapping ladder is exhaustive — each branch maps one Matrix errcode/HTTP status to one canonical code; splitting hurts traceability.

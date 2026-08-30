@@ -17,6 +17,7 @@
  * @public
  */
 
+import { normalizeWhatsAppId } from "../../allowlist.js";
 import type {
   WhatsAppBackend,
   WhatsAppInboundEvent,
@@ -24,7 +25,6 @@ import type {
   WhatsAppSendResult,
   WhatsAppStatusReceipt,
 } from "../../backend-types.js";
-import { normalizeWhatsAppId } from "../../allowlist.js";
 import { normalizeBaileysMessage } from "./normalize.js";
 import {
   type BaileysSocketFactory,

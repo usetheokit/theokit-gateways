@@ -63,7 +63,6 @@ const CREDENTIAL_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["gateway-whatsapp", ["accessToken", "appSecret"]],
 ]);
 
-
 /**
  * Platforms whose wire format carries no rich text, so ignoring `format` is CORRECT there.
  *
@@ -298,6 +297,28 @@ function emptyTextGuardVerdict(source: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Every adapter that never reads `out.format`, or a reason it could not be read.
+ *
+ * Extracted from the `it` so the assertion is one line: a test whose body branches is a test
+ * whose failure needs reading twice before you know what broke.
+ */
+async function adaptersIgnoringFormat(): Promise<string[]> {
+  const ignoring: string[] = [];
+  for (const pkg of await adapterPackages()) {
+    if (NO_RICH_TEXT.has(pkg)) continue;
+    const source = await readFile(join(PACKAGES_DIR, pkg, "src", "adapter.ts"), "utf8").catch(
+      () => undefined,
+    );
+    if (source === undefined) {
+      ignoring.push(`${pkg}: no adapter.ts`);
+      continue;
+    }
+    if (!/\bout\.format\b/.test(source)) ignoring.push(pkg);
+  }
+  return ignoring;
+}
+
 describe("cross-adapter contract", () => {
   it("identity-guards EVERY handler unsubscribe, in every file that declares one", async () => {
     // Per-declaration, not per-package. The package-level version of this check passed
@@ -512,7 +533,6 @@ describe("cross-adapter contract", () => {
     ).toEqual([]);
   });
 
-
   it("reads out.format in every adapter whose platform has rich text", async () => {
     // `OutboundMessage.format` is declared `"plain" | "markdown" | "html"` on the base contract and
     // documented as a rendering hint. Measured 2026-08-30: two adapters read it and eight do not,
@@ -526,25 +546,11 @@ describe("cross-adapter contract", () => {
     // correctly. Per-package tests prove the mapping; this one catches the silent ignore that no
     // single package's suite can be asked to notice — the same divergence class as the guards
     // above.
-    const pkgs = await adapterPackages();
-    const ignoring: string[] = [];
+    const ignoring = await adaptersIgnoringFormat();
 
-    for (const pkg of pkgs) {
-      if (NO_RICH_TEXT.has(pkg)) continue;
-      const source = await readFile(join(PACKAGES_DIR, pkg, "src", "adapter.ts"), "utf8").catch(
-        () => undefined,
-      );
-      if (source === undefined) {
-        ignoring.push(`${pkg}: no adapter.ts`);
-        continue;
-      }
-      if (!/\bout\.format\b/.test(source)) ignoring.push(pkg);
-    }
-
-    expect(
-      ignoring,
-      "adapters that never read the `format` their own contract declares",
-    ).toEqual([]);
+    expect(ignoring, "adapters that never read the `format` their own contract declares").toEqual(
+      [],
+    );
   });
 
   it("every credential field is either masked or recorded as uncovered", async () => {

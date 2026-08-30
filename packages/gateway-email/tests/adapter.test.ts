@@ -803,3 +803,55 @@ describe("EmailAdapter", () => {
     });
   });
 });
+
+describe("EmailAdapter — the format the caller declared", () => {
+  /**
+   * `html` rides ALONGSIDE `text` as a multipart alternative, never instead of it: a
+   * plain-text reader shows the text part, so a client that cannot render HTML still gets
+   * the message. Sending html-only would make the mail unreadable in exactly the clients
+   * this field is supposed to serve.
+   */
+  it("sends an html part alongside text when the caller declares a format", async () => {
+    const { adapter, smtp } = mk();
+    await adapter.connect();
+
+    const res = await adapter.sendMessage({
+      channel: { id: "someone@example.com", type: "dm" },
+      text: "**bold**",
+      format: "markdown",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(smtp.sent[0]?.text).toBe("**bold**");
+    expect(smtp.sent[0]?.html).toBeDefined();
+  });
+
+  it("sends text only when no format is declared", async () => {
+    const { adapter, smtp } = mk();
+    await adapter.connect();
+
+    await adapter.sendMessage({
+      channel: { id: "someone@example.com", type: "dm" },
+      text: "plain",
+    });
+
+    expect(smtp.sent[0]?.html).toBeUndefined();
+  });
+
+  it("escapes the text it puts in the html part", async () => {
+    // The html part is escaped and wrapped, not rendered: a markdown renderer is a dependency
+    // this package does not have. Without escaping, a message containing `<script>` would
+    // become one in the recipient's client.
+    const { adapter, smtp } = mk();
+    await adapter.connect();
+
+    await adapter.sendMessage({
+      channel: { id: "someone@example.com", type: "dm" },
+      text: "<script>alert(1)</script>",
+      format: "markdown",
+    });
+
+    expect(smtp.sent[0]?.html).not.toContain("<script>");
+    expect(smtp.sent[0]?.html).toContain("&lt;script&gt;");
+  });
+});

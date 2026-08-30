@@ -208,17 +208,40 @@ function isDispatchable(
  * "let it through". See {@link BaileysDispatchContext} for what the backend must supply before a
  * note-to-self can be answered at all.
  */
+/** The envelope's addressing, once every field it needs has been read and none was missing. */
+interface Addressed {
+  readonly key: Record<string, unknown>;
+  readonly remoteJid: string;
+  readonly wamid: string;
+}
+
+/**
+ * Read the envelope's addressing, or refuse it.
+ *
+ * Split from {@link normalizeBaileysMessage} because the two halves answer different questions:
+ * this one asks whether the envelope IS one — has a key, a chat, an id — and the caller asks
+ * whether it should be delivered. Together they read as one ladder of early returns, which is
+ * what pushed the function past its complexity budget when the dispatch verdict grew a third
+ * outcome.
+ */
+function addressingOf(envelope: RawEnvelope | undefined): Addressed | undefined {
+  const key = envelope === undefined ? undefined : asObject(envelope.key);
+  if (key === undefined) return undefined;
+  const remoteJid = asText(key.remoteJid);
+  const wamid = asText(key.id);
+  if (remoteJid === undefined || wamid === undefined) return undefined;
+  return { key, remoteJid, wamid };
+}
+
 export function normalizeBaileysMessage(
   raw: unknown,
   ctx?: BaileysDispatchContext,
 ): WhatsAppInboundEvent | undefined {
   const envelope = asObject(raw) as RawEnvelope | undefined;
-  const key = envelope === undefined ? undefined : asObject(envelope.key);
-  if (key === undefined) return undefined;
+  const addressed = addressingOf(envelope);
+  if (addressed === undefined) return undefined;
 
-  const remoteJid = asText(key.remoteJid);
-  const wamid = asText(key.id);
-  if (remoteJid === undefined || wamid === undefined) return undefined;
+  const { key, remoteJid, wamid } = addressed;
   const verdict = isDispatchable(key, remoteJid, wamid, ctx);
   if (verdict === "no") return undefined;
 
