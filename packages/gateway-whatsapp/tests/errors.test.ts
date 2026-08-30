@@ -4,12 +4,40 @@
 
 import { describe, expect, it } from "vitest";
 
-import { mapWhatsAppCloudError, mapWhatsAppWebError } from "../src/errors.js";
+import { ConfigurationError, mapWhatsAppCloudError, mapWhatsAppWebError } from "../src/errors.js";
+
+describe("ConfigurationError", () => {
+  it("names this package in the message a caller did not write one for", () => {
+    // The class is `@public`, and the prefix passed to `super` exists so a caller does not have to
+    // type it. Every call site inside this package types it anyway, so the prefix argument is
+    // reached by nothing — measured, emptying it killed no test. A consumer taking the default is
+    // the one who meets it, and would get an error opening with ": " and naming no package.
+    const e = new ConfigurationError({ code: "peer_missing" });
+
+    expect(e.message).toBe("gateway-whatsapp: peer_missing");
+    expect(e.name).toBe("ConfigurationError");
+  });
+});
 
 describe("mapWhatsAppCloudError", () => {
   it("test_map_cloud_error_190_to_auth_failed", () => {
     const e = mapWhatsAppCloudError(401, { error: { code: 190, message: "expired" } });
     expect(e.code).toBe("auth_failed");
+    // The code alone left the message branch unmeasured: removing it changes only the text, and
+    // no test here read the text. "Bearer token rejected" is what tells a reader the credential
+    // is the problem rather than the payload.
+    expect(e.message).toContain("Bearer token rejected");
+  });
+
+  it("reports auth_failed from either signal, not only from the two together", () => {
+    // `errCode === 190 || status === 401`. Every existing case sent BOTH, so mutating either
+    // operand away left the other carrying the test. Meta is not obliged to send both.
+    expect(mapWhatsAppCloudError(200, { error: { code: 190, message: "x" } }).code).toBe(
+      "auth_failed",
+    );
+    expect(mapWhatsAppCloudError(401, { error: { code: 0, message: "x" } }).code).toBe(
+      "auth_failed",
+    );
   });
 
   it("test_map_cloud_error_130_to_rate_limit", () => {
@@ -17,6 +45,7 @@ describe("mapWhatsAppCloudError", () => {
     // exercising. The code it passes is fabricated — see the block below.
     const e = mapWhatsAppCloudError(429, { error: { code: 130, message: "throttle" } });
     expect(e.code).toBe("rate_limit");
+    expect(e.message).toContain("Throttled");
   });
 
   // Every code below is copied from Meta's published error table, not invented.
@@ -32,6 +61,9 @@ describe("mapWhatsAppCloudError", () => {
       error: { code: 131047, message: "Re-engagement message" },
     });
     expect(e.code).toBe("session_window_expired");
+    // The remedy is the reason this code is separated from invalid_request at all. Asserting only
+    // the code left the sentence that carries it unprotected.
+    expect(e.message).toContain("send an approved template instead");
   });
 
   it("maps 130429 — Cloud API throughput reached — to rate_limit", () => {
@@ -112,7 +144,14 @@ describe("mapWhatsAppWebError", () => {
   });
 
   it("handles undefined gracefully", () => {
-    expect(mapWhatsAppWebError(undefined).code).toBe("unknown");
+    const e = mapWhatsAppWebError(undefined);
+    expect(e.code).toBe("unknown");
+    // "Gracefully" is a claim about the message too. The `?? "unknown bridge error"` fallback was
+    // free to become "" with this test still green, and an error whose text is the empty string is
+    // exactly what "handled gracefully" must not mean — the bridge failed and the log says nothing.
+    expect(e.message, "the fallback left the error with no text at all").toBe(
+      "unknown bridge error",
+    );
   });
 });
 
@@ -144,8 +183,60 @@ describe("mapWhatsAppCloudError — the recipient allowlist (131030)", () => {
       error: { code: 131030, message: "(#131030) Recipient phone number not in allowed list" },
     });
 
-    expect(e.message).toMatch(/allow(ed)? list|allowlist/i);
-    expect(e.message).toContain("131030");
+    // Assert the text this branch ADDS, never text Meta already sent. The previous assertions
+    // were `/allow(ed)? list/i` and "131030" — both already present in the input message above,
+    // and the fallthrough returns that message verbatim. They passed whether or not this branch
+    // ran, which is the one thing a test about a branch must not do.
+    // BOTH halves of the concatenation. Mutation testing showed the first one could be emptied
+    // with this test still green, because "WhatsApp API setup" lives in the second — an assertion
+    // on half a sentence measures half a sentence.
+    expect(e.message, "the first half of the remedy is missing").toContain(
+      "not on this number's allowed list",
+    );
+    expect(e.message, "the second half of the remedy is missing").toContain("WhatsApp API setup");
+    expect(e.message, "Meta's own text was dropped instead of appended to").toContain("131030");
+  });
+
+  it("reports invalid_request from either signal, not only from the two together", () => {
+    // `status === 400 || errCode === 100`, and every existing case sent both — so each operand
+    // could be deleted with the other still carrying the test.
+    expect(mapWhatsAppCloudError(400, { error: { code: 0, message: "x" } }).code).toBe(
+      "invalid_request",
+    );
+    expect(mapWhatsAppCloudError(200, { error: { code: 100, message: "x" } }).code).toBe(
+      "invalid_request",
+    );
+  });
+
+  it("treats HTTP 500 itself as a server error, not only what is above it", () => {
+    // `status >= 500`. No case used exactly 500, so `>` and `>=` were indistinguishable — and 500
+    // is the status Meta actually returns most. The first valid value at a boundary is the value
+    // an off-by-one gets wrong.
+    expect(mapWhatsAppCloudError(500, { error: { code: 0, message: "x" } }).code).toBe(
+      "server_error",
+    );
+  });
+
+  it("falls back to the status when Meta sends no message at all", () => {
+    // `parsed.error?.message ?? \`HTTP ${status}\``. Every case here supplies a message, so the
+    // fallback was never taken and could be emptied unnoticed — leaving an error whose text is
+    // the empty string, which is the one thing a log reader cannot act on.
+    const e = mapWhatsAppCloudError(503, {});
+
+    expect(e.message).toContain("503");
+  });
+
+  it("does not paste the 24-hour remedy onto errors that are not about the window", () => {
+    // `if (code === "session_window_expired")` mutated to `true` survived: every other test
+    // asserted a substring that ALSO appears once the wrong remedy is prepended. An error telling
+    // an operator to send a template when the recipient is simply unreachable sends them to spend
+    // an afternoon on the wrong fix.
+    const e = mapWhatsAppCloudError(400, {
+      error: { code: 131026, message: "Unable to deliver message" },
+    });
+
+    expect(e.code).toBe("undeliverable");
+    expect(e.message).not.toContain("approved template");
   });
 
   it("still maps an ordinary 400 to invalid_request", () => {

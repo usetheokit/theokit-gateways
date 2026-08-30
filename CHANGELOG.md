@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING (behaviour):** all ten adapters now read `OutboundMessage.format`, where two did. A consumer passing `format: "markdown"` received plain text; it is now acted on wherever the platform can act on it — Telegram `parse_mode`, Slack `mrkdwn`, Teams `textFormat`. Matrix and Email cannot: `formatted_body` promises HTML, so markdown there would render literal asterisks and drop any `<tag>` in the text, and Email escapes markdown into a `<pre>` part rather than parsing it. Both say so once instead of faking it. Discord and Mattermost escape `*_`~` when `plain` is declared, so a user's literal asterisks stay literal. LINE, SMS and WhatsApp carry no formatting on their message type and now log once that the declared format was dropped, instead of discarding it in silence (#B-020)
 
 ### Fixed
+- **gateway-whatsapp:** the first mutation measurement ever taken on an adapter package scored
+  73.96%, against 95.63% for the core — 44 mutants that no test could kill. It is 95.86% now, and
+  the seven that remain are enumerated with a proven reason in `tests/MUTATION.md`. The gap was not
+  theoretical: the branch that adds the "register the recipient" remedy could be deleted with every
+  test green, because the assertion checked words Meta's own message already contained; a wildcard
+  written with a space around it was silently dropped from the allowlist; splitting on a space —
+  WhatsApp's third-choice boundary, and the only one an ordinary chat message uses — was pinned by
+  nothing; and two negative-case tests asserted `toBeInstanceOf` without the message, which
+  `rules/testing.md` § 4.1 names as half a test (#B-024)
 - **gateway-discord, gateway-telegram, gateway-line:** three tests asserted `adapter.platform` — a
   constant no `disconnect()` or `startTyping()` can change, so each reported green whatever the code
   did. They now watch what their names claim: that a client which never connected is never torn
