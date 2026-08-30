@@ -118,9 +118,16 @@ describe("DiscordAdapter (T6.1)", () => {
   });
 
   it("disconnect is idempotent on never-connected", async () => {
+    // `adapter.platform` was the assertion here, and it is a constant that no `disconnect()` can
+    // change — the test read green whatever the adapter did. What "on never-connected" actually
+    // claims is that the underlying client is never torn down when it was never brought up, so
+    // that is what is watched.
+    const destroy = vi.spyOn(adapter.getBot(), "destroy");
+
     await adapter.disconnect();
     await adapter.disconnect();
-    expect(adapter.platform).toBe("discord");
+
+    expect(destroy, "destroy() ran on a client that never connected").not.toHaveBeenCalled();
   });
 
   it("connect() with bad token returns false (does NOT throw)", async () => {

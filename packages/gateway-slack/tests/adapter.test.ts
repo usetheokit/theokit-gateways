@@ -463,6 +463,22 @@ describe("SlackAdapter — teardown races connect (#31)", () => {
 
     expect(stopMock).toHaveBeenCalledOnce();
   });
+
+  it("reconnects after an explicit disconnect", async () => {
+    // The other half of the same invariant: tearing down exactly once is only useful if the
+    // adapter can then come back. `connect()` is guarded by `connected`, so a disconnect that
+    // stops clearing it turns the guard into a latch — connect() answers true, starts nothing,
+    // and the bot is deaf with no error anywhere. Deleting that line left this whole package
+    // green until this test existed.
+    const a = new SlackAdapter({ botToken: "xoxb-x", appToken: "xapp-x" });
+
+    expect(await a.connect()).toBe(true);
+    await a.disconnect();
+    expect(await a.connect()).toBe(true);
+
+    expect(startMock, "the second connect() never started the app").toHaveBeenCalledTimes(2);
+    await a.disconnect();
+  });
 });
 
 describe("SlackAdapter — sendMessage guard order", () => {

@@ -528,6 +528,28 @@ describe("LineAdapter lifecycle", () => {
     await adapter.disconnect();
   });
 
+  it("reconnects after an explicit disconnect", async () => {
+    // The guard on connect() must be a guard, not a latch: `disconnect()` clears `connected`, and
+    // if it ever stops, connect() answers true without building a client — the adapter goes deaf
+    // and nothing reports it. Removing that one line left all 84 tests in this package green.
+    let built = 0;
+    const adapter = new LineAdapter({
+      channelSecret: "s",
+      channelAccessToken: "t",
+      __clientFactory: () => {
+        built += 1;
+        return makeMockClient();
+      },
+    });
+
+    expect(await adapter.connect()).toBe(true);
+    await adapter.disconnect();
+    expect(await adapter.connect()).toBe(true);
+
+    expect(built, "the second connect() never built a client").toBe(2);
+    await adapter.disconnect();
+  });
+
   it("connect() reports failure when LINE rejects the access token", async () => {
     // Building a LINE client performs no I/O whatsoever, so connect() used to
     // answer true for any string and the failure surfaced at the first send —
@@ -606,7 +628,14 @@ describe("LineAdapter lifecycle", () => {
     const adapter = new LineAdapter({ channelSecret: "s", channelAccessToken: "t" });
     await adapter.disconnect();
     await adapter.disconnect();
-    expect(adapter.platform).toBe("line");
+
+    // The assertion used to be `adapter.platform`, which no `disconnect()` can change. The two
+    // awaits above did carry "does not throw" on their own, but the name claims more than that:
+    // after tearing down twice the adapter must be coherently DISCONNECTED, not half-torn-down.
+    // A send is the only place that state is observable from outside.
+    const r = await adapter.sendMessage({ channel: { id: "U-alice", type: "dm" }, text: "hi" });
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe("not_connected");
   });
 
   it("sendMessage before connect() reports not_connected instead of throwing", async () => {

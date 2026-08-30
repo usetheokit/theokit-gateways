@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING (behaviour):** all ten adapters now read `OutboundMessage.format`, where two did. A consumer passing `format: "markdown"` received plain text; it is now acted on wherever the platform can act on it — Telegram `parse_mode`, Slack `mrkdwn`, Teams `textFormat`. Matrix and Email cannot: `formatted_body` promises HTML, so markdown there would render literal asterisks and drop any `<tag>` in the text, and Email escapes markdown into a `<pre>` part rather than parsing it. Both say so once instead of faking it. Discord and Mattermost escape `*_`~` when `plain` is declared, so a user's literal asterisks stay literal. LINE, SMS and WhatsApp carry no formatting on their message type and now log once that the declared format was dropped, instead of discarding it in silence (#B-020)
 
 ### Fixed
+- **gateway-discord, gateway-telegram, gateway-line:** three tests asserted `adapter.platform` — a
+  constant no `disconnect()` or `startTyping()` can change, so each reported green whatever the code
+  did. They now watch what their names claim: that a client which never connected is never torn
+  down, that a non-numeric chat id never reaches Telegram, and that a doubly-disconnected LINE
+  adapter reports `not_connected` rather than a half-torn-down state (#B-024)
+- **gateway-line, gateway-matrix, gateway-slack, gateway-email:** deleting one line from
+  `disconnect()` — the clear of the `connected` flag — turns the guard on `connect()` into a latch:
+  the adapter answers `true`, builds nothing, and goes deaf with no error anywhere. Seven of the
+  nine adapters carrying that shape had no test that noticed; four now do, and `gateway-email`'s
+  existing "without reinit" test now checks the reinit half it never looked at (#B-024)
 - **gateway-matrix, gateway-teams:** two tests named `disconnect is idempotent` asserted nothing —
   their whole body was a comment saying that not throwing was the assertion. A second `stop()` on an
   already-stopped client throws nowhere either, so both passed on a broken disconnect. Each now

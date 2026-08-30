@@ -422,6 +422,29 @@ describe("MatrixAdapter lifecycle", () => {
     stderr.mockRestore();
   });
 
+  it("reconnects after an explicit disconnect", async () => {
+    // A guard that never clears is a latch: connect() would answer true forever while building
+    // nothing, leaving a bot that is silent and looks healthy. Deleting the clear in disconnect()
+    // left every test in this package passing until this one existed.
+    let built = 0;
+    const adapter = new MatrixAdapter({
+      homeserverUrl: "https://matrix.example.org",
+      accessToken: "t",
+      userId: "@bot:example.org",
+      __clientFactory: () => {
+        built += 1;
+        return makeMockClient();
+      },
+    });
+
+    expect(await adapter.connect()).toBe(true);
+    await adapter.disconnect();
+    expect(await adapter.connect()).toBe(true);
+
+    expect(built, "the second connect() never built a client").toBe(2);
+    await adapter.disconnect();
+  });
+
   describe("teardown aborts do not kill the host process (issue #12)", () => {
     /** Connects with a stubbed global fetch and hands back the SDK's fetchFn. */
     async function connectCapturingFetchFn(): Promise<{

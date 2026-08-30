@@ -127,13 +127,23 @@ class FakeSmtp implements ISmtpClient {
 function mk(extra: Partial<typeof VALID_OPTS> & Record<string, unknown> = {}) {
   const imap = new FakeImap();
   const smtp = new FakeSmtp();
+  // How many times connect() built its clients. `connect()` is guarded by `this.connected`, so this
+  // counter is the only place the difference between "the guard held" and "the guard latched" is
+  // visible from outside: both leave connect() answering true.
+  const built = { imap: 0, smtp: 0 };
   const adapter = new EmailAdapter({
     ...VALID_OPTS,
     ...extra,
-    __imapFactory: () => imap,
-    __smtpFactory: () => smtp,
+    __imapFactory: () => {
+      built.imap += 1;
+      return imap;
+    },
+    __smtpFactory: () => {
+      built.smtp += 1;
+      return smtp;
+    },
   });
-  return { adapter, imap, smtp };
+  return { adapter, imap, smtp, built };
 }
 
 describe("EmailAdapter", () => {
@@ -231,10 +241,33 @@ describe("EmailAdapter", () => {
     });
 
     it("is idempotent — second connect returns true without reinit", async () => {
-      const { adapter } = mk();
+      const { adapter, built } = mk();
       await adapter.connect();
       const ok2 = await adapter.connect();
       expect(ok2).toBe(true);
+
+      // "without reinit" is the half the assertion above cannot see: a second connect that DID
+      // rebuild both clients also answers true, and would leak an IMAP connection per call.
+      expect(built, "connect() rebuilt its clients on the second call").toEqual({
+        imap: 1,
+        smtp: 1,
+      });
+      await adapter.disconnect();
+    });
+
+    it("reconnects after an explicit disconnect", async () => {
+      // The guard must be a guard, not a latch. `disconnect()` clears `connected`, and if it ever
+      // stops doing so, connect() returns true without building anything — the adapter goes deaf
+      // with no error anywhere. Removing that one line leaves the whole suite green without this.
+      const { adapter, built } = mk();
+      await adapter.connect();
+      await adapter.disconnect();
+      await adapter.connect();
+
+      expect(built, "the second connect() did not rebuild its clients").toEqual({
+        imap: 2,
+        smtp: 2,
+      });
       await adapter.disconnect();
     });
   });
