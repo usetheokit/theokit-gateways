@@ -50,6 +50,36 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 60_000;
 /** How long to wait for one send to be acknowledged. */
 const DEFAULT_SEND_TIMEOUT_MS = 30_000;
 
+/**
+ * What the pairing is doing, for a caller that must ASK rather than be told.
+ *
+ * {@link WhatsAppBaileysBackendOptions.onQr} is push: it fires when WhatsApp issues a code, at a
+ * moment the caller does not choose. A screen is pull — it loads when someone opens it and has to
+ * ask what is true right now. With only the callback, showing a QR anywhere means every consumer
+ * keeping its own copy of the latest code and its own notion of whether pairing already succeeded,
+ * which is this backend's bookkeeping copied into each of them.
+ *
+ * @public
+ */
+export interface WhatsAppPairingState {
+  /**
+   * `idle` before `connect()`, `awaiting_scan` while a code is outstanding, `connected` once the
+   * socket opens, `closed` when it dies without a scan.
+   */
+  readonly status: "idle" | "awaiting_scan" | "connected" | "closed";
+  /**
+   * The most recent code, present only while `awaiting_scan`.
+   *
+   * WhatsApp reissues roughly every 20 seconds and the previous one stops working, so a screen
+   * holding the old square shows something that cannot be scanned. It is cleared on `connected`
+   * and on `closed` for the same reason: offering a code that leads nowhere is worse than
+   * offering none.
+   */
+  readonly qr?: string;
+  /** When that code arrived, so a UI can show its age instead of a stale square. */
+  readonly qrAt?: number;
+}
+
 /** Construction options. @public */
 export interface WhatsAppBaileysBackendOptions {
   /**
@@ -66,6 +96,13 @@ export interface WhatsAppBaileysBackendOptions {
   readonly socketFactory?: BaileysSocketFactory;
   /**
    * Where the pairing QR goes, as often as WhatsApp reissues it.
+   *
+   * **QR IS THE ONLY WAY IN.** Baileys exposes `requestPairingCode`, and WhatsApp refuses the codes
+   * this backend asks for — measured 2026-08-30 across three attempts, on both the 12- and 13-digit
+   * forms of a Brazilian number. The reference implementation of this same transport documents the
+   * same conclusion in one line ("Login is QR-only") while sending a custom `browser` triple exactly
+   * as this one does, so the triple is NOT established as the cause and no cause is claimed here.
+   * What is established is the outcome: a caller with no route to display a QR has no route to pair.
    *
    * Defaults to stderr. It is exposed here because a host that is not a terminal — a service, a
    * container, a web app — has no way to read stderr back to the person holding the phone, and
@@ -121,6 +158,8 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
    * `rules/error-handling.md` § 3: fail clear, and log with enough context to act.
    */
   private lastCloseError?: unknown;
+  /** The pairing, as a caller may ask for it. Never handed out mutable. */
+  private pairingState: WhatsAppPairingState = { status: "idle" };
   private inboundHandler?: (event: WhatsAppInboundEvent) => Promise<void>;
   private statusHandler?: (receipt: WhatsAppStatusReceipt) => Promise<void>;
   /**
@@ -217,12 +256,26 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
     return true;
   }
 
+  /**
+   * What the pairing is doing right now.
+   *
+   * Read it as often as a screen needs; it is a snapshot, not a subscription.
+   */
+  get pairing(): WhatsAppPairingState {
+    return this.pairingState;
+  }
+
   /** Build a socket through the injected factory, or the real one. @internal */
   private async buildSocket(): Promise<BaileysSocketLike> {
     const factory = this.opts.socketFactory ?? createBaileysSocket;
     return factory({
       sessionDir: this.opts.sessionDir,
-      ...(this.opts.onQr !== undefined ? { onQr: this.opts.onQr } : {}),
+      // ALWAYS supplied, even when the caller wants none: a backend that only forwards cannot
+      // answer `pairing`, and the caller's own handler still runs, so wiring one costs nothing.
+      onQr: (qr: string) => {
+        this.pairingState = { status: "awaiting_scan", qr, qrAt: Date.now() };
+        this.opts.onQr?.(qr);
+      },
     });
   }
 
@@ -265,12 +318,16 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
     socket.ev.on("connection.update", (update) => {
       if (!isCurrent()) return;
       if (update.connection === "open") {
+        // The code is dropped, not kept: a scanned QR is spent, and a UI holding it would offer
+        // something that no longer pairs anything.
+        this.pairingState = { status: "connected" };
         settle(true);
         return;
       }
       if (update.connection !== "close") return;
       this.lastCloseError = update.lastDisconnect?.error;
       this.connected = false;
+      this.pairingState = { status: "closed" };
       // A closed socket is finished, and Baileys carries its own reconnect machinery: left
       // alone it keeps dialling under a backend that believes it is disconnected. Clearing the
       // reference too is what stops the next `connect()` overwriting it and stranding this one

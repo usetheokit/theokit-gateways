@@ -744,3 +744,84 @@ describe("WhatsAppBaileysBackend — the window before a socket exists", () => {
     expect(socket.ended, "a socket delivered after disconnect was left running").toBe(true);
   }, 30_000);
 });
+
+describe("WhatsAppBaileysBackend — pairing a caller can ASK about", () => {
+  // `onQr` is PUSH: it fires when WhatsApp issues a code, which is a moment the caller does not
+  // choose. A screen is PULL — it loads whenever someone opens it and has to ask what the state is
+  // right now. With only the callback, showing a QR in a UI means the app keeping its own copy and
+  // its own notion of whether the pairing already succeeded, which is the framework's bookkeeping
+  // living in every consumer.
+  const tick = () => new Promise((r) => setTimeout(r, 10));
+
+  function pairingBackend() {
+    const socket = new FakeSocket();
+    let issue: ((qr: string) => void) | undefined;
+    const backend = new WhatsAppBaileysBackend({
+      sessionDir: "/tmp/does-not-matter",
+      connectTimeoutMs: 500,
+      socketFactory: async (opts) => {
+        // The backend must ALWAYS supply one, or it cannot record what it never sees.
+        issue = opts.onQr;
+        return socket;
+      },
+    });
+    return { backend, socket, issue: (qr: string) => issue?.(qr) };
+  }
+
+  it("is idle before connect, holds the newest QR while waiting, and clears it once open", async () => {
+    const { backend, socket, issue } = pairingBackend();
+    expect(backend.pairing).toEqual({ status: "idle" });
+
+    const connecting = backend.connect();
+    await tick();
+
+    issue("QR-ONE");
+    expect(backend.pairing.status).toBe("awaiting_scan");
+    expect(backend.pairing.qr).toBe("QR-ONE");
+    expect(typeof backend.pairing.qrAt).toBe("number");
+
+    // WhatsApp reissues every ~20s, and a screen showing the previous square is a screen showing
+    // something that no longer works.
+    issue("QR-TWO");
+    expect(backend.pairing.qr).toBe("QR-TWO");
+
+    socket.open();
+    await connecting;
+    expect(backend.pairing.status).toBe("connected");
+    expect(backend.pairing.qr, "a connected pairing still offered a code to scan").toBeUndefined();
+  });
+
+  it("still delivers every QR to a caller's own onQr", async () => {
+    // Recording must not replace. An app wiring `onQr` to a log or a websocket keeps working.
+    const seen: string[] = [];
+    const socket = new FakeSocket();
+    let issue: ((qr: string) => void) | undefined;
+    const backend = new WhatsAppBaileysBackend({
+      sessionDir: "/tmp/does-not-matter",
+      connectTimeoutMs: 500,
+      onQr: (qr) => seen.push(qr),
+      socketFactory: async (opts) => {
+        issue = opts.onQr;
+        return socket;
+      },
+    });
+    const connecting = backend.connect();
+    await tick();
+    issue?.("QR-A");
+    issue?.("QR-B");
+    socket.open();
+    await connecting;
+    expect(seen, "the caller's own onQr stopped being called").toEqual(["QR-A", "QR-B"]);
+  });
+
+  it("reports closed when the socket dies before anyone scans", async () => {
+    const { backend, socket, issue } = pairingBackend();
+    const connecting = backend.connect();
+    await tick();
+    issue("QR-ONE");
+    socket.emit("connection.update", { connection: "close" });
+    await connecting;
+    expect(backend.pairing.status).toBe("closed");
+    expect(backend.pairing.qr, "a dead socket still advertised its stale QR").toBeUndefined();
+  });
+});

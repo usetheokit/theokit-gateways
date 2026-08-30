@@ -13,7 +13,7 @@ Multi-channel gateway packages for the Theo ecosystem, extracted from `theokit-s
 | `@theokit/gateway-matrix` | Matrix | **full** — send and receive |
 | `@theokit/gateway-mattermost` | Mattermost | **full** — send and receive |
 | `@theokit/gateway-email` | Email (nodemailer + imapflow) | **full** — send and receive |
-| `@theokit/gateway-line` | LINE Messaging API | partial — send only; the inbound test exists and has never run |
+| `@theokit/gateway-line` | LINE Messaging API | **full** — send and receive |
 | `@theokit/gateway-whatsapp` | WhatsApp (Meta Cloud API + whatsapp-web.js + Baileys) | partial — the Cloud API send is accepted by Meta, delivery and inbound not asserted here; the two unofficial backends reach a pairing QR and have never been paired here |
 | `@theokit/gateway-teams` | Microsoft Teams | **none** — no credentials; four tests written, never executed |
 | `@theokit/gateway-sms` | SMS (Twilio / Plivo / Vonage) | **none** — no credentials; inbound not written |
@@ -50,10 +50,12 @@ Three caveats the column is too narrow to carry, and they are the honest part:
   `failed`) arrives only by webhook, and no test here reads one. Its inbound half was
   proven once by hand against a live webhook, which is evidence, but not evidence this
   suite can re-run.
-- **LINE's inbound round trip is written and has never executed.** It drives LINE's own
+- **LINE's inbound round trip needs a tunnel to run at all.** It drives LINE's own
   `setWebhookEndpoint` / `testWebhookEndpoint` and verifies the signature over the raw
-  bytes; it needs `INTEGRATION_PUBLIC_URL` pointing at a reachable HTTPS endpoint.
-  Written and unrun is not the same as covered.
+  bytes, so it skips unless `INTEGRATION_PUBLIC_URL` points at a reachable HTTPS endpoint.
+  First executed 2026-08-30 against a cloudflared tunnel, and it passed — LINE delivered a
+  signed webhook to the capture server. It is the one row here whose status depends on
+  something the runner must set up, so a plain `pnpm integration` still reports it skipped.
 - **Teams needs a work tenant, not a personal account.** Personal Teams
   (`teams.live.com`) has no app catalog, so a custom bot cannot be installed and the
   two outbound tests have nothing to post into. The two authentication tests need only
