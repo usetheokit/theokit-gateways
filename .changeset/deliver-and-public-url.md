@@ -12,10 +12,15 @@
 "@theokit/gateway-whatsapp": minor
 ---
 
-**The peer floor on `@theokit/gateway` rises to `>=0.9.0`.** Every adapter now implements `deliver`
-over `runHandler`, and neither exists below that — an adapter installed against an older core does
-not build. The `dep-check` gate caught this by building the whole workspace against the floor each
-package claims, which is the one thing a version range cannot tell you by reading it.
+**The peer floor on `@theokit/gateway` rises with this release.** Every adapter now implements
+`deliver` over `runHandler`, and neither exists in an older core — an adapter installed against one
+does not build. `dep-check` caught that by building the whole workspace against the floor each
+package claimed, which is the one thing a version range cannot tell you by reading it.
+
+The floor is set in the version commit rather than here, because a range cannot name a version that
+does not exist yet: raised in the workspace, the same gate then fails the other way round — every
+adapter declaring a floor above the core installed beside it. That is the shape `fa70153` used when
+these ranges were first written.
 
 `deliver(event)` — every adapter can now be handed an event that arrived out of band (#83).
 
