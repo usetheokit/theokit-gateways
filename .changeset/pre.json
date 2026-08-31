@@ -1,0 +1,20 @@
+{
+  "mode": "pre",
+  "tag": "next",
+  "initialVersions": {
+    "@theokit/gateway-integration": "0.0.0",
+    "@theokit/gateway": "0.9.0",
+    "@theokit/gateway-discord": "0.2.1",
+    "@theokit/gateway-email": "0.3.1",
+    "@theokit/gateway-line": "0.3.0",
+    "@theokit/gateway-matrix": "0.3.0",
+    "@theokit/gateway-mattermost": "0.2.1",
+    "@theokit/gateway-slack": "0.3.1",
+    "@theokit/gateway-sms": "0.3.1",
+    "@theokit/gateway-teams": "0.2.1",
+    "@theokit/gateway-telegram": "0.3.1",
+    "@theokit/gateway-whatsapp": "0.4.1",
+    "@theokit/gateway-tools": "0.0.0"
+  },
+  "changesets": []
+}
