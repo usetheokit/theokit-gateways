@@ -62,7 +62,7 @@ jobs:
           node scripts/peer-majors.mjs
 
   verify:
-    name: ${{ matrix.pkg }} @ ${{ matrix.dep }}@${{ matrix.major }}
+    name: ${{ matrix.pkg }} @ ${{ matrix.dep }}@${{ matrix.version }}
     needs: derive
     runs-on: ubuntu-latest
     strategy:
@@ -94,5 +94,5 @@ jobs:
         env:
           PEER_PKG: ${{ matrix.pkg }}
           PEER_DEP: ${{ matrix.dep }}
-          PEER_MAJOR: ${{ matrix.major }}
-        run: node scripts/check-peer-major.mjs "$PEER_PKG" "$PEER_DEP" "$PEER_MAJOR"
+          PEER_VERSION: ${{ matrix.version }}
+        run: node scripts/check-peer-major.mjs "$PEER_PKG" "$PEER_DEP" "$PEER_VERSION"

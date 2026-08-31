@@ -9,7 +9,12 @@
  * that leaves an override behind silently changes what every later command resolves, which is a
  * worse failure than the one it was investigating.
  *
- * Usage: node scripts/check-peer-major.mjs <package-name> <dep> <major>
+ * Usage: node scripts/check-peer-major.mjs <package-name> <dep> <version>
+ *
+ * The VERSION, not the major. `^7` is not a way to ask for a major: semver excludes prereleases
+ * from a caret range, so `^7` matches nothing when the only published 7.x is `7.0.0-rc14` — the
+ * case `baileys >=7.0.0-rc14` presents, and how this was found. `peer-majors.mjs` resolves the
+ * concrete version, so this script installs a fact rather than constructing a range.
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -19,9 +24,9 @@ const ROOT = new URL("..", import.meta.url).pathname;
 const MANIFEST = join(ROOT, "package.json");
 const BACKUP = join(ROOT, "package.json.peer-major-backup");
 
-const [pkg, dep, major] = process.argv.slice(2);
-if (!pkg || !dep || !major) {
-  console.error("usage: node scripts/check-peer-major.mjs <package-name> <dep> <major>");
+const [pkg, dep, version] = process.argv.slice(2);
+if (!pkg || !dep || !version) {
+  console.error("usage: node scripts/check-peer-major.mjs <package-name> <dep> <version>");
   process.exit(2);
 }
 
@@ -54,10 +59,10 @@ let failure;
 try {
   const manifest = JSON.parse(readFileSync(MANIFEST, "utf8"));
   manifest.pnpm ??= {};
-  manifest.pnpm.overrides = { ...manifest.pnpm.overrides, [dep]: `^${major}` };
+  manifest.pnpm.overrides = { ...manifest.pnpm.overrides, [dep]: version };
   writeFileSync(MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`);
 
-  console.log(`\n── ${pkg} against ${dep}@^${major} ──\n`);
+  console.log(`\n── ${pkg} against ${dep}@${version} ──\n`);
   run("pnpm", ["install", "--no-frozen-lockfile"]);
 
   // Build the workspace dependencies FIRST. A package here resolves its siblings through their
@@ -81,7 +86,7 @@ try {
 }
 
 if (failure !== undefined) {
-  console.error(`\nFAIL  ${pkg} does not hold against ${dep}@^${major}`);
+  console.error(`\nFAIL  ${pkg} does not hold against ${dep}@${version}`);
   process.exit(1);
 }
-console.log(`\nPASS  ${pkg} holds against ${dep}@^${major}`);
+console.log(`\nPASS  ${pkg} holds against ${dep}@${version}`);
