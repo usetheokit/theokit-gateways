@@ -1,0 +1,56 @@
+# `develop` accepts one thing: the promotion from `workspace`.
+#
+# WHY A WORKFLOW AND NOT THE HOOK. `rules/git-safety.md` says `develop` "advances only by promoting
+# `workspace`" and to "never merge anything other than `workspace` into it", and
+# `hooks/validate-command.sh` blocks it — for a `git merge` typed in a local checkout. Nothing here
+# merges that way. Every one of this repository's 43 promotions landed through `gh pr merge`, which
+# runs server-side where no local hook exists. The rule was enforced on the path nobody uses and
+# unenforced on the path everybody uses.
+#
+# That is not hypothetical. A sibling repository carrying the identical rule and the identical hook
+# accumulated THIRTY merged `main → develop` pull requests through exactly this gap, because its
+# back-merge workflow targeted `develop` and no hook ever saw them. This repository is clean —
+# 43 of 43 from `workspace` — because its back-merge targets `workspace` instead. The gate exists so
+# that stays true by construction rather than by the author of the next workflow remembering.
+#
+# NO `paths:` FILTER, deliberately. This is marked required in branch protection, and a required
+# check that does not run on some pull requests deadlocks them permanently. The same reasoning is
+# written at the top of `dep-check.yml`; the opposite reasoning is written at the top of
+# `peer-majors.yml`, which is not required and therefore may filter.
+#
+# WHAT IT DOES NOT COVER. A push directly to `develop`, which branch protection already refuses, and
+# a merge performed by someone with permission to bypass protection. It answers one question — did
+# this work originate on `workspace` — which is the question the rule asks.
+name: Promotion gate
+
+on:
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  head-is-workspace:
+    name: develop accepts only workspace
+    runs-on: ubuntu-latest
+    steps:
+      - name: check the head branch
+        env:
+          # Never interpolated into the script: a branch name is attacker-chosen text on a fork
+          # pull request, and `${{ }}` inside `run:` expands it as source code.
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          if [ "$HEAD_REF" = "workspace" ]; then
+            echo "head is workspace — this is the promotion the rule allows"
+            exit 0
+          fi
+          echo "::error::'${HEAD_REF}' cannot be merged into develop."
+          echo
+          echo "rules/git-safety.md § 1: develop advances ONLY by promoting workspace, and nothing"
+          echo "other than workspace may be merged into it. Work originates on workspace; develop"
+          echo "integrates it."
+          echo
+          echo "Land this on workspace first, then open workspace -> develop."
+          exit 1
