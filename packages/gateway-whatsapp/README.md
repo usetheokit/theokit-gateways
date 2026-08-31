@@ -7,6 +7,18 @@ subprocess bridge, and a `baileys` socket.
 Pre-1.0 contract per ADR D314 — breaking changes allowed within 0.x. (This line used to
 pin a version number, and named 0.1.0 while the package shipped 0.3.2.)
 
+
+## How inbound arrives
+
+**It depends on the backend**, and the two are not alike.
+
+`cloud` is an **HTTP webhook** the application must authenticate: Meta signs with
+`X-Hub-Signature-256` over the raw body, and `theokit/server/webhook` exports `whatsapp()` and
+`whatsappSubscribe()` for the signature and the GET handshake. Parsed events go to
+`adapter.deliver(event)`.
+
+`baileys` and `web` hold **their own socket** — there is no webhook to host, and messages reach
+`onInbound` once `connect()` resolves.
 ## Choosing a backend
 
 | Backend | Needs | Exercised against real WhatsApp |
@@ -81,4 +93,3 @@ PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome node your-app.js
 The bridge spawns without an explicit `env`, so it inherits yours and the variable
 reaches Puppeteer. `WhatsAppBaileysBackend` needs no browser at all, which is the reason
 it exists (B-001).
-

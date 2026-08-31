@@ -4,6 +4,11 @@ Matrix protocol platform adapter for [`@theokit/gateway`](../gateway).
 
 Decentralized federation. Works with matrix.org, element.io, self-hosted Synapse/Dendrite, etc. Bot in `@bot:matrix.org` can receive from `@alice:element.io` via federation built-in.
 
+
+## How inbound arrives
+
+**Sync loop.** `startClient()` long-polls the homeserver and timeline events reach `onInbound`.
+There is no webhook to host and nothing for an application to authenticate.
 ## Install
 
 ```bash

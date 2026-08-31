@@ -10,6 +10,19 @@ Three backends, opt-in via peer-dep:
 | Plivo | `plivo` | `X-Plivo-Signature-V3` (HMAC-SHA256) |
 | Vonage | `@vonage/server-sdk` | `Authorization: Bearer <JWT>` |
 
+
+## How inbound arrives
+
+**HTTP webhook**, and the application must authenticate it. Each provider signs differently —
+Twilio over the URL plus the sorted POST parameters, Plivo over another string, Vonage with a JWT —
+so the verification lives here rather than in a framework that would have to reimplement all three.
+
+Two ways to serve it. `createWebhookServer` mounts the Express routes for you; or host the route
+yourself and pass `smsWebhookVerifier(adapter)` to a framework webhook seam.
+
+Set `publicUrl` to the address the provider posts to. Twilio SIGNS that URL, and behind a proxy that
+rewrites `host` — a tunnel, an ingress, a load balancer terminating TLS — the address the request
+arrived on is the internal one and every genuine delivery fails its signature.
 ## Install
 
 ```bash

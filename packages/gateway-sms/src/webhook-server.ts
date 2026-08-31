@@ -16,9 +16,11 @@
  * @public
  */
 
-import type { Express, NextFunction, Request, Response } from "express";
+import { listenerLifecycle, loadPeer, rawBodyCapture } from "@theokit/gateway";
+import type { Express, Request, Response } from "express";
 import type { SMSAdapter } from "./adapter.js";
 import type { SignatureContext } from "./backend-types.js";
+
 import { ConfigurationError } from "./errors.js";
 
 export interface WebhookServerOptions {
@@ -37,18 +39,16 @@ export interface WebhookServer {
   stop(): Promise<void>;
 }
 
-async function loadExpress(): Promise<{ default: () => Express }> {
-  try {
-    const mod = await import("express");
-    // Both ESM and CJS forms; normalize to { default }.
-    const fn = (mod as { default?: () => Express }).default ?? (mod as unknown as () => Express);
-    return { default: fn };
-  } catch {
-    throw new ConfigurationError({
-      code: "express_not_installed",
-      message: 'gateway-sms: peer-dep "express" not installed. Run: pnpm add express',
-    });
-  }
+async function loadExpress(): Promise<() => Express> {
+  return loadPeer<() => Express>(
+    async () => import("express"),
+    () => {
+      throw new ConfigurationError({
+        code: "express_not_installed",
+        message: 'gateway-sms: peer-dep "express" not installed. Run: pnpm add express',
+      });
+    },
+  );
 }
 
 /**
@@ -93,42 +93,10 @@ function buildSignatureContext(req: Request, publicUrl?: string): SignatureConte
  * that only sends messages never pays for it.
  */
 export async function createWebhookServer(opts: WebhookServerOptions): Promise<WebhookServer> {
-  const expressMod = await loadExpress();
-  const app: Express = opts.app ?? expressMod.default();
+  const createApp = await loadExpress();
+  const app: Express = opts.app ?? createApp();
   const prefix = opts.path ?? "/sms";
   const backend = opts.adapter.getBackendKind();
-
-  // Raw-body capture middleware — must run BEFORE express.urlencoded/json,
-  // since signature verification needs the exact byte sequence.
-  const rawCapture = (req: Request, _res: Response, next: NextFunction) => {
-    // Someone else already drained the stream — a global `express.json()` or
-    // `express.urlencoded()` mounted ahead of this router is the usual cause.
-    // Without this branch, `req.on("end")` never fires for a stream that already
-    // ended, `next()` is never called, and the request HANGS with no response:
-    // the provider times out and retries, and nothing is logged. Failing loudly
-    // and continuing is strictly better — verification then refuses the empty
-    // body with a 401, a visible symptom that points at the real cause.
-    if (req.readableEnded || req.complete) {
-      process.stderr.write(
-        "[gateway-sms] raw body already consumed before signature capture — mount this router " +
-          "BEFORE any global body parser, or signature verification cannot see the bytes it " +
-          "must hash\n",
-      );
-      (req as Request & { rawBody: string }).rawBody = "";
-      next();
-      return;
-    }
-    let buf = "";
-    req.setEncoding("utf8");
-    req.on("data", (chunk: string) => {
-      buf += chunk;
-    });
-    req.on("end", () => {
-      (req as Request & { rawBody: string }).rawBody = buf;
-      next();
-    });
-    req.on("error", (err) => next(err));
-  };
 
   const handler = (req: Request, res: Response): void => {
     const ctx = buildSignatureContext(req, opts.adapter.publicUrl);
@@ -156,40 +124,10 @@ export async function createWebhookServer(opts: WebhookServerOptions): Promise<W
     res.status(204).end();
   };
 
-  app.post(`${prefix}/${backend}`, rawCapture, handler);
+  app.post(`${prefix}/${backend}`, rawBodyCapture("gateway-sms"), handler);
 
-  let server: import("node:http").Server | undefined;
-  let started = false;
-  let stopped = false;
-
-  return {
-    async start(): Promise<void> {
-      if (started || opts.app !== undefined) {
-        // When caller injected its own app, we don't manage the listener.
-        started = true;
-        return;
-      }
-      // Cleared here, not in stop(): a server that was stopped and is starting again is no longer
-      // stopped, and leaving the flag latched made the NEXT stop() a no-op that left the listener up.
-      stopped = false;
-      const port = opts.port ?? 3000;
-      await new Promise<void>((resolve) => {
-        server = app.listen(port, () => resolve());
-      });
-      started = true;
-    },
-    async stop(): Promise<void> {
-      if (stopped) return;
-      stopped = true;
-      // The pair of latches used to be write-once, so `start()` after a `stop()` returned without
-      // creating a listener and the server was silently dead — no error, no log, just a port nothing
-      // answers on. Resetting `started` is what makes a restart a restart.
-      started = false;
-      if (server === undefined) return;
-      await new Promise<void>((resolve) => {
-        server?.close(() => resolve());
-      });
-      server = undefined;
-    },
-  };
+  // The lifecycle lives in `@theokit/gateway`, written once. It was duplicated here and in
+  // gateway-line, and the same write-once latch bug had to be fixed in both files by one commit —
+  // which is what turned the duplication from a style question into a defect (#89).
+  return listenerLifecycle({ app, port: opts.port ?? 3000, injected: opts.app !== undefined });
 }
