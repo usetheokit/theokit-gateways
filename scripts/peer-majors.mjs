@@ -26,7 +26,6 @@
  *   node scripts/peer-majors.mjs            human-readable table
  *   node scripts/peer-majors.mjs --matrix   JSON for a GitHub Actions matrix
  */
-import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -82,30 +81,47 @@ function majorsOf(range) {
 /** Majors a version could not be resolved for — reported, never silently dropped. */
 const unresolvable = [];
 
-/** One registry answer per dependency, reused across its majors. */
+/** One registry answer per dependency, fetched once up front. */
 const versionCache = new Map();
 
-function publishedVersions(dep) {
-  if (versionCache.has(dep)) return versionCache.get(dep);
-  let result;
+/**
+ * Ask the npm registry directly over HTTPS.
+ *
+ * `fetch` rather than shelling out to `npm view`. Sonar flagged the subprocess correctly — invoking
+ * a binary by NAME resolves it through `PATH`, so anything that can write a directory on `PATH`
+ * chooses what runs. The registry is an HTTP API and Node has had a global `fetch` since 18, so the
+ * subprocess bought nothing and cost a command-injection surface, a dependency on npm being
+ * installed, and a process spawn per dependency.
+ *
+ * A dependency that cannot be reached is recorded WITH ITS REASON and never silently dropped:
+ * "we could not check" and "there is nothing to check" are different facts.
+ */
+async function loadVersions(dep) {
+  // Scoped names carry a slash the registry expects percent-encoded.
+  const url = `https://registry.npmjs.org/${dep.replace("/", "%2F")}`;
   try {
-    const raw = execFileSync("npm", ["view", dep, "versions", "--json"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    const parsed = JSON.parse(raw);
-    result = { versions: Array.isArray(parsed) ? parsed : [parsed], reason: null };
+    const res = await fetch(url, { headers: { accept: "application/vnd.npm.install-v1+json" } });
+    if (!res.ok)
+      return { versions: null, reason: `the registry answered ${res.status} for ${dep}` };
+    const body = await res.json();
+    const versions = Object.keys(body.versions ?? {});
+    if (versions.length === 0)
+      return { versions: null, reason: `the registry lists no versions for ${dep}` };
+    return { versions, reason: null };
   } catch (err) {
-    // Carries the real message. The first version said only "the registry did not answer", and when
-    // a missing import made this throw `execFileSync is not defined`, the report blamed npm for a
-    // bug in this file — a generic message that misattributes is worse than none.
-    result = {
+    // Carries the real message. An earlier version said only "the registry did not answer", and
+    // when a missing import made the call throw, the report blamed the registry for a bug in this
+    // file — a generic message that misattributes is worse than none.
+    return {
       versions: null,
-      reason: `could not ask the registry for ${dep}: ${err.message.split("\n")[0]}`,
+      reason: `could not reach the registry for ${dep}: ${err.message.split("\n")[0]}`,
     };
   }
-  versionCache.set(dep, result);
-  return result;
+}
+
+/** Reads what `loadVersions` already put in the cache. Classification stays synchronous. */
+function publishedVersions(dep) {
+  return versionCache.get(dep) ?? { versions: null, reason: `${dep} was never fetched` };
 }
 
 /**
@@ -229,6 +245,16 @@ export function peerMajorRows() {
   }
   return { rows, problems, unbounded };
 }
+
+// Fetch every third-party dependency's version list ONCE, in parallel, before classifying.
+// Prefetching is what lets the classification below stay synchronous and pure: it reads a map
+// instead of awaiting inside a loop, and one round of parallel requests replaces a serial spawn
+// per dependency.
+await Promise.all(
+  [...new Set(thirdPartyDeclarations().map(([, dep]) => dep))].map(async (dep) => {
+    versionCache.set(dep, await loadVersions(dep));
+  }),
+);
 
 const { rows, problems, unbounded } = peerMajorRows();
 
