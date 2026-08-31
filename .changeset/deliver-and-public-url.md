@@ -1,16 +1,21 @@
 ---
 "@theokit/gateway": minor
-"@theokit/gateway-discord": patch
-"@theokit/gateway-email": patch
-"@theokit/gateway-line": patch
-"@theokit/gateway-matrix": patch
-"@theokit/gateway-mattermost": patch
-"@theokit/gateway-slack": patch
-"@theokit/gateway-sms": patch
-"@theokit/gateway-teams": patch
-"@theokit/gateway-telegram": patch
-"@theokit/gateway-whatsapp": patch
+"@theokit/gateway-discord": minor
+"@theokit/gateway-email": minor
+"@theokit/gateway-line": minor
+"@theokit/gateway-matrix": minor
+"@theokit/gateway-mattermost": minor
+"@theokit/gateway-slack": minor
+"@theokit/gateway-sms": minor
+"@theokit/gateway-teams": minor
+"@theokit/gateway-telegram": minor
+"@theokit/gateway-whatsapp": minor
 ---
+
+**The peer floor on `@theokit/gateway` rises to `>=0.9.0`.** Every adapter now implements `deliver`
+over `runHandler`, and neither exists below that — an adapter installed against an older core does
+not build. The `dep-check` gate caught this by building the whole workspace against the floor each
+package claims, which is the one thing a version range cannot tell you by reading it.
 
 `deliver(event)` — every adapter can now be handed an event that arrived out of band (#83).
 
