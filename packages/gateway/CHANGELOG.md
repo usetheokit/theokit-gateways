@@ -1,5 +1,98 @@
 # Changelog
 
+## 0.9.0
+
+### Minor Changes
+
+- b38172b: **The peer floor on `@theokit/gateway` rises with this release.** Every adapter now implements
+  `deliver` over `runHandler`, and neither exists in an older core — an adapter installed against one
+  does not build. `dep-check` caught that by building the whole workspace against the floor each
+  package claimed, which is the one thing a version range cannot tell you by reading it.
+
+  The floor is set in the version commit rather than here, because a range cannot name a version that
+  does not exist yet: raised in the workspace, the same gate then fails the other way round — every
+  adapter declaring a floor above the core installed beside it. That is the shape `fa70153` used when
+  these ranges were first written.
+
+  `deliver(event)` — every adapter can now be handed an event that arrived out of band (#83).
+
+  `onInbound` was the seam every adapter implemented and it had no public counterpart. Six platforms
+  self-deliver once connected — long polling, a gateway socket, Socket Mode, a sync loop, IMAP — so
+  the asymmetry stayed invisible: `GatewayRunner` worked for eight platforms and silently did nothing
+  for LINE and WhatsApp Cloud, whose payloads arrive on an HTTP route the application owns. Every app
+  wired those two by hand, beside the runner rather than through it.
+
+  ```ts
+  const outcome = await adapter.deliver(event); // "ok" | "no_handler" | "handler_threw"
+  ```
+
+  The three outcomes are distinguished because a caller acts on them differently: answering a webhook
+  200 when nobody was subscribed tells the provider to stop retrying a message nothing received.
+
+  `BasePlatformAdapter.runHandler` holds the containment once, where ten copies of it used to live —
+  a handler is user code, its throw is named as the handler's failure rather than the platform's, and
+  delivery continues. Each adapter's `deliver` is one line over it.
+
+  Also: `gateway-sms`'s `createWebhookServer` now signs against the configured `publicUrl` (#90).
+  Twilio verifies against the URL it POSTed to, and behind a proxy that rewrites `host` — a tunnel, an
+  ingress, a load balancer terminating TLS — the reconstruction from headers yields the internal
+  address, so a correct signature fails on every delivery. `publicUrl` is required by all three
+  backend option shapes and documented as "used by signature verifier"; until now no source file read
+  it. The header reconstruction stays as the fallback for an app served directly.
+
+- 4b1d4bb: The half of an Express webhook server that is the same everywhere now lives in one place (#89).
+
+  `gateway-line` and `gateway-sms` each shipped one and shared 101 of ~170 lines: the lazy `express`
+  load, the raw-body capture with the hang it documents, and the start/stop lifecycle. What differs —
+  signature verification, body parsing, routing — stayed where it belongs.
+
+  It had already been paid for. A write-once latch made `start()` after `stop()` return without
+  creating a listener, which is a port nothing answers on with no error and no log, and the fix had to
+  be applied to both files by one commit because the latch lived in the copied half.
+
+  `@theokit/gateway` now exports `loadPeer`, `rawBodyCapture` and `listenerLifecycle`. **This does not
+  make express a dependency of the core**: nothing in that module imports it. Every shape is
+  structural — a request is whatever has `readableEnded` and `on`, a listener is whatever has `listen`
+  and `close` — so the two packages that use express keep declaring it and the core never learns the
+  name.
+
+  Every adapter README now states how inbound reaches it (#91): a webhook the application must
+  authenticate, a WebSocket, a sync loop, or an SDK that owns its own HTTP server. The three that have
+  no webhook say so with the reason, because an absence that is a decision should not read as a gap.
+
+- 348bc02: WhatsApp: send to the address that routes, and answer where the message came from (#82, #84).
+
+  **A send that WhatsApp discards no longer reports success.** Baileys hands back a
+  locally-generated `wamid` whether or not the JID routes anywhere, and the backend treated that id
+  as proof of delivery — so a message nobody received was recorded as a success by the caller's log,
+  its metrics and its retry logic. Measured on a real account: `5535998838687` and `553598838687` are
+  the same Brazilian line, both answered `ok: true`, and only the second arrived.
+
+  `send` now asks WhatsApp which form it routes to before sending, and refuses a number the server
+  does not know with `undeliverable` naming the number. That fixes the Brazilian ninth digit without a
+  Brazil-specific rule anywhere in this package — the answer is whatever the server says, for any
+  country. The lookup is cached for the life of the session, so it costs one round-trip per recipient.
+
+  **An inbound event now carries the address it arrived on**, as `whatsapp.channelJid`. `channel.id`
+  is normalised to digits — which is what an allowlist compares — and that normalisation strips the
+  domain, the part that says whether an address is a phone, a group, or an account's linked identity.
+  A note-to-self arrives addressed by LID, so replying to `channel.id` rebuilt `…@s.whatsapp.net`, an
+  address that does not exist.
+
+  **`send` accepts a qualified JID verbatim.** A `to` containing `@` is already an address and is
+  passed through untouched, where it used to become `231116569108705@lid@s.whatsapp.net`. So
+  answering an inbound event is now:
+
+  ```ts
+  await adapter.sendMessage({
+    channel: { id: event.whatsapp.channelJid ?? event.channel.id, type: "dm" },
+    text,
+  });
+  ```
+
+  Not affected: the Cloud backend. Meta rejects an unroutable recipient with an error code, so the
+  same mistake surfaces there instead of vanishing.
+
 ## 0.8.0
 
 ### Minor Changes
