@@ -39,10 +39,11 @@ interface Recorder {
   order: string[];
 }
 
-function makeAdapter(opts: { verify?: boolean; buildThrows?: boolean } = {}) {
+function makeAdapter(opts: { verify?: boolean; buildThrows?: boolean; publicUrl?: string } = {}) {
   const rec: Recorder = { verifyCalls: [], buildCalls: [], dispatched: [], order: [] };
   const adapter = {
     getBackendKind: () => "twilio" as const,
+    publicUrl: opts.publicUrl,
     verifySignature(ctx: SignatureContext) {
       rec.verifyCalls.push(ctx);
       rec.order.push("verify");
@@ -167,6 +168,40 @@ describe("createWebhookServer — raw body capture", () => {
     // Twilio's HMAC covers the full URL. Behind a TLS-terminating proxy the
     // request arrives as http, so the signature is computed over an https URL
     // that this code has to rebuild — get it wrong and every request 401s.
+    const app = express();
+    const { adapter, rec } = makeAdapter({ verify: true });
+    await createWebhookServer({ adapter, app });
+    const base = await listen(app);
+
+    await post(base, "/sms/twilio", FORM_BODY, { "x-forwarded-proto": "https" });
+
+    expect(rec.verifyCalls[0]?.url).toMatch(/^https:\/\/127\.0\.0\.1:\d+\/sms\/twilio$/);
+  });
+
+  it("signs against the configured publicUrl when the host header is not the public one", async () => {
+    // Twilio verifies against the URL it POSTed to. Behind a proxy that rewrites `host` — a
+    // tunnel, an ingress, a load balancer terminating TLS — the reconstruction above yields the
+    // INTERNAL address, and every genuine delivery fails as a 401 with a correct signature.
+    //
+    // `publicUrl` is REQUIRED by all three backend option shapes and documented as "used by
+    // signature verifier". Measured 2026-08-31: no source file read it. An operator who set it
+    // correctly had already done the right thing and still got the failure.
+    const app = express();
+    const { adapter, rec } = makeAdapter({
+      verify: true,
+      publicUrl: "https://bot.example.com/sms/twilio",
+    });
+    await createWebhookServer({ adapter, app });
+    const base = await listen(app);
+
+    await post(base, "/sms/twilio", FORM_BODY, { "x-forwarded-proto": "https" });
+
+    expect(rec.verifyCalls[0]?.url).toBe("https://bot.example.com/sms/twilio");
+  });
+
+  it("still reconstructs from headers when no publicUrl is configured", async () => {
+    // The fallback stays: an app served directly, with no proxy in front, has nothing to
+    // configure and the headers are the truth.
     const app = express();
     const { adapter, rec } = makeAdapter({ verify: true });
     await createWebhookServer({ adapter, app });

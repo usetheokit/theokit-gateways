@@ -378,4 +378,16 @@ export class EmailAdapter extends BasePlatformAdapter {
     await this._drainUnseen();
     await this.dispatchQueue;
   }
+
+  /**
+   * Deliver an event that arrived out of band — the ingest `onInbound` had no counterpart for (#83).
+   *
+   * One line over `runHandler`, which owns the containment: a handler is user code, its throw is
+   * named as the handler's failure rather than the platform's, and delivery continues.
+   */
+  override async deliver(
+    event: GatewayMessageEvent,
+  ): Promise<"ok" | "no_handler" | "handler_threw"> {
+    return this.runHandler(this.handler, event);
+  }
 }

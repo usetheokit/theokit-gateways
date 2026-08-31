@@ -4,6 +4,11 @@ Discord platform adapter for `@theokit/gateway`. Wraps [discord.js](https://disc
 
 > **Status: 0.1.0 — pre-release.**
 
+
+## How inbound arrives
+
+**Gateway WebSocket.** discord.js holds the connection; events reach `onInbound` once `connect()`
+resolves. There is no webhook to host and nothing for an application to authenticate.
 ## Install
 
 ```bash

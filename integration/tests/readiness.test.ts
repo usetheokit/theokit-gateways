@@ -243,6 +243,23 @@ describe("live-test readiness", () => {
       SessionRouter: "delegates to a strategy function; nothing crosses a network",
       BasePlatformAdapter:
         "abstract base — every adapter suite in this package drives a concrete subclass of it",
+      loadPeer:
+        "loads a peer dependency and names it when absent. A live run proves the SUCCESS path, " +
+        "which is the half that cannot fail interestingly; the half worth asserting is the " +
+        "message a consumer sees when express is missing, and that needs the package absent — " +
+        "the opposite of a live environment. Driven by both webhook-server suites, which mount a " +
+        "real Express app over a real socket",
+      rawBodyCapture:
+        "reads the request stream before anything parses it. Every signature verification in the " +
+        "live SMS and LINE suites depends on it having the exact bytes — a wrong capture fails " +
+        "them all — so it is proven over the wire without being named there. The case it exists " +
+        "for cannot be reached live at all: a global body parser mounted AHEAD of the router, " +
+        "which is a wiring mistake in the consuming app, not a platform behaviour",
+      listenerLifecycle:
+        "start/stop over an HTTP listener. Nothing crosses a platform boundary — the provider is " +
+        "never involved in whether OUR server is up — and the defect it was extracted for is a " +
+        "restart, which both webhook-server suites drive against a real socket and which no live " +
+        "run would repeat any better",
       HookExecutor:
         "constructed by GatewayRunner rather than by a consumer; its three fire points are each driven by tests/gateway-e2e.test.ts",
       GatewayConfigurationError:

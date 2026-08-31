@@ -58,6 +58,15 @@ export interface BaileysSocketLike {
     content: { text: string },
   ): Promise<{ key?: { id?: string } } | undefined>;
   /**
+   * Ask the server which numbers are registered, and under which JID it routes them.
+   *
+   * Optional because an older Baileys, or a fake in a test that predates this, may not have it.
+   * When it is absent the backend sends to the number as given — the behaviour before #82 — rather
+   * than refusing everything, because refusing on a missing capability would turn an upgrade
+   * problem into an outage.
+   */
+  onWhatsApp?(...numbers: string[]): Promise<Array<{ exists?: boolean; jid?: string }> | undefined>;
+  /**
    * Who this socket logged in as — present once the connection opens.
    *
    * Optional because a socket that never opened has no identity to report, and because tests

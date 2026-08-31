@@ -4,6 +4,19 @@ LINE Messaging API platform adapter for [`@theokit/gateway`](../gateway).
 
 APAC consumer dominant — Japan (~85M MAU), Taiwan, Thailand. Webhook-only inbound (LINE doesn't offer a WebSocket gateway). HMAC-SHA256 signature validation on every POST.
 
+
+## How inbound arrives
+
+**HTTP webhook**, and the application must authenticate it: LINE signs every POST with
+HMAC-SHA256 over the raw body, and `verifyLineSignature(channelSecret, rawBody, signature)` is
+exported for that.
+
+Two ways to serve it. `createWebhookServer` mounts an Express route for you; or host the route
+yourself and hand the parsed events to `adapter.deliver(event)`, which is what makes `GatewayRunner`
+work for a webhook platform.
+
+A validator in the shape `theokit/server/webhook` expects does not ship yet — see
+[usetheokit/theokit#590](https://github.com/usetheokit/theokit/issues/590).
 ## Install
 
 ```bash

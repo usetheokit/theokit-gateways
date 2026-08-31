@@ -275,3 +275,49 @@ describe("normalizeBaileysMessage — envelope shapes a review found", () => {
     expect(normalizeBaileysMessage(envelope({ messageTimestamp: undefined }))).toBeUndefined();
   });
 });
+
+describe("the address a reply must be sent to (#84)", () => {
+  it("carries the raw remoteJid back, so a caller can answer where the message came from", () => {
+    // MEASURED on a paired account, 2026-08-30. The self-chat's `remoteJid` is the account's LID:
+    //
+    //   selfJids learned: 553598838687, 231116569108705
+    //   upsert  fromMe=true jid=…8705  <- the LID, not the number
+    //
+    // `channelId` goes through `normalizeWhatsAppId`, which strips the device suffix AND the
+    // domain — so `231116569108705@lid` becomes `231116569108705`, digits that no longer say what
+    // KIND of identifier they are. Replying to it rebuilds `…@s.whatsapp.net`, an address that
+    // does not exist. The send reports ok and lands nowhere.
+    const event = normalizeBaileysMessage(
+      {
+        key: { id: "wamid.1", remoteJid: "231116569108705@lid", fromMe: false },
+        message: { conversation: "hello" },
+        messageTimestamp: 1_700_000_000,
+      },
+      {},
+    );
+
+    expect(event?.channelJid, "the address the message arrived on was discarded").toBe(
+      "231116569108705@lid",
+    );
+    // The normalised form stays exactly as it was: it is what the allowlist compares.
+    expect(event?.channelId).toBe("231116569108705");
+  });
+
+  it("carries a group's JID back too, not only the exotic ones", () => {
+    const event = normalizeBaileysMessage(
+      {
+        key: {
+          id: "wamid.2",
+          remoteJid: "120363000000000000@g.us",
+          participant: "5511999999999@s.whatsapp.net",
+          fromMe: false,
+        },
+        message: { conversation: "hi all" },
+        messageTimestamp: 1_700_000_000,
+      },
+      {},
+    );
+
+    expect(event?.channelJid).toBe("120363000000000000@g.us");
+  });
+});

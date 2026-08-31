@@ -35,6 +35,28 @@ class FakeSocket implements BaileysSocketLike {
    */
   user?: { id?: string; lid?: string };
 
+  /**
+   * What the server says about each number.
+   *
+   * `null` is the default and means "every number is registered, and routes to itself" — which is
+   * what a real account sees for almost every recipient. A test that cares assigns an object, and
+   * then only the numbers it lists route.
+   */
+  registry: Record<string, string> | null = null;
+  /** Every number the backend asked about, in order. */
+  readonly asked: string[] = [];
+
+  async onWhatsApp(
+    ...numbers: string[]
+  ): Promise<Array<{ exists: boolean; jid: string }> | undefined> {
+    this.asked.push(...numbers);
+    return numbers.map((n) => {
+      if (this.registry === null) return { exists: true, jid: `${n}@s.whatsapp.net` };
+      const jid = this.registry[n];
+      return jid === undefined ? { exists: false, jid: "" } : { exists: true, jid };
+    });
+  }
+
   readonly ev = {
     on: <K extends keyof BaileysEventMap>(
       event: K,
@@ -918,5 +940,106 @@ describe("WhatsAppBaileysBackend — pairing a caller can ASK about", () => {
     await connecting;
     expect(backend.pairing.status).toBe("closed");
     expect(backend.pairing.qr, "a dead socket still advertised its stale QR").toBeUndefined();
+  });
+});
+
+describe("WhatsAppBaileysBackend — the recipient WhatsApp actually routes to (#82)", () => {
+  it("sends to the JID the server resolves, not the string the caller typed", async () => {
+    // MEASURED on a real paired account, 2026-08-30. Two sends seconds apart, same recipient:
+    //
+    //   5535998838687  (with the Brazilian ninth digit)  -> ok: true, wamid ...  NOT delivered
+    //   553598838687   (without)                          -> ok: true, wamid ...  delivered
+    //
+    // Brazil has two live spellings of one line and only one of them routes. `send` built the JID
+    // from whatever string it was given and reported the locally-generated wamid as proof — so the
+    // caller's log, its metrics and its retry logic all recorded a success for a message nobody
+    // received. `rules/error-handling.md` § 5 names that failure first.
+    //
+    // `onWhatsApp` asks the server which form it routes to, which fixes the ninth digit without a
+    // Brazil-specific rule anywhere in this package: the answer is whatever the server says.
+    const { backend, socket } = await connected();
+    socket.registry = { "5535998838687": "553598838687@s.whatsapp.net" };
+
+    const result = await backend.send({ to: "5535998838687", isGroup: false, text: "hi" });
+
+    expect(result.ok).toBe(true);
+    expect(socket.sent[0]?.jid, "sent to the number as typed, which does not route").toBe(
+      "553598838687@s.whatsapp.net",
+    );
+  });
+
+  it("refuses a number WhatsApp does not know, instead of reporting success", async () => {
+    // The half that matters more than the ninth digit: a contract that reports success for a
+    // message it discarded is not a documentation problem. The error names the number so the log
+    // says which one, rather than leaving a wamid that resolves to nothing.
+    const { backend, socket } = await connected();
+    socket.registry = {};
+
+    const result = await backend.send({ to: "5511900000000", isGroup: false, text: "hi" });
+
+    expect(result.ok).toBe(false);
+    // `undeliverable` rather than a new code: the union already says "the payload was fine and no
+    // retry will change it", which is what a number that is not on WhatsApp is.
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("undeliverable");
+    expect(result.error?.message).toContain("5511900000000");
+    expect(socket.sent, "a message was sent to a number that does not resolve").toHaveLength(0);
+  });
+
+  it("asks once per recipient, then remembers for the life of the session", async () => {
+    // One round-trip is the cost of the fix; paying it per message would make every send slower
+    // for a fact that cannot change while the session lives.
+    const { backend, socket } = await connected();
+    socket.registry = { "5511999999999": "5511999999999@s.whatsapp.net" };
+
+    await backend.send({ to: "5511999999999", isGroup: false, text: "one" });
+    await backend.send({ to: "5511999999999", isGroup: false, text: "two" });
+
+    expect(socket.asked).toEqual(["5511999999999"]);
+    expect(socket.sent).toHaveLength(2);
+  });
+
+  it("does not ask about a group, which is not a phone number", async () => {
+    // `onWhatsApp` answers about registered NUMBERS. A group JID is not one, and asking would
+    // refuse every group message.
+    const { backend, socket } = await connected();
+
+    const result = await backend.send({ to: "120363000000000000", isGroup: true, text: "hi" });
+
+    expect(result.ok).toBe(true);
+    expect(socket.asked).toHaveLength(0);
+    expect(socket.sent[0]?.jid).toBe("120363000000000000@g.us");
+  });
+});
+
+describe("WhatsAppBaileysBackend — replying to the address a message came from (#84)", () => {
+  it("sends to a qualified JID verbatim, instead of appending a domain to it", () => {
+    // The other half of #84. Carrying `channelJid` back is useless if `send` cannot accept it:
+    // `${to}@s.whatsapp.net` applied to `231116569108705@lid` produces
+    // `231116569108705@lid@s.whatsapp.net`, which routes nowhere and reports ok.
+    //
+    // A string containing `@` is already an address. Pass it through.
+    return connected().then(async ({ backend, socket }) => {
+      const result = await backend.send({
+        to: "231116569108705@lid",
+        isGroup: false,
+        text: "note",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(socket.sent[0]?.jid).toBe("231116569108705@lid");
+    });
+  });
+
+  it("does not ask WhatsApp about a qualified JID, which is not a phone number", async () => {
+    // `onWhatsApp` answers about NUMBERS. Asking it about a LID would get "not registered" and
+    // refuse a message to an address that is perfectly valid.
+    const { backend, socket } = await connected();
+    socket.registry = {};
+
+    const result = await backend.send({ to: "231116569108705@lid", isGroup: false, text: "note" });
+
+    expect(result.ok).toBe(true);
+    expect(socket.asked).toHaveLength(0);
   });
 });
