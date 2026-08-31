@@ -26,6 +26,7 @@
  *   node scripts/peer-majors.mjs            human-readable table
  *   node scripts/peer-majors.mjs --matrix   JSON for a GitHub Actions matrix
  */
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -45,7 +46,12 @@ const PACKAGES = join(ROOT, "packages");
  *                a promise that stopped being checked without anyone deciding to stop checking it.
  */
 function majorsOf(range) {
-  if (/^(>=|>|\*|x)/.test(range.trim())) return { majors: null, unbounded: true, unparsed: null };
+  const floor = /^(?:>=|>)\s*(\d+)\./.exec(range.trim());
+  if (floor !== null)
+    return { majors: null, unbounded: true, floorMajor: floor[1], unparsed: null };
+  // `*` or `x` names no floor at all, so there is nothing to resolve from.
+  if (/^(\*|x)/.test(range.trim()))
+    return { majors: null, unbounded: true, floorMajor: null, unparsed: null };
   const parts = range.split("||").map((p) => p.trim());
   const majors = [];
   for (const part of parts) {
@@ -54,6 +60,80 @@ function majorsOf(range) {
     majors.push(match[1]);
   }
   return { majors, unbounded: false, unparsed: null };
+}
+
+/**
+ * The majors a registry actually serves at or above an unbounded floor.
+ *
+ * WHY THIS ASKS THE REGISTRY. An unbounded range like `>=7.0.0-rc14` claims every major from its
+ * floor upward, including ones that do not exist yet — so it cannot be enumerated from the manifest
+ * alone. The first version of this script stopped there and reported it as "no ceiling, so no major
+ * to pin", which is true and useless: the day the dependency publishes a new major, the claim goes
+ * untested and nothing here notices. That is the same shape as the defect this whole workflow was
+ * built to catch, one file over.
+ *
+ * Found by a peer applying this method to their own repository and asking the question this script
+ * did not: are there majors published ABOVE the floor that nobody exercises?
+ *
+ * A registry that cannot be reached does NOT silently drop the range — the caller keeps it in the
+ * unbounded list with the reason, because "we could not check" and "there is nothing to check" are
+ * different facts.
+ */
+/** Majors a version could not be resolved for — reported, never silently dropped. */
+const unresolvable = [];
+
+/** One registry answer per dependency, reused across its majors. */
+const versionCache = new Map();
+
+function publishedVersions(dep) {
+  if (versionCache.has(dep)) return versionCache.get(dep);
+  let result;
+  try {
+    const raw = execFileSync("npm", ["view", dep, "versions", "--json"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const parsed = JSON.parse(raw);
+    result = { versions: Array.isArray(parsed) ? parsed : [parsed], reason: null };
+  } catch (err) {
+    // Carries the real message. The first version said only "the registry did not answer", and when
+    // a missing import made this throw `execFileSync is not defined`, the report blamed npm for a
+    // bug in this file — a generic message that misattributes is worse than none.
+    result = {
+      versions: null,
+      reason: `could not ask the registry for ${dep}: ${err.message.split("\n")[0]}`,
+    };
+  }
+  versionCache.set(dep, result);
+  return result;
+}
+
+/**
+ * The version to actually install for one major: the highest published in it, stable preferred.
+ *
+ * A major is not a version, and `^7` is not a way to ask for one. Semver excludes prereleases from
+ * a caret range, so `^7` matches NOTHING when the only published 7.x is `7.0.0-rc14` — which is
+ * exactly the case `baileys >=7.0.0-rc14` presents, and exactly how this was found: the first
+ * version of the checker built `^${major}` and the install resolved to nothing.
+ *
+ * Resolving here rather than in the checker also means the matrix row names the version that was
+ * verified. "major 9" in a report is a claim about an interval; `9.9.0` is a fact.
+ */
+function versionForMajor(versions, major) {
+  const inMajor = versions.filter((v) => String(v).split(".")[0] === String(major));
+  if (inMajor.length === 0) return null;
+  const stable = inMajor.filter((v) => !String(v).includes("-"));
+  const pool = stable.length > 0 ? stable : inMajor;
+  return pool[pool.length - 1];
+}
+
+function publishedMajorsAtOrAbove(dep, floorMajor) {
+  const { versions, reason } = publishedVersions(dep);
+  if (versions === null) return { majors: null, reason };
+  const majors = [...new Set(versions.map((v) => String(v).split(".")[0]))]
+    .filter((m) => /^\d+$/.test(m) && Number(m) >= Number(floorMajor))
+    .sort((a, b) => Number(a) - Number(b));
+  return { majors, reason: null };
 }
 
 function publishablePackages() {
@@ -78,14 +158,51 @@ function publishablePackages() {
  */
 function classify(pkgName, dep, range) {
   const parsed = majorsOf(range);
-  if (parsed.unbounded) return { kind: "unbounded", entry: { pkg: pkgName, dep, range } };
+  if (parsed.unbounded) {
+    if (parsed.floorMajor === null) {
+      return {
+        kind: "unbounded",
+        entry: { pkg: pkgName, dep, range, reason: "the range names no floor" },
+      };
+    }
+    const { majors, reason } = publishedMajorsAtOrAbove(dep, parsed.floorMajor);
+    if (majors === null) return { kind: "unbounded", entry: { pkg: pkgName, dep, range, reason } };
+    return { kind: "rows", entry: rowsFor(pkgName, dep, range, majors) };
+  }
   if (parsed.majors === null) {
     return { kind: "problem", entry: { pkg: pkgName, dep, range, unparsed: parsed.unparsed } };
   }
-  return {
-    kind: "rows",
-    entry: parsed.majors.map((major) => ({ pkg: pkgName, dep, range, major })),
-  };
+  return { kind: "rows", entry: rowsFor(pkgName, dep, range, parsed.majors) };
+}
+
+/**
+ * One row per major, each naming the version that will actually be installed.
+ *
+ * A major with nothing published in it is dropped with a note rather than emitted: a matrix job
+ * that installs a version the registry does not serve fails for a reason that has nothing to do
+ * with the code under test.
+ */
+function rowsFor(pkgName, dep, range, majors) {
+  const { versions, reason } = publishedVersions(dep);
+  if (versions === null) {
+    unresolvable.push({ pkg: pkgName, dep, range, reason });
+    return [];
+  }
+  const rows = [];
+  for (const major of majors) {
+    const version = versionForMajor(versions, major);
+    if (version === null) {
+      unresolvable.push({
+        pkg: pkgName,
+        dep,
+        range,
+        reason: `nothing published in major ${major}`,
+      });
+      continue;
+    }
+    rows.push({ pkg: pkgName, dep, range, major, version });
+  }
+  return rows;
 }
 
 /** Every third-party peer declaration across the workspace, as `[pkgName, dep, range]`. */
@@ -117,10 +234,11 @@ const { rows, problems, unbounded } = peerMajorRows();
 
 if (process.argv.includes("--matrix")) {
   // stdout carries only the JSON a workflow parses; anything else goes to stderr.
+  for (const u of unresolvable) {
+    console.error(`unresolved: ${u.pkg} declares ${u.dep} ${u.range} — ${u.reason}`);
+  }
   for (const u of unbounded) {
-    console.error(
-      `unbounded: ${u.pkg} declares ${u.dep} ${u.range} — no ceiling, so no major to pin`,
-    );
+    console.error(`unbounded: ${u.pkg} declares ${u.dep} ${u.range} — not resolved: ${u.reason}`);
   }
   for (const p of problems) {
     console.error(
@@ -134,16 +252,17 @@ if (process.argv.includes("--matrix")) {
 const width = Math.max(...rows.map((r) => r.pkg.length), 10);
 for (const row of rows) {
   console.log(
-    `  ${row.pkg.padEnd(width)}  ${row.dep.padEnd(20)}  ${row.range.padEnd(24)}  major ${row.major}`,
+    `  ${row.pkg.padEnd(width)}  ${row.dep.padEnd(20)}  ${row.range.padEnd(24)}  ${row.version}`,
   );
 }
 console.log(
   `\n  ${rows.length} (package, peer, major) combinations from ${new Set(rows.map((r) => r.pkg)).size} packages`,
 );
+for (const u of unresolvable) {
+  console.log(`  unresolved: ${u.pkg} declares ${u.dep} ${u.range} — ${u.reason}`);
+}
 for (const u of unbounded) {
-  console.log(
-    `  unbounded: ${u.pkg} declares ${u.dep} ${u.range} — no ceiling, so no major to pin`,
-  );
+  console.log(`  unbounded: ${u.pkg} declares ${u.dep} ${u.range} — not resolved: ${u.reason}`);
 }
 for (const p of problems) {
   console.error(
