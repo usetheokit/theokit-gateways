@@ -675,6 +675,7 @@ suggested_mode: evolve
 source: human
 evidence: `packages/gateway-line/src/webhook-server.ts` (162 lines) and `packages/gateway-sms/src/webhook-server.ts` (174) share 101 identical lines ignoring indentation — measured 2026-08-30 with `comm -12` over both files sorted. What is shared is the lazy `express` loader, the raw-body capture middleware including its comment about the drained-stream hang, and the `start()`/`stop()` lifecycle. What differs is signature verification, body parsing and routing, which are genuinely per-platform.
 why_now: the duplication has already been paid for. Commit `11000cc` fixed a write-once latch that made `start()` after `stop()` return without creating a listener — a server that reports success and answers nothing — and it had to fix it in BOTH files, because the latch is in the half that is copied. That is the DRY test stated in `~/.claude/CLAUDE.md` § 12 exactly: if changing it here means changing it there, the knowledge is duplicated. It surfaced again on 2026-08-30 as the largest block of duplicated production code in the promotion of `workspace` to `develop`.
+tracked_as: usetheokit/theokit-gateways#89
 status: raw
 dod:
   - the shared half lives in one place, and a change to the lifecycle or the raw-body capture is written once
@@ -695,6 +696,7 @@ suggested_mode: review
 source: human
 evidence: `packages/gateway-sms/src/webhook-server.ts` builds its `SignatureContext.url` from `x-forwarded-proto` + the `host` header + `req.originalUrl`, and never reads the configured `publicUrl`. Measured 2026-08-31: before `smsWebhookVerifier` landed, `grep -rn publicUrl packages/gateway-sms --include='*.ts'` returned the type declaration and test fixtures only — no source file read it. The new Fetch-API verifier now does; the Express webhook server still does not.
 why_now: Twilio verifies against the URL it POSTed to, so behind a proxy that rewrites `host` — a tunnel, an ingress, a load balancer terminating TLS — the header-derived URL is the internal one and every genuine delivery fails its signature as a 401. `publicUrl` is REQUIRED by all three backend option shapes and documented as "used by signature verifier", so an operator who sets it correctly has already done the right thing and still gets the failure. Two code paths now answer the same question differently, which is worse than either answer alone.
+tracked_as: usetheokit/theokit-gateways#90
 status: raw
 dod:
   - `createWebhookServer`'s context uses the configured `publicUrl` when there is one, matching `smsWebhookVerifier`
@@ -712,6 +714,7 @@ suggested_mode: evolve
 source: human
 evidence: measured 2026-08-31 across `packages/gateway-*/src/adapter.ts`. Teams calls `app.start(port)` — `@microsoft/teams.apps` owns the HTTP server and validates the Bot Framework JWT itself. Matrix calls `startClient()` and subscribes via `subscribeToTimeline` — a sync loop. Mattermost calls `ws.addMessageListener` — a WebSocket. Only LINE and SMS have an HTTP endpoint the consuming app must authenticate, and SMS now has `smsWebhookVerifier`.
 why_now: the question was asked directly — "fix Teams, SMS, Matrix and Mattermost" — and the honest answer for three of them is that there is no webhook to validate. Writing a validator for a transport a platform does not use is a fabricated mechanism, and for Teams it would mean reimplementing Microsoft's JWT/JWKS validation, which Rule 9 names first. What IS missing is the record: nothing states which adapters have a webhook surface, so the question will be asked again and answered by reading three files.
+tracked_as: usetheokit/theokit-gateways#91
 status: raw
 dod:
   - each adapter's README states its inbound transport — webhook, WebSocket, sync loop, or SDK-owned server
