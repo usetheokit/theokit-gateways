@@ -51,17 +51,38 @@ async function loadExpress(): Promise<{ default: () => Express }> {
   }
 }
 
-function buildSignatureContext(req: Request): SignatureContext {
+/**
+ * The URL the provider signed.
+ *
+ * `publicUrl` wins when it is configured, because it is the only value that survives a proxy. The
+ * provider verifies against the address IT posted to, and behind a tunnel, an ingress, or a load
+ * balancer terminating TLS the reconstruction below yields the internal one — so a correct
+ * signature fails, on every delivery, with nothing in the log naming the cause.
+ *
+ * The header reconstruction stays as the fallback: an app served directly has nothing to configure
+ * and the headers are the truth. Measured 2026-08-31 — `publicUrl` is required by all three backend
+ * option shapes and documented as "used by signature verifier", and until this commit no source
+ * file read it.
+ */
+function signedUrl(
+  req: Request,
+  headers: Readonly<Record<string, string>>,
+  publicUrl?: string,
+): string {
+  if (publicUrl !== undefined && publicUrl !== "") return publicUrl;
+  const protoHeader = headers["x-forwarded-proto"];
+  const proto = protoHeader ?? (req.secure ? "https" : "http");
+  const host = req.get("host") ?? "localhost";
+  return `${proto}://${host}${req.originalUrl}`;
+}
+
+function buildSignatureContext(req: Request, publicUrl?: string): SignatureContext {
   const rawBody = (req as Request & { rawBody?: string }).rawBody ?? "";
   const headers: Record<string, string> = {};
   for (const [k, v] of Object.entries(req.headers)) {
     headers[k.toLowerCase()] = Array.isArray(v) ? v.join(",") : (v ?? "");
   }
-  const protoHeader = headers["x-forwarded-proto"];
-  const proto = protoHeader ?? (req.secure ? "https" : "http");
-  const host = req.get("host") ?? "localhost";
-  const url = `${proto}://${host}${req.originalUrl}`;
-  return { headers, rawBody, url };
+  return { headers, rawBody, url: signedUrl(req, headers, publicUrl) };
 }
 
 /**
@@ -110,7 +131,7 @@ export async function createWebhookServer(opts: WebhookServerOptions): Promise<W
   };
 
   const handler = (req: Request, res: Response): void => {
-    const ctx = buildSignatureContext(req);
+    const ctx = buildSignatureContext(req, opts.adapter.publicUrl);
     if (!opts.adapter.verifySignature(ctx)) {
       res.status(401).type("text/plain").send("invalid signature");
       return;
