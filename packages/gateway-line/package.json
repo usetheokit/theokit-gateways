@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-line",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "LINE Messaging API platform adapter for @theokit/gateway. ADRs D405-D412.",
   "license": "Apache-2.0",
   "repository": {
