@@ -487,6 +487,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
         wamid: inbound.wamid,
         phoneNumberId: inbound.phoneNumberId,
         contactName: inbound.contactName,
+        channelJid: inbound.channelJid,
         backend: inbound.backend,
         raw: inbound.raw,
       },

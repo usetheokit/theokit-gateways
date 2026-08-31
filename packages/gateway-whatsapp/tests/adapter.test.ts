@@ -628,3 +628,34 @@ describe("WhatsAppAdapter — a format the platform cannot carry as a flag", () 
     stderr.mockRestore();
   });
 });
+
+describe("WhatsAppAdapter — the address a reply must go to (#84)", () => {
+  it("carries channelJid onto the event a consumer actually receives", async () => {
+    // The normaliser learned to keep the raw address and the type learned to declare it, and
+    // neither mattered while `toMessageEvent` dropped it on the floor — which is where the repro
+    // in #84 lives: a consumer answering `event.channel.id`.
+    const backend = new FakeBackend();
+    const adapter = new WhatsAppAdapter(backend);
+    const seen: Array<Record<string, unknown>> = [];
+    adapter.onInbound(async (e) => {
+      seen.push((e as { whatsapp: Record<string, unknown> }).whatsapp);
+    });
+    await adapter.connect();
+
+    await backend.inboundHandler?.({
+      wamid: "wamid.1",
+      fromPhone: "231116569108705",
+      conversationType: "dm",
+      channelId: "231116569108705",
+      channelJid: "231116569108705@lid",
+      text: "note to self",
+      receivedAt: 1_700_000_000_000,
+      backend: "baileys",
+      raw: {},
+    });
+
+    expect(seen[0]?.channelJid, "the reply address never reached the consumer").toBe(
+      "231116569108705@lid",
+    );
+  });
+});

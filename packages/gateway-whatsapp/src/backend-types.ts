@@ -29,6 +29,19 @@ export interface WhatsAppInboundEvent {
   readonly conversationType: "dm" | "group";
   /** Channel id — either the sender phone (DM) or the group id (group). */
   readonly channelId: string;
+  /**
+   * The address this message arrived on, verbatim — the one a reply must be sent to.
+   *
+   * `channelId` is normalised to digits, which is what the allowlist compares and what a session
+   * key is built from. That normalisation strips the DOMAIN, and the domain is what says which kind
+   * of identifier this is: `@s.whatsapp.net` is a phone JID, `@g.us` a group, `@lid` an account's
+   * linked identity. A note-to-self arrives addressed by LID, so replying to the digits rebuilds
+   * `…@s.whatsapp.net` — an address that does not exist, and a send that reports ok and lands
+   * nowhere (#84).
+   *
+   * Optional because the Cloud backend has no JID to report; it addresses recipients by phone.
+   */
+  readonly channelJid?: string;
   /** Plain-text body (already filtered by EC-4 — text-only in v1). */
   readonly text: string;
   /** Receipt timestamp (ms since epoch). */
