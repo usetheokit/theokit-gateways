@@ -61,6 +61,20 @@ export class SMSAdapter extends BasePlatformAdapter {
   }
 
   readonly platform = "sms" as const;
+
+  /**
+   * The URL the provider POSTs inbound to, as the provider sees it.
+   *
+   * Required by all three backend option shapes and documented there as "used by signature
+   * verifier" — and, measured 2026-08-31, read by nothing: it appeared only in the type and in test
+   * fixtures. Twilio SIGNS this URL, so the value matters most in exactly the case where the
+   * request cannot supply it: behind a proxy or a tunnel, the request's own URL is the internal one
+   * and will not match what was signed.
+   *
+   * Exposed so {@link smsWebhookVerifier} can use it, which is what makes the option true.
+   */
+  readonly publicUrl: string;
+
   private readonly backend: SMSBackend;
   private inboundHandler: ((event: GatewayMessageEvent) => Promise<void>) | undefined;
   private connected = false;
@@ -77,6 +91,7 @@ export class SMSAdapter extends BasePlatformAdapter {
       });
     }
     this.defaultCountry = opts.defaultCountry;
+    this.publicUrl = opts.publicUrl;
     this.backend = createBackend(opts);
   }
 
