@@ -41,7 +41,7 @@
     "test:mutation": "stryker run"
   },
   "peerDependencies": {
-    "@line/bot-sdk": "^9.0.0",
+    "@line/bot-sdk": "^9.0.0 || ^11.0.0",
     "@theokit/gateway": ">=0.9.0 <1.0.0",
     "express": "^4.18.0 || ^5.0.0"
   },
@@ -54,6 +54,7 @@
     }
   },
   "devDependencies": {
+    "@line/bot-sdk": "^11.2.0",
     "@stryker-mutator/core": "10",
     "@stryker-mutator/vitest-runner": "10",
     "@theokit/gateway": "workspace:*",
