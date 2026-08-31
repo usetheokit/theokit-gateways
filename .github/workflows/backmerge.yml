@@ -1,0 +1,92 @@
+# Carry a release back down, so the next one does not regress versions.
+#
+# WHAT GOES WRONG WITHOUT IT. Changesets cuts the version bump on `main`: the `Version Packages`
+# pull request has `main` as its base, so `packages/*/package.json` and the per-package CHANGELOGs
+# advance there and nowhere else. `develop` keeps the versions it had. Measured 2026-08-31 after
+# releasing `@theokit/gateway-{matrix,line}@0.3.0` — `main` carried 0.3.0, `develop` still said
+# 0.2.0, and `main` was four commits ahead. The next `develop → main` pull request would have
+# proposed setting the published versions BACK to 0.2.0.
+#
+# This is structural, not an accident: every release creates it. Before this workflow existed the
+# repository had opened ZERO pull requests against `workspace` in its whole history, and the drift
+# above was closed by hand.
+#
+# WHY `workspace` AND NOT `develop`. The obvious back-merge is `main → develop`, and this project
+# forbids it: `rules/git-safety.md` says `develop` "advances only by promoting `workspace` through a
+# `workspace → develop` pull request" and to "never merge anything other than `workspace` into it".
+# So the release comes down into `workspace`, and the ordinary promotion carries it the rest of the
+# way. That is the same path a human would have to take, which is the point — a mechanism that
+# needs the rule bent is a mechanism that teaches people to bend it.
+#
+# WHAT THIS DOES NOT GUARANTEE. It opens a pull request; a person merges it. The drift window is
+# therefore not closed, only bounded and made visible. Nothing breaks while the pull request sits —
+# it just has to land before the next release is cut, because that is the moment the stale versions
+# would be proposed as new ones.
+name: Back-merge
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # The repository default is read-only, so the write scope is requested here rather than widened
+  # for every workflow in the repository.
+  pull-requests: write
+
+concurrency:
+  group: backmerge
+  # Never cancel: a cancelled run leaves the release stranded on `main` with nothing to say so.
+  cancel-in-progress: false
+
+jobs:
+  backmerge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # The comparison below needs history, not just the tip.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: open the back-merge pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          ahead="$(git rev-list --count origin/workspace..origin/main)"
+          if [ "$ahead" -eq 0 ]; then
+            echo "workspace already has everything on main — nothing to carry back"
+            exit 0
+          fi
+          echo "main is ${ahead} commit(s) ahead of workspace"
+
+          # Idempotent: a push during an open back-merge must not open a second one. The existing
+          # pull request updates itself, because its head IS main.
+          existing="$(gh pr list --base workspace --head main --state open --json number --jq 'length')"
+          if [ "$existing" -ne 0 ]; then
+            echo "a back-merge pull request is already open — it tracks main, so it is already current"
+            exit 0
+          fi
+
+          gh pr create \
+            --base workspace \
+            --head main \
+            --title "Back-merge: carry the release down to workspace" \
+            --body "$(cat <<'BODY'
+          Opened automatically after a push to `main`.
+
+          Changesets cuts the version bump on `main`, so `packages/*/package.json` and the
+          per-package CHANGELOGs advance there and nowhere else. Without this, `develop` keeps
+          the versions it had and the next `develop → main` pull request proposes setting the
+          published versions **back**.
+
+          `workspace` rather than `develop` because `rules/git-safety.md` allows nothing but
+          `workspace` to be merged into `develop`. The ordinary `workspace → develop` promotion
+          carries this the rest of the way.
+
+          Nothing breaks while this sits. It has to land before the next release is cut.
+          BODY
+          )"
