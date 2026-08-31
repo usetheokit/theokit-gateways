@@ -26,7 +26,7 @@
  *   node scripts/peer-majors.mjs            human-readable table
  *   node scripts/peer-majors.mjs --matrix   JSON for a GitHub Actions matrix
  */
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -70,25 +70,45 @@ function publishablePackages() {
     .filter((p) => p !== null && p.manifest.private !== true);
 }
 
-/** One row per (package, third-party peer, major). Siblings are dep-check's job, not ours. */
+/**
+ * Classify one peer declaration into the bucket it belongs in.
+ *
+ * Split out of `peerMajorRows` so each function answers one question: this one decides WHAT a
+ * declaration is, the caller decides where to put it.
+ */
+function classify(pkgName, dep, range) {
+  const parsed = majorsOf(range);
+  if (parsed.unbounded) return { kind: "unbounded", entry: { pkg: pkgName, dep, range } };
+  if (parsed.majors === null) {
+    return { kind: "problem", entry: { pkg: pkgName, dep, range, unparsed: parsed.unparsed } };
+  }
+  return {
+    kind: "rows",
+    entry: parsed.majors.map((major) => ({ pkg: pkgName, dep, range, major })),
+  };
+}
+
+/** Every third-party peer declaration across the workspace, as `[pkgName, dep, range]`. */
+function thirdPartyDeclarations() {
+  return publishablePackages().flatMap(({ manifest }) =>
+    Object.entries(manifest.peerDependencies ?? {})
+      // Siblings are dep-check's job — its floor leg already covers them, and duplicating that
+      // here would put one claim behind two gates that can disagree.
+      .filter(([dep]) => !dep.startsWith("@theokit/"))
+      .map(([dep, range]) => [manifest.name, dep, range]),
+  );
+}
+
+/** One row per (package, third-party peer, major), plus what could not be turned into rows. */
 export function peerMajorRows() {
   const rows = [];
   const problems = [];
   const unbounded = [];
-  for (const { manifest } of publishablePackages()) {
-    for (const [dep, range] of Object.entries(manifest.peerDependencies ?? {})) {
-      if (dep.startsWith("@theokit/")) continue;
-      const parsed = majorsOf(range);
-      if (parsed.unbounded) {
-        unbounded.push({ pkg: manifest.name, dep, range });
-        continue;
-      }
-      if (parsed.majors === null) {
-        problems.push({ pkg: manifest.name, dep, range, unparsed: parsed.unparsed });
-        continue;
-      }
-      for (const major of parsed.majors) rows.push({ pkg: manifest.name, dep, range, major });
-    }
+  const bucket = { rows, problem: problems, unbounded };
+  for (const [pkgName, dep, range] of thirdPartyDeclarations()) {
+    const { kind, entry } = classify(pkgName, dep, range);
+    if (kind === "rows") rows.push(...entry);
+    else bucket[kind].push(entry);
   }
   return { rows, problems, unbounded };
 }
@@ -98,10 +118,14 @@ const { rows, problems, unbounded } = peerMajorRows();
 if (process.argv.includes("--matrix")) {
   // stdout carries only the JSON a workflow parses; anything else goes to stderr.
   for (const u of unbounded) {
-    console.error(`unbounded: ${u.pkg} declares ${u.dep} ${u.range} — no ceiling, so no major to pin`);
+    console.error(
+      `unbounded: ${u.pkg} declares ${u.dep} ${u.range} — no ceiling, so no major to pin`,
+    );
   }
   for (const p of problems) {
-    console.error(`unparsed range: ${p.pkg} declares ${p.dep} ${p.range} — "${p.unparsed}" is not ^X.Y.Z`);
+    console.error(
+      `unparsed range: ${p.pkg} declares ${p.dep} ${p.range} — "${p.unparsed}" is not ^X.Y.Z`,
+    );
   }
   console.log(JSON.stringify({ include: rows }));
   process.exit(problems.length > 0 ? 1 : 0);
@@ -109,13 +133,21 @@ if (process.argv.includes("--matrix")) {
 
 const width = Math.max(...rows.map((r) => r.pkg.length), 10);
 for (const row of rows) {
-  console.log(`  ${row.pkg.padEnd(width)}  ${row.dep.padEnd(20)}  ${row.range.padEnd(24)}  major ${row.major}`);
+  console.log(
+    `  ${row.pkg.padEnd(width)}  ${row.dep.padEnd(20)}  ${row.range.padEnd(24)}  major ${row.major}`,
+  );
 }
-console.log(`\n  ${rows.length} (package, peer, major) combinations from ${new Set(rows.map((r) => r.pkg)).size} packages`);
+console.log(
+  `\n  ${rows.length} (package, peer, major) combinations from ${new Set(rows.map((r) => r.pkg)).size} packages`,
+);
 for (const u of unbounded) {
-  console.log(`  unbounded: ${u.pkg} declares ${u.dep} ${u.range} — no ceiling, so no major to pin`);
+  console.log(
+    `  unbounded: ${u.pkg} declares ${u.dep} ${u.range} — no ceiling, so no major to pin`,
+  );
 }
 for (const p of problems) {
-  console.error(`\n  unparsed: ${p.pkg} declares ${p.dep} ${p.range} — "${p.unparsed}" is not ^X.Y.Z`);
+  console.error(
+    `\n  unparsed: ${p.pkg} declares ${p.dep} ${p.range} — "${p.unparsed}" is not ^X.Y.Z`,
+  );
 }
 process.exit(problems.length > 0 ? 1 : 0);

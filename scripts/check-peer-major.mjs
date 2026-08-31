@@ -12,7 +12,7 @@
  * Usage: node scripts/check-peer-major.mjs <package-name> <dep> <major>
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { copyFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -37,12 +37,18 @@ function restore() {
     // committed tree says it resolves.
     run("git", ["restore", "pnpm-lock.yaml"], { stdio: "ignore" });
   } catch {
-    console.error(`\nCOULD NOT RESTORE ${MANIFEST} — restore it from ${BACKUP} by hand before doing anything else.`);
+    console.error(
+      `\nCOULD NOT RESTORE ${MANIFEST} — restore it from ${BACKUP} by hand before doing anything else.`,
+    );
   }
 }
 
 copyFileSync(MANIFEST, BACKUP);
-for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => { restore(); process.exit(130); });
+for (const signal of ["SIGINT", "SIGTERM"])
+  process.on(signal, () => {
+    restore();
+    process.exit(130);
+  });
 
 let failure;
 try {
@@ -53,6 +59,18 @@ try {
 
   console.log(`\n── ${pkg} against ${dep}@^${major} ──\n`);
   run("pnpm", ["install", "--no-frozen-lockfile"]);
+
+  // Build the workspace dependencies FIRST. A package here resolves its siblings through their
+  // `dist/`, so `tsc --noEmit` cannot see `@theokit/gateway`'s types until that package is built.
+  // Locally this passed without the step and failed on the first CI run, because a developer's
+  // tree already carries a `dist/` from an earlier build and a fresh checkout does not — the whole
+  // class of bug where a check is verified only under state the real pipeline never has.
+  // `<pkg>^...` is pnpm's selector for "the dependencies of, excluding itself". The mirrored form
+  // `...^<pkg>` means DEPENDENTS, and reaches for the integration suite instead — measured, because
+  // the first version of this line used it and failed with "None of the selected packages has a
+  // build script".
+  run("pnpm", ["--filter", `${pkg}^...`, "build"]);
+
   for (const script of ["typecheck", "test", "build"]) {
     run("pnpm", ["--filter", pkg, script]);
   }
