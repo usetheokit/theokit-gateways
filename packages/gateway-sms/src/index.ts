@@ -13,3 +13,5 @@ export type {
 } from "./types.js";
 export type { WebhookServer, WebhookServerOptions } from "./webhook-server.js";
 export { createWebhookServer } from "./webhook-server.js";
+export type { SMSWebhookVerifierOptions, WebhookVerifyResult } from "./webhook-verifier.js";
+export { smsWebhookVerifier } from "./webhook-verifier.js";

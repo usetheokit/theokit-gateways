@@ -4,6 +4,14 @@ Mattermost platform adapter for [`@theokit/gateway`](../gateway).
 
 Works with self-hosted Mattermost (Docker / Kubernetes / bare metal) and Mattermost Cloud. WebSocket gateway for real-time inbound, REST v4 for outbound.
 
+
+## How inbound arrives
+
+**WebSocket.** The adapter subscribes to the server's event socket; messages reach `onInbound` once
+`connect()` resolves. There is no webhook to host and nothing for an application to authenticate.
+
+Mattermost's platform does offer outgoing webhooks and slash commands. This adapter does not use
+them, so nothing here validates one.
 ## Install
 
 ```bash

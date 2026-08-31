@@ -114,6 +114,23 @@ export interface WhatsAppMessageEvent extends BaseMessageEvent {
     /** Contact's profile name when Meta provides it. */
     readonly contactName?: string;
     /**
+     * The address this arrived on, verbatim — what a reply must be sent to.
+     *
+     * `channel.id` is normalised to digits, which is what an allowlist compares and what a session
+     * key is built from. The normalisation strips the DOMAIN, and the domain is what says which
+     * kind of identifier it is: `@s.whatsapp.net` a phone, `@g.us` a group, `@lid` an account's
+     * linked identity. A note-to-self arrives addressed by LID, so answering `channel.id` rebuilds
+     * `…@s.whatsapp.net` — an address that does not exist, and a send that reports ok and lands
+     * nowhere (#84).
+     *
+     * `sendMessage` accepts this verbatim: a `to` containing `@` is already an address and is
+     * passed through untouched.
+     *
+     * Present on the baileys backend. The cloud backend addresses recipients by phone and has no
+     * JID to report.
+     */
+    readonly channelJid?: string;
+    /**
      * Which backend produced this event.
      *
      * `baileys` joined `cloud` and `web` in 0.2: it speaks the WhatsApp Web multi-device

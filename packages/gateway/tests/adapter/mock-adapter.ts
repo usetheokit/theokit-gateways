@@ -66,4 +66,9 @@ export class MockAdapter extends BasePlatformAdapter {
   async emit(event: MessageEvent): Promise<void> {
     if (this.handler !== undefined) await this.handler(event);
   }
+
+  /** The out-of-band ingest every adapter carries (#83). */
+  override async deliver(event: MessageEvent): Promise<"ok" | "no_handler" | "handler_threw"> {
+    return this.runHandler(this.handler, event);
+  }
 }

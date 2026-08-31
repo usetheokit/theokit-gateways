@@ -2,6 +2,14 @@
 
 Slack platform adapter for `@theokit/gateway`. Adoption Roadmap #7; ADRs D267-D285.
 
+
+## How inbound arrives
+
+**Socket Mode.** Bolt holds the connection; events reach `onInbound` once `connect()` resolves.
+There is no webhook to host and nothing for an application to authenticate.
+
+Slack's platform also supports HTTP events with a signing secret, and `theokit/server/webhook`
+exports `slack()` for that — but this adapter uses Socket Mode, so it is not the path in play here.
 ## Install
 
 ```bash

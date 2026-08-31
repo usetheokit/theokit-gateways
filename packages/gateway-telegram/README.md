@@ -4,6 +4,14 @@ Telegram platform adapter for `@theokit/gateway`. Wraps [grammy](https://grammy.
 
 > **Status: 0.1.0 — pre-release.**
 
+
+## How inbound arrives
+
+**Long polling by default.** grammY pulls updates and they reach `onInbound` once `connect()`
+resolves.
+
+Telegram also supports a webhook, and `theokit/server/webhook` exports `telegram()` for the secret
+token it sends in `X-Telegram-Bot-Api-Secret-Token`. Parsed updates go to `adapter.deliver(event)`.
 ## Install
 
 ```bash

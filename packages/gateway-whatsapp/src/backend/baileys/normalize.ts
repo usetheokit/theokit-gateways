@@ -132,7 +132,7 @@ function toSeconds(timestamp: unknown): number | undefined {
 function resolveParties(
   key: Record<string, unknown>,
   remoteJid: string,
-): { fromPhone: string; channelId: string; isGroup: boolean } | undefined {
+): { fromPhone: string; channelId: string; channelJid: string; isGroup: boolean } | undefined {
   const isGroup = remoteJid.endsWith("@g.us");
   const senderJid = isGroup ? asText(key.participant) : remoteJid;
   if (senderJid === undefined) return undefined;
@@ -140,7 +140,10 @@ function resolveParties(
   const fromPhone = normalizeWhatsAppId(senderJid);
   const channelId = normalizeWhatsAppId(remoteJid);
   if (fromPhone.length === 0 || channelId.length === 0) return undefined;
-  return { fromPhone, channelId, isGroup };
+  // `remoteJid` is carried out UNCHANGED beside the normalised id. The normalisation is what the
+  // allowlist compares; the raw form is the only thing a reply can be addressed to, and the two are
+  // not interchangeable — stripping the domain loses which KIND of address it was (#84).
+  return { fromPhone, channelId, channelJid: remoteJid, isGroup };
 }
 
 /**
@@ -261,6 +264,7 @@ export function normalizeBaileysMessage(
     fromPhone: parties.fromPhone,
     conversationType: parties.isGroup ? "group" : "dm",
     channelId: parties.channelId,
+    channelJid: parties.channelJid,
     text,
     receivedAt: seconds * 1_000,
     backend: "baileys",

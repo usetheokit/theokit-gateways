@@ -50,6 +50,21 @@ function endQuietly(socket: BaileysSocketLike): void {
 const DEFAULT_CONNECT_TIMEOUT_MS = 60_000;
 /** How long to wait for one send to be acknowledged. */
 const DEFAULT_SEND_TIMEOUT_MS = 30_000;
+
+/**
+ * The answer "WhatsApp routes this to nobody", carried through the send chain.
+ *
+ * A sentinel rather than `undefined` because `sendMessage` itself resolves to `undefined` for an
+ * acknowledgement with no id, and the two mean opposite things: one is a message that went out
+ * without a wamid, the other is a message that was never sent.
+ */
+const UNROUTABLE = "__unroutable__" as const;
+
+/**
+ * What one send attempt resolves to before the timeout race: the socket's acknowledgement, an
+ * acknowledgement with no id, or the recipient having no route at all.
+ */
+type SendOutcome = { key?: { id?: string } } | undefined | typeof UNROUTABLE;
 /**
  * How many of our own message ids to keep, as an echo guard.
  *
@@ -235,6 +250,15 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
    * the failure it guards against is a message delivered to the wrong person.
    */
   private sendQueue: Promise<unknown> = Promise.resolve();
+
+  /**
+   * What WhatsApp answered about each recipient, for the life of the session.
+   *
+   * Holds the routable JID, or {@link UNROUTABLE} for a number the server does not know. Both are
+   * worth remembering: a second send to a number that does not exist should refuse as fast as the
+   * first, without another round-trip.
+   */
+  private readonly jidCache = new Map<string, string>();
 
   constructor(private readonly opts: WhatsAppBaileysBackendOptions) {}
 
@@ -532,9 +556,9 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
    * @internal
    */
   private async raceSend(
-    inFlight: Promise<{ key?: { id?: string } } | undefined>,
+    inFlight: Promise<SendOutcome>,
     timeoutMs: number,
-  ): Promise<{ key?: { id?: string } } | undefined | "timeout"> {
+  ): Promise<SendOutcome | "timeout"> {
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<"timeout">((resolve) => {
       timer = setTimeout(() => resolve("timeout"), timeoutMs);
@@ -573,12 +597,37 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
       };
     }
 
-    const jid = `${message.to}@${message.isGroup ? "g.us" : "s.whatsapp.net"}`;
     const timeoutMs = this.opts.sendTimeoutMs ?? DEFAULT_SEND_TIMEOUT_MS;
-    const inFlight = socket.sendMessage(jid, { text: message.text });
 
-    const result = this.raceSend(inFlight, timeoutMs)
+    // Resolve BEFORE sending, and let the server's answer decide the address.
+    //
+    // Baileys hands back a locally-generated wamid whether or not the JID routes anywhere, so
+    // building one from the caller's string and reporting that id as proof of delivery loses the
+    // message in silence — the caller's log, its metrics and its retry logic all record a success
+    // for something nobody received (#82).
+    //
+    // Measured on a real account: `5535998838687` and `553598838687` are the same Brazilian line,
+    // both answered `ok: true`, and only the second arrived. Asking WhatsApp which form it routes
+    // to fixes the ninth digit without a Brazil-specific rule anywhere in this package — the answer
+    // is whatever the server says, for any country.
+    const send: Promise<SendOutcome> = this.resolveJid(socket, message).then(
+      async (jid): Promise<SendOutcome> =>
+        jid === undefined ? UNROUTABLE : await socket.sendMessage(jid, { text: message.text }),
+    );
+
+    const result = this.raceSend(send, timeoutMs)
       .then((outcome) => {
+        if (outcome === UNROUTABLE) {
+          return {
+            ok: false,
+            error: {
+              code: "undeliverable" as const,
+              message:
+                `WhatsApp does not route to "${message.to}" — the number is not registered, or ` +
+                "not in the form this account can reach. Nothing was sent.",
+            },
+          };
+        }
         if (outcome === "timeout") {
           return {
             ok: false,
@@ -602,7 +651,54 @@ export class WhatsAppBaileysBackend implements WhatsAppBackend {
         },
       }));
 
-    return { result, inFlight };
+    return { result, inFlight: send };
+  }
+
+  /**
+   * The JID WhatsApp routes this message to, or `undefined` when it routes to nobody.
+   *
+   * A group id is not a phone number and `onWhatsApp` answers about numbers, so groups pass
+   * straight through — asking would refuse every group message.
+   *
+   * The answer is cached for the life of the session. It is a fact about a number's registration,
+   * which does not change while a socket lives, and paying a round-trip per message would make
+   * every send slower for something already known.
+   *
+   * A socket without `onWhatsApp` — an older Baileys, or a fake predating this — sends to the
+   * number as given, which is the behaviour from before #82. Refusing on a missing capability
+   * would turn an upgrade problem into an outage.
+   */
+  private async resolveJid(
+    socket: BaileysSocketLike,
+    message: WhatsAppOutboundMessage,
+  ): Promise<string | undefined> {
+    // Already an address: pass it through untouched. `channelJid` on an inbound event is exactly
+    // this, and appending a domain to it produced `231116569108705@lid@s.whatsapp.net` — a string
+    // that routes nowhere and reports ok (#84). Asking `onWhatsApp` about it is equally wrong: that
+    // call answers about phone NUMBERS, and a LID is not one, so it would refuse a valid address.
+    if (message.to.includes("@")) return message.to;
+    if (message.isGroup) return `${message.to}@g.us`;
+    if (socket.onWhatsApp === undefined) return `${message.to}@s.whatsapp.net`;
+
+    const cached = this.jidCache.get(message.to);
+    if (cached !== undefined) return cached === UNROUTABLE ? undefined : cached;
+
+    let answer: Array<{ exists?: boolean; jid?: string }> | undefined;
+    try {
+      answer = await socket.onWhatsApp(message.to);
+    } catch {
+      // The lookup failing is not the same as the number not existing, and refusing here would
+      // turn a transient server hiccup into a permanent-looking `undeliverable`. Send as given.
+      return `${message.to}@s.whatsapp.net`;
+    }
+
+    const entry = answer?.[0];
+    if (entry?.exists !== true || entry.jid === undefined || entry.jid === "") {
+      this.jidCache.set(message.to, UNROUTABLE);
+      return undefined;
+    }
+    this.jidCache.set(message.to, entry.jid);
+    return entry.jid;
   }
 
   /** Subscribe to inbound events. EC-H: a second call REPLACES the first. */

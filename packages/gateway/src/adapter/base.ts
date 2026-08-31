@@ -77,6 +77,51 @@ export abstract class BasePlatformAdapter {
    */
   abstract onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void;
 
+  /**
+   * Deliver an inbound event that arrived OUT OF BAND, and report what the handler did with it.
+   *
+   * Six adapters self-deliver once connected — long polling, a gateway socket, Socket Mode, a sync
+   * loop, IMAP. The webhook platforms cannot: the payload arrives on an HTTP route the application
+   * owns, and until this existed there was no supported call that joined the two. `onInbound` had no
+   * public counterpart, so `GatewayRunner` was reachable for eight platforms and not for LINE or
+   * WhatsApp Cloud, which every app then wired by hand beside the runner instead of through it
+   * (#83).
+   *
+   * The return value distinguishes the three outcomes a caller can act on, because they are not the
+   * same problem: nobody subscribed, the handler ran, or the handler threw. Answering a webhook 200
+   * for the first is wrong — the provider would stop retrying a message nothing received.
+   *
+   * Implementations should be one line over {@link runHandler}, which owns the containment.
+   */
+  abstract deliver(event: GatewayMessageEvent): Promise<"ok" | "no_handler" | "handler_threw">;
+
+  /**
+   * Run a subscribed handler and contain its failure. The body of {@link deliver}, written once.
+   *
+   * A handler is USER code and may throw. An adapter must contain that throw, name it as the
+   * handler's failure rather than the platform's, and keep delivering — one bad message ends
+   * neither the process nor the connection. Two adapters once discarded the rejection with `void`,
+   * which under Node's default ends the process; two more reported it as a platform-client error,
+   * sending whoever debugged their own handler to the wrong repository (#41).
+   *
+   * Ten copies of that knowledge is ten chances to get it wrong, so it lives here. The platform tag
+   * is taken from `this.platform`, which is the only part that differed between them.
+   */
+  protected async runHandler(
+    handler: ((event: GatewayMessageEvent) => Promise<void>) | undefined,
+    event: GatewayMessageEvent,
+  ): Promise<"ok" | "no_handler" | "handler_threw"> {
+    if (handler === undefined) return "no_handler";
+    try {
+      await handler(event);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[${this.platform}] handler threw: ${message}\n`);
+      return "handler_threw";
+    }
+    return "ok";
+  }
+
   /** Lifecycle: emit a typing indicator. Default: noop. */
   async startTyping(_channelId: string): Promise<void> {
     /* override */
