@@ -49,6 +49,8 @@ function endQuietly(socket: BaileysSocketLike): void {
 /** How long to wait for the socket to report `open` before giving up. */
 const DEFAULT_CONNECT_TIMEOUT_MS = 60_000;
 /** How long to wait for one send to be acknowledged. */
+const DEFAULT_SEND_TIMEOUT_MS = 30_000;
+
 /**
  * The answer "WhatsApp routes this to nobody", carried through the send chain.
  *
@@ -63,8 +65,6 @@ const UNROUTABLE = "__unroutable__" as const;
  * acknowledgement with no id, or the recipient having no route at all.
  */
 type SendOutcome = { key?: { id?: string } } | undefined | typeof UNROUTABLE;
-
-const DEFAULT_SEND_TIMEOUT_MS = 30_000;
 /**
  * How many of our own message ids to keep, as an echo guard.
  *
