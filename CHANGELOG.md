@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **ci:** `Back-merge` opens a `main → workspace` pull request after a release, so the version bumps changesets cuts on `main` come back down. Measured after releasing `gateway-{matrix,line}@0.3.0`: `main` carried 0.3.0, `develop` still said 0.2.0, and the next `develop → main` pull request would have proposed setting the published versions back. The repository had opened zero pull requests against `workspace` in its whole history
 - **ci:** `Peer majors` verifies every third-party peer range at every major it claims — 26 combinations, each naming the concrete version it installs. The Dependency Gate exercises the floor of every declared range among the organisation's own packages and no third-party range at all, so four multi-major promises were verified at one point each and two adapters ran against whatever pnpm's peer auto-install picked. An unbounded range (`>=x`) is resolved against the registry rather than skipped, since the majors it promises are exactly the ones that appear without any file changing (#99, #100)
 - **backlog:** B-023 — ten of eleven packages run their suite without a typechecker, so a type error in a package's own tests reports a green suite (#B-023)
 - **backlog:** B-020 and B-021 measured and triaged — eight adapters ignoring a declared `format` field, and an alignment gate that reads a disclaimer as a citation (#B-020, #B-021)
