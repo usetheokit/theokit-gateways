@@ -40,10 +40,26 @@ jobs:
           # Never interpolated into the script: a branch name is attacker-chosen text on a fork
           # pull request, and `${{ }}` inside `run:` expands it as source code.
           HEAD_REF: ${{ github.head_ref }}
+          # The branch NAME is not enough. `github.head_ref` on a fork pull request is the branch
+          # name inside THE FORK, so anyone may fork this public repository, name a branch
+          # `workspace`, and satisfy a name-only check. The promotion comes from this repository's
+          # own `workspace` or it is not the promotion.
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          echo "head: ${HEAD_REPO}:${HEAD_REF}  ->  base: ${BASE_REPO}:develop"
+
+          if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "::error::a fork cannot promote into develop. The head is '${HEAD_REPO}', not '${BASE_REPO}'."
+            echo
+            echo "Work originates on this repository's own workspace branch. A branch named"
+            echo "'workspace' in a fork is a different branch that happens to share a name."
+            exit 1
+          fi
+
           if [ "$HEAD_REF" = "workspace" ]; then
-            echo "head is workspace — this is the promotion the rule allows"
+            echo "head is this repository's workspace — the promotion the rule allows"
             exit 0
           fi
           echo "::error::'${HEAD_REF}' cannot be merged into develop."
