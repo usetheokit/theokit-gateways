@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-whatsapp",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "WhatsApp platform adapter for @theokit/gateway. Multi-backend (Meta Cloud API + whatsapp-web.js bridge). ADRs D303-D314.",
   "license": "Apache-2.0",
   "repository": {
@@ -41,7 +41,7 @@
     "test:mutation": "stryker run"
   },
   "peerDependencies": {
-    "@theokit/gateway": ">=0.6.0 <1.0.0",
+    "@theokit/gateway": ">=0.9.0 <1.0.0",
     "baileys": ">=7.0.0-rc14",
     "whatsapp-web.js": "^1.23.0"
   },

@@ -1,5 +1,78 @@
 # Changelog
 
+## 0.4.0
+
+### Minor Changes
+
+- b38172b: **The peer floor on `@theokit/gateway` rises with this release.** Every adapter now implements
+  `deliver` over `runHandler`, and neither exists in an older core — an adapter installed against one
+  does not build. `dep-check` caught that by building the whole workspace against the floor each
+  package claimed, which is the one thing a version range cannot tell you by reading it.
+
+  The floor is set in the version commit rather than here, because a range cannot name a version that
+  does not exist yet: raised in the workspace, the same gate then fails the other way round — every
+  adapter declaring a floor above the core installed beside it. That is the shape `fa70153` used when
+  these ranges were first written.
+
+  `deliver(event)` — every adapter can now be handed an event that arrived out of band (#83).
+
+  `onInbound` was the seam every adapter implemented and it had no public counterpart. Six platforms
+  self-deliver once connected — long polling, a gateway socket, Socket Mode, a sync loop, IMAP — so
+  the asymmetry stayed invisible: `GatewayRunner` worked for eight platforms and silently did nothing
+  for LINE and WhatsApp Cloud, whose payloads arrive on an HTTP route the application owns. Every app
+  wired those two by hand, beside the runner rather than through it.
+
+  ```ts
+  const outcome = await adapter.deliver(event); // "ok" | "no_handler" | "handler_threw"
+  ```
+
+  The three outcomes are distinguished because a caller acts on them differently: answering a webhook
+  200 when nobody was subscribed tells the provider to stop retrying a message nothing received.
+
+  `BasePlatformAdapter.runHandler` holds the containment once, where ten copies of it used to live —
+  a handler is user code, its throw is named as the handler's failure rather than the platform's, and
+  delivery continues. Each adapter's `deliver` is one line over it.
+
+  Also: `gateway-sms`'s `createWebhookServer` now signs against the configured `publicUrl` (#90).
+  Twilio verifies against the URL it POSTed to, and behind a proxy that rewrites `host` — a tunnel, an
+  ingress, a load balancer terminating TLS — the reconstruction from headers yields the internal
+  address, so a correct signature fails on every delivery. `publicUrl` is required by all three
+  backend option shapes and documented as "used by signature verifier"; until now no source file read
+  it. The header reconstruction stays as the fallback for an app served directly.
+
+- 348bc02: WhatsApp: send to the address that routes, and answer where the message came from (#82, #84).
+
+  **A send that WhatsApp discards no longer reports success.** Baileys hands back a
+  locally-generated `wamid` whether or not the JID routes anywhere, and the backend treated that id
+  as proof of delivery — so a message nobody received was recorded as a success by the caller's log,
+  its metrics and its retry logic. Measured on a real account: `5535998838687` and `553598838687` are
+  the same Brazilian line, both answered `ok: true`, and only the second arrived.
+
+  `send` now asks WhatsApp which form it routes to before sending, and refuses a number the server
+  does not know with `undeliverable` naming the number. That fixes the Brazilian ninth digit without a
+  Brazil-specific rule anywhere in this package — the answer is whatever the server says, for any
+  country. The lookup is cached for the life of the session, so it costs one round-trip per recipient.
+
+  **An inbound event now carries the address it arrived on**, as `whatsapp.channelJid`. `channel.id`
+  is normalised to digits — which is what an allowlist compares — and that normalisation strips the
+  domain, the part that says whether an address is a phone, a group, or an account's linked identity.
+  A note-to-self arrives addressed by LID, so replying to `channel.id` rebuilt `…@s.whatsapp.net`, an
+  address that does not exist.
+
+  **`send` accepts a qualified JID verbatim.** A `to` containing `@` is already an address and is
+  passed through untouched, where it used to become `231116569108705@lid@s.whatsapp.net`. So
+  answering an inbound event is now:
+
+  ```ts
+  await adapter.sendMessage({
+    channel: { id: event.whatsapp.channelJid ?? event.channel.id, type: "dm" },
+    text,
+  });
+  ```
+
+  Not affected: the Cloud backend. Meta rejects an unroutable recipient with an error code, so the
+  same mistake surfaces there instead of vanishing.
+
 ## 0.3.3
 
 ### Patch Changes

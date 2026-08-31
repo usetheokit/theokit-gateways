@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-line",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "description": "LINE Messaging API platform adapter for @theokit/gateway. ADRs D405-D412.",
   "license": "Apache-2.0",
   "repository": {
@@ -42,7 +42,7 @@
   },
   "peerDependencies": {
     "@line/bot-sdk": "^9.0.0",
-    "@theokit/gateway": ">=0.6.0 <1.0.0",
+    "@theokit/gateway": ">=0.9.0 <1.0.0",
     "express": "^4.18.0 || ^5.0.0"
   },
   "peerDependenciesMeta": {
