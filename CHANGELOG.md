@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **ci:** `Peer majors` verifies every third-party peer range at every major it claims — 25 combinations. The Dependency Gate exercises the floor of every declared range among the organisation's own packages and no third-party range at all, so four multi-major promises were verified at one point each and two adapters ran against whatever pnpm's peer auto-install picked (#99, #100)
+- **ci:** `Peer majors` verifies every third-party peer range at every major it claims — 26 combinations, each naming the concrete version it installs. The Dependency Gate exercises the floor of every declared range among the organisation's own packages and no third-party range at all, so four multi-major promises were verified at one point each and two adapters ran against whatever pnpm's peer auto-install picked. An unbounded range (`>=x`) is resolved against the registry rather than skipped, since the majors it promises are exactly the ones that appear without any file changing (#99, #100)
 - **backlog:** B-023 — ten of eleven packages run their suite without a typechecker, so a type error in a package's own tests reports a green suite (#B-023)
 - **backlog:** B-020 and B-021 measured and triaged — eight adapters ignoring a declared `format` field, and an alignment gate that reads a disclaimer as a citation (#B-020, #B-021)
 - **gateway:** a cross-adapter gate fails when an adapter never reads the `format` its own contract declares — 8 of 10 do not, and two real phones received literal asterisks because of it (#B-020)
