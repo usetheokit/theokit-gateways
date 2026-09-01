@@ -25,7 +25,8 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "sideEffects": false,
   "files": [
@@ -63,5 +64,19 @@
   "publishConfig": {
     "access": "public",
     "provenance": true
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/usetheokit/theokit-gateways/issues"
+  },
+  "homepage": "https://github.com/usetheokit/theokit-gateways/tree/main/packages/gateway-matrix#readme",
+  "keywords": [
+    "theokit",
+    "gateway",
+    "matrix",
+    "protocol",
+    "platform",
+    "adapter",
+    "adrs",
+    "d413-d421"
+  ]
 }
