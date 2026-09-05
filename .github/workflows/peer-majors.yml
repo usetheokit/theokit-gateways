@@ -74,12 +74,23 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+      # `@v1` is a moving ref by design; what the action RUNS stays pinned by digest inside it.
+      #
+      # This block was the STALEST setup in the ecosystem — `pnpm/action-setup` v4.1.0 and
+      # `actions/setup-node` v4.1.0, while every other workflow here had moved to v6.0.10 and
+      # v7.0.0. That is the cost of a copy: the ones nobody looks at stop being updated, and
+      # nothing reports it. Calling the shared action ends the divergence rather than refreshing
+      # two digests that will drift again.
+      #
+      # It also gains the cache key this block never had: `cache-dependency-path` lists
+      # `package.json` beside `pnpm-lock.yaml`, so a pnpm major bump invalidates the store
+      # instead of restoring one the new pnpm reads as inconsistent.
+      #
+      # `node-version: 22` stays explicit — this job is a matrix leg pinned on purpose, not a
+      # repository default, so it must not fall through to `.nvmrc`.
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
         with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          node-version: '22'
       - name: verify
         # typecheck + test + build at that major. This proves the COMPILE-TIME and PACKAGING
         # contract — a removed export, a changed signature, a type that stopped being assignable.
