@@ -65,7 +65,13 @@ jobs:
   # time an external flake blocks a release. Re-run it instead.
   live-contracts:
     name: Live platform contracts (release gate)
-    uses: $/.github/workflows/integration.yml
+    # zizmor: ignore[self-repository] -- `$/` is the better form and GitHub shipped it on
+    # 2026-07-30, but NO actionlint release parses it: the latest is v1.7.12 from 2026-03-30,
+    # four months earlier, and it rejects `$/...` as "invalid format because ref is missing".
+    # actionlint is a REQUIRED check here (`lint / actionlint + zizmor`), so adopting the
+    # better syntax today trades a low-severity advisory for a hard gate failure. Revisit when
+    # actionlint ships support; the migration is one regex.
+    uses: ./.github/workflows/integration.yml
     # Explicit rather than `inherit`: the live suites get the platform
     # credentials and nothing else — in particular not NPM_TOKEN.
     secrets:
