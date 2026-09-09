@@ -65,7 +65,7 @@ jobs:
   # time an external flake blocks a release. Re-run it instead.
   live-contracts:
     name: Live platform contracts (release gate)
-    uses: ./.github/workflows/integration.yml
+    uses: $/.github/workflows/integration.yml
     # Explicit rather than `inherit`: the live suites get the platform
     # credentials and nothing else — in particular not NPM_TOKEN.
     secrets:
