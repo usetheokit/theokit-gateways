@@ -122,7 +122,8 @@ jobs:
     # plainly because `environment:` is easy to mistake for the second.
     environment: release
     needs: [live-contracts, release-channel]
-    runs-on: ubuntu-latest
+    # Named for the reason above: this job builds and publishes what consumers install.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write
