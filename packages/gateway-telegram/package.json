@@ -25,7 +25,8 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -57,5 +58,20 @@
   "publishConfig": {
     "access": "public",
     "provenance": true
-  }
+  },
+  "sideEffects": false,
+  "bugs": {
+    "url": "https://github.com/usetheokit/theokit-gateways/issues"
+  },
+  "homepage": "https://github.com/usetheokit/theokit-gateways/tree/main/packages/gateway-telegram#readme",
+  "keywords": [
+    "theokit",
+    "gateway",
+    "telegram",
+    "grammy",
+    "platform",
+    "adapter",
+    "adr",
+    "d171"
+  ]
 }
