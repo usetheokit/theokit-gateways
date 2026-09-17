@@ -85,9 +85,31 @@ const byOwner = {};
 for (const r of rows) byOwner[r.owner] = (byOwner[r.owner] ?? 0) + r.loc;
 const total = rows.reduce((a, r) => a + r.loc, 0);
 
+// How many of the named files this run actually FOUND.
+//
+// Without it the tool is fail-open, and the failure looks exactly like success: `FILES` is a
+// hardcoded list of paths taken from one app, so an app that names its files differently — or a
+// freshly scaffolded one that has not written them yet — resolves none of them and reports
+// `{ gap: 0, presenter: 0, total: 0 }`. A perfect score, measured over nothing.
+//
+// Proved 2026-09-17 against a `create-theokit --preset=bot` scaffold: 12 rows, 0 present, zeros
+// across every owner. The same shape the `adapter-contract` gate refuses by asserting
+// `examined === 10` before it reports offenders — an empty result is about the query first.
+const present = rows.filter((r) => r.present).length;
+const missing = rows.length - present;
+
 const report = JSON.stringify(
-  { metric: "lines neither blank nor comment-only", root, rows, byOwner, total },
+  { metric: "lines neither blank nor comment-only", root, rows, byOwner, total, present, missing },
   null,
   2,
 );
 process.stdout.write(`${report}\n`);
+
+if (present === 0) {
+  process.stderr.write(
+    `MEASURED NOTHING: none of the ${rows.length} named files exist under ${root}.\n` +
+      "The zeros above are the absence of the query's targets, not the absence of joinery.\n" +
+      "Point it at an app that carries these files, or teach FILES this app's names.\n",
+  );
+  process.exit(2);
+}
