@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.10.0
+
+### Minor Changes
+
+- 1754a0e: Add `toDialect(text, platform)` — markdown into the target channel's own dialect.
+
+  Measured across every `adapter.ts` and `split.ts` in the ten packages: no package transforms a
+  single character of text. What exists is markdown escape, HTML escape, phone normalisation and
+  post-cut newline cleanup. All ten READ `OutboundMessage.format`, but reading a flag is not
+  translating a body — so the agent answered `**Bom Sucesso (MG)**` and both LINE and WhatsApp
+  delivered the asterisks to a real phone.
+
+  The adapters refuse the translation deliberately and correctly: `gateway-whatsapp` reads `format`
+  only to warn once, because emphasis there is inline in the text rather than a transport flag. An
+  adapter is transport; translation depends on what was said AND where it is going, which makes it
+  presentation. It ships here as a pure function so the channel presenter in `theokit` can call it
+  without `@theokit/gateway` ever depending on `@theokit/presenter` (B-019 FR-005 / AC-004).
+
+  Taught three dialects — WhatsApp (`*bold*`, `_em_`, `~strike~`), LINE and SMS (markers dropped, no
+  rich text). A platform it has not been taught passes through UNCHANGED: inventing a mapping is
+  wrong invisibly, passing `**bold**` through is wrong where somebody can see it.
+
+- e05b146: The `@theokit/sdk` peer range admits the published `latest`. `>=2.18.0 <5` excluded `5.9.0`, so the
+  dependency gate counted this package among those a release would strand
+  (usetheokit/shared-workflows#64).
+
+  **Both ends were installed and run, not reasoned about:**
+
+  | sdk                                                               | typecheck | suite      |
+  | ----------------------------------------------------------------- | --------- | ---------- |
+  | 2.18.0 — the declared floor, three majors below the devDependency | clean     | 164 passed |
+  | 5.9.0 — the published latest                                      | clean     | 164 passed |
+
+  The floor is the surprise: `>=2.18.0` had never been exercised here — the devDependency was
+  `^4.62.0` — and it holds. This package makes one import from `@theokit/sdk`, and it has not moved
+  across three majors.
+
+  No code changed. A clean consumer install of the tarball with `@theokit/sdk@5.9.0` reports no
+  `ERESOLVE` and resolves one copy.
+
 ## 0.9.0
 
 ### Minor Changes
