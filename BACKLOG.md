@@ -49,15 +49,14 @@ own quality gates.
 
 ## Index
 
-26 items — **Open** 10 · **In flight** 0 · **Closed** 16
+26 items — **Open** 9 · **In flight** 1 · **Closed** 16
 
-### Open (10)
+### Open (9)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
 | [`B-017`](#b-017--bridge-starts-fails-intermittently-on-chromium-profile-cleanup----) | `bridge-starts` fails intermittently on Chromium profile cleanup | `raw` | — |
 | [`B-018`](#b-018--a-theokit-app-writes-268-lines-of-channel-joinery-the-framework-should-own----) | A theokit app writes 268 lines of channel joinery the framework should own | `triaged` | — |
-| [`B-019`](#b-019--agent-output-reaches-a-chat-channel-through-a-presenter-nobody-wrote----) | Agent output reaches a chat channel through a presenter nobody wrote | `triaged` | — |
 | [`B-020`](#b-020--eight-of-ten-adapters-ignore-outboundmessageformat-so-a-caller-cannot-rely-on-it----) | Eight of ten adapters ignore `OutboundMessage.format`, so a caller cannot rely on it | `triaged` | — |
 | [`B-021`](#b-021--check_alignment_gatepy-reads-a-b-nnn-mentioned-in-prose-as-a-citation----) | `check_alignment_gate.py` reads a `B-NNN` mentioned in prose as a citation | `triaged` | — |
 | [`B-022`](#b-022--eleven-of-twelve-packages-have-no-mutation-runner----) | Eleven of twelve packages have no mutation runner | `raw` | — |
@@ -66,9 +65,11 @@ own quality gates.
 | [`B-025`](#b-025--the-webhook-server-still-ignores-the-publicurl-twilio-signs----) | The webhook server still ignores the publicUrl Twilio signs | `raw` | — |
 | [`B-026`](#b-026--three-of-the-ten-adapters-cannot-be-served-by-a-framework-webhook-seam-and-two-never-will----) | Three of the ten adapters cannot be served by a framework webhook seam, and two never will | `raw` | — |
 
-### In flight (0)
+### In flight (1)
 
-_None._
+| Item | Title | Status | Severity |
+|---|---|---|---|
+| [`B-019`](#b-019--agent-output-reaches-a-chat-channel-through-a-presenter-nobody-wrote----) | Agent output reaches a chat channel through a presenter nobody wrote | `approved` | — |
 
 ### Closed (16)
 
@@ -562,7 +563,8 @@ suggested_mode: evolve
 source: human
 evidence: records/discoveries/opportunities/gateways-channel-descriptor-opportunity.md — SHIPPABLE, falsification evaluated, all 3 conditions unsatisfied. Originally measured in `appteste` on theokit 0.62.0, counting lines that are neither blank nor comment-only. 537 total across 12 files, classified by owner: 268 framework gap (catalog 114, lifecycle 74, webhook dispatch 51, validator bridge 19, leftovers 10), 50 a hand-written presenter, 86 mixed, 133 legitimate app concern. Supporting measurements: `startTyping` is on the base adapter contract, implemented by 1 of 10 adapters and called by nobody; `OutboundMessage.format` is honoured by 2 of 10, and the agent's `**bold**` reached LINE and WhatsApp as literal asterisks; 8 of 10 packages carry a `split.ts` with a hardcoded limit.
 why_now: eight channels were driven end to end in one session and every one of them needed the same five joins written by hand — a catalog entry, a lifecycle entry, a parse branch, a send branch, and in one case a validator bridge. Adding a channel costs four edits in every consuming app, which fails Open/Closed at the app boundary. Two of the joins are already filed as defects (#83 webhook ingest, #84 reply addressing); this item is the shape they share.
-status: triaged
+status: approved
+approved_by: human/paulo
 dod:
   - a structural descriptor exists that describes required CONFIG (not env var names) and carries no import from theokit, proven by one socket channel and one webhook channel
   - the test app's catalog, validator bridge, parse branch and send branch are deleted for those two channels, with the LOC delta measured
@@ -570,6 +572,29 @@ dod:
   - webhook payloads enter through a public supported API rather than an `@internal` one
   - existing direct consumers of the gateway packages still work without theokit
 > Registered 2026-08-30 after the architecture review. Scoped as a bounded spike by the reviewer, not a commitment to the full design: the 537 lines are measured, the descriptor is a hypothesis.
+>
+> **Re-measured 2026-09-17** — the original figures stay above as the 2026-08-30 measurement; these
+> are a second one, not a correction, for the reason the tool's own docblock gives: an ad-hoc
+> recount is a new measurement wearing the old one's name.
+>
+> - `node tools/measure-app-joinery.mjs ../appteste` → **573 total / 292 gap** (was 537 / 268).
+>   **+36 lines of joinery in 18 days**, in a real app. The joinery is not standing still.
+> - The tool was **fail-open** until today: it resolves a hardcoded list of filenames from
+>   `appteste`, so an app naming its files differently reported `{gap: 0, presenter: 0, total: 0}` —
+>   a perfect score over nothing. Proved against a `create-theokit --preset=bot` scaffold (12 rows,
+>   0 present). It now emits `present`/`missing` and exits 2 when it resolves none of them.
+> - **Two figures in `evidence:` above are now stale, and both moved the right way.**
+>   `OutboundMessage.format` is honoured by **10 of 10**, not 2 — `adapter-contract.test.ts` passes
+>   with `examined === 10` and an empty offender list (that is B-020, which is resolved in code and
+>   still `triaged` in this registry). `splitForDiscord` is now exported, so the eight splitters are
+>   reachable; a new cross-package gate asserts it.
+> - **The `@internal` gap in the DoD is narrower than "no inbound path".** `gateway-sms` exports
+>   `parseInbound` + `smsWebhookVerifier` + `createWebhookServer`; `gateway-line` exports
+>   `lineEventToMessageEvent` + `verifyLineSignature` + `createWebhookServer`; `gateway-teams`
+>   exports `normalizeTeamsActivity` but no verifier. So parse and verify are ALREADY public for two
+>   of the four. What is `@internal` is only the DELIVERY — `dispatchEvent`
+>   (`gateway-sms/src/adapter.ts:213`). The fourth DoD bullet is about that last step, and the work
+>   is smaller than "build ingest for four platforms".
 
 ## B-019 — Agent output reaches a chat channel through a presenter nobody wrote   [ ]
 
@@ -579,7 +604,8 @@ suggested_mode: evolve
 source: human
 evidence: records/discoveries/opportunities/gateways-channel-presenter-opportunity.md — SHIPPABLE_WITH_CAVEATS. The plan hypothesis was FALSIFIED (2 of 3 conditions fired) and replaced: the presenter must not touch splitting at all. Originally `appteste/server/agent-loop.ts` — 50 lines that consume the agent's event stream and produce one chat message. Its first version took every frame carrying a `delta`, so a reply arrived on a real phone as `"TheOi! 👋"`, the `"The"` being a fragment of the model's reasoning. theokit already ships `Presenter<TOut>` + `PresenterRegistry` keyed by surface, with three implementations (web, terminal, json) over a canonical `AgentOutputEvent`. Meanwhile 8 of 10 gateway packages carry a `split.ts` with a hardcoded limit (`TELEGRAM_MAX_MESSAGE = 4096`, `DISCORD_MAX_MESSAGE = 2000`), which is presentation living in a transport package because there was nowhere else.
 why_now: the reasoning leak reached a real user, and the dialect gap is user-visible — `**Bom Sucesso (MG)**` was delivered with literal asterisks on LINE and WhatsApp. Kept SEPARATE from B-018 deliberately: the presenter carries an unresolved ownership question (split rules belong to the transport, event translation to the framework) and coupling the two would hold the better-evidenced change hostage to the larger one.
-status: triaged
+status: approved
+approved_by: human/paulo
 dod:
   - one channel presenter exists as `Presenter<OutboundMessage>`, registered under the channel id, consuming the adapter's existing splitter rather than replacing it
   - agent output never exposes reasoning or non-user-facing events on a channel, covered by a test that fails on the current hand-written loop
@@ -664,6 +690,10 @@ dod:
   - the cost is measured and stated — `tsc --noEmit` per package on every `pnpm -r test` run, against the current suite time
   - if some package is deliberately excluded, the reason is written where the exclusion is
 > Registered 2026-08-30 during B-020's `/review` pre-conditions. Gate G2 ran: `typecheck` and `tsc`
+>
+> **Re-verified 2026-09-17** — evidence HOLDS, unchanged. Enumerated `scripts.test` across all
+> eleven packages: `gateway` runs `tsc --noEmit && vitest run`; the other ten run `vitest run`
+> alone. The item is measured and still true; only its `status` is behind.
 > matched no existing item; B-021 and B-022 matched only on the repository name. Not merged into
 > B-022 — that one is about mutation runners, a different tool answering a different question.
 
@@ -683,6 +713,12 @@ dod:
   - where the shared half lives is decided with a written reason: the core has no HTTP concern today and `express` is a peer of exactly these two packages, so adding it to `@theokit/gateway` is a boundary change and not a move
   - the 21 existing tests across both packages still pass, and the latch regression test still fails when the fix is reverted
 > Registered 2026-08-30 while getting the promotion PR past SonarCloud. Gate G2 ran: `webhook-server`
+>
+> **Re-measured 2026-09-17 — the evidence MOVED, and the problem shrank by half.** The item records
+> 162 + 174 lines sharing 101 identical ones (2026-08-30). Today: `gateway-line/src/webhook-server.ts`
+> is **102** lines and `gateway-sms/src/webhook-server.ts` is **133**, sharing **56** identical lines
+> by the same `comm -12` over both sorted. Both files were cut and the duplication fell with them.
+> Still real, roughly half the size. The original figures stay above as what was measured then.
 > and `webhook server` matched no existing item. Deliberately NOT done inside that pull request — an
 > architectural boundary decided under a metric's deadline, unreviewed, in a 56-commit promotion, is
 > the tail wagging the dog. `sonar.cpd.exclusions` narrows duplication detection to production code
@@ -703,6 +739,14 @@ dod:
   - a test drives a request whose `host` header differs from `publicUrl` and asserts the signed URL is the configured one
   - if the header-derived URL is kept as a fallback, the precedence is written where the option is declared
 > Registered 2026-08-31 while adding `smsWebhookVerifier`. Gate G2 ran: `publicUrl` matched only
+>
+> **Re-verified 2026-09-17 — RESOLVED in code, and this registry did not hear about it.** The item
+> records that `webhook-server.ts` built its `SignatureContext.url` from headers and never read the
+> configured `publicUrl`. It reads it now: `signedUrl()` returns `publicUrl` when it is set and only
+> falls back to `x-forwarded-proto` + host + `originalUrl` otherwise, and the docblock states the
+> reason — *"`publicUrl` wins when it is configured, because it is the only value that survives a
+> proxy."* `opts.adapter.publicUrl` is threaded in at the call site. Seven references where the
+> item measured none. Needs a kill or a close, not work.
 > B-018's evidence line, which is about credential field NAMES across adapters, not about this
 > option being unread. Not merged into it.
 
@@ -721,4 +765,11 @@ dod:
   - the two that need a verifier (LINE, SMS) say where it comes from; SMS points at `smsWebhookVerifier`, LINE at usetheokit/theokit#590
   - the three that do not say so explicitly, with the reason, so the absence reads as a decision rather than a gap
 > Registered 2026-08-31. Gate G2 ran: `webhook` matched B-024 (the duplicated webhook servers) and
+>
+> **Re-verified 2026-09-17 — evidence HOLDS.** Re-enumerated how each adapter takes inbound:
+> Teams declares `start(port?)` on the `@microsoft/teams.apps` `App` shape it lazy-types
+> (`adapter.ts:32`) and owns its own HTTP server; Matrix `startClient()` + `subscribeToTimeline`;
+> Mattermost `addMessageListener`; Telegram long-poll; Discord and Slack their own `start()`. Only
+> `gateway-line` and `gateway-sms` ship `createWebhookServer` — the two HTTP endpoints a consuming
+> app must authenticate, exactly as the item records. Only the `status` is behind.
 > B-025 (publicUrl), neither of which is about which adapters have a webhook at all.

@@ -321,6 +321,24 @@ async function adaptersIgnoringFormat(): Promise<{ ignoring: string[]; examined:
   return { ignoring, examined };
 }
 
+/**
+ * The splitter a package exports from `src/split.ts`, or `undefined` when it has none.
+ *
+ * Extracted from the test that uses it: inline, the loop carried a try/catch and two `continue`s,
+ * and biome measured the enclosing callback at a cognitive complexity of 11 against a ceiling of 10.
+ * The absence of a splitter is not a fault — email sends whole bodies — so it reads as `undefined`
+ * rather than as an error.
+ */
+async function declaredSplitter(pkg: string): Promise<string | undefined> {
+  let split: string;
+  try {
+    split = await readFile(join(PACKAGES_DIR, pkg, "src", "split.ts"), "utf8");
+  } catch {
+    return undefined;
+  }
+  return /export function (split\w+)/.exec(split)?.[1];
+}
+
 describe("cross-adapter contract", () => {
   it("identity-guards EVERY handler unsubscribe, in every file that declares one", async () => {
     // Per-declaration, not per-package. The package-level version of this check passed
@@ -583,5 +601,36 @@ describe("cross-adapter contract", () => {
     }
 
     expect(missing, "neither masked nor recorded as uncovered").toEqual([]);
+  });
+
+  it("reaches its splitter from the public entry, in every package that has one", async () => {
+    // A splitter is presentation logic living in a transport package, and B-019 puts the channel
+    // presenter OUTSIDE these packages — so a caller that must not re-split has to reach the one
+    // the adapter already uses. Seven of eight were exported; `gateway-discord` was not, which
+    // made it the only platform where an outside caller could not do that. Measured 2026-09-17.
+    //
+    // The same divergence class as the `format` gate above: no single package's suite can be asked
+    // to notice that IT is the odd one out.
+    const packages = await adapterPackages();
+    const unreachable: string[] = [];
+    let examined = 0;
+
+    for (const pkg of packages) {
+      const declared = await declaredSplitter(pkg);
+      if (declared === undefined) continue;
+      examined += 1;
+
+      const index = await readFile(join(PACKAGES_DIR, pkg, "src", "index.ts"), "utf8");
+      if (!new RegExp(`\\b${declared}\\b`).test(index)) unreachable.push(`${pkg} (${declared})`);
+    }
+
+    // The count first, for the reason the `format` gate states: an empty offender list means either
+    // every splitter is reachable, or the scan read nothing.
+    expect(
+      examined,
+      "packages with a splitter — a gate that reads nothing reports no offenders",
+    ).toBeGreaterThanOrEqual(8);
+
+    expect(unreachable, "splitters the package never re-exports from its public entry").toEqual([]);
   });
 });
