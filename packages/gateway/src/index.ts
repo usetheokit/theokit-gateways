@@ -57,6 +57,7 @@ export {
   chunkByGrapheme,
   chunkText,
 } from "./text/chunk.js";
+export { toDialect } from "./text/dialect.js";
 // Types
 export type {
   BaseMessageEvent,

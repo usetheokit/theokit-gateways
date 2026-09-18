@@ -239,6 +239,15 @@ describe("live-test readiness", () => {
       chunkText:
         "pure function, no I/O. The splitting it performs IS proven over the wire, by the five adapter suites that send past their platform's cap",
       chunkByGrapheme: "pure function, same reasoning as chunkText",
+      toDialect:
+        "pure function, no I/O — and unlike chunkText its work is NOT proven over the wire here, " +
+        "because no adapter in this package calls it. That is deliberate and documented in " +
+        "text/dialect.ts: translation is presentation, it depends on what was said and where it is " +
+        "going at once, so the channel presenter in `theokit` calls it and `@theokit/gateway` must " +
+        "not depend on `@theokit/presenter`. No live suite HERE can drive it without inverting that " +
+        "dependency. Covered by packages/gateway/tests/text/dialect.test.ts, seven cases over the " +
+        "four markers and the three dialects; the proof that a real phone receives the result " +
+        "belongs to whoever wires the presenter",
       defaultStrategy: "pure function: event -> agent id string. No transport can disagree with it",
       SessionRouter: "delegates to a strategy function; nothing crosses a network",
       BasePlatformAdapter:

@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **tools:** `measure-app-joinery.mjs` now reports `present` / `missing` and exits 2 when it found
+  none of the files it names. It resolves a hardcoded list taken from one app, so an app that names
+  its files differently — or a freshly scaffolded one — resolved nothing and reported
+  `{ gap: 0, presenter: 0, total: 0 }`: a perfect score measured over nothing. Proved against a
+  `create-theokit --preset=bot` scaffold on 2026-09-17 — 12 rows, 0 present. It matters now because
+  the tool became the oracle of a product objective, and an oracle that cannot fail is not one.
+
+- **gate:** `adapter-contract` now asserts that every package shipping a `src/split.ts` re-exports
+  its splitter from `src/index.ts`. Seven of eight did; `gateway-discord` did not, so Discord was
+  the only platform whose splitter an outside caller could not reach (B-019 FR-006 / AC-005). The
+  gate counts the packages it examined before reporting offenders, for the reason the `format` gate
+  states: an empty offender list otherwise means either that every splitter is reachable, or that
+  the scan read nothing.
+
 - **ci:** per-commit package previews via pkg.pr.new. A fix here is unverifiable from a sibling
   repository until it is on a registry, and this ecosystem has nine interdependent publishable
   repositories — measured 2026-08-31, `@theokit/http` reached 2.0.0 in one while three packages in
