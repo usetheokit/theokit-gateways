@@ -111,24 +111,6 @@ async function adapterPackages(): Promise<string[]> {
 }
 
 /** Read a package's options declaration, wherever it lives — six use `types.ts`, four `adapter.ts`. */
-/**
- * The splitter a package exports from `src/split.ts`, or `undefined` when it has none.
- *
- * Extracted from the test that uses it: inline, the loop carried a try/catch and two `continue`s,
- * and biome measured the enclosing callback at a cognitive complexity of 11 against a ceiling of 10.
- * The absence of a splitter is not a fault — email sends whole bodies — so it reads as `undefined`
- * rather than as an error.
- */
-async function declaredSplitter(pkg: string): Promise<string | undefined> {
-  let split: string;
-  try {
-    split = await readFile(join(PACKAGES_DIR, pkg, "src", "split.ts"), "utf8");
-  } catch {
-    return undefined;
-  }
-  return /export function (split\w+)/.exec(split)?.[1];
-}
-
 async function optionsSource(pkg: string): Promise<string | undefined> {
   for (const file of ["types.ts", "adapter.ts"]) {
     try {
@@ -337,6 +319,24 @@ async function adaptersIgnoringFormat(): Promise<{ ignoring: string[]; examined:
     if (!/\bout\.format\b/.test(source)) ignoring.push(pkg);
   }
   return { ignoring, examined };
+}
+
+/**
+ * The splitter a package exports from `src/split.ts`, or `undefined` when it has none.
+ *
+ * Extracted from the test that uses it: inline, the loop carried a try/catch and two `continue`s,
+ * and biome measured the enclosing callback at a cognitive complexity of 11 against a ceiling of 10.
+ * The absence of a splitter is not a fault — email sends whole bodies — so it reads as `undefined`
+ * rather than as an error.
+ */
+async function declaredSplitter(pkg: string): Promise<string | undefined> {
+  let split: string;
+  try {
+    split = await readFile(join(PACKAGES_DIR, pkg, "src", "split.ts"), "utf8");
+  } catch {
+    return undefined;
+  }
+  return /export function (split\w+)/.exec(split)?.[1];
 }
 
 describe("cross-adapter contract", () => {
