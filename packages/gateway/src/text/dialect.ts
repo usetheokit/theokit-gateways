@@ -67,6 +67,27 @@ const PATTERN =
   /\*\*(?<bold>.+?)\*\*|~~(?<strike>.+?)~~|(?<![*\w])\*(?!\s)(?<italicStar>.+?)(?<!\s)\*(?!\*)|(?<![_\w])_(?!\s)(?<italicUnderscore>.+?)(?<!\s)_(?!\w)|`(?<code>.+?)`/gu;
 
 /**
+ * Which capture group becomes which dialect marker, in the order `PATTERN` alternates.
+ *
+ * A table rather than a chain of conditionals, because the two ITALIC spellings make a chain read as
+ * five decisions when it encodes one lookup — and biome measured the enclosing function at a
+ * cognitive complexity of 26 against a ceiling of 10. Adding a marker is a row here and an
+ * alternative in `PATTERN`; nothing else moves.
+ *
+ * Order here does NOT matter, and the first draft of this comment said it did. `PATTERN` alternates,
+ * so at most one group carries a value per match — which is exactly why the loop may return on the
+ * first one it finds. Checked rather than asserted: moving `italicStar` above `bold` leaves all
+ * seven tests green, while deleting a row fails two. Order is load-bearing in `PATTERN`, not here.
+ */
+const GROUP_MARKERS = [
+  ["bold", "bold"],
+  ["strike", "strike"],
+  ["italicStar", "italic"],
+  ["italicUnderscore", "italic"],
+  ["code", "code"],
+] as const satisfies ReadonlyArray<readonly [string, keyof Dialect]>;
+
+/**
  * Rewrite `text` for `platform`.
  *
  * @param text - the assembled answer, in markdown as the model produced it
@@ -82,21 +103,16 @@ export function toDialect(text: string, platform: string): string {
     const groups = args.at(-1) as Record<string, string | undefined> | undefined;
     if (groups === undefined) return matched;
 
-    const [marker, content] =
-      groups.bold !== undefined
-        ? (["bold", groups.bold] as const)
-        : groups.strike !== undefined
-          ? (["strike", groups.strike] as const)
-          : groups.italicStar !== undefined
-            ? (["italic", groups.italicStar] as const)
-            : groups.italicUnderscore !== undefined
-              ? (["italic", groups.italicUnderscore] as const)
-              : groups.code !== undefined
-                ? (["code", groups.code] as const)
-                : (["bold", undefined] as const);
+    for (const [group, marker] of GROUP_MARKERS) {
+      const content = groups[group];
+      if (content === undefined) continue;
+      const wrap = dialect[marker];
+      return wrap === undefined ? content : `${wrap}${content}${wrap}`;
+    }
 
-    if (content === undefined) return matched;
-    const wrap = dialect[marker];
-    return wrap === undefined ? content : `${wrap}${content}${wrap}`;
+    // PATTERN matched and named no group: unreachable while every alternative above carries one,
+    // and returning the match unchanged is the only answer that cannot corrupt text if it stops
+    // being true. The same reason the whole module passes an unknown platform through.
+    return matched;
   });
 }
