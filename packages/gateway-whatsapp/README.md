@@ -27,7 +27,7 @@ import {
 const adapter = WhatsAppAdapter.fromCloud(cloud, { allowedSenders: process.env.WHATSAPP_ALLOWED });
 adapter.onInbound(handleMessage);
 // In-process only: a route served by several instances needs a shared store for this.
-const delivered = new Set<string>();
+const claimed = new Set<string>();
 
 async function onWebhook(rawBody: string, signature: string | undefined): Promise<number> {
   if (!verifyWebhookSignature(rawBody, signature, cloud.appSecret)) return 401;
@@ -40,9 +40,13 @@ async function onWebhook(rawBody: string, signature: string | undefined): Promis
   const envelope = parseWebhookPayload(json);
   if (envelope === null) return 400;
   for (const event of adapter.toDeliverableEvents(envelope)) {
-    if (delivered.has(event.whatsapp.wamid)) continue;
-    if ((await adapter.deliver(event)) !== "ok") return 503;
-    delivered.add(event.whatsapp.wamid);
+    const wamid = event.whatsapp.wamid;
+    if (claimed.has(wamid)) continue; // delivered, or being delivered by an earlier request
+    claimed.add(wamid); // before the await, so a redelivery during a slow handler skips it
+    if ((await adapter.deliver(event)) !== "ok") {
+      claimed.delete(wamid); // Meta's retry may deliver it again
+      return 503;
+    }
   }
   for (const receipt of normalizeStatusReceipts(envelope)) {
     // handle sent / delivered / read / failed here
@@ -66,8 +70,13 @@ messages to another number's agent.
 Answer 200 only when every event returned `ok`. `no_handler` means nothing received the message,
 and `handler_threw` means your handler failed on it; a non-2xx makes Meta retry the whole envelope,
 so a handler that always throws on one message sees it again on every retry. Meta also redelivers
-an envelope it did not see answered in time, so a slow handler causes repeats as well. A retry
-repeats the events already delivered, which is why the route skips a `wamid` it has delivered.
+an envelope it did not see answered in time, so a slow handler causes repeats as well, and such a
+redelivery can arrive while the first request is still running. A retry repeats the events already
+delivered. The route therefore claims a `wamid` before it awaits `deliver()` and skips any `wamid`
+already claimed, which covers both cases; it releases the claim when delivery fails, so Meta's retry
+delivers that message again. One case stays open: when a redelivery was answered 200 because it
+skipped a message that was still running, and that first delivery then fails, Meta does not retry.
+A handler slower than Meta's timeout should answer 200 first and hand the events to a queue.
 
 Status receipts never reach `onStatusReceipt` on this path: that handler listens to the backend,
 and your route is what receives the webhook. Read them from the envelope with
