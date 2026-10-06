@@ -55,6 +55,8 @@ export interface KeyServer {
   hits(): number;
   /** Answer the next `/keys` request with this status instead of the key set. */
   failNext(status: number): void;
+  /** Answer the next `/keys` request with this JSON document instead of the key set. */
+  answerNext(document: unknown): void;
   close(): Promise<void>;
   /** Sign `claims` (merged over valid defaults; `undefined` removes a claim) with the published key. */
   signToken(claims: Record<string, unknown>, opts?: SignOptions): string;
@@ -137,6 +139,7 @@ export async function startKeyServer(): Promise<KeyServer> {
   const published = [current.jwk];
   let hitCount = 0;
   let pendingFailure: number | undefined;
+  let pendingDocument: { readonly document: unknown } | undefined;
   let unpublished: KeyObject | undefined;
 
   const server = createServer((req, res) => {
@@ -151,7 +154,8 @@ export async function startKeyServer(): Promise<KeyServer> {
       return;
     }
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ keys: published }));
+    res.end(JSON.stringify(pendingDocument ? pendingDocument.document : { keys: published }));
+    pendingDocument = undefined;
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;
@@ -163,6 +167,9 @@ export async function startKeyServer(): Promise<KeyServer> {
     hits: () => hitCount,
     failNext: (status) => {
       pendingFailure = status;
+    },
+    answerNext: (document) => {
+      pendingDocument = { document };
     },
     close: () =>
       new Promise<void>((resolve, reject) => {

@@ -231,4 +231,80 @@ describe("forged key ids", () => {
     expect(again).toMatchObject({ ok: false, reason: "invalid_token" });
     expect(checks).toBe(10);
   });
+
+  it("spend no budget on a kid an accepted token used, so the key set is never read for it", async () => {
+    const { ks, verify } = await verifierWithKeys();
+    const accepted = [];
+    for (let i = 0; i < 6; i += 1) accepted.push(await verify(activityRequest(ks.signToken({}))));
+    for (let i = 0; i < 9; i += 1) await verify(activityRequest(forged(ks)));
+
+    expect(accepted.every((r) => r.ok)).toBe(true);
+    expect(ks.hits()).toBe(10);
+  });
+
+  it("admit a kid an accepted token used even when the key set cannot be read", async () => {
+    const { ks, verify } = await verifierWithKeys();
+    await verify(activityRequest(ks.signToken({})));
+    for (let i = 0; i < 9; i += 1) await verify(activityRequest(forged(ks)));
+    ks.failNext(503);
+    await verify(activityRequest(forged(ks)));
+
+    const res = await verify(activityRequest(ks.signToken({})));
+
+    expect(res.ok).toBe(true);
+  });
+
+  it("do not read the key set again for a kid it already lists", async () => {
+    const { ks, verify } = await verifierWithKeys();
+    const publishedKid = ks.rotate();
+    const listedForgery = () => ks.signToken({}, { alg: "none", kid: publishedKid });
+    for (let i = 0; i < 10; i += 1) await verify(activityRequest(forged(ks)));
+    await verify(activityRequest(listedForgery()));
+    const afterFirst = ks.hits();
+    vi.advanceTimersByTime(10_000);
+
+    const res = await verify(activityRequest(listedForgery()));
+
+    expect(res).toMatchObject({ ok: false, reason: "invalid_token" });
+    expect([afterFirst, ks.hits()]).toEqual([12, 12]);
+  });
+
+  it("say the key set could not be read when it answers with no keys array", async () => {
+    const { ks, verify } = await verifierWithKeys();
+    for (let i = 0; i < 10; i += 1) await verify(activityRequest(forged(ks)));
+    ks.answerNext({ keys: "not-an-array" });
+
+    const res = await verify(activityRequest(forged(ks)));
+
+    expect(res).toMatchObject({
+      ok: false,
+      message: expect.stringContaining("the Bot Framework key set could not be read"),
+    });
+  });
+
+  it("list the keys a key-set entry names, past entries with no usable kid", async () => {
+    const { ks, verify } = await verifierWithKeys();
+    const rotated = ks.rotate();
+    for (let i = 0; i < 10; i += 1) await verify(activityRequest(forged(ks)));
+    ks.answerNext({ keys: [null, { kid: 7 }, { kid: "" }, {}, { kid: rotated }] });
+
+    const res = await verify(activityRequest(ks.signToken({})));
+
+    expect(res.ok).toBe(true);
+  });
+
+  it("learn a kid the key set listed once the SDK accepted its token", async () => {
+    const { ks, verify } = await verifierWithKeys();
+    for (let i = 0; i < 10; i += 1) await verify(activityRequest(forged(ks)));
+    const listed = await verify(activityRequest(ks.signToken({})));
+    vi.advanceTimersByTime(60_000);
+    const again = await verify(activityRequest(ks.signToken({})));
+    for (let i = 0; i < 9; i += 1) await verify(activityRequest(forged(ks)));
+
+    const fresh = await verify(activityRequest(forged(ks)));
+
+    expect([listed.ok, again.ok]).toEqual([true, true]);
+    expect(fresh).toMatchObject({ ok: false, reason: "invalid_token" });
+    expect(fresh.ok ? "" : fresh.message).not.toContain("does not list");
+  });
 });
