@@ -159,10 +159,11 @@ export async function startKeyServer(): Promise<KeyServer> {
         server.close((err) => (err ? reject(err) : resolve()));
       }),
     signToken: (claims, opts = {}) => {
-      const payload = buildClaims(cloud, claims, opts.expiresInSeconds ?? 600);
-      return opts.alg === "HS256" || opts.alg === "none"
-        ? forgeWith(opts.alg, publicKey, opts.kid ?? kid, payload)
-        : signWith(opts.key ?? privateKey, opts.kid ?? kid, payload);
+      const { alg = "RS256", kid: keyId = kid, key = privateKey, expiresInSeconds = 600 } = opts;
+      const payload = buildClaims(cloud, claims, expiresInSeconds);
+      return alg === "RS256"
+        ? signWith(key, keyId, payload)
+        : forgeWith(alg, publicKey, keyId, payload);
     },
     otherKeySign: (claims) => {
       unpublished ??= generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
