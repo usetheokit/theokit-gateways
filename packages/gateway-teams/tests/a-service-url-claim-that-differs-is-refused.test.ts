@@ -13,7 +13,6 @@ import {
   F5_BF_SERVICE_URL_DIFFERS,
   F6_ENTRA_NO_SERVICE_URL,
   signFixture,
-  TENANT,
 } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
 
@@ -36,27 +35,19 @@ describe("a service url claim that differs", () => {
     expect(JSON.stringify(res).includes(token)).toBe(false);
   });
 
-  it("refuses it as serviceurl_mismatch through an accepting validator", async () => {
+  it.each([
+    ["a token whose serviceurl claim differs from the body", F5_BF_SERVICE_URL_DIFFERS],
+    ["an Entra-issued token that carries no serviceurl claim", F6_ENTRA_NO_SERVICE_URL],
+  ])("refuses %s as serviceurl_mismatch through an accepting validator", async (_, fixture) => {
     ks = await startKeyServer();
     const { module } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: module });
-    const token = signFixture(ks, F5_BF_SERVICE_URL_DIFFERS.claims);
-
-    const res = await verify(activityRequest(token));
-
-    expect(res).toMatchObject({ ok: false, reason: "serviceurl_mismatch" });
-    expect(JSON.stringify(res).includes(token)).toBe(false);
-  });
-
-  it("refuses an Entra-issued token that carries no serviceurl claim as serviceurl_mismatch", async () => {
-    ks = await startKeyServer();
-    const { module } = acceptingValidatorModule();
+    const tenant = fixture.tenantId === undefined ? {} : { tenantId: fixture.tenantId };
     const verify = teamsActivityVerifier({
       clientId: CLIENT_ID,
-      tenantId: TENANT,
       __validatorModule: module,
+      ...tenant,
     });
-    const token = signFixture(ks, F6_ENTRA_NO_SERVICE_URL.claims);
+    const token = signFixture(ks, fixture.claims);
 
     const res = await verify(activityRequest(token));
 

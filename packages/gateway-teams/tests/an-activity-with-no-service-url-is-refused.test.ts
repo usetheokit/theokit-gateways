@@ -17,25 +17,15 @@ describe("an activity with no service url", () => {
     ks = undefined;
   });
 
-  it("refuses an activity with no serviceUrl as malformed_body with 0 validator calls", async () => {
+  it.each([
+    ["no serviceUrl", { type: "message" }],
+    ["a serviceUrl that is an empty string", { type: "message", serviceUrl: "" }],
+  ])("refuses an activity with %s as malformed_body with 0 validator calls", async (_, body) => {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
     const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: module });
 
-    const res = await verify(activityRequest(ks.signToken({}), { type: "message" }));
-
-    expect(res).toMatchObject({ ok: false, reason: "malformed_body" });
-    expect(calls.check).toBe(0);
-  });
-
-  it("refuses an activity whose serviceUrl is an empty string as malformed_body with 0 validator calls", async () => {
-    ks = await startKeyServer();
-    const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: module });
-
-    const res = await verify(
-      activityRequest(ks.signToken({}), { type: "message", serviceUrl: "" }),
-    );
+    const res = await verify(activityRequest(ks.signToken({}), body));
 
     expect(res).toMatchObject({ ok: false, reason: "malformed_body" });
     expect(calls.check).toBe(0);

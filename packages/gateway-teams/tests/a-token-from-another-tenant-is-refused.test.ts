@@ -15,7 +15,6 @@ import {
   F3_ENTRA_OTHER_TENANT,
   F4_ENTRA_NO_TENANT_CONFIGURED,
   signFixture,
-  TENANT,
 } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
 
@@ -27,61 +26,34 @@ describe("a token from another tenant", () => {
     ks = undefined;
   });
 
-  it("refuses a Bot Framework token whose tid differs from the configured tenant as tenant_mismatch", async () => {
+  // F1 and F2 run on the installed SDK against the key server; F3 and F4 are Entra-issued tokens
+  // the 2.1.x SDK path accepts, reached through an accepting validator and the default cloud.
+  it.each([
+    [
+      "a Bot Framework token whose tid differs from the configured tenant",
+      F1_BF_OTHER_TENANT,
+      "sdk",
+    ],
+    ["a Bot Framework token with no tid when a tenant is configured", F2_BF_NO_TID, "sdk"],
+    ["an Entra-issued token from another tenant", F3_ENTRA_OTHER_TENANT, "accepting"],
+    [
+      "an Entra-issued token when no tenant is configured",
+      F4_ENTRA_NO_TENANT_CONFIGURED,
+      "accepting",
+    ],
+  ] as const)("refuses %s by its tenant reason", async (_, fixture, path) => {
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({
-      clientId: CLIENT_ID,
-      tenantId: TENANT,
-      cloud: ks.cloud,
-    });
-    const token = signFixture(ks, F1_BF_OTHER_TENANT.claims);
+    const tenant = fixture.tenantId === undefined ? {} : { tenantId: fixture.tenantId };
+    const verify = teamsActivityVerifier(
+      path === "sdk"
+        ? { clientId: CLIENT_ID, cloud: ks.cloud, ...tenant }
+        : { clientId: CLIENT_ID, __validatorModule: acceptingValidatorModule().module, ...tenant },
+    );
+    const token = signFixture(ks, fixture.claims);
 
     const res = await verify(activityRequest(token));
 
-    expect(res).toMatchObject({ ok: false, reason: "tenant_mismatch" });
-    expect(JSON.stringify(res).includes(token)).toBe(false);
-  });
-
-  it("refuses a Bot Framework token with no tid when a tenant is configured as tenant_unverified", async () => {
-    ks = await startKeyServer();
-    const verify = teamsActivityVerifier({
-      clientId: CLIENT_ID,
-      tenantId: TENANT,
-      cloud: ks.cloud,
-    });
-    const token = signFixture(ks, F2_BF_NO_TID.claims);
-
-    const res = await verify(activityRequest(token));
-
-    expect(res).toMatchObject({ ok: false, reason: "tenant_unverified" });
-    expect(JSON.stringify(res).includes(token)).toBe(false);
-  });
-
-  it("refuses an Entra-issued token from another tenant as tenant_mismatch", async () => {
-    ks = await startKeyServer();
-    const { module } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({
-      clientId: CLIENT_ID,
-      tenantId: TENANT,
-      __validatorModule: module,
-    });
-    const token = signFixture(ks, F3_ENTRA_OTHER_TENANT.claims);
-
-    const res = await verify(activityRequest(token));
-
-    expect(res).toMatchObject({ ok: false, reason: "tenant_mismatch" });
-    expect(JSON.stringify(res).includes(token)).toBe(false);
-  });
-
-  it("refuses an Entra-issued token when no tenant is configured as tenant_unverified", async () => {
-    ks = await startKeyServer();
-    const { module } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: module });
-    const token = signFixture(ks, F4_ENTRA_NO_TENANT_CONFIGURED.claims);
-
-    const res = await verify(activityRequest(token));
-
-    expect(res).toMatchObject({ ok: false, reason: "tenant_unverified" });
+    expect(res).toMatchObject({ ok: false, reason: fixture.reason });
     expect(JSON.stringify(res).includes(token)).toBe(false);
   });
 
