@@ -337,6 +337,8 @@ describe("WhatsAppAdapter.toDeliverableEvent", () => {
     readonly inbound: WhatsAppInboundEvent;
     /** Refusal lines either path must write: one for a refused sender, none otherwise. */
     readonly refusals: number;
+    /** Whether the message reaches the agent: both paths must agree AND be right. */
+    readonly kept: boolean;
   }
 
   const group = { conversationType: "group", channelId: "group@g.us" } as const;
@@ -346,42 +348,49 @@ describe("WhatsAppAdapter.toDeliverableEvent", () => {
       options: { allowedSenders: "5511999999999" },
       inbound: makeInbound({ fromPhone: "5511999999999", channelId: "5511999999999" }),
       refusals: 0,
+      kept: true,
     },
     {
       name: "refused DM",
       options: { allowedSenders: "5511999999999" },
       inbound: makeInbound({ fromPhone: "5511888888888" }),
       refusals: 1,
+      kept: false,
     },
     {
       name: "fromSelf under an allowlist",
       options: { allowedSenders: "553598838687" },
       inbound: makeInbound({ fromPhone: "231116569108705@lid", fromSelf: true, text: "note" }),
       refusals: 0,
+      kept: true,
     },
     {
       name: "group not addressed",
       options: { botPhoneId: "5511777777777" },
       inbound: makeInbound({ ...group, text: "hello all" }),
       refusals: 0,
+      kept: false,
     },
     {
       name: "group addressed",
       options: { botPhoneId: "5511777777777" },
       inbound: makeInbound({ ...group, text: "+55 (11) 77777-7777 hi" }),
       refusals: 0,
+      kept: true,
     },
     {
       name: "group with requireMention false",
       options: { botPhoneId: "5511777777777", requireMention: false },
       inbound: makeInbound({ ...group, text: "hello all" }),
       refusals: 0,
+      kept: true,
     },
     {
       name: "group with requireMention on and botPhoneId empty",
       options: { requireMention: true, botPhoneId: "" },
       inbound: makeInbound({ ...group, text: "hello all" }),
       refusals: 0,
+      kept: false,
     },
   ];
 
@@ -403,17 +412,21 @@ describe("WhatsAppAdapter.toDeliverableEvent", () => {
     return { seen, decided, inboundStderr, methodStderr };
   }
 
-  it("gives onInbound and toDeliverableEvent the same verdict for the same inbound", async () => {
+  it("covers the seven parity rows", () => {
     expect(parityRows).toHaveLength(7);
-    for (const row of parityRows) {
+  });
+
+  it.each(parityRows.map((row) => [row.name, row] as const))(
+    "gives onInbound and toDeliverableEvent the same, correct verdict for %s",
+    async (_, row) => {
       const { seen, decided, inboundStderr, methodStderr } = await decideBothWays(row);
 
-      expect(seen, row.name).toEqual(decided === undefined ? [] : [decided]);
-      expect(methodStderr, row.name).toEqual(inboundStderr);
-      expect(
-        methodStderr.filter((line) => line.startsWith(REFUSAL_PREFIX)),
-        row.name,
-      ).toHaveLength(row.refusals);
-    }
-  });
+      expect(decided !== undefined).toBe(row.kept);
+      expect(seen).toEqual(decided === undefined ? [] : [decided]);
+      expect(methodStderr).toEqual(inboundStderr);
+      expect(methodStderr.filter((line) => line.startsWith(REFUSAL_PREFIX))).toHaveLength(
+        row.refusals,
+      );
+    },
+  );
 });
