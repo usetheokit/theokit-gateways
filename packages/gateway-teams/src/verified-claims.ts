@@ -129,7 +129,7 @@ export function decodeVerifiedClaims(rawToken: string): Record<string, unknown> 
  */
 export function readTokenKeyId(rawToken: string): string | undefined {
   const kid = decodeSegment(rawToken, 0)?.kid;
-  return typeof kid === "string" ? kid : undefined;
+  return typeof kid === "string" && kid.length > 0 ? kid : undefined;
 }
 
 /** One base64url JSON object segment of a three-segment JWT, or `undefined`. */

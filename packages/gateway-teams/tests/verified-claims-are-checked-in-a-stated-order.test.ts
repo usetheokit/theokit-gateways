@@ -12,6 +12,7 @@ import {
   decodeVerifiedClaims,
   parseActivityBody,
   readBearerToken,
+  readTokenKeyId,
 } from "../src/verified-claims.js";
 import {
   ENTRA_LOGIN,
@@ -175,6 +176,26 @@ describe("decodeVerifiedClaims", () => {
     expect(decodeVerifiedClaims("a.!!!.c")).toBeUndefined();
     expect(decodeVerifiedClaims("a.b")).toBeUndefined();
     expect(decodeVerifiedClaims(`a.${payload}.c.d`)).toBeUndefined();
+  });
+});
+
+describe("readTokenKeyId", () => {
+  const header = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+
+  it("reads a non-empty string kid from a three-segment token's header", () => {
+    expect(readTokenKeyId(`${header({ alg: "RS256", kid: "k1" })}.e30.c`)).toBe("k1");
+  });
+
+  it.each([
+    ["a header with no kid", `${header({ alg: "RS256" })}.e30.c`],
+    ["a numeric kid", `${header({ kid: 7 })}.e30.c`],
+    ["an empty kid", `${header({ kid: "" })}.e30.c`],
+    ["a header that is not JSON", "!!!.e30.c"],
+    ["a header that is a JSON array", `${header(["k1"])}.e30.c`],
+    ["two segments", `${header({ kid: "k1" })}.e30`],
+    ["four segments", `${header({ kid: "k1" })}.e30.c.d`],
+  ])("reads no kid from %s", (_, token) => {
+    expect(readTokenKeyId(token)).toBeUndefined();
   });
 });
 

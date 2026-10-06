@@ -4,6 +4,7 @@
  * whose kid no accepted token used reach the SDK; a kid an accepted token used is never limited.
  */
 
+import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -29,6 +30,34 @@ describe("forged key ids", () => {
   }
 
   const forged = (ks: KeyServer) => ks.signToken({}, { alg: "none", kid: randomUUID() });
+
+  /** A three-segment token whose header is `header`, with a valid payload and no signature. */
+  const withHeader = (ks: KeyServer, header: Record<string, unknown>) => {
+    const [, payload] = ks.signToken({}).split(".");
+    return `${Buffer.from(JSON.stringify(header)).toString("base64url")}.${payload}.`;
+  };
+
+  it("spend no key-set capacity on a bearer that is not a JWT or whose header names no string kid", async () => {
+    const { ks, verify } = await verifierWithKeys();
+    const keyless = [
+      "x",
+      "a.b",
+      "!!!.e30.",
+      withHeader(ks, { alg: "RS256", typ: "JWT" }),
+      withHeader(ks, { alg: "RS256", typ: "JWT", kid: 7 }),
+      withHeader(ks, { alg: "RS256", typ: "JWT", kid: "" }),
+    ];
+
+    const refused = [];
+    for (let i = 0; i < 4; i += 1) {
+      for (const token of keyless) refused.push(await verify(activityRequest(token)));
+    }
+    const hitsAfterKeyless = ks.hits();
+    for (let i = 0; i < 10; i += 1) await verify(activityRequest(forged(ks)));
+
+    expect(refused.every((r) => !r.ok && r.reason === "invalid_token")).toBe(true);
+    expect([hitsAfterKeyless, ks.hits()]).toEqual([0, 10]);
+  });
 
   it("make at most 10 key-set requests for 20 unsigned tokens with fresh kids in one minute", async () => {
     const { ks, verify } = await verifierWithKeys();

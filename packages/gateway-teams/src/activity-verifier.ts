@@ -312,24 +312,26 @@ async function sdkCheck(
 const UNKNOWN_KEY_CHECKS_PER_WINDOW = 10;
 const UNKNOWN_KEY_WINDOW_MS = 60_000;
 
+const NO_KEY_ID =
+  "the token is not a JWT whose header names its signing key (a non-empty string kid), so the Teams SDK was not asked";
+
 const UNKNOWN_KEY_LIMITED =
   "the token names a signing key no accepted token used, and the verifier already asked the Teams SDK about 10 such tokens this minute";
 
 /**
- * Which tokens may reach the SDK. A `kid` an accepted token used always may; any other (or none)
- * spends one of {@link UNKNOWN_KEY_CHECKS_PER_WINDOW} per fixed window. Only a kid whose token the
+ * Which tokens may reach the SDK. A `kid` an accepted token used always may; any other spends one of {@link UNKNOWN_KEY_CHECKS_PER_WINDOW} per fixed window. Only a kid whose token the
  * SDK accepted is learned, so the known set holds keys the key set really published.
  */
 function unknownKeyBudget(): {
-  admit(kid: string | undefined): boolean;
-  learn(kid: string | undefined): void;
+  admit(kid: string): boolean;
+  learn(kid: string): void;
 } {
   const known = new Set<string>();
   let windowStart = Number.NEGATIVE_INFINITY;
   let used = 0;
   return {
     admit(kid) {
-      if (kid !== undefined && known.has(kid)) return true;
+      if (known.has(kid)) return true;
       const now = Date.now();
       if (now - windowStart >= UNKNOWN_KEY_WINDOW_MS) {
         windowStart = now;
@@ -340,7 +342,7 @@ function unknownKeyBudget(): {
       return true;
     },
     learn(kid) {
-      if (kid !== undefined) known.add(kid);
+      known.add(kid);
     },
   };
 }
@@ -349,8 +351,9 @@ type ReadableActivity = Extract<ParsedBody, { ok: true }>;
 type KeyBudget = ReturnType<typeof unknownKeyBudget>;
 
 /**
- * {@link sdkCheck}, unless the token's `kid` is unknown and the budget for unknown kids is spent;
- * a kid the SDK accepted is learned.
+ * {@link sdkCheck}, unless the token names no `kid` (the SDK's key client would fetch the key set
+ * for it, and no genuine token omits it), or its `kid` is unknown and the budget for unknown kids
+ * is spent; a kid the SDK accepted is learned.
  */
 async function budgetedSdkCheck(
   validator: TokenValidatorLike,
@@ -358,6 +361,7 @@ async function budgetedSdkCheck(
   read: { readonly header: string; readonly rawToken: string; readonly body: ReadableActivity },
 ): Promise<ResolvedToken | Refusal | undefined> {
   const kid = readTokenKeyId(read.rawToken);
+  if (kid === undefined) return refuse("invalid_token", NO_KEY_ID);
   if (!budget.admit(kid)) return refuse("invalid_token", UNKNOWN_KEY_LIMITED);
   const token = await sdkCheck(validator, read.header, read.body.activity);
   if (token !== undefined && !("reason" in token)) budget.learn(kid);
