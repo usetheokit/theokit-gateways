@@ -2,7 +2,7 @@
 
 Microsoft Teams platform adapter for `@theokit/gateway`. Built on the modern `@microsoft/teams.apps` v2 SDK.
 
-Status: **v0.1.0 pre-release**. Pre-1.0 contract per ADR D324 — breaking changes allowed within 0.x.
+Status: **v0.1.0 pre-release**. Pre-1.0 contract per ADR D324: breaking changes allowed within 0.x.
 
 ## How inbound arrives
 
@@ -28,14 +28,17 @@ const verify = teamsActivityVerifier({ clientId });
 
 export async function onTeamsRequest(request: Request): Promise<Response> {
   const result = await verify(request.clone());
-  if (!result.ok) return new Response(result.reason, { status: 401 });
+  if (!result.ok) {
+    const status = result.reason === "key_set_unavailable" ? 503 : 401;
+    return new Response(result.reason, { status });
+  }
   const outcome = await adapter.deliver(normalizeTeamsActivity(result.activity));
   return new Response(null, { status: outcome === "ok" ? 200 : 500 });
 }
 ```
 
-The verifier runs the SDK's own token validator, so the signature, key-set and expiry rules stay
-Microsoft's. It then checks three claims of the token the SDK accepted: `aud` must be this bot's
+The verifier checks the token's RS256 signature against Microsoft's published keys, then runs the
+SDK's own token validator, so the issuer, audience and expiry rules stay Microsoft's. It then checks three claims of the token the SDK accepted: `aud` must be this bot's
 app id (or one of its `api://` forms), `serviceurl` must match the activity's `serviceUrl`, and the tenant must be the one you
 configured; with no `tenantId`, a token issued by a specific Entra tenant is refused as
 `tenant_unverified`. It never throws for a request; a refusal is `{ ok: false, reason, message }`,
@@ -53,21 +56,24 @@ Two refusals follow from Microsoft's tokens rather than from a fault, and both a
   token (the agentic-identity path in `@microsoft/teams.apps` 2.1) are refused, because the
   platform signs no `serviceurl` claim on them, so nothing binds the token to the activity.
 
-A key-set outage reads as `invalid_token`, the same as a forged token; the next request retries.
-The key-set client and its timeout belong to the SDK, so a key set that never answers holds the
-request until that timeout: bound the `verify` call with your route's own timeout.
+The verifier reads Microsoft's published key sets itself, from the URLs the SDK uses: the Bot
+Framework set (from your `cloud`'s `openIdMetadataUrl`) and, only when `tenantId` is set,
+`{loginEndpoint}/{tenantId}/discovery/v2.0/keys`. It reads a set when it holds no copy, when its
+copy lacks the token's `kid`, or when its copy is an hour old, and never more than once every 10
+seconds per set, whatever is sent. A token whose header names anything but RS256, whose `kid` the
+set does not list, or whose signature does not verify is refused as `invalid_token` before the SDK
+is asked, so a forged token never makes the bot fetch the key set. A key Microsoft has just
+published can be refused for up to 10 seconds. A token issued by an Entra tenant this verifier
+would refuse (another tenant, or any tenant when no `tenantId` is set) is refused with that tenant
+reason before the SDK.
 
-The SDK fetches the key set for a token whose `kid` it has not cached, before checking the
-signature, and the sender chooses the `kid`. So the verifier refuses a token with no `kid` as
-`invalid_token` before the SDK, and lets at most 10 tokens a minute whose `kid` no accepted token
-used reach the SDK. Past those 10, a token reaches the SDK only if the published Bot Framework key
-set lists its `kid`: the verifier reads that set (the URL the SDK uses, from your `cloud`'s
-`openIdMetadataUrl`) at most once every 10 seconds, so forged tokens cannot keep a genuine key out.
-The worst case is a key Microsoft has just published being refused for up to 10 seconds. A key that
-signed an accepted activity is never limited. A token issued by an Entra tenant this verifier would
-refuse (another tenant, or any tenant when no `tenantId` is set) is refused with that tenant reason
-before the SDK. The limits are per verifier, not per client: put your own per-client rate limit in
-front of the route as well (ADR-0003).
+`key_set_unavailable` means the key set could not be read and the copy held, if any, does not
+list the token's key: the token could not be checked. Answer it with a 503, as the example does,
+so the Bot Framework retries; a cold start during a key-set outage refuses this way until a read
+succeeds, at most one read every 10 seconds. The SDK still reads the key set through its own
+client on a cold start, and that read and its timeout belong to the SDK, so bound the `verify`
+call with your route's own timeout. The limits are per verifier, not per client: put your own
+per-client rate limit in front of the route as well (ADR-0003, ADR-0005).
 
 What else to expect from the verifier:
 

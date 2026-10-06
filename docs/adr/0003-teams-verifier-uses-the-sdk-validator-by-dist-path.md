@@ -4,6 +4,9 @@
 - Date: 2026-10-06
 - Deciders: gateway cluster maintainers
 - Evidence: the `gateway-teams-inbound-verifier` plan and its alignment brief, measured 2026-10-06
+- Superseded in part by [ADR-0005](0005-the-teams-verifier-owns-key-retrieval.md): the verifier now reads
+  the key sets and checks the signature before the SDK, so the consequences below on the key-set
+  outage, the unknown-key budget and the tenant-issued key budget no longer hold
 
 ## Context and Problem Statement
 
