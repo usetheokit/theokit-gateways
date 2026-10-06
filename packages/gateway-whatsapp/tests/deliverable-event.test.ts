@@ -6,6 +6,8 @@
  * route admits every sender the operator refused.
  */
 
+import { createHmac } from "node:crypto";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
@@ -77,7 +79,14 @@ interface TextMessage {
 }
 
 function envelopeOf(messages: readonly TextMessage[], phoneNumberId = "PNID"): MetaWebhookEnvelope {
-  const parsed = parseWebhookPayload({
+  const parsed = parseWebhookPayload(envelopeJson(messages, phoneNumberId));
+  if (parsed === null) throw new Error("fixture envelope did not parse");
+  return parsed;
+}
+
+/** The webhook body Meta posts, before parsing. */
+function envelopeJson(messages: readonly TextMessage[], phoneNumberId = "PNID"): unknown {
+  return {
     object: "whatsapp_business_account",
     entry: [
       {
@@ -104,9 +113,7 @@ function envelopeOf(messages: readonly TextMessage[], phoneNumberId = "PNID"): M
         ],
       },
     ],
-  });
-  if (parsed === null) throw new Error("fixture envelope did not parse");
-  return parsed;
+  };
 }
 
 function makeInbound(overrides: Partial<WhatsAppInboundEvent> = {}): WhatsAppInboundEvent {
@@ -321,6 +328,41 @@ describe("WhatsAppAdapter.toDeliverableEvents and the envelope's phone number id
     );
 
     expect(events.map((e) => e.whatsapp.phoneNumberId)).toEqual(["OTHER"]);
+  });
+});
+
+describe("the foreign phone number id on the single-message and backend-hosted paths", () => {
+  // The check sits in toDeliverableEvent so all three paths decide alike; these pin the two paths
+  // that do not go through toDeliverableEvents.
+  it("toDeliverableEvent on a fromCloud adapter drops a message for another number", () => {
+    const adapter = WhatsAppAdapter.fromCloud(CLOUD);
+
+    const event = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "OTHER" }));
+
+    expect(event).toBeUndefined();
+    expect(stderrLines.filter((line) => line.includes('phone number id "OTHER"'))).toHaveLength(1);
+  });
+
+  it("onInbound on a fromCloud adapter receives the own number's message and not another's", async () => {
+    const adapter = WhatsAppAdapter.fromCloud(CLOUD);
+    const received: string[] = [];
+    adapter.onInbound(async (event) => {
+      received.push(event.id);
+    });
+    const backend = adapter.getBackend() as WhatsAppCloudBackend;
+    const post = async (wamid: string, phoneNumberId: string): Promise<boolean> => {
+      const body = JSON.stringify(
+        envelopeJson([{ from: "5511999999999", id: wamid, body: "hello" }], phoneNumberId),
+      );
+      const hex = createHmac("sha256", CLOUD.appSecret).update(body).digest("hex");
+      return backend.handleWebhookPayload(body, `sha256=${hex}`);
+    };
+
+    expect(await post("wamid.foreign", "OTHER")).toBe(true);
+    expect(await post("wamid.own", "PNID")).toBe(true);
+
+    expect(received).toEqual(["wamid.own"]);
+    expect(stderrLines.filter((line) => line.includes('phone number id "OTHER"'))).toHaveLength(1);
   });
 });
 
