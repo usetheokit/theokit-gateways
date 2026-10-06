@@ -112,13 +112,40 @@ interface TokenValidatorLike {
   check(authHeader: string, body: unknown): Promise<unknown>;
 }
 
+/** The SDK's `ILogger` shape, as far as its validators call it. */
+interface SdkLogger {
+  error(...msg: unknown[]): void;
+  warn(...msg: unknown[]): void;
+  info(...msg: unknown[]): void;
+  debug(...msg: unknown[]): void;
+  trace(...msg: unknown[]): void;
+  log(level: string, ...msg: unknown[]): void;
+  child(name: string): SdkLogger;
+}
+
 type ValidatorClass = new (
   appId: string,
   tenantId?: string,
   serviceUrl?: string,
-  logger?: undefined,
+  logger?: SdkLogger,
   cloud?: TeamsCloudEndpoints,
 ) => TokenValidatorLike;
+
+const ignore = (): void => {};
+
+/**
+ * The logger handed to the SDK validator. Without one the SDK logs every refused token through its
+ * `ConsoleLogger`, claim values included, and those values are chosen by whoever sent the request.
+ */
+const SILENT_LOGGER: SdkLogger = {
+  error: ignore,
+  warn: ignore,
+  info: ignore,
+  debug: ignore,
+  trace: ignore,
+  log: ignore,
+  child: () => SILENT_LOGGER,
+};
 
 /** The SDK middleware module, as far as this verifier reads it. */
 interface ValidatorModuleLike {
@@ -193,7 +220,7 @@ async function loadValidator(options: TeamsActivityVerifierOptions): Promise<Loa
       options.clientId,
       options.tenantId,
       undefined,
-      undefined,
+      SILENT_LOGGER,
       options.cloud,
     );
     return { validator };

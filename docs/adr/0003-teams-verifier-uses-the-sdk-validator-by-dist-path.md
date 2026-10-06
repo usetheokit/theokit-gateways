@@ -52,8 +52,10 @@ prefer only because the claim checks run after it on both.
 - A key-set outage reads as `invalid_token`, the same as a forgery. The key client and its timeout
   belong to the SDK (`jwks-rsa`); a key set that never answers holds the request for that timeout,
   so the route should bound the call with its own.
-- The SDK's default `ConsoleLogger` writes an error line for every token it refuses. That is the
-  SDK's logging, not the verifier's; a flood of forged requests becomes log volume.
+- The verifier hands the SDK validator a silent logger. Without one, the SDK's default
+  `ConsoleLogger` writes an error line for every token it refuses, with claim values the sender
+  chose, so a flood of forged requests would become log volume an unauthenticated sender writes.
+  The cost is that the SDK's own diagnostics are gone; the refusal reason is what remains.
 - The control test in `packages/gateway-teams/tests/` deep-imports `ServiceTokenValidator`; a
   lockfile bump to an SDK without that name fails it at load, which fails closed.
 
