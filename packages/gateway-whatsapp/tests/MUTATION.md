@@ -2,7 +2,7 @@
 
 Run: `pnpm --filter @theokit/gateway-whatsapp run test:mutation`
 
-Deliberately outside `test`, so `pnpm -r run test` never pays for it. Scope, and why these three
+Deliberately outside `test`, so `pnpm -r run test` never pays for it. Scope, and why these five
 files and not the others, is in `stryker.config.json`.
 
 ## Baseline
@@ -11,6 +11,7 @@ files and not the others, is in `stryker.config.json`.
 |---|---|---|---|
 | 2026-08-30 (first ever) | 73.96% | 125 | 44 |
 | 2026-08-30 (after this pass) | 95.86% | 162 | 7 |
+| 2026-10-06 (`inbound-rules.ts` and `signature.ts` in scope) | 96.90% | 281 | 9 |
 
 `break` is set to the measured figure with headroom for two mutants (one mutant is ~0.59% of 169).
 It is a ratchet: raise it when the score rises, never lower it to make a red run green.
@@ -18,7 +19,7 @@ It is a ratchet: raise it when the score rises, never lower it to make a red run
 Before this run **no adapter package in this repository had ever been measured** — only
 `packages/gateway`. The 44 survivors were not a surprise so much as an absence: nothing had asked.
 
-## The 7 survivors, each with its reason
+## The 9 survivors, each with its reason
 
 Anything NOT on this list is outstanding work, not an accepted mutant.
 
@@ -87,3 +88,28 @@ regex cannot produce.
 | Line | Mutant | Why nothing can kill it |
 |---|---|---|
 | `phoneRuns` | `s.match(PHONE_RUN) ?? []` becomes `?? ["Stryker was here"]` | EQUIVALENT. The fallback only applies when the text has no digit; the string normalizes to `""`, and `"".includes(botPhoneId)` is false for every non-empty id, the only kind the group rule reaches. The message is dropped either way |
+
+### `backend/cloud/signature.ts`: in the configured scope since 2026-10-06
+
+`verifyWebhookSignature` decides whether a POST is Meta's, and since B-421 it refuses an empty or
+whitespace-only app secret. It lived in `webhook.ts` beside the envelope normalizers, and putting
+that whole file in scope measured 45 survivors in the normalizers (86.58%) without isolating the
+refusal; the function moved to `signature.ts` so this scope measures the signature check alone.
+The normalizers stay unmeasured, which is outstanding work and not an accepted gap.
+
+In the first run (the function still inside `webhook.ts`) the empty-secret refusal and the length
+guard had no survivor, and ten mutants of the function survived, handled this way:
+
+- Two on the `sha256=` prefix check and two on the hex check were real gaps: no test sent the right
+  digest under another prefix, or the right digest followed by non-hex characters (which
+  `Buffer.from(hex, "hex")` silently drops). Both now have a test.
+- Five sat on a line that converted a string body to a UTF-8 Buffer before hashing. `hmac.update`
+  already reads a string as UTF-8, so the line was removed rather than documented.
+- One is equivalent, and is the only survivor of the 34 mutants `signature.ts` now has:
+
+| Line | Mutant | Why nothing can kill it |
+|---|---|---|
+| hex check | `/^[0-9a-f]+$/i` becomes `/[0-9a-f]+$/i` | EQUIVALENT. Without `^`, only a header whose hex part starts with a non-hex character passes the check differently, and `Buffer.from(hex, "hex")` stops at the first non-hex character, so that header decodes to an empty buffer and fails the length guard either way |
+
+The foreign phone number id check (`isForAnotherNumber`, in `inbound-rules.ts` since B-421's fix
+pass) left no survivor.

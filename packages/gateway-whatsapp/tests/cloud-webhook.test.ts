@@ -94,6 +94,37 @@ describe("verifyWebhookSignature", () => {
     expect(verifyWebhookSignature("body", "sha256=not-hex!!", APP_SECRET)).toBe(false);
   });
 
+  it("refuses the correct digest under a prefix other than sha256=", () => {
+    const digest = signedHeader("body").slice("sha256=".length);
+
+    expect(verifyWebhookSignature("body", `sha999=${digest}`, APP_SECRET)).toBe(false);
+  });
+
+  it("refuses the correct digest followed by non-hex characters", () => {
+    // Buffer.from(hex, "hex") stops at the first non-hex character, so without the hex check the
+    // trailing junk is dropped and the digest underneath would match.
+    expect(verifyWebhookSignature("body", `${signedHeader("body")}zz`, APP_SECRET)).toBe(false);
+  });
+
+  it("accepts the correct digest written in upper case", () => {
+    expect(
+      verifyWebhookSignature(
+        "body",
+        signedHeader("body").toUpperCase().replace("SHA256=", "sha256="),
+        APP_SECRET,
+      ),
+    ).toBe(true);
+  });
+
+  it("verifies a non-ASCII string body against the digest of its UTF-8 bytes", () => {
+    const body = '{"text":"日本語 ☕ über"}';
+
+    expect(verifyWebhookSignature(body, signedHeader(body), APP_SECRET)).toBe(true);
+    expect(verifyWebhookSignature(Buffer.from(body, "utf8"), signedHeader(body), APP_SECRET)).toBe(
+      true,
+    );
+  });
+
   it("accepts Buffer rawBody", () => {
     const buf = Buffer.from('{"a":1}', "utf8");
     const sig = signedHeader('{"a":1}');
