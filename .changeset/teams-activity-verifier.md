@@ -15,5 +15,10 @@ Two refusals are deliberate: with `tenantId` set, a Bot Framework token with no 
 `tenant_unverified`, and Microsoft documents none on connector tokens; an agentic-identity (Entra)
 activity is `serviceurl_mismatch`, because its token carries no `serviceurl` claim.
 
+The verifier reads at most 1 MiB of body and refuses a larger one as `malformed_body` before any
+token work. It hands the SDK validator a silent logger, so a refused token writes nothing to the
+host's logs. `validator_unavailable` also covers an SDK `check()` that fails with anything but its
+own token refusal, and its message names the error's class and code, never the error's text.
+
 Also exports the `TeamsActivityVerifierOptions`, `TeamsActivityVerifyResult` and
 `TeamsCloudEndpoints` types. Additive: no existing export changes, no new dependency.
