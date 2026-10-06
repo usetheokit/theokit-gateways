@@ -16,18 +16,36 @@ pin a version number, and named 0.1.0 while the package shipped 0.3.2.)
 the body, turn it into events with the adapter's rules applied, and deliver each one.
 
 ```ts
-import { parseWebhookPayload, verifyWebhookSignature, WhatsAppAdapter } from "@theokit/gateway-whatsapp";
+import {
+  normalizeStatusReceipts,
+  parseWebhookPayload,
+  verifyWebhookSignature,
+  WhatsAppAdapter,
+} from "@theokit/gateway-whatsapp";
 
 // cloud: { accessToken, phoneNumberId, appSecret }; handleMessage: your agent's handler.
 const adapter = WhatsAppAdapter.fromCloud(cloud, { allowedSenders: process.env.WHATSAPP_ALLOWED });
 adapter.onInbound(handleMessage);
+// In-process only: a route served by several instances needs a shared store for this.
+const delivered = new Set<string>();
 
 async function onWebhook(rawBody: string, signature: string | undefined): Promise<number> {
   if (!verifyWebhookSignature(rawBody, signature, cloud.appSecret)) return 401;
-  const envelope = parseWebhookPayload(JSON.parse(rawBody));
+  let json: unknown;
+  try {
+    json = JSON.parse(rawBody);
+  } catch {
+    return 400;
+  }
+  const envelope = parseWebhookPayload(json);
   if (envelope === null) return 400;
   for (const event of adapter.toDeliverableEvents(envelope)) {
+    if (delivered.has(event.whatsapp.wamid)) continue;
     if ((await adapter.deliver(event)) !== "ok") return 503;
+    delivered.add(event.whatsapp.wamid);
+  }
+  for (const receipt of normalizeStatusReceipts(envelope)) {
+    // handle sent / delivered / read / failed here
   }
   return 200;
 }
@@ -36,12 +54,20 @@ async function onWebhook(rawBody: string, signature: string | undefined): Promis
 The signature check is the route's job: `toDeliverableEvents` does not do it. `theokit/server/webhook`
 exports `whatsapp()` and `whatsappSubscribe()` for the signature and the GET handshake. The method
 applies `allowedSenders` and the group rule exactly as `onInbound` does, so a refused sender yields
-no event and one line on stderr. Status receipts yield none either.
+no event and one line on stderr naming only the last four digits of the number. On an adapter built
+with `fromCloud` it also drops messages addressed to another `phone_number_id`: one Meta app signs
+every number's webhooks with the same secret, so a shared route must not hand one number's
+messages to another number's agent.
 
 Answer 200 only when every event returned `ok`. `no_handler` means nothing received the message,
 and `handler_threw` means your handler failed on it; a non-2xx makes Meta retry the whole envelope,
-so a handler that always throws on one message sees it again on every retry. A retry also repeats
-the events already delivered, so `event.whatsapp.wamid` is the key to skip them.
+so a handler that always throws on one message sees it again on every retry. Meta also redelivers
+an envelope it did not see answered in time, so a slow handler causes repeats as well. A retry
+repeats the events already delivered, which is why the route skips a `wamid` it has delivered.
+
+Status receipts never reach `onStatusReceipt` on this path: that handler listens to the backend,
+and your route is what receives the webhook. Read them from the envelope with
+`normalizeStatusReceipts`, as above.
 
 `baileys` and `web` hold **their own socket** — there is no webhook to host, and messages reach
 `onInbound` once `connect()` resolves.

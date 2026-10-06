@@ -14,4 +14,10 @@ decides through `toDeliverableEvent`, so both paths apply one rule set and write
 line. Neither method calls the backend or the network, and neither verifies the webhook signature;
 the route still does that first. The README's "How inbound arrives" shows the route end to end.
 
-Additive. No existing export changes.
+Two behaviours change on every inbound path, `onInbound` included. An adapter built with
+`fromCloud` drops a message addressed to another `phone_number_id`, naming that id on stderr once,
+because one Meta app signs every number's webhooks with the same secret. The allowlist refusal line
+names the sender by the last four digits of the number only (`a sender ending in 8888`), where it
+used to print the whole number.
+
+No existing export changes.
