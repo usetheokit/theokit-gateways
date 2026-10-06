@@ -159,6 +159,7 @@ describe("readBearerToken", () => {
     expect(readBearerToken("Bearer a.b.c")).toBe("a.b.c");
     expect(readBearerToken("a.b.c")).toBe("a.b.c");
     expect(readBearerToken("Bearer ")).toBeUndefined();
+    expect(readBearerToken("Bearer")).toBeUndefined();
     expect(readBearerToken("")).toBeUndefined();
     expect(readBearerToken(null)).toBeUndefined();
   });

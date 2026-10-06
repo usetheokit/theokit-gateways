@@ -82,13 +82,17 @@ export function assertVerifierOptions(options: {
   assertCloud(options.cloud);
 }
 
+/** The scheme prefix the SDK strips from an `Authorization` header. */
+const BEARER = "Bearer ";
+
 /**
  * The token in an `Authorization` header, read as the SDK reads it: everything after `Bearer `,
- * or the whole header when that prefix is absent. `undefined` when there is nothing to read.
+ * or the whole header when that prefix is absent. `undefined` when there is nothing to read,
+ * including a bare `Bearer`, which is what Fetch leaves of `Bearer ` once it trims the value.
  */
 export function readBearerToken(header: string | null): string | undefined {
-  if (header === null) return undefined;
-  const token = header.startsWith("Bearer ") ? header.slice(7) : header;
+  if (header === null || header === BEARER.trimEnd()) return undefined;
+  const token = header.startsWith(BEARER) ? header.slice(BEARER.length) : header;
   return token.length > 0 ? token : undefined;
 }
 
