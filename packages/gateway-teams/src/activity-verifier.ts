@@ -19,6 +19,7 @@ import {
   type ParsedBody,
   parseActivityBody,
   readBearerToken,
+  readTokenKeyId,
 } from "./verified-claims.js";
 
 /**
@@ -302,7 +303,66 @@ async function sdkCheck(
   }
 }
 
+/**
+ * How many tokens whose `kid` no accepted token used may reach the SDK per window. The SDK's key
+ * client (`jwks-rsa`, constructed with `rateLimit: false`) caches only keys it found, so each such
+ * token is one key-set request, made before any signature check, for a value the sender chose.
+ * Ten per minute is `jwks-rsa`'s own `jwksRequestsPerMinute` default, the bound the SDK leaves off.
+ */
+const UNKNOWN_KEY_CHECKS_PER_WINDOW = 10;
+const UNKNOWN_KEY_WINDOW_MS = 60_000;
+
+const UNKNOWN_KEY_LIMITED =
+  "the token names a signing key no accepted token used, and the verifier already asked the Teams SDK about 10 such tokens this minute";
+
+/**
+ * Which tokens may reach the SDK. A `kid` an accepted token used always may; any other (or none)
+ * spends one of {@link UNKNOWN_KEY_CHECKS_PER_WINDOW} per fixed window. Only a kid whose token the
+ * SDK accepted is learned, so the known set holds keys the key set really published.
+ */
+function unknownKeyBudget(): {
+  admit(kid: string | undefined): boolean;
+  learn(kid: string | undefined): void;
+} {
+  const known = new Set<string>();
+  let windowStart = Number.NEGATIVE_INFINITY;
+  let used = 0;
+  return {
+    admit(kid) {
+      if (kid !== undefined && known.has(kid)) return true;
+      const now = Date.now();
+      if (now - windowStart >= UNKNOWN_KEY_WINDOW_MS) {
+        windowStart = now;
+        used = 0;
+      }
+      if (used >= UNKNOWN_KEY_CHECKS_PER_WINDOW) return false;
+      used += 1;
+      return true;
+    },
+    learn(kid) {
+      if (kid !== undefined) known.add(kid);
+    },
+  };
+}
+
 type ReadableActivity = Extract<ParsedBody, { ok: true }>;
+type KeyBudget = ReturnType<typeof unknownKeyBudget>;
+
+/**
+ * {@link sdkCheck}, unless the token's `kid` is unknown and the budget for unknown kids is spent;
+ * a kid the SDK accepted is learned.
+ */
+async function budgetedSdkCheck(
+  validator: TokenValidatorLike,
+  budget: KeyBudget,
+  read: { readonly header: string; readonly rawToken: string; readonly body: ReadableActivity },
+): Promise<ResolvedToken | Refusal | undefined> {
+  const kid = readTokenKeyId(read.rawToken);
+  if (!budget.admit(kid)) return refuse("invalid_token", UNKNOWN_KEY_LIMITED);
+  const token = await sdkCheck(validator, read.header, read.body.activity);
+  if (token !== undefined && !("reason" in token)) budget.learn(kid);
+  return token;
+}
 
 /** The header, its token and the parsed body, or the refusal that needs no SDK work. */
 async function readRequest(
@@ -339,7 +399,9 @@ function judgeVerifiedToken(
  * and tenant claims match this configuration; it never throws for a request. The SDK is imported
  * on the first request, once per verifier; a failed load is kept, so every later request refuses
  * as `validator_unavailable` until the verifier is rebuilt. A key-set outage reads as
- * `invalid_token`, the same as a forgery, and the next request retries. A `check()` that fails
+ * `invalid_token`, the same as a forgery, and the next request retries. At most ten tokens a
+ * minute whose `kid` no accepted token used reach the SDK; the rest are `invalid_token` with no
+ * key-set request, and a kid an accepted token used is never limited. A `check()` that fails
  * with anything but the SDK's plain `Error` is `validator_unavailable`, naming the error's class.
  *
  * @throws TypeError at construction for an empty `clientId`, an empty or multi-tenant `tenantId`,
@@ -351,6 +413,7 @@ export function teamsActivityVerifier(
 ): (request: Request) => Promise<TeamsActivityVerifyResult> {
   assertVerifierOptions(options);
   let loaded: Promise<Loaded> | undefined;
+  const budget = unknownKeyBudget();
   const expected = {
     clientId: options.clientId,
     tenantId: options.tenantId,
@@ -365,7 +428,7 @@ export function teamsActivityVerifier(
     const load = await loaded;
     if ("unavailable" in load) return refuse("validator_unavailable", load.unavailable);
 
-    const token = await sdkCheck(load.validator, read.header, read.body.activity);
+    const token = await budgetedSdkCheck(load.validator, budget, read);
     if (token !== undefined && "reason" in token) return token;
     return judgeVerifiedToken(token, read.rawToken, read.body, expected);
   };

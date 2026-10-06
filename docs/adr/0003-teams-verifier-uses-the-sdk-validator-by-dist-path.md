@@ -52,6 +52,19 @@ prefer only because the claim checks run after it on both.
 - A key-set outage reads as `invalid_token`, the same as a forgery. The key client and its timeout
   belong to the SDK (`jwks-rsa`); a key set that never answers holds the request for that timeout,
   so the route should bound the call with its own.
+- **Unknown signing keys are budgeted.** The SDK's key client (`jwks-rsa` 3.x, built with
+  `rateLimit: false`) caches only keys it found, and `jsonwebtoken` asks it for the key before any
+  signature, algorithm or expiry check. So each token naming a `kid` the cache lacks was one
+  request to Microsoft's key endpoint, for a value an unauthenticated sender chose: 20 forged
+  tokens with fresh kids made 20 key-set requests (finding #60, measured 2026-10-06). The verifier
+  now reads the `kid` from the unverified header and lets at most 10 tokens per fixed 60-second
+  window reach the SDK when their kid is one no accepted token used; the rest are `invalid_token`
+  with no request. A kid is learned only when the SDK accepted its token, and a learned kid is
+  never limited. Ten a minute is `jwks-rsa`'s own `jwksRequestsPerMinute` default. The cost: a
+  sender who spends the budget can delay, by up to a minute, the first activity signed with a key
+  this verifier has not yet seen (at startup, or after Microsoft rotates its keys). Activities
+  under keys already seen are unaffected. The budget is per verifier, not per client; a per-client
+  rate limit in front of the route remains the operator's.
 - The verifier hands the SDK validator a silent logger. Without one, the SDK's default
   `ConsoleLogger` writes an error line for every token it refuses, with claim values the sender
   chose, so a flood of forged requests would become log volume an unauthenticated sender writes.
@@ -67,6 +80,13 @@ prefer only because the claim checks run after it on both.
 - **`jsonwebtoken` plus `jwks-rsa`, called directly.** Rejected: a new dependency, and a second
   statement of Microsoft's issuer, audience, key-set and `serviceurl` rules that would drift from
   the SDK's.
+- **For unknown kids, one SDK check per minimum interval (a cooldown).** Rejected: it breaks the
+  documented recovery from a key-set outage. A verifier whose first request meets a 503 would
+  refuse the next genuine activity too, because that activity's kid is still unknown and the one
+  slot was spent on the failed fetch. A budget of ten keeps a retry available.
+- **Fetching the key set in the verifier and refusing any kid absent from it.** Rejected: a
+  second key-set client beside the SDK's, which must also know which key set each path uses (Bot
+  Framework or, on 2.1.x, Entra); the same drift the direct `jwks-rsa` alternative was rejected for.
 - **`botframework-connector`.** Rejected: a new dependency from a different SDK generation.
 
 ## Verification

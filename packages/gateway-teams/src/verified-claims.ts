@@ -120,13 +120,27 @@ export function parseActivityBody(text: string): ParsedBody {
  * object. No signature work happens here: the SDK checked this exact string first.
  */
 export function decodeVerifiedClaims(rawToken: string): Record<string, unknown> | undefined {
+  return decodeSegment(rawToken, 1);
+}
+
+/**
+ * The `kid` of a token's JOSE header, read WITHOUT verifying anything: the sender chose it. Used
+ * only to decide whether the SDK may be asked about the token, never as evidence about it.
+ */
+export function readTokenKeyId(rawToken: string): string | undefined {
+  const kid = decodeSegment(rawToken, 0)?.kid;
+  return typeof kid === "string" ? kid : undefined;
+}
+
+/** One base64url JSON object segment of a three-segment JWT, or `undefined`. */
+function decodeSegment(rawToken: string, index: 0 | 1): Record<string, unknown> | undefined {
   const segments = rawToken.split(".");
   if (segments.length !== 3) return undefined;
   try {
-    const payload: unknown = JSON.parse(
-      Buffer.from(segments[1] as string, "base64url").toString("utf8"),
+    const decoded: unknown = JSON.parse(
+      Buffer.from(segments[index] as string, "base64url").toString("utf8"),
     );
-    return isPlainObject(payload) ? payload : undefined;
+    return isPlainObject(decoded) ? decoded : undefined;
   } catch {
     return undefined;
   }

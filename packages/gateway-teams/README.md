@@ -57,6 +57,14 @@ A key-set outage reads as `invalid_token`, the same as a forged token; the next 
 The key-set client and its timeout belong to the SDK, so a key set that never answers holds the
 request until that timeout: bound the `verify` call with your route's own timeout.
 
+The SDK fetches the key set for a token whose `kid` it has not cached, before checking the
+signature, and the sender chooses the `kid`. So the verifier lets at most 10 tokens a minute whose
+`kid` no accepted token used reach the SDK, and refuses the rest as `invalid_token` without a
+key-set request. A key that signed an accepted activity is never limited. A sender who spends that
+budget can delay by up to a minute the first activity signed with a key the verifier has not seen
+yet, at startup or after Microsoft rotates its keys. The budget is per verifier, not per client:
+put your own per-client rate limit in front of the route as well (ADR-0003).
+
 What else to expect from the verifier:
 
 - It reads at most 1 MiB of the body, before any token work, because the `serviceurl` check needs

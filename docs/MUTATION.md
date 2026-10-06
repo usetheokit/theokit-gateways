@@ -28,7 +28,7 @@ Until 2026-08-30 only `packages/gateway` had ever been measured. The ten adapter
 | gateway-discord | 62.50% | 87.50% | 1 | 75 |
 | gateway-slack | 76.40% | 87.28% | 20 | 86 |
 | gateway-email | 62.42% | 86.71% | 39 | 86 |
-| gateway-teams | 70.43% | 87.73% | 62 + 4 no coverage | 87 |
+| gateway-teams | 70.43% | 89.42% (with the unknown-kid budget, 2026-10-06) | 59 + 3 no coverage | 89 |
 
 `break` is each package's measured figure with one mutant of headroom. It is a **ratchet**: raise it
 when the score rises, never lower it to make a red run green under an unchanged scope. Where the
