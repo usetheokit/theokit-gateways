@@ -14,13 +14,20 @@ import {
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
   type SendResult,
+  type WhatsAppMessageEvent,
 } from "@theokit/gateway";
 
 import { parseAllowedSenders } from "./allowlist.js";
 import { WhatsAppBaileysBackend } from "./backend/baileys/index.js";
 import { WhatsAppCloudBackend } from "./backend/cloud/index.js";
+import type { MetaWebhookEnvelope } from "./backend/cloud/types.js";
+import { normalizeInboundMessages } from "./backend/cloud/webhook.js";
 import { WhatsAppWebBackend } from "./backend/web/index.js";
-import type { WhatsAppBackend, WhatsAppStatusReceipt } from "./backend-types.js";
+import type {
+  WhatsAppBackend,
+  WhatsAppInboundEvent,
+  WhatsAppStatusReceipt,
+} from "./backend-types.js";
 import { ConfigurationError } from "./errors.js";
 import { decideInbound, digitsOnly, type InboundRules } from "./inbound-rules.js";
 import { splitForWhatsApp } from "./split.js";
@@ -415,7 +422,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
 
     const off = this.backendImpl.onInbound(async (inbound) => {
       if (!this.handler) return;
-      const event = decideInbound(inbound, this.rules);
+      const event = this.toDeliverableEvent(inbound);
       if (event === undefined) return;
       await this.handler(event);
     });
@@ -434,6 +441,41 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
         this.inboundUnsubscribe = undefined;
       }
     };
+  }
+
+  /**
+   * The event `onInbound` would hand its handler for this inbound message, or `undefined` when the
+   * sender allowlist refuses it or the group rule drops it. A refusal writes the same stderr line
+   * `onInbound` writes.
+   *
+   * Pass the result to `deliver()`. Neither the backend nor the network is called.
+   *
+   * @public
+   */
+  toDeliverableEvent(inbound: WhatsAppInboundEvent): WhatsAppMessageEvent | undefined {
+    return decideInbound(inbound, this.rules);
+  }
+
+  /**
+   * The events of one Meta Cloud webhook envelope that may reach the agent, in envelope order, with
+   * the sender allowlist and the group rule applied. Status receipts and non-text messages yield no
+   * event, so a status-only envelope returns `[]`. Each refused or dropped message writes the
+   * same stderr line `onInbound` writes.
+   *
+   * The route that receives the webhook verifies `X-Hub-Signature-256` first (with
+   * `verifyWebhookSignature`, or theokit's `whatsapp()` route validator); this method does not. Meta redelivers on timeout, and
+   * `event.whatsapp.wamid` is the key a route can use to ignore a repeat. Neither the backend nor
+   * the network is called.
+   *
+   * @public
+   */
+  toDeliverableEvents(envelope: MetaWebhookEnvelope): WhatsAppMessageEvent[] {
+    const events: WhatsAppMessageEvent[] = [];
+    for (const inbound of normalizeInboundMessages(envelope)) {
+      const event = this.toDeliverableEvent(inbound);
+      if (event !== undefined) events.push(event);
+    }
+    return events;
   }
 
   /** Status receipts (sent/delivered/read/failed). Adapter-specific (D307). */
