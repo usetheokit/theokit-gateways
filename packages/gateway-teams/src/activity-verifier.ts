@@ -10,6 +10,8 @@
  * compares no `serviceurl` on the 2.1.x Entra path.
  */
 
+import { Buffer } from "node:buffer";
+
 import {
   assertVerifierOptions,
   checkVerifiedClaims,
@@ -93,7 +95,7 @@ const DEFAULT_LOGIN_ENDPOINT = "https://login.microsoftonline.com";
 const MESSAGES: Readonly<Record<RefusalReason, string>> = {
   missing_authorization: "no Authorization header: the request carries no Bot Framework token",
   malformed_body:
-    "the request body is not a readable JSON activity with a non-empty string serviceUrl",
+    "the request body is over 1 MiB or is not a readable JSON activity with a non-empty string serviceUrl",
   validator_unavailable: "the Teams SDK token validator could not be loaded",
   invalid_token:
     "the Teams SDK did not accept the token (bad signature, unknown key, wrong audience or issuer, expired, or a serviceurl it compared and found different)",
@@ -231,9 +233,35 @@ async function loadValidator(options: TeamsActivityVerifierOptions): Promise<Loa
   }
 }
 
+/**
+ * The largest body the verifier reads. The body is read before the token is verified, because the
+ * `serviceurl` check needs the activity, so an unauthenticated sender controls this read.
+ */
+const MAX_BODY_BYTES = 1024 * 1024;
+
+/** The body as text, or `undefined` once it passes {@link MAX_BODY_BYTES}. Reads no further. */
+async function readBoundedText(request: Request): Promise<string | undefined> {
+  if (request.body === null) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel();
+      return undefined;
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks));
+}
+
 async function readBody(request: Request): Promise<ParsedBody> {
   try {
-    return parseActivityBody(await request.text());
+    const text = await readBoundedText(request);
+    return text === undefined ? { ok: false, reason: "malformed_body" } : parseActivityBody(text);
   } catch {
     return { ok: false, reason: "malformed_body" };
   }
@@ -305,6 +333,7 @@ function judgeVerifiedToken(
 /**
  * Build a verifier for one Teams bot. The returned function reads a Fetch `Request` (pass a
  * `clone()` if the body is needed afterwards) and answers with {@link TeamsActivityVerifyResult}.
+ * It reads at most 1 MiB of body: a larger one is `malformed_body`, refused before any token work.
  *
  * It accepts only when the SDK validator accepted the token AND the token's `aud`, `serviceurl`
  * and tenant claims match this configuration; it never throws for a request. The SDK is imported
