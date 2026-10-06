@@ -22,7 +22,7 @@ import {
   type WhatsAppAdapterCommonOptions,
 } from "../src/index.js";
 
-const REFUSAL_PREFIX = "[whatsapp] dropped inbound from";
+const REFUSAL_PREFIX = "[whatsapp] dropped inbound from a sender";
 const CLOUD = { accessToken: "t", phoneNumberId: "PNID", appSecret: "s" } as const;
 
 class FakeBackend implements WhatsAppBackend {
@@ -173,7 +173,7 @@ describe("WhatsAppAdapter.toDeliverableEvents", () => {
 
     expect(events).toEqual([]);
     expect(refusalLines()).toEqual([
-      '[whatsapp] dropped inbound from "5511888888888" — not in the configured allowlist\n',
+      "[whatsapp] dropped inbound from a sender ending in 8888: not in the configured allowlist\n",
     ]);
   });
 

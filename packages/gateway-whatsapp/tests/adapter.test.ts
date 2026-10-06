@@ -375,7 +375,8 @@ describe("WhatsAppAdapter — sender allowlist", () => {
 
     await backend.emitInbound(inboundFrom("5511000000000@s.whatsapp.net"));
 
-    expect(writes.join("")).toContain("5511000000000");
+    expect(writes.join("")).toContain("a sender ending in 0000");
+    expect(writes.join("")).not.toContain("5511000000000");
     stderr.mockRestore();
   });
 

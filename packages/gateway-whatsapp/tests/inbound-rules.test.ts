@@ -58,8 +58,15 @@ describe("decideInbound", () => {
     );
     expect(refused).toBeUndefined();
     expect(stderrLines).toEqual([
-      '[whatsapp] dropped inbound from "5511888888888" — not in the configured allowlist\n',
+      "[whatsapp] dropped inbound from a sender ending in 8888: not in the configured allowlist\n",
     ]);
+  });
+
+  it("decideInbound never writes a refused sender's full number to stderr", () => {
+    decideInbound(inboundFrom("5511888888888"), rules({ allowedSenders: "5511999999999" }));
+    decideInbound(inboundFrom("231116569108705@lid"), rules({ allowedSenders: "5511999999999" }));
+
+    expect(stderrLines.join("")).not.toMatch(/5511888888888|231116569108705/);
   });
 
   it("decideInbound keeps the owner's own note under an allowlist", () => {

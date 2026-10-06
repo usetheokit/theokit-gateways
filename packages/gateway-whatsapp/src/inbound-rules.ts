@@ -58,8 +58,9 @@ function phoneRuns(s: string): string[] {
  * Runs before the group/mention filter because it answers a different question: that one asks
  * whether a message was meant for us, this one asks whether the sender may reach us at all.
  *
- * The refusal is logged. A silent drop is indistinguishable from a broken gateway, and the
- * first thing a mistyped allowlist causes is an operator wondering why the bot went mute.
+ * The refusal is logged, with the sender's address reduced to its last four digits. A silent drop
+ * is indistinguishable from a broken gateway, and the first thing a mistyped allowlist causes is
+ * an operator wondering why the bot went mute.
  */
 function isRefusedBySenderAllowlist(
   inbound: WhatsAppInboundEvent,
@@ -74,9 +75,19 @@ function isRefusedBySenderAllowlist(
   if (allowedSenders === undefined) return false;
   if (isSenderAllowed(inbound.fromPhone, allowedSenders)) return false;
   process.stderr.write(
-    `[whatsapp] dropped inbound from "${inbound.fromPhone}" — not in the configured allowlist\n`,
+    `[whatsapp] dropped inbound from ${redactedSender(inbound.fromPhone)}: not in the configured allowlist\n`,
   );
   return true;
+}
+
+/**
+ * A refused sender as the log names it: the last four digits of the address, enough to match a
+ * mistyped allowlist entry by eye. The full number is personal data of someone who never agreed
+ * to reach this bot, and every unsolicited message would otherwise write it to the host's logs.
+ */
+function redactedSender(fromPhone: string): string {
+  const tail = digitsOnly(fromPhone).slice(-4);
+  return tail.length > 0 ? `a sender ending in ${tail}` : "a sender with no number";
 }
 
 /** D309 + EC-7: group filter with digit-only normalization. */
