@@ -28,7 +28,7 @@ Until 2026-08-30 only `packages/gateway` had ever been measured. The ten adapter
 | gateway-discord | 62.50% | 87.50% | 1 | 75 |
 | gateway-slack | 76.40% | 87.28% | 20 | 86 |
 | gateway-email | 62.42% | 86.71% | 39 | 86 |
-| gateway-teams | 70.43% | 86.56% | 27 | 84 |
+| gateway-teams | 70.43% | 87.73% | 62 + 4 no coverage | 87 |
 
 `break` is each package's measured figure with one mutant of headroom. It is a **ratchet**: raise it
 when the score rises, never lower it to make a red run green under an unchanged scope. Where the
@@ -41,6 +41,11 @@ Scope is the same everywhere: **normalisation, filtering, splitting, error mappi
 files that decide something. `adapter.ts` is excluded in every package, because it is I/O
 orchestration whose tests drive fakes, and mutating it measures the fakes rather than the adapter.
 The WhatsApp bridge is a `.mjs` child process Stryker cannot instrument.
+
+One exception: gateway-teams mutates `activity-verifier.ts` since 2026-10-06. It reads a request
+and calls the SDK, but it also decides refusals (the body bound, which SDK errors are token
+refusals, the guards after the SDK answers), and outside the ratchet it measured 70.18%. With it in
+scope the package went from 86.56% to 87.73%; most of its survivors are refusal message texts.
 
 That exclusion is a real limit, stated rather than hidden: a defect in an adapter's connect/send
 plumbing is not covered by these numbers.

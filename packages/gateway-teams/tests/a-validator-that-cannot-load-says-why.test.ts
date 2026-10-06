@@ -63,4 +63,31 @@ describe("a validator that cannot load", () => {
     expect(res.ok ? "" : res.message).toContain("RangeError");
     expect(res.ok ? "" : res.message).not.toContain(PRIVATE_TEXT);
   });
+
+  it.each([
+    [
+      "a name and a code that are not identifiers",
+      Object.assign(new Error("x"), { name: `Bad ${PRIVATE_TEXT}`, code: `E ${PRIVATE_TEXT}` }),
+      "(an unnamed error)",
+    ],
+    ["a thrown null", null, "(a thrown object)"],
+  ])("refuses a constructor failure with %s without repeating it", async (_, thrown, kind) => {
+    ks = await startKeyServer();
+    const { teamsActivityVerifier } = await import("../src/index.js");
+    const verify = teamsActivityVerifier({
+      clientId: CLIENT_ID,
+      __validatorModule: {
+        InboundActivityTokenValidator: class {
+          constructor() {
+            throw thrown;
+          }
+        },
+      },
+    });
+
+    const res = await verify(activityRequest(ks.signToken({})));
+
+    expect(res.ok ? "" : res.message).toContain(kind);
+    expect(res.ok ? "" : res.message).not.toContain(PRIVATE_TEXT);
+  });
 });
