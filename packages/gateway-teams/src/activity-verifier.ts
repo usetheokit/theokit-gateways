@@ -304,10 +304,10 @@ async function sdkCheck(
 }
 
 /**
- * How many tokens whose `kid` no accepted token used may reach the SDK per window. The SDK's key
- * client (`jwks-rsa`, constructed with `rateLimit: false`) caches only keys it found, so each such
- * token is one key-set request, made before any signature check, for a value the sender chose.
- * Ten per minute is `jwks-rsa`'s own `jwksRequestsPerMinute` default, the bound the SDK leaves off.
+ * How many tokens whose `kid` no accepted token used may reach the SDK per window. The SDK's
+ * key-set client is built with its rate limit off and caches only keys it found, so each such token
+ * is one key-set request, made before any signature check, for a value the sender chose. Ten per
+ * minute is that client's own default request limit, the bound the SDK leaves off.
  */
 const UNKNOWN_KEY_CHECKS_PER_WINDOW = 10;
 const UNKNOWN_KEY_WINDOW_MS = 60_000;
