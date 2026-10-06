@@ -12,13 +12,40 @@ pin a version number, and named 0.1.0 while the package shipped 0.3.2.)
 
 **It depends on the backend**, and the two are not alike.
 
-`cloud` is an **HTTP webhook** the application must authenticate: Meta signs with
-`X-Hub-Signature-256` over the raw body, and `theokit/server/webhook` exports `whatsapp()` and
-`whatsappSubscribe()` for the signature and the GET handshake. Parsed events go to
-`adapter.deliver(event)`.
+`cloud` is an **HTTP webhook** the application hosts, in four steps: verify the signature, parse
+the body, turn it into events with the adapter's rules applied, and deliver each one.
+
+```ts
+import { parseWebhookPayload, verifyWebhookSignature, WhatsAppAdapter } from "@theokit/gateway-whatsapp";
+
+// cloud: { accessToken, phoneNumberId, appSecret }; handleMessage: your agent's handler.
+const adapter = WhatsAppAdapter.fromCloud(cloud, { allowedSenders: process.env.WHATSAPP_ALLOWED });
+adapter.onInbound(handleMessage);
+
+async function onWebhook(rawBody: string, signature: string | undefined): Promise<number> {
+  if (!verifyWebhookSignature(rawBody, signature, cloud.appSecret)) return 401;
+  const envelope = parseWebhookPayload(JSON.parse(rawBody));
+  if (envelope === null) return 400;
+  for (const event of adapter.toDeliverableEvents(envelope)) {
+    if ((await adapter.deliver(event)) !== "ok") return 503;
+  }
+  return 200;
+}
+```
+
+The signature check is the route's job: `toDeliverableEvents` does not do it. `theokit/server/webhook`
+exports `whatsapp()` and `whatsappSubscribe()` for the signature and the GET handshake. The method
+applies `allowedSenders` and the group rule exactly as `onInbound` does, so a refused sender yields
+no event and one line on stderr. Status receipts yield none either.
+
+Answer 200 only when every event returned `ok`. `no_handler` means nothing received the message,
+and `handler_threw` means your handler failed on it; a non-2xx makes Meta retry the whole envelope,
+so a handler that always throws on one message sees it again on every retry. A retry also repeats
+the events already delivered, so `event.whatsapp.wamid` is the key to skip them.
 
 `baileys` and `web` hold **their own socket** — there is no webhook to host, and messages reach
 `onInbound` once `connect()` resolves.
+
 ## Choosing a backend
 
 | Backend | Needs | Exercised against real WhatsApp |
