@@ -212,12 +212,24 @@ async function readBody(request: Request): Promise<ParsedBody> {
   }
 }
 
-/** The SDK's verdict on this exact header: the token it resolved, or `undefined` on refusal. */
+/**
+ * Whether a throw from `check()` is the SDK refusing the token. Both 2.0.x and 2.1.x refuse with a
+ * plain `Error` ("Invalid token", "No token provided", "Entra inbound token is missing tid"); a
+ * `TypeError` or any other throw is the validator itself failing.
+ */
+function isTokenRefusal(error: unknown): boolean {
+  return error instanceof Error && error.constructor === Error;
+}
+
+/**
+ * The SDK's verdict on this exact header: the token it resolved, `undefined` when it refused the
+ * token, or a `validator_unavailable` refusal when `check()` failed in a way that is no verdict.
+ */
 async function sdkCheck(
   validator: TokenValidatorLike,
   header: string,
   activity: Record<string, unknown>,
-): Promise<ResolvedToken | undefined> {
+): Promise<ResolvedToken | Refusal | undefined> {
   try {
     const result = (await validator.check(header, activity)) as
       | { appId?: unknown; serviceUrl?: unknown }
@@ -226,8 +238,12 @@ async function sdkCheck(
     const { appId, serviceUrl } = result ?? {};
     if (typeof appId !== "string" || typeof serviceUrl !== "string") return undefined;
     return { appId, serviceUrl };
-  } catch {
-    return undefined;
+  } catch (error) {
+    if (isTokenRefusal(error)) return undefined;
+    return refuse(
+      "validator_unavailable",
+      `the Teams SDK token validator failed instead of judging the token (${errorKind(error)})`,
+    );
   }
 }
 
@@ -265,8 +281,10 @@ function judgeVerifiedToken(
  *
  * It accepts only when the SDK validator accepted the token AND the token's `aud`, `serviceurl`
  * and tenant claims match this configuration; it never throws for a request. The SDK is imported
- * on the first request, once per verifier. A key-set outage reads as `invalid_token`, the same as
- * a forgery, and the next request retries.
+ * on the first request, once per verifier; a failed load is kept, so every later request refuses
+ * as `validator_unavailable` until the verifier is rebuilt. A key-set outage reads as
+ * `invalid_token`, the same as a forgery, and the next request retries. A `check()` that fails
+ * with anything but the SDK's plain `Error` is `validator_unavailable`, naming the error's class.
  *
  * @throws TypeError at construction for an empty `clientId`, an empty or multi-tenant `tenantId`,
  * or a `cloud` missing one of its three endpoints.
@@ -292,6 +310,7 @@ export function teamsActivityVerifier(
     if ("unavailable" in load) return refuse("validator_unavailable", load.unavailable);
 
     const token = await sdkCheck(load.validator, read.header, read.body.activity);
+    if (token !== undefined && "reason" in token) return token;
     return judgeVerifiedToken(token, read.rawToken, read.body, expected);
   };
 }
