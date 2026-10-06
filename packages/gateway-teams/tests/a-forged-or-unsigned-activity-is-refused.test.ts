@@ -31,19 +31,33 @@ describe("a forged or unsigned activity", () => {
     expect(ks.hits()).toBe(0);
   });
 
-  it("refuses a token signed by a key the key set does not hold as invalid_token", async () => {
+  const now = () => Math.floor(Date.now() / 1000);
+
+  // One row per check the installed SDK makes before the verifier sees a claim. The signature,
+  // algorithm and issuer rules are the SDK's alone (the verifier checks only aud, serviceurl and
+  // tenant), so each row fails if an SDK upgrade stops making that check.
+  it.each([
+    ["signed by a key the key set does not hold", (ks: KeyServer) => ks.otherKeySign({})],
+    ["expired by more than 300 seconds", (ks: KeyServer) => ks.signToken({ exp: now() - 361 })],
+    ["unsigned, with alg none", (ks: KeyServer) => ks.signToken({}, { alg: "none" })],
+    [
+      "HMAC-signed with the published public key as secret (alg HS256)",
+      (ks: KeyServer) => ks.signToken({}, { alg: "HS256" }),
+    ],
+    [
+      "naming a kid the key set does not hold",
+      (ks: KeyServer) => ks.signToken({}, { kid: "unknown-kid" }),
+    ],
+    [
+      "issued by another issuer",
+      (ks: KeyServer) => ks.signToken({ iss: "https://issuer.other.example" }),
+    ],
+    ["carrying no issuer", (ks: KeyServer) => ks.signToken({ iss: undefined })],
+    ["not valid for another hour (nbf)", (ks: KeyServer) => ks.signToken({ nbf: now() + 3600 })],
+  ])("refuses a token %s as invalid_token through the installed SDK", async (_, token) => {
     const { ks, verify } = await verifierWithKeys();
 
-    const res = await verify(activityRequest(ks.otherKeySign({})));
-
-    expect(res).toMatchObject({ ok: false, reason: "invalid_token" });
-  });
-
-  it("refuses a token expired by more than 300 seconds as invalid_token", async () => {
-    const { ks, verify } = await verifierWithKeys();
-    const now = Math.floor(Date.now() / 1000);
-
-    const res = await verify(activityRequest(ks.signToken({ exp: now - 301 - 60 })));
+    const res = await verify(activityRequest(token(ks)));
 
     expect(res).toMatchObject({ ok: false, reason: "invalid_token" });
   });

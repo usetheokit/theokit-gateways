@@ -8,7 +8,7 @@
  * server, at run time, so no key material is ever committed.
  */
 
-import { generateKeyPairSync, type KeyObject, randomUUID, sign } from "node:crypto";
+import { createHmac, generateKeyPairSync, type KeyObject, randomUUID, sign } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 
@@ -40,6 +40,11 @@ export interface SignOptions {
   readonly kid?: string;
   /** Lifetime from now; defaults to 600 seconds. */
   readonly expiresInSeconds?: number;
+  /**
+   * The signing algorithm; defaults to `RS256`. `HS256` signs with the published public key's PEM
+   * as the HMAC secret (the key-confusion forgery); `none` writes no signature at all.
+   */
+  readonly alg?: "RS256" | "HS256" | "none";
 }
 
 /** A running key server. Close it in `afterEach`. */
@@ -101,6 +106,19 @@ function signWith(key: KeyObject, kid: string, payload: Record<string, unknown>)
   return `${input}.${signature}`;
 }
 
+/** A token whose header names `alg` but whose signature no RS256 key produced. */
+function forgeWith(
+  alg: "HS256" | "none",
+  publicKey: KeyObject,
+  kid: string,
+  payload: Record<string, unknown>,
+): string {
+  const input = `${base64url({ alg, typ: "JWT", kid })}.${base64url(payload)}`;
+  if (alg === "none") return `${input}.`;
+  const secret = publicKey.export({ format: "pem", type: "spki" });
+  return `${input}.${createHmac("sha256", secret).update(input).digest("base64url")}`;
+}
+
 /** Start a key server on 127.0.0.1, on a free port. */
 export async function startKeyServer(): Promise<KeyServer> {
   const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -140,12 +158,12 @@ export async function startKeyServer(): Promise<KeyServer> {
         server.closeAllConnections();
         server.close((err) => (err ? reject(err) : resolve()));
       }),
-    signToken: (claims, opts = {}) =>
-      signWith(
-        opts.key ?? privateKey,
-        opts.kid ?? kid,
-        buildClaims(cloud, claims, opts.expiresInSeconds ?? 600),
-      ),
+    signToken: (claims, opts = {}) => {
+      const payload = buildClaims(cloud, claims, opts.expiresInSeconds ?? 600);
+      return opts.alg === "HS256" || opts.alg === "none"
+        ? forgeWith(opts.alg, publicKey, opts.kid ?? kid, payload)
+        : signWith(opts.key ?? privateKey, opts.kid ?? kid, payload);
+    },
     otherKeySign: (claims) => {
       unpublished ??= generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
       return signWith(unpublished, kid, buildClaims(cloud, claims, 600));
