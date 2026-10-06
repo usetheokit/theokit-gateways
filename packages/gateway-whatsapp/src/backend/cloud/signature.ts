@@ -41,8 +41,8 @@ export function verifyWebhookSignature(
   const receivedHex = signatureHeader.slice(7);
   if (!/^[0-9a-f]+$/i.test(receivedHex)) return false;
   const received = Buffer.from(receivedHex, "hex");
-  const body = typeof rawBody === "string" ? Buffer.from(rawBody, "utf8") : rawBody;
-  const expected = crypto.createHmac("sha256", appSecret).update(body).digest();
+  // `update` reads a string as UTF-8 and a Buffer as its bytes, which is what Meta signed.
+  const expected = crypto.createHmac("sha256", appSecret).update(rawBody).digest();
   // EC-3: length guard before timingSafeEqual.
   if (received.length !== expected.length) return false;
   return crypto.timingSafeEqual(received, expected);
