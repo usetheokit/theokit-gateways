@@ -58,12 +58,16 @@ The key-set client and its timeout belong to the SDK, so a key set that never an
 request until that timeout: bound the `verify` call with your route's own timeout.
 
 The SDK fetches the key set for a token whose `kid` it has not cached, before checking the
-signature, and the sender chooses the `kid`. So the verifier lets at most 10 tokens a minute whose
-`kid` no accepted token used reach the SDK, and refuses the rest as `invalid_token` without a
-key-set request. A key that signed an accepted activity is never limited. A sender who spends that
-budget can delay by up to a minute the first activity signed with a key the verifier has not seen
-yet, at startup or after Microsoft rotates its keys. The budget is per verifier, not per client:
-put your own per-client rate limit in front of the route as well (ADR-0003).
+signature, and the sender chooses the `kid`. So the verifier refuses a token with no `kid` as
+`invalid_token` before the SDK, and lets at most 10 tokens a minute whose `kid` no accepted token
+used reach the SDK. Past those 10, a token reaches the SDK only if the published Bot Framework key
+set lists its `kid`: the verifier reads that set (the URL the SDK uses, from your `cloud`'s
+`openIdMetadataUrl`) at most once every 10 seconds, so forged tokens cannot keep a genuine key out.
+The worst case is a key Microsoft has just published being refused for up to 10 seconds. A key that
+signed an accepted activity is never limited. A token issued by an Entra tenant this verifier would
+refuse (another tenant, or any tenant when no `tenantId` is set) is refused with that tenant reason
+before the SDK. The limits are per verifier, not per client: put your own per-client rate limit in
+front of the route as well (ADR-0003).
 
 What else to expect from the verifier:
 
