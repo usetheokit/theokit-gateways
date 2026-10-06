@@ -19,7 +19,7 @@ Until 2026-08-30 only `packages/gateway` had ever been measured. The ten adapter
 | package | first measurement | after | survivors | `break` |
 |---|---|---|---|---|
 | gateway (core) | — (measured for months) | 95.63% | 20 | 95 |
-| gateway-whatsapp | 73.96% | 95.86% | 7 | 95 |
+| gateway-whatsapp | 73.96% | 95.38% (with `inbound-rules.ts`, 2026-10-06) | 11 | 95 |
 | gateway-matrix | 91.53% | **100.00%** | 0 | 98 |
 | gateway-sms | 83.72% | 93.02% | 2 | 90 |
 | gateway-mattermost | 85.42% | 90.63% | 8 | 89 |

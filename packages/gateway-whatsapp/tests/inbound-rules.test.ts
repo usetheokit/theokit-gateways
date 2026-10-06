@@ -69,6 +69,14 @@ describe("decideInbound", () => {
     expect(stderrLines.join("")).not.toMatch(/5511888888888|231116569108705/);
   });
 
+  it("decideInbound names a refused sender with no digit as a sender with no number", () => {
+    decideInbound(inboundFrom("stranger@lid"), rules({ allowedSenders: "5511999999999" }));
+
+    expect(stderrLines).toEqual([
+      "[whatsapp] dropped inbound from a sender with no number: not in the configured allowlist\n",
+    ]);
+  });
+
   it("decideInbound keeps the owner's own note under an allowlist", () => {
     const note = decideInbound(
       { ...inboundFrom("231116569108705@lid"), fromSelf: true },
