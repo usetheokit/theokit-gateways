@@ -1,9 +1,12 @@
 /**
  * Does an inbound WhatsApp message reach the agent, and as what?
  *
- * The sender allowlist, the group-mention rule and the conversion to the gateway's event shape,
- * as pure functions. `WhatsAppAdapter` holds the configuration and passes it in; every adapter
- * path that decides an inbound message calls `decideInbound`, so there is one rule set to keep.
+ * The addressed-number check, the sender allowlist, the group-mention rule and the conversion to
+ * the gateway's event shape, as functions of their inputs (the only state is the set of foreign
+ * numbers already reported, which the caller owns). `WhatsAppAdapter` holds the configuration and
+ * passes it in; every adapter path that decides an inbound message goes through
+ * `toDeliverableEvent`, which calls `isForAnotherNumber` and `decideInbound`, so there is one rule
+ * set to keep.
  */
 
 import type { WhatsAppMessageEvent } from "@theokit/gateway";
@@ -88,6 +91,31 @@ function isRefusedBySenderAllowlist(
 function redactedSender(fromPhone: string): string {
   const tail = digitsOnly(fromPhone).slice(-4);
   return tail.length > 0 ? `a sender ending in ${tail}` : "a sender with no number";
+}
+
+/**
+ * Is this message addressed to a Cloud number other than `ownPhoneNumberId`?
+ *
+ * Meta signs every number of one app with one secret, so a valid signature does not say which
+ * number an envelope was for. `undefined` means the adapter has no Cloud number to compare, and
+ * nothing is dropped. A message with no phone number id is not provably this number's, and is
+ * named `(none)`. Each dropped id is written to stderr once: `reported` holds the ids already named,
+ * and this function adds to it.
+ */
+export function isForAnotherNumber(
+  inbound: WhatsAppInboundEvent,
+  ownPhoneNumberId: string | undefined,
+  reported: Set<string>,
+): boolean {
+  if (ownPhoneNumberId === undefined || inbound.phoneNumberId === ownPhoneNumberId) return false;
+  const other = inbound.phoneNumberId ?? "(none)";
+  if (!reported.has(other)) {
+    reported.add(other);
+    process.stderr.write(
+      `[whatsapp] dropped inbound addressed to phone number id "${other}": this adapter answers for "${ownPhoneNumberId}". Logged once per id.\n`,
+    );
+  }
+  return true;
 }
 
 /** D309 + EC-7: group filter with digit-only normalization. */

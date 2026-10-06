@@ -29,7 +29,12 @@ import type {
   WhatsAppStatusReceipt,
 } from "./backend-types.js";
 import { ConfigurationError } from "./errors.js";
-import { decideInbound, digitsOnly, type InboundRules } from "./inbound-rules.js";
+import {
+  decideInbound,
+  digitsOnly,
+  type InboundRules,
+  isForAnotherNumber,
+} from "./inbound-rules.js";
 import { splitForWhatsApp } from "./split.js";
 
 export { digitsOnly };
@@ -472,22 +477,10 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
    * @public
    */
   toDeliverableEvent(inbound: WhatsAppInboundEvent): WhatsAppMessageEvent | undefined {
-    if (this.isForAnotherNumber(inbound)) return undefined;
-    return decideInbound(inbound, this.rules);
-  }
-
-  /** Whether a Cloud adapter received a message addressed to a number that is not its own. */
-  private isForAnotherNumber(inbound: WhatsAppInboundEvent): boolean {
-    const own = this.ownPhoneNumberId;
-    if (own === undefined || inbound.phoneNumberId === own) return false;
-    const other = inbound.phoneNumberId ?? "(none)";
-    if (!this.reportedForeignNumbers.has(other)) {
-      this.reportedForeignNumbers.add(other);
-      process.stderr.write(
-        `[whatsapp] dropped inbound addressed to phone number id "${other}": this adapter answers for "${own}". Logged once per id.\n`,
-      );
+    if (isForAnotherNumber(inbound, this.ownPhoneNumberId, this.reportedForeignNumbers)) {
+      return undefined;
     }
-    return true;
+    return decideInbound(inbound, this.rules);
   }
 
   /**
