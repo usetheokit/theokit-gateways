@@ -60,6 +60,11 @@ export interface KeyServer {
   signToken(claims: Record<string, unknown>, opts?: SignOptions): string;
   /** Sign with a fresh key pair the server never publishes, under the published `kid`. */
   otherKeySign(claims: Record<string, unknown>): string;
+  /**
+   * Publish a new key beside the current ones, as Microsoft does when it rotates, and sign with it
+   * from now on. Returns the new key's `kid`.
+   */
+  rotate(): string;
 }
 
 /** The test cloud for a key server listening on `port`. */
@@ -120,10 +125,16 @@ function forgeWith(
 }
 
 /** Start a key server on 127.0.0.1, on a free port. */
-export async function startKeyServer(): Promise<KeyServer> {
+function newSigningKey() {
   const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const kid = randomUUID();
   const jwk = { ...publicKey.export({ format: "jwk" }), kid, use: "sig", alg: "RS256" };
+  return { publicKey, privateKey, kid, jwk };
+}
+
+export async function startKeyServer(): Promise<KeyServer> {
+  let current = newSigningKey();
+  const published = [current.jwk];
   let hitCount = 0;
   let pendingFailure: number | undefined;
   let unpublished: KeyObject | undefined;
@@ -140,7 +151,7 @@ export async function startKeyServer(): Promise<KeyServer> {
       return;
     }
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ keys: [jwk] }));
+    res.end(JSON.stringify({ keys: published }));
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;
@@ -159,15 +170,25 @@ export async function startKeyServer(): Promise<KeyServer> {
         server.close((err) => (err ? reject(err) : resolve()));
       }),
     signToken: (claims, opts = {}) => {
-      const { alg = "RS256", kid: keyId = kid, key = privateKey, expiresInSeconds = 600 } = opts;
+      const {
+        alg = "RS256",
+        kid: keyId = current.kid,
+        key = current.privateKey,
+        expiresInSeconds = 600,
+      } = opts;
       const payload = buildClaims(cloud, claims, expiresInSeconds);
       return alg === "RS256"
         ? signWith(key, keyId, payload)
-        : forgeWith(alg, publicKey, keyId, payload);
+        : forgeWith(alg, current.publicKey, keyId, payload);
     },
     otherKeySign: (claims) => {
       unpublished ??= generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
-      return signWith(unpublished, kid, buildClaims(cloud, claims, 600));
+      return signWith(unpublished, current.kid, buildClaims(cloud, claims, 600));
+    },
+    rotate: () => {
+      current = newSigningKey();
+      published.push(current.jwk);
+      return current.kid;
     },
   };
 }

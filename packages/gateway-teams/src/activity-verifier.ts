@@ -93,6 +93,10 @@ const MIDDLEWARE_MODULE = "@microsoft/teams.apps/dist/middleware/index.js";
 /** `PUBLIC.loginEndpoint` in `@microsoft/teams.api`, which this package does not depend on. */
 const DEFAULT_LOGIN_ENDPOINT = "https://login.microsoftonline.com";
 
+/** `PUBLIC.openIdMetadataUrl` in `@microsoft/teams.api`. */
+const DEFAULT_OPENID_METADATA_URL =
+  "https://login.botframework.com/v1/.well-known/openidconfiguration";
+
 const MESSAGES: Readonly<Record<RefusalReason, string>> = {
   missing_authorization: "no Authorization header: the request carries no Bot Framework token",
   malformed_body:
@@ -315,12 +319,16 @@ const UNKNOWN_KEY_WINDOW_MS = 60_000;
 const NO_KEY_ID =
   "the token is not a JWT whose header names its signing key (a non-empty string kid), so the Teams SDK was not asked";
 
-const UNKNOWN_KEY_LIMITED =
-  "the token names a signing key no accepted token used, and the verifier already asked the Teams SDK about 10 such tokens this minute";
+const KEY_NOT_PUBLISHED =
+  "the token names a signing key that no accepted token used and that the Bot Framework key set, as last read, does not list; 10 such tokens already reached the Teams SDK this minute";
+
+const KEY_SET_UNREADABLE =
+  "the token names a signing key that no accepted token used, 10 such tokens already reached the Teams SDK this minute, and the Bot Framework key set could not be read";
 
 /**
- * Which tokens may reach the SDK. A `kid` an accepted token used always may; any other spends one of {@link UNKNOWN_KEY_CHECKS_PER_WINDOW} per fixed window. Only a kid whose token the
- * SDK accepted is learned, so the known set holds keys the key set really published.
+ * Which tokens may reach the SDK without consulting the published key set. A `kid` an accepted
+ * token used always may; any other spends one of {@link UNKNOWN_KEY_CHECKS_PER_WINDOW} per fixed
+ * window. Only a kid whose token the SDK accepted is learned.
  */
 function unknownKeyBudget(): {
   admit(kid: string): boolean;
@@ -347,13 +355,89 @@ function unknownKeyBudget(): {
   };
 }
 
+/** The longest the verifier waits between two reads of the published key set. */
+const KEY_SET_READ_INTERVAL_MS = 10_000;
+
+/** How long one read of the published key set may take before it counts as failed. */
+const KEY_SET_READ_TIMEOUT_MS = 10_000;
+
+/**
+ * The key-set URL the SDK validator derives from the cloud's OpenID metadata URL: both 2.0.15 and
+ * 2.1.0 replace a trailing `/openidconfiguration` with `/keys` and fetch that, without reading the
+ * metadata document.
+ */
+function keySetUrl(cloud: TeamsCloudEndpoints | undefined): string {
+  const metadata = cloud?.openIdMetadataUrl ?? DEFAULT_OPENID_METADATA_URL;
+  return metadata.replace(/\/openidconfiguration$/, "/keys");
+}
+
+/** The `kid` of every key in a key-set document, or `undefined` when it is not one. */
+function listedKeyIds(document: unknown): Set<string> | undefined {
+  const keys = (document as { keys?: unknown } | null)?.keys;
+  if (!Array.isArray(keys)) return undefined;
+  const kids = new Set<string>();
+  for (const key of keys) {
+    const kid = (key as { kid?: unknown } | null)?.kid;
+    if (typeof kid === "string" && kid.length > 0) kids.add(kid);
+  }
+  return kids;
+}
+
+/** Fetch the key set's kids, or `undefined` for any failure: network, status, timeout or shape. */
+async function readKeySet(url: string): Promise<Set<string> | undefined> {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(KEY_SET_READ_TIMEOUT_MS) });
+    return response.ok ? listedKeyIds(await response.json()) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether the published key set lists a `kid`, consulted only once the unknown-key budget is
+ * spent. The set is read again when a kid is missing from it, at most once per
+ * {@link KEY_SET_READ_INTERVAL_MS}; concurrent lookups share one read, and a failed read keeps the
+ * last set that was read. So a sender inventing kids costs at most one request per interval, and a
+ * genuine key is admitted on the first read after Microsoft publishes it, whatever else was sent.
+ */
+function publishedKeySet(url: string): {
+  lists(kid: string): Promise<"listed" | "unlisted" | "unreadable">;
+} {
+  let kids = new Set<string>();
+  let lastRead = Number.NEGATIVE_INFINITY;
+  let lastReadFailed = false;
+  let reading: Promise<void> | undefined;
+  const read = async (): Promise<void> => {
+    const fresh = await readKeySet(url);
+    lastReadFailed = fresh === undefined;
+    if (fresh !== undefined) kids = fresh;
+  };
+  return {
+    async lists(kid) {
+      if (kids.has(kid)) return "listed";
+      const now = Date.now();
+      if (reading === undefined && now - lastRead >= KEY_SET_READ_INTERVAL_MS) {
+        lastRead = now;
+        reading = read().finally(() => {
+          reading = undefined;
+        });
+      }
+      await reading;
+      if (kids.has(kid)) return "listed";
+      return lastReadFailed ? "unreadable" : "unlisted";
+    },
+  };
+}
+
 type ReadableActivity = Extract<ParsedBody, { ok: true }>;
-type KeyBudget = ReturnType<typeof unknownKeyBudget>;
+type KeyBudget = ReturnType<typeof unknownKeyBudget> & {
+  readonly published: ReturnType<typeof publishedKeySet>;
+};
 
 /**
  * {@link sdkCheck}, unless the token names no `kid` (the SDK's key client would fetch the key set
- * for it, and no genuine token omits it), or its `kid` is unknown and the budget for unknown kids
- * is spent; a kid the SDK accepted is learned.
+ * for it, and no genuine token omits it), or its `kid` is unknown, the budget for unknown kids is
+ * spent and the published key set does not list it; a kid the SDK accepted is learned.
  */
 async function budgetedSdkCheck(
   validator: TokenValidatorLike,
@@ -362,7 +446,15 @@ async function budgetedSdkCheck(
 ): Promise<ResolvedToken | Refusal | undefined> {
   const kid = readTokenKeyId(read.rawToken);
   if (kid === undefined) return refuse("invalid_token", NO_KEY_ID);
-  if (!budget.admit(kid)) return refuse("invalid_token", UNKNOWN_KEY_LIMITED);
+  if (!budget.admit(kid)) {
+    const listing = await budget.published.lists(kid);
+    if (listing !== "listed") {
+      return refuse(
+        "invalid_token",
+        listing === "unreadable" ? KEY_SET_UNREADABLE : KEY_NOT_PUBLISHED,
+      );
+    }
+  }
   const token = await sdkCheck(validator, read.header, read.body.activity);
   if (token !== undefined && !("reason" in token)) budget.learn(kid);
   return token;
@@ -403,10 +495,12 @@ function judgeVerifiedToken(
  * and tenant claims match this configuration; it never throws for a request. The SDK is imported
  * on the first request, once per verifier; a failed load is kept, so every later request refuses
  * as `validator_unavailable` until the verifier is rebuilt. A key-set outage reads as
- * `invalid_token`, the same as a forgery, and the next request retries. At most ten tokens a
- * minute whose `kid` no accepted token used reach the SDK; the rest are `invalid_token` with no
- * key-set request, and a kid an accepted token used is never limited. A `check()` that fails
- * with anything but the SDK's plain `Error` is `validator_unavailable`, naming the error's class.
+ * `invalid_token`, the same as a forgery, and the next request retries. A token with no `kid` is
+ * `invalid_token` before the SDK. At most ten tokens a minute whose `kid` no accepted token used
+ * reach the SDK; past that, only a `kid` the published Bot Framework key set lists does, and that
+ * set is read at most once per 10 seconds, so a key Microsoft publishes is admitted within 10
+ * seconds whatever else is sent. A kid an accepted token used is never limited. A `check()` that
+ * fails with anything but the SDK's plain `Error` is `validator_unavailable`, naming its class.
  *
  * @throws TypeError at construction for an empty `clientId`, an empty or multi-tenant `tenantId`,
  * or a `cloud` missing one of its three endpoints.
@@ -417,7 +511,7 @@ export function teamsActivityVerifier(
 ): (request: Request) => Promise<TeamsActivityVerifyResult> {
   assertVerifierOptions(options);
   let loaded: Promise<Loaded> | undefined;
-  const budget = unknownKeyBudget();
+  const budget = { ...unknownKeyBudget(), published: publishedKeySet(keySetUrl(options.cloud)) };
   const expected = {
     clientId: options.clientId,
     tenantId: options.tenantId,
