@@ -8,7 +8,7 @@
  */
 
 import type { ClaimRefusal } from "../../src/verified-claims.js";
-import { CLIENT_ID, SERVICE_URL } from "./key-server.js";
+import { CLIENT_ID, type KeyServer, SERVICE_URL } from "./key-server.js";
 
 /** The tenant the verifier is configured with. */
 export const TENANT = "11111111-1111-1111-1111-111111111111";
@@ -113,3 +113,61 @@ export const ONE_VIOLATION_FIXTURES: readonly ClaimFixture[] = [
   F6_ENTRA_NO_SERVICE_URL,
   F7_BF_OTHER_APP,
 ];
+
+/** Sign `claims` with the key server; `BF` resolves to its issuer, and absent default claims stay absent. */
+export function signFixture(ks: KeyServer, claims: Readonly<Record<string, unknown>>): string {
+  return ks.signToken({ serviceurl: undefined, ...issuerFor(claims, ks.cloud.tokenIssuer) });
+}
+
+/** A POST the connector would send: a bearer token (when given) and a JSON body. */
+export function activityRequest(
+  token: string | undefined,
+  body: unknown = { type: "message", serviceUrl: SERVICE_URL },
+): Request {
+  const headers = new Headers({ "content-type": "application/json" });
+  if (token !== undefined) headers.set("authorization", `Bearer ${token}`);
+  return new Request("https://bot.test/api/messages", {
+    method: "POST",
+    headers,
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  });
+}
+
+/** What an accepting validator recorded. */
+export interface ValidatorCalls {
+  readonly ctor: unknown[][];
+  check: number;
+}
+
+/**
+ * A stand-in for the SDK middleware module whose validator accepts every token, so a test reaches
+ * the claim checks for tokens the real SDK would refuse first (the 2.1.x Entra path). With
+ * `holdUntil`, every `check` waits until that many are in flight; a miscount fails at vitest's
+ * test timeout rather than hanging the run.
+ */
+export function acceptingValidatorModule(
+  opts: {
+    readonly name?: "InboundActivityTokenValidator" | "ServiceTokenValidator";
+    readonly holdUntil?: number;
+  } = {},
+): { readonly module: Record<string, unknown>; readonly calls: ValidatorCalls } {
+  const calls: ValidatorCalls = { ctor: [], check: 0 };
+  let release: () => void = () => {};
+  const allInFlight = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  class AcceptingValidator {
+    constructor(...args: unknown[]) {
+      calls.ctor.push(args);
+    }
+    async check(_header: string, body: { serviceUrl: string }) {
+      calls.check += 1;
+      if (opts.holdUntil !== undefined) {
+        if (calls.check >= opts.holdUntil) release();
+        await allInFlight;
+      }
+      return { appId: CLIENT_ID, serviceUrl: body.serviceUrl };
+    }
+  }
+  return { module: { [opts.name ?? "InboundActivityTokenValidator"]: AcceptingValidator }, calls };
+}
