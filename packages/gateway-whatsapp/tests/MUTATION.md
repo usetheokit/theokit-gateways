@@ -60,3 +60,27 @@ the next reader does not spend an afternoon writing a test that cannot exist.
 ### `errors.ts` — 0
 
 100%.
+
+### `inbound-rules.ts`: measured once by B-421, outside the configured scope
+
+`src/inbound-rules.ts` holds the sender allowlist, the group rule and the conversion that used to be
+private methods of `adapter.ts`, which is why no run had measured them. It is NOT in `mutate`, so
+the baseline above does not move; B-421 measured it once with
+`pnpm exec stryker run --mutate src/inbound-rules.ts`.
+
+| Date | Score | Killed | Survived |
+|---|---|---|---|
+| 2026-10-06 (first) | 83.33% | 55 | 11 |
+| 2026-10-06 (after four boundary tests) | 93.94% | 62 | 4 |
+| 2026-10-06 (after removing the dead filter) | 98.33% | 59 | 1 |
+
+Seven survivors were real gaps: a bot number at the very start or end of a group message, a
+one-digit run, and the exact "dropping every group message" line. Three sat on
+`.filter((d) => d.length > 0)` after `.map(digitsOnly)`: every `PHONE_RUN` match starts and ends
+with a digit, so no run normalizes to `""` and the filter could never drop anything. It was removed
+rather than documented, because unlike `stripLeading` above it was a guard against a value the
+regex cannot produce.
+
+| Line | Mutant | Why nothing can kill it |
+|---|---|---|
+| `phoneRuns` | `s.match(PHONE_RUN) ?? []` becomes `?? ["Stryker was here"]` | EQUIVALENT. The fallback only applies when the text has no digit; the string normalizes to `""`, and `"".includes(botPhoneId)` is false for every non-empty id, the only kind the group rule reaches. The message is dropped either way |

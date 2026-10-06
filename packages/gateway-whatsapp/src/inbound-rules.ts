@@ -48,7 +48,8 @@ const PHONE_RUN = /[\d][\d+\-().  ]*[\d]|[\d]/g;
  * a letter or a comma do what it visually does: end the number.
  */
 function phoneRuns(s: string): string[] {
-  return (s.match(PHONE_RUN) ?? []).map(digitsOnly).filter((d) => d.length > 0);
+  // Every match starts and ends with a digit, so no run normalizes to "".
+  return (s.match(PHONE_RUN) ?? []).map(digitsOnly);
 }
 
 /**
