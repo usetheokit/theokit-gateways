@@ -94,4 +94,37 @@ describe("decideInbound", () => {
 
     expect(converted).toEqual(expectedEvent);
   });
+
+  describe("the group rule", () => {
+    const groupRules = (botPhoneId: string): InboundRules => ({
+      allowedSenders: undefined,
+      requireMention: true,
+      botPhoneId,
+    });
+    const groupMessage = (text: string) =>
+      inboundFrom("5511888888888", { conversationType: "group", channelId: "g@g.us", text });
+
+    it("decideInbound keeps a group message that opens with the bot's number", () => {
+      const kept = decideInbound(groupMessage("5511777777777 hi"), groupRules("5511777777777"));
+      expect(kept?.text).toBe("5511777777777 hi");
+    });
+
+    it("decideInbound keeps a group message that ends with the bot's number", () => {
+      const kept = decideInbound(groupMessage("hi 5511777777777"), groupRules("5511777777777"));
+      expect(kept?.text).toBe("hi 5511777777777");
+    });
+
+    it("decideInbound reads a one-digit run as a number", () => {
+      const kept = decideInbound(groupMessage("call 7 now"), groupRules("7"));
+      expect(kept?.text).toBe("call 7 now");
+    });
+
+    it("decideInbound names the misconfiguration when botPhoneId is unset", () => {
+      const dropped = decideInbound(groupMessage("hello all"), groupRules(""));
+      expect(dropped).toBeUndefined();
+      expect(stderrLines).toEqual([
+        "[whatsapp] dropping every group message: requireMention is on and botPhoneId is unset\n",
+      ]);
+    });
+  });
 });
