@@ -14,20 +14,18 @@ import {
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
   type SendResult,
-  type WhatsAppMessageEvent,
 } from "@theokit/gateway";
 
-import { isSenderAllowed, parseAllowedSenders } from "./allowlist.js";
+import { parseAllowedSenders } from "./allowlist.js";
 import { WhatsAppBaileysBackend } from "./backend/baileys/index.js";
 import { WhatsAppCloudBackend } from "./backend/cloud/index.js";
 import { WhatsAppWebBackend } from "./backend/web/index.js";
-import type {
-  WhatsAppBackend,
-  WhatsAppInboundEvent,
-  WhatsAppStatusReceipt,
-} from "./backend-types.js";
+import type { WhatsAppBackend, WhatsAppStatusReceipt } from "./backend-types.js";
 import { ConfigurationError } from "./errors.js";
+import { decideInbound, digitsOnly, type InboundRules } from "./inbound-rules.js";
 import { splitForWhatsApp } from "./split.js";
+
+export { digitsOnly };
 
 /** Cloud (Meta WhatsApp Business Cloud API) backend config (ADR D304). */
 export interface WhatsAppCloudConfig {
@@ -155,36 +153,6 @@ function requireNonEmpty(entries: ReadonlyArray<readonly [string, string | undef
   }
 }
 
-/** EC-7: digit-only normalizer for mention comparison (handles `+`, `-`, `()`, spaces). */
-export function digitsOnly(s: string): string {
-  return s.replace(/[^\d]/g, "");
-}
-
-/**
- * Characters that may appear INSIDE a written phone number: digits and the
- * separators people type around them. Anything else — a letter, a comma, a
- * newline — ends the run.
- */
-const PHONE_RUN = /[\d][\d+\-().  ]*[\d]|[\d]/g;
-
-/**
- * EC-7: the phone-like runs in a message, each normalized to digits.
- *
- * The filter used to normalize the WHOLE message and ask whether the result
- * contained the bot's number. That accepts the four documented formats, but it
- * also concatenates digits from unrelated words: with a bot at 5511999999999,
- * `"pedido 55 chegou 11, ref 99999-9999 ok"` normalized to a string containing
- * exactly that number, and the bot answered a message about an order. Every
- * group message carrying scattered digits woke it.
- *
- * Scanning runs instead keeps the separators irrelevant WITHIN a number — which
- * is what EC-7 asks for, and what `"+55 (11) 99999-9999"` needs — while letting
- * a letter or a comma do what it visually does: end the number.
- */
-export function phoneRuns(s: string): string[] {
-  return (s.match(PHONE_RUN) ?? []).map(digitsOnly).filter((d) => d.length > 0);
-}
-
 /**
  * Adapter facade. Implements `BasePlatformAdapter` (D172).
  *
@@ -194,10 +162,13 @@ export function phoneRuns(s: string): string[] {
 export class WhatsAppAdapter extends BasePlatformAdapter {
   readonly platform = "whatsapp" as const;
   private readonly backendImpl: WhatsAppBackend;
-  private readonly requireMention: boolean;
+  /**
+   * The bot's number, digits only. Kept as its own field because the documented construction
+   * path is tested by reading it (`fromCloud` defaulting it to the phone number id).
+   */
   private readonly botPhoneId: string;
-  /** `undefined` = no allowlist configured; a set = configured, and enforced fail-closed. */
-  private readonly allowedSenders: ReadonlySet<string> | undefined;
+  /** The sender allowlist and group rule the inbound path decides by. */
+  private readonly rules: InboundRules;
   /** Mirrors the sibling adapters: guards connect() against opening a second session. */
   private connected = false;
   private handler?: (event: GatewayMessageEvent) => Promise<void>;
@@ -368,13 +339,16 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
   constructor(backendImpl: WhatsAppBackend, opts: WhatsAppAdapterCommonOptions = {}) {
     super();
     this.backendImpl = backendImpl;
-    this.requireMention = opts.requireMention ?? true;
     this.botPhoneId = digitsOnly(opts.botPhoneId ?? "");
-    // Absent and empty are different answers. Absent means the operator has not adopted the
-    // filter, and delivery is unchanged. Empty means they configured one and named nobody, which
-    // is a decision — `parseAllowedSenders` is fail-closed and honours it.
-    this.allowedSenders =
-      opts.allowedSenders === undefined ? undefined : parseAllowedSenders(opts.allowedSenders);
+    this.rules = {
+      requireMention: opts.requireMention ?? true,
+      botPhoneId: this.botPhoneId,
+      // Absent and empty are different answers. Absent means the operator has not adopted the
+      // filter, and delivery is unchanged. Empty means they configured one and named nobody, which
+      // is a decision — `parseAllowedSenders` is fail-closed and honours it.
+      allowedSenders:
+        opts.allowedSenders === undefined ? undefined : parseAllowedSenders(opts.allowedSenders),
+    };
   }
 
   /** Escape hatch (D180-style) for advanced features. */
@@ -434,66 +408,6 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     return lastWamid !== undefined ? { ok: true, messageId: lastWamid } : { ok: true };
   }
 
-  /**
-   * Is this sender refused by a configured allowlist?
-   *
-   * Runs before the group/mention filter because it answers a different question: that one asks
-   * whether a message was meant for us, this one asks whether the sender may reach us at all.
-   *
-   * The refusal is logged. A silent drop is indistinguishable from a broken gateway, and the
-   * first thing a mistyped allowlist causes is an operator wondering why the bot went mute.
-   */
-  private isRefusedBySenderAllowlist(inbound: WhatsAppInboundEvent): boolean {
-    // The allowlist answers "may this STRANGER reach the agent?", and the account owner writing
-    // in their own self-chat is not one. It also cannot answer it here: the self-chat reports the
-    // account's LID as the sender, while an operator writes a phone number — measured on a real
-    // paired session. Reading the flag rather than the address keeps the exemption tied to the
-    // backend's own decision, so a stranger arriving on a LID is still refused.
-    if (inbound.fromSelf === true) return false;
-    if (this.allowedSenders === undefined) return false;
-    if (isSenderAllowed(inbound.fromPhone, this.allowedSenders)) return false;
-    process.stderr.write(
-      `[whatsapp] dropped inbound from "${inbound.fromPhone}" — not in the configured allowlist\n`,
-    );
-    return true;
-  }
-
-  /** D309 + EC-7: group filter with digit-only normalization. */
-  private shouldDropGroupMessage(inbound: WhatsAppInboundEvent): boolean {
-    if (inbound.conversationType !== "group" || !this.requireMention) return false;
-    if (this.botPhoneId.length === 0) {
-      // Misconfigured: with no id to look for, every group message looks unaddressed. Saying
-      // so matters more here than anywhere — the sibling allowlist check makes the same point
-      // fifteen lines below, and a gateway that answers no group message and explains nothing
-      // is indistinguishable from a broken one. Common with `fromWeb`, which has no phone
-      // number id to default from.
-      process.stderr.write(
-        "[whatsapp] dropping every group message: requireMention is on and botPhoneId is unset\n",
-      );
-      return true;
-    }
-    return !phoneRuns(inbound.text).some((run) => run.includes(this.botPhoneId));
-  }
-
-  private toMessageEvent(inbound: WhatsAppInboundEvent): WhatsAppMessageEvent {
-    return {
-      id: inbound.wamid,
-      platform: "whatsapp",
-      sender: { id: inbound.fromPhone, displayName: inbound.contactName },
-      channel: { id: inbound.channelId, type: inbound.conversationType },
-      text: inbound.text,
-      receivedAt: inbound.receivedAt,
-      whatsapp: {
-        wamid: inbound.wamid,
-        phoneNumberId: inbound.phoneNumberId,
-        contactName: inbound.contactName,
-        channelJid: inbound.channelJid,
-        backend: inbound.backend,
-        raw: inbound.raw,
-      },
-    };
-  }
-
   onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
     // EC-H: replace any previous subscription.
     this.inboundUnsubscribe?.();
@@ -501,9 +415,9 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
 
     const off = this.backendImpl.onInbound(async (inbound) => {
       if (!this.handler) return;
-      if (this.isRefusedBySenderAllowlist(inbound)) return;
-      if (this.shouldDropGroupMessage(inbound)) return;
-      await this.handler(this.toMessageEvent(inbound));
+      const event = decideInbound(inbound, this.rules);
+      if (event === undefined) return;
+      await this.handler(event);
     });
     this.inboundUnsubscribe = off;
 
