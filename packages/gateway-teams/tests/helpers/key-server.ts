@@ -6,10 +6,14 @@
  * `node:http`. So a cloud whose metadata URL points at this server makes the real validator check
  * real RS256 signatures against a key nobody outside this process holds. Keys are generated per
  * server, at run time, so no key material is ever committed.
+ *
+ * The test cloud's `loginEndpoint` is this server too, and it answers
+ * `/{tenant}/discovery/v2.0/keys` with the same published keys: the URL SDK 2.1.x and the verifier
+ * derive for a configured tenant's key set. Requests to it are counted apart from `/keys`.
  */
 
 import { createHmac, generateKeyPairSync, type KeyObject, randomUUID, sign } from "node:crypto";
-import { createServer } from "node:http";
+import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
 /** The bot's app id every test configures. Kept here so every helper reads one test identity. */
@@ -51,8 +55,18 @@ export interface SignOptions {
 export interface KeyServer {
   readonly port: number;
   readonly cloud: TestCloud;
-  /** How many times `/keys` was requested. */
+  /** How many times `/keys` (the Bot Framework key set) was requested. */
   hits(): number;
+  /** How many times `/{tenant}/discovery/v2.0/keys` was requested for `tenant`. */
+  tenantHits(tenant: string): number;
+  /** Every path requested, in order, whatever was answered. */
+  requests(): readonly string[];
+  /** The `kid` of every key the server publishes now, oldest first. */
+  publishedKids(): readonly string[];
+  /** Sign `claims` with the published key whose id is `kid`, under that `kid`. */
+  signWithKid(kid: string, claims: Record<string, unknown>): string;
+  /** Stop publishing the key whose id is `kid`, as Microsoft does when it retires one. */
+  retire(kid: string): void;
   /** Answer the next `/keys` request with this status instead of the key set. */
   failNext(status: number): void;
   /** Answer the next `/keys` request with this JSON document instead of the key set. */
@@ -72,7 +86,7 @@ export interface KeyServer {
 /** The test cloud for a key server listening on `port`. */
 export function testCloud(port: number): TestCloud {
   return {
-    loginEndpoint: "https://login.test.invalid",
+    loginEndpoint: `http://127.0.0.1:${port}`,
     tokenIssuer: "https://api.botframework.test",
     openIdMetadataUrl: `http://127.0.0.1:${port}/openidconfiguration`,
     loginTenant: "botframework.test",
@@ -126,7 +140,7 @@ function forgeWith(
   return `${input}.${createHmac("sha256", secret).update(input).digest("base64url")}`;
 }
 
-/** Start a key server on 127.0.0.1, on a free port. */
+/** A fresh RS256 key pair and its public JWK, under a random `kid`. */
 function newSigningKey() {
   const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const kid = randomUUID();
@@ -134,19 +148,33 @@ function newSigningKey() {
   return { publicKey, privateKey, kid, jwk };
 }
 
-export async function startKeyServer(): Promise<KeyServer> {
+/** Options for {@link startKeyServer}. */
+export interface KeyServerOptions {
+  /**
+   * How many keys to publish besides the signing one. The SDK's key client caches 5 keys, so a
+   * test about listed kids missing that cache publishes more than 5.
+   */
+  readonly extraKeys?: number;
+}
+
+const TENANT_KEYS_PATH = /^\/([^/]+)\/discovery\/v2\.0\/keys$/;
+
+/** Start a key server on 127.0.0.1, on a free port. */
+export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeyServer> {
+  const extras = Array.from({ length: opts.extraKeys ?? 0 }, newSigningKey);
   let current = newSigningKey();
-  const published = [current.jwk];
+  const privateKeys = new Map<string, KeyObject>(
+    [...extras, current].map((key) => [key.kid, key.privateKey]),
+  );
+  let published = [...extras.map((key) => key.jwk), current.jwk];
   let hitCount = 0;
+  const tenantHitCounts = new Map<string, number>();
+  const paths: string[] = [];
   let pendingFailure: number | undefined;
   let pendingDocument: { readonly document: unknown } | undefined;
   let unpublished: KeyObject | undefined;
 
-  const server = createServer((req, res) => {
-    if (req.url !== "/keys") {
-      res.writeHead(404).end();
-      return;
-    }
+  const answerKeys = (res: ServerResponse): void => {
     hitCount += 1;
     if (pendingFailure !== undefined) {
       res.writeHead(pendingFailure).end();
@@ -156,6 +184,21 @@ export async function startKeyServer(): Promise<KeyServer> {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify(pendingDocument ? pendingDocument.document : { keys: published }));
     pendingDocument = undefined;
+  };
+
+  const answerTenantKeys = (tenant: string, res: ServerResponse): void => {
+    tenantHitCounts.set(tenant, (tenantHitCounts.get(tenant) ?? 0) + 1);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ keys: published }));
+  };
+
+  const server = createServer((req, res) => {
+    const path = req.url ?? "";
+    paths.push(path);
+    const tenant = TENANT_KEYS_PATH.exec(path)?.[1];
+    if (tenant !== undefined) answerTenantKeys(tenant, res);
+    else if (path === "/keys") answerKeys(res);
+    else res.writeHead(404).end();
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;
@@ -165,6 +208,17 @@ export async function startKeyServer(): Promise<KeyServer> {
     port,
     cloud,
     hits: () => hitCount,
+    tenantHits: (tenant) => tenantHitCounts.get(tenant) ?? 0,
+    requests: () => [...paths],
+    publishedKids: () => published.map((jwk) => jwk.kid),
+    signWithKid: (kid, claims) => {
+      const key = privateKeys.get(kid);
+      if (key === undefined) throw new Error(`key server: no key with kid ${kid}`);
+      return signWith(key, kid, buildClaims(cloud, claims, 600));
+    },
+    retire: (kid) => {
+      published = published.filter((jwk) => jwk.kid !== kid);
+    },
     failNext: (status) => {
       pendingFailure = status;
     },
@@ -194,7 +248,8 @@ export async function startKeyServer(): Promise<KeyServer> {
     },
     rotate: () => {
       current = newSigningKey();
-      published.push(current.jwk);
+      privateKeys.set(current.kid, current.privateKey);
+      published = [...published, current.jwk];
       return current.kid;
     },
   };
