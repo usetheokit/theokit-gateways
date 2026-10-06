@@ -201,4 +201,34 @@ describe("forged key ids", () => {
     });
     expect(genuine.ok).toBe(true);
   });
+
+  it("do not learn a kid whose check failed as validator_unavailable", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-06T12:00:00Z"));
+    ks = await startKeyServer();
+    let checks = 0;
+    // Fails as the validator itself (a TypeError) on the first call, then refuses as the SDK does.
+    class BreaksOnceValidator {
+      async check() {
+        checks += 1;
+        if (checks === 1) throw new TypeError("validator broke");
+        throw new Error("Invalid token");
+      }
+    }
+    const verify = teamsActivityVerifier({
+      clientId: CLIENT_ID,
+      cloud: ks.cloud,
+      __validatorModule: { InboundActivityTokenValidator: BreaksOnceValidator },
+    });
+    const kid = randomUUID();
+    const token = ks.signToken({}, { alg: "none", kid });
+
+    const broken = await verify(activityRequest(token));
+    for (let i = 0; i < 9; i += 1) await verify(activityRequest(forged(ks)));
+    const again = await verify(activityRequest(token));
+
+    expect(broken).toMatchObject({ ok: false, reason: "validator_unavailable" });
+    expect(again).toMatchObject({ ok: false, reason: "invalid_token" });
+    expect(checks).toBe(10);
+  });
 });
