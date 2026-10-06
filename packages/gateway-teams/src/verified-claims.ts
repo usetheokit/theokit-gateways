@@ -168,7 +168,7 @@ function isTenantIssued(iss: unknown, loginEndpoint: string): boolean {
 
 function checkTenant(
   claims: Record<string, unknown>,
-  expected: ExpectedClaims,
+  expected: Pick<ExpectedClaims, "tenantId" | "loginEndpoint">,
 ): ClaimRefusal | undefined {
   if (expected.tenantId === undefined) {
     return isTenantIssued(claims.iss, expected.loginEndpoint) ? "tenant_unverified" : undefined;
@@ -177,6 +177,30 @@ function checkTenant(
   return claims.tid.toLowerCase() === expected.tenantId.toLowerCase()
     ? undefined
     : "tenant_mismatch";
+}
+
+/**
+ * Whether a token's UNVERIFIED `iss` is an Entra issuer: the tokens SDK 2.1.x checks against the
+ * key set of the tenant their unverified `tid` names, rather than against the Bot Framework one.
+ * Read without verifying anything; used only to decide whether the SDK may be asked.
+ */
+export function isTenantIssuedToken(rawToken: string, loginEndpoint: string): boolean {
+  return isTenantIssued(decodeSegment(rawToken, 1)?.iss, loginEndpoint);
+}
+
+/**
+ * The tenant refusal a tenant-issued token would get after the SDK accepted it, read from its
+ * UNVERIFIED claims. An accepted token's verified claims are these same claims, so a token this
+ * returns a reason for can never be accepted: refusing it before the SDK changes only which
+ * reason a token wrong in several ways is reported by.
+ */
+export function tenantRefusalBeforeVerification(
+  rawToken: string,
+  expected: Pick<ExpectedClaims, "tenantId" | "loginEndpoint">,
+): ClaimRefusal | undefined {
+  const claims = decodeSegment(rawToken, 1);
+  if (claims === undefined || !isTenantIssued(claims.iss, expected.loginEndpoint)) return undefined;
+  return checkTenant(claims, expected);
 }
 
 /**

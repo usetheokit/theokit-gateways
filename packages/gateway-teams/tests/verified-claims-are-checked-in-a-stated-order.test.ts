@@ -13,6 +13,7 @@ import {
   parseActivityBody,
   readBearerToken,
   readTokenKeyId,
+  tenantRefusalBeforeVerification,
 } from "../src/verified-claims.js";
 import {
   ENTRA_LOGIN,
@@ -196,6 +197,54 @@ describe("readTokenKeyId", () => {
     ["four segments", `${header({ kid: "k1" })}.e30.c.d`],
   ])("reads no kid from %s", (_, token) => {
     expect(readTokenKeyId(token)).toBeUndefined();
+  });
+});
+
+describe("tenantRefusalBeforeVerification", () => {
+  const token = (payload: unknown) =>
+    `e30.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.c`;
+  const configured = { tenantId: TENANT, loginEndpoint: ENTRA_LOGIN };
+
+  it.each([
+    [
+      "an Entra v2 token for another tenant",
+      { iss: `${ENTRA_LOGIN}/x/v2.0`, tid: OTHER_TENANT },
+      configured,
+      "tenant_mismatch",
+    ],
+    [
+      "an Entra v1 token for another tenant",
+      { iss: "https://sts.windows.net/x/", tid: OTHER_TENANT },
+      configured,
+      "tenant_mismatch",
+    ],
+    [
+      "an Entra token with no tid",
+      { iss: `${ENTRA_LOGIN}/x/v2.0` },
+      configured,
+      "tenant_unverified",
+    ],
+    [
+      "an Entra token with no tenant configured",
+      { iss: `${ENTRA_LOGIN}/x/v2.0`, tid: TENANT },
+      { loginEndpoint: ENTRA_LOGIN },
+      "tenant_unverified",
+    ],
+    [
+      "an Entra token for the configured tenant, in another case",
+      { iss: `${ENTRA_LOGIN}/x/v2.0`, tid: TENANT.toUpperCase() },
+      configured,
+      undefined,
+    ],
+    [
+      "a Bot Framework token for another tenant",
+      { iss: BF_ISSUER, tid: OTHER_TENANT },
+      configured,
+      undefined,
+    ],
+    ["a payload that is not a JSON object", ["iss"], configured, undefined],
+  ])("answers %s with %s", (_, payload, expected, reason) => {
+    expect(tenantRefusalBeforeVerification(token(payload), expected)).toBe(reason);
   });
 });
 

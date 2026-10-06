@@ -16,10 +16,13 @@ import {
   assertVerifierOptions,
   checkVerifiedClaims,
   decodeVerifiedClaims,
+  type ExpectedClaims,
+  isTenantIssuedToken,
   type ParsedBody,
   parseActivityBody,
   readBearerToken,
   readTokenKeyId,
+  tenantRefusalBeforeVerification,
 } from "./verified-claims.js";
 
 /**
@@ -322,6 +325,9 @@ const NO_KEY_ID =
 const KEY_NOT_PUBLISHED =
   "the token names a signing key that no accepted token used and that the Bot Framework key set, as last read, does not list; 10 such tokens already reached the Teams SDK this minute";
 
+const TENANT_KEY_LIMITED =
+  "the tenant-issued token names a signing key that no accepted tenant-issued token used, and 10 tokens with such keys already reached the Teams SDK this minute";
+
 const KEY_SET_UNREADABLE =
   "the token names a signing key that no accepted token used, 10 such tokens already reached the Teams SDK this minute, and the Bot Framework key set could not be read";
 
@@ -434,29 +440,47 @@ type KeyBudget = ReturnType<typeof unknownKeyBudget> & {
   readonly published: ReturnType<typeof publishedKeySet>;
 };
 
+type TenantExpectation = Pick<ExpectedClaims, "tenantId" | "loginEndpoint">;
+
 /**
- * {@link sdkCheck}, unless the token names no `kid` (the SDK's key client would fetch the key set
- * for it, and no genuine token omits it), or its `kid` is unknown, the budget for unknown kids is
- * spent and the published key set does not list it; a kid the SDK accepted is learned.
+ * Whether the SDK may be asked about this token, and under which key the budget knows its `kid`;
+ * or the refusal that needs no SDK work. Refused before the SDK: a token with no `kid` (the SDK's
+ * key client would fetch the key set for it, and no genuine token omits it); a tenant-issued token
+ * whose unverified tenant this verifier would refuse anyway (on 2.1.x it would make the SDK fetch
+ * the key set of whichever tenant it names); and a token whose `kid` is unknown once the budget is
+ * spent, unless it is a Bot Framework token whose `kid` the published key set lists. A
+ * tenant-issued token's `kid` is learned apart from Bot Framework ones, because on 2.1.x the SDK
+ * resolves it against a different key set.
  */
+async function admitToSdk(
+  rawToken: string,
+  budget: KeyBudget,
+  expected: TenantExpectation,
+): Promise<{ readonly budgetKey: string } | Refusal> {
+  const kid = readTokenKeyId(rawToken);
+  if (kid === undefined) return refuse("invalid_token", NO_KEY_ID);
+  const tenantRefusal = tenantRefusalBeforeVerification(rawToken, expected);
+  if (tenantRefusal !== undefined) return refuse(tenantRefusal);
+  const tenantIssued = isTenantIssuedToken(rawToken, expected.loginEndpoint);
+  const budgetKey = `${tenantIssued ? "tenant" : "botframework"} ${kid}`;
+  if (budget.admit(budgetKey)) return { budgetKey };
+  if (tenantIssued) return refuse("invalid_token", TENANT_KEY_LIMITED);
+  const listing = await budget.published.lists(kid);
+  if (listing === "listed") return { budgetKey };
+  return refuse("invalid_token", listing === "unreadable" ? KEY_SET_UNREADABLE : KEY_NOT_PUBLISHED);
+}
+
+/** {@link sdkCheck} for a token {@link admitToSdk} admitted; a key the SDK accepted is learned. */
 async function budgetedSdkCheck(
   validator: TokenValidatorLike,
   budget: KeyBudget,
   read: { readonly header: string; readonly rawToken: string; readonly body: ReadableActivity },
+  expected: TenantExpectation,
 ): Promise<ResolvedToken | Refusal | undefined> {
-  const kid = readTokenKeyId(read.rawToken);
-  if (kid === undefined) return refuse("invalid_token", NO_KEY_ID);
-  if (!budget.admit(kid)) {
-    const listing = await budget.published.lists(kid);
-    if (listing !== "listed") {
-      return refuse(
-        "invalid_token",
-        listing === "unreadable" ? KEY_SET_UNREADABLE : KEY_NOT_PUBLISHED,
-      );
-    }
-  }
+  const admission = await admitToSdk(read.rawToken, budget, expected);
+  if ("reason" in admission) return admission;
   const token = await sdkCheck(validator, read.header, read.body.activity);
-  if (token !== undefined && !("reason" in token)) budget.learn(kid);
+  if (token !== undefined && !("reason" in token)) budget.learn(admission.budgetKey);
   return token;
 }
 
@@ -496,7 +520,8 @@ function judgeVerifiedToken(
  * on the first request, once per verifier; a failed load is kept, so every later request refuses
  * as `validator_unavailable` until the verifier is rebuilt. A key-set outage reads as
  * `invalid_token`, the same as a forgery, and the next request retries. A token with no `kid` is
- * `invalid_token` before the SDK. At most ten tokens a minute whose `kid` no accepted token used
+ * `invalid_token` before the SDK, and so is a tenant-issued token whose unverified tenant would
+ * be refused (with that tenant reason). At most ten tokens a minute whose `kid` no accepted token used
  * reach the SDK; past that, only a `kid` the published Bot Framework key set lists does, and that
  * set is read at most once per 10 seconds, so a key Microsoft publishes is admitted within 10
  * seconds whatever else is sent. A kid an accepted token used is never limited. A `check()` that
@@ -526,7 +551,7 @@ export function teamsActivityVerifier(
     const load = await loaded;
     if ("unavailable" in load) return refuse("validator_unavailable", load.unavailable);
 
-    const token = await budgetedSdkCheck(load.validator, budget, read);
+    const token = await budgetedSdkCheck(load.validator, budget, read, expected);
     if (token !== undefined && "reason" in token) return token;
     return judgeVerifiedToken(token, read.rawToken, read.body, expected);
   };
