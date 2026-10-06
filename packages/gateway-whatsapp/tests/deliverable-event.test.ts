@@ -366,6 +366,68 @@ describe("the foreign phone number id on the single-message and backend-hosted p
   });
 });
 
+describe("the foreign phone number id report", () => {
+  const foreignLines = (id: string): string[] =>
+    stderrLines.filter((line) => line.includes(`phone number id "${id}"`));
+
+  it("names a foreign number once however many of its messages arrive", () => {
+    const adapter = WhatsAppAdapter.fromCloud(CLOUD);
+
+    const first = adapter.toDeliverableEvents(
+      envelopeOf(
+        [
+          { from: "5511999999999", id: "wamid.1", body: "one" },
+          { from: "5511999999999", id: "wamid.2", body: "two" },
+        ],
+        "OTHER",
+      ),
+    );
+    const later = adapter.toDeliverableEvents(
+      envelopeOf([{ from: "5511999999999", id: "wamid.3", body: "three" }], "OTHER"),
+    );
+
+    expect([...first, ...later]).toEqual([]);
+    expect(foreignLines("OTHER")).toHaveLength(1);
+    expect(foreignLines("OTHER")[0]).toContain('this adapter answers for "PNID"');
+  });
+
+  it("names each foreign number on its own line", () => {
+    const adapter = WhatsAppAdapter.fromCloud(CLOUD);
+
+    adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "OTHER" }));
+    adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "THIRD" }));
+
+    expect(foreignLines("OTHER")).toHaveLength(1);
+    expect(foreignLines("THIRD")).toHaveLength(1);
+  });
+
+  it("drops a Cloud message with no phone number id and names it (none), once", () => {
+    const adapter = WhatsAppAdapter.fromCloud(CLOUD);
+
+    const first = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: undefined }));
+    const second = adapter.toDeliverableEvent(
+      makeInbound({ wamid: "wamid.y", phoneNumberId: undefined }),
+    );
+
+    expect([first, second]).toEqual([undefined, undefined]);
+    expect(foreignLines("(none)")).toHaveLength(1);
+  });
+
+  it("still delivers the adapter's own number after dropping a foreign one", () => {
+    const adapter = WhatsAppAdapter.fromCloud(CLOUD);
+
+    const events = adapter.toDeliverableEvents(
+      envelopeOf([{ from: "5511999999999", id: "wamid.foreign", body: "x" }], "OTHER"),
+    );
+    const own = adapter.toDeliverableEvents(
+      envelopeOf([{ from: "5511999999999", id: "wamid.own", body: "y" }], "PNID"),
+    );
+
+    expect(events).toEqual([]);
+    expect(own.map((e) => e.id)).toEqual(["wamid.own"]);
+  });
+});
+
 describe("WhatsAppAdapter.toDeliverableEvent", () => {
   it("drops a group message that does not mention the bot", () => {
     const adapter = new WhatsAppAdapter(new FakeBackend(), { botPhoneId: "5511777777777" });
