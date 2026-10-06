@@ -176,6 +176,14 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
   private readonly botPhoneId: string;
   /** The sender allowlist and group rule the inbound path decides by. */
   private readonly rules: InboundRules;
+  /**
+   * The Cloud phone number id this adapter answers for; set by `fromCloud`, `undefined` for any
+   * other backend. Meta signs every number of one app with one secret, so a signed message is
+   * only this adapter's when its `phoneNumberId` is this one.
+   */
+  private ownPhoneNumberId: string | undefined;
+  /** Phone number ids already named on stderr, so a misrouted number is reported once. */
+  private readonly reportedForeignNumbers = new Set<string>();
   /** Mirrors the sibling adapters: guards connect() against opening a second session. */
   private connected = false;
   private handler?: (event: GatewayMessageEvent) => Promise<void>;
@@ -309,7 +317,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     if (cloud.apiVersion !== undefined) {
       requireNonEmpty([["apiVersion", cloud.apiVersion]]);
     }
-    return new WhatsAppAdapter(
+    const adapter = new WhatsAppAdapter(
       new WhatsAppCloudBackend({
         accessToken: cloud.accessToken,
         phoneNumberId: cloud.phoneNumberId,
@@ -318,6 +326,8 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
       }),
       { ...opts, botPhoneId: opts.botPhoneId ?? cloud.phoneNumberId },
     );
+    adapter.ownPhoneNumberId = cloud.phoneNumberId;
+    return adapter;
   }
 
   /**
@@ -448,19 +458,39 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
    * sender allowlist refuses it or the group rule drops it. A refusal writes the same stderr line
    * `onInbound` writes.
    *
+   * An adapter built with `fromCloud` also drops a message addressed to another phone number id
+   * (one app may serve several numbers under one secret), naming that id on stderr once. An
+   * adapter built any other way has no Cloud number to compare and does not check it.
+   *
    * Pass the result to `deliver()`. Neither the backend nor the network is called.
    *
    * @public
    */
   toDeliverableEvent(inbound: WhatsAppInboundEvent): WhatsAppMessageEvent | undefined {
+    if (this.isForAnotherNumber(inbound)) return undefined;
     return decideInbound(inbound, this.rules);
+  }
+
+  /** Whether a Cloud adapter received a message addressed to a number that is not its own. */
+  private isForAnotherNumber(inbound: WhatsAppInboundEvent): boolean {
+    const own = this.ownPhoneNumberId;
+    if (own === undefined || inbound.phoneNumberId === own) return false;
+    const other = inbound.phoneNumberId ?? "(none)";
+    if (!this.reportedForeignNumbers.has(other)) {
+      this.reportedForeignNumbers.add(other);
+      process.stderr.write(
+        `[whatsapp] dropped inbound addressed to phone number id "${other}": this adapter answers for "${own}". Logged once per id.\n`,
+      );
+    }
+    return true;
   }
 
   /**
    * The events of one Meta Cloud webhook envelope that may reach the agent, in envelope order, with
    * the sender allowlist and the group rule applied. Status receipts and non-text messages yield no
    * event, so a status-only envelope returns `[]`. Each refused or dropped message writes the
-   * same stderr line `onInbound` writes.
+   * same stderr line `onInbound` writes. On an adapter built with `fromCloud`, messages addressed
+   * to another `phone_number_id` are dropped (see `toDeliverableEvent`).
    *
    * The route that receives the webhook verifies `X-Hub-Signature-256` first (with
    * `verifyWebhookSignature`, or theokit's `whatsapp()` route validator); this method does not. Meta redelivers on timeout, and

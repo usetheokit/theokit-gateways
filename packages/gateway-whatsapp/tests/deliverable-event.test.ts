@@ -75,7 +75,7 @@ interface TextMessage {
   readonly body: string;
 }
 
-function envelopeOf(messages: readonly TextMessage[]): MetaWebhookEnvelope {
+function envelopeOf(messages: readonly TextMessage[], phoneNumberId = "PNID"): MetaWebhookEnvelope {
   const parsed = parseWebhookPayload({
     object: "whatsapp_business_account",
     entry: [
@@ -86,7 +86,7 @@ function envelopeOf(messages: readonly TextMessage[]): MetaWebhookEnvelope {
             field: "messages",
             value: {
               messaging_product: "whatsapp",
-              metadata: { display_phone_number: "15550000000", phone_number_id: "PNID" },
+              metadata: { display_phone_number: "15550000000", phone_number_id: phoneNumberId },
               contacts: messages.map((m) => ({
                 profile: { name: `name ${m.from}` },
                 wa_id: m.from,
@@ -284,6 +284,31 @@ describe("WhatsAppAdapter.toDeliverableEvents", () => {
     const result = await adapter.deliver(events[0] as (typeof events)[number]);
 
     expect(result).toBe("no_handler");
+  });
+});
+
+describe("WhatsAppAdapter.toDeliverableEvents and the envelope's phone number id", () => {
+  // Meta signs every number of one app with one app secret, so a valid signature does not say
+  // which number an envelope was addressed to. A Cloud adapter answers for its own number only.
+  it("drops a message addressed to another phone number id and says so on stderr", () => {
+    const adapter = WhatsAppAdapter.fromCloud(CLOUD);
+
+    const events = adapter.toDeliverableEvents(
+      envelopeOf([{ from: "5511999999999", id: "wamid.1", body: "hello" }], "OTHER"),
+    );
+
+    expect(events).toEqual([]);
+    expect(stderrLines.filter((line) => line.includes('phone number id "OTHER"'))).toHaveLength(1);
+  });
+
+  it("keeps the envelope's phone number id on the event of an adapter with no Cloud number", () => {
+    const adapter = new WhatsAppAdapter(new FakeBackend());
+
+    const events = adapter.toDeliverableEvents(
+      envelopeOf([{ from: "5511999999999", id: "wamid.1", body: "hello" }], "OTHER"),
+    );
+
+    expect(events.map((e) => e.whatsapp.phoneNumberId)).toEqual(["OTHER"]);
   });
 });
 
