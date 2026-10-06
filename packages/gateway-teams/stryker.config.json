@@ -7,7 +7,7 @@
     "related": false
   },
   "reporters": ["json", "html", "clear-text", "progress"],
-  "mutate": ["src/normalize.ts", "src/split.ts", "src/errors.ts"],
+  "mutate": ["src/normalize.ts", "src/split.ts", "src/errors.ts", "src/verified-claims.ts"],
   "concurrency": 2,
   "coverageAnalysis": "perTest",
   "disableTypeChecks": true,
