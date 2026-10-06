@@ -36,7 +36,11 @@ describe("a token for another app", () => {
   it("refuses it as audience_mismatch through an accepting validator", async () => {
     ks = await startKeyServer();
     const { module } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: module });
+    const verify = teamsActivityVerifier({
+      clientId: CLIENT_ID,
+      cloud: ks.cloud,
+      __validatorModule: module,
+    });
     const token = signFixture(ks, F7_BF_OTHER_APP.claims);
 
     const res = await verify(activityRequest(token));

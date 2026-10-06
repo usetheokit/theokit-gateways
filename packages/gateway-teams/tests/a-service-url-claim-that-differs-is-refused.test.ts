@@ -44,6 +44,7 @@ describe("a service url claim that differs", () => {
     const tenant = fixture.tenantId === undefined ? {} : { tenantId: fixture.tenantId };
     const verify = teamsActivityVerifier({
       clientId: CLIENT_ID,
+      cloud: ks.cloud,
       __validatorModule: module,
       ...tenant,
     });

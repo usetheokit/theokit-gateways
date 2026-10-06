@@ -4,8 +4,6 @@
  * claims. Anything less is a typed refusal, never an exception and never an acceptance.
  */
 
-import { Buffer } from "node:buffer";
-
 import { afterEach, describe, expect, it } from "vitest";
 
 import { teamsActivityVerifier } from "../src/index.js";
@@ -31,11 +29,15 @@ describe("an SDK answer the verifier cannot confirm", () => {
   });
 
   it("refuses as invalid_token when the SDK accepts a token whose payload does not decode", async () => {
+    ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: module });
-    const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "k1" })).toString("base64url");
+    const verify = teamsActivityVerifier({
+      clientId: CLIENT_ID,
+      cloud: ks.cloud,
+      __validatorModule: module,
+    });
 
-    const res = await verify(activityRequest(`${header}.!!!.c`));
+    const res = await verify(activityRequest(ks.signRawPayload("!!!")));
 
     expect(res).toMatchObject({ ok: false, reason: "invalid_token" });
     expect(calls.check).toBe(1);
@@ -49,6 +51,7 @@ describe("an SDK answer the verifier cannot confirm", () => {
     ks = await startKeyServer();
     const verify = teamsActivityVerifier({
       clientId: CLIENT_ID,
+      cloud: ks.cloud,
       __validatorModule: resolvingValidatorModule(result),
     });
 

@@ -31,7 +31,7 @@ describe("the Teams SDK load", () => {
     });
     const { teamsActivityVerifier } = await import("../src/index.js");
 
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID });
+    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud });
     expect(imports).toBe(0);
 
     const r1 = await verify(activityRequest(ks.signToken({})));
@@ -49,7 +49,7 @@ describe("the Teams SDK load", () => {
       throw new Error("Cannot find module '@microsoft/teams.apps'");
     });
     const { teamsActivityVerifier } = await import("../src/index.js");
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID });
+    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud });
 
     const res = await verify(activityRequest(ks.signToken({})));
 

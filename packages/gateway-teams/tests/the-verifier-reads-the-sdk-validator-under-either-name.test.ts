@@ -33,6 +33,7 @@ describe("the SDK validator", () => {
     const service = { n: 0 };
     const verify = teamsActivityVerifier({
       clientId: CLIENT_ID,
+      cloud: ks.cloud,
       __validatorModule: {
         InboundActivityTokenValidator: countingClass(inbound),
         ServiceTokenValidator: countingClass(service),
@@ -51,6 +52,7 @@ describe("the SDK validator", () => {
     const service = { n: 0 };
     const verify = teamsActivityVerifier({
       clientId: CLIENT_ID,
+      cloud: ks.cloud,
       __validatorModule: { default: { ServiceTokenValidator: countingClass(service) } },
     });
 
@@ -62,7 +64,11 @@ describe("the SDK validator", () => {
 
   it("refuses every request as validator_unavailable when the SDK exports neither", async () => {
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: {} });
+    const verify = teamsActivityVerifier({
+      clientId: CLIENT_ID,
+      cloud: ks.cloud,
+      __validatorModule: {},
+    });
 
     const r1 = await verify(activityRequest(ks.signToken({})));
     const r2 = await verify(activityRequest(ks.signToken({})));
@@ -83,6 +89,7 @@ describe("the SDK validator", () => {
     const res = await verify(activityRequest(ks.signToken({})));
 
     expect(res).toMatchObject({ ok: true, token: { appId: CLIENT_ID, serviceUrl: SERVICE_URL } });
-    expect(ks.hits()).toBe(1);
+    // One read by the verifier, one by the SDK's own key client: the SDK was really asked.
+    expect(ks.hits()).toBe(2);
   });
 });

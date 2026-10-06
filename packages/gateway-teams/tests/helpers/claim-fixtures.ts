@@ -20,9 +20,9 @@ export const OTHER_TENANT = "22222222-2222-2222-2222-222222222222";
 export const OTHER_APP = "00000000-0000-0000-0000-0000000000ff";
 
 /**
- * The public Entra login endpoint: the verifier's default for recognising tenant-issued tokens when
- * no `cloud` is configured. The key server's test cloud names a different one, so a test that wants
- * F3, F4 or F6 recognised as tenant-issued configures no `cloud`.
+ * The public Entra login endpoint, as the fixtures write it. {@link signFixture} rewrites it to the
+ * key server's own `loginEndpoint`, so a verifier built with the key server's cloud recognises F3,
+ * F4 and F6 as tenant-issued and reads the configured tenant's key set from the key server.
  */
 export const ENTRA_LOGIN = "https://login.microsoftonline.com";
 
@@ -114,9 +114,16 @@ export const ONE_VIOLATION_FIXTURES: readonly ClaimFixture[] = [
   F7_BF_OTHER_APP,
 ];
 
-/** Sign `claims` with the key server; `BF` resolves to its issuer, and absent default claims stay absent. */
+/**
+ * Sign `claims` with the key server; `BF` resolves to its issuer, an {@link ENTRA_LOGIN} issuer moves
+ * to the key server's `loginEndpoint`, and absent default claims stay absent.
+ */
 export function signFixture(ks: KeyServer, claims: Readonly<Record<string, unknown>>): string {
-  return ks.signToken({ serviceurl: undefined, ...issuerFor(claims, ks.cloud.tokenIssuer) });
+  const resolved = issuerFor(claims, ks.cloud.tokenIssuer);
+  if (typeof resolved.iss === "string" && resolved.iss.startsWith(ENTRA_LOGIN)) {
+    resolved.iss = `${ks.cloud.loginEndpoint}${resolved.iss.slice(ENTRA_LOGIN.length)}`;
+  }
+  return ks.signToken({ serviceurl: undefined, ...resolved });
 }
 
 /** A POST the connector would send: a bearer token (when given) and a JSON body. */

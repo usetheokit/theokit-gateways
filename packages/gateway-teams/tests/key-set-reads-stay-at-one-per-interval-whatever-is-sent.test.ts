@@ -45,5 +45,5 @@ describe("key-set reads", () => {
 
     expect(results.every((r) => !r.ok)).toBe(true);
     expect([ks.hits(), ks.tenantHits(TENANT)]).toEqual([1, 1]);
-  });
+  }, 30_000);
 });

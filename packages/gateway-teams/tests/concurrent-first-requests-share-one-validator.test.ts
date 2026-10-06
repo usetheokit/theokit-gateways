@@ -20,7 +20,11 @@ describe("concurrent first requests", () => {
   it("builds one validator for five concurrent first requests", async () => {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule({ holdUntil: 5 });
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: module });
+    const verify = teamsActivityVerifier({
+      clientId: CLIENT_ID,
+      cloud: ks.cloud,
+      __validatorModule: module,
+    });
     const token = ks.signToken({});
 
     const results = await Promise.all(

@@ -125,11 +125,20 @@ export function decodeVerifiedClaims(rawToken: string): Record<string, unknown> 
 
 /**
  * The `kid` of a token's JOSE header, read WITHOUT verifying anything: the sender chose it. Used
- * only to decide whether the SDK may be asked about the token, never as evidence about it.
+ * only to find the published key the signature must verify under, never as evidence about it.
  */
 export function readTokenKeyId(rawToken: string): string | undefined {
   const kid = decodeSegment(rawToken, 0)?.kid;
   return typeof kid === "string" && kid.length > 0 ? kid : undefined;
+}
+
+/**
+ * The `alg` of a token's JOSE header, read WITHOUT verifying anything. The verifier checks a
+ * signature itself only when this is `RS256`, the one algorithm the Teams SDK accepts.
+ */
+export function readTokenAlgorithm(rawToken: string): string | undefined {
+  const alg = decodeSegment(rawToken, 0)?.alg;
+  return typeof alg === "string" ? alg : undefined;
 }
 
 /** One base64url JSON object segment of a three-segment JWT, or `undefined`. */
@@ -182,7 +191,8 @@ function checkTenant(
 /**
  * Whether a token's UNVERIFIED `iss` is an Entra issuer: the tokens SDK 2.1.x checks against the
  * key set of the tenant their unverified `tid` names, rather than against the Bot Framework one.
- * Read without verifying anything; used only to decide whether the SDK may be asked.
+ * Read without verifying anything; used only to choose the key set the verifier checks the
+ * signature against, and whether the SDK may be asked.
  */
 export function isTenantIssuedToken(rawToken: string, loginEndpoint: string): boolean {
   return isTenantIssued(decodeSegment(rawToken, 1)?.iss, loginEndpoint);

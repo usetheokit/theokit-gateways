@@ -1,16 +1,19 @@
 /**
- * `teamsActivityVerifier`: refuse an inbound Teams activity on an app's own HTTP route unless the
- * Microsoft SDK validated its token and the token's `aud`, `serviceurl` and `tid` claims match this
- * app (ADR-0003).
+ * `teamsActivityVerifier`: refuse an inbound Teams activity on an app's own HTTP route unless its
+ * RS256 signature verifies under a published key, the Microsoft SDK validated its token, and the
+ * token's `aud`, `serviceurl` and `tid` claims match this app (ADR-0003, ADR-0005).
  *
- * The signature, key-set and expiry work belongs to the SDK's own inbound validator, which the SDK
- * root does not export: it is read from `@microsoft/teams.apps/dist/middleware/index.js`, as
- * `InboundActivityTokenValidator` (2.1.x) or `ServiceTokenValidator` (2.0.x). The claim checks run
- * after it on both, because that validator alone restricts no tenant on the Bot Framework path and
- * compares no `serviceurl` on the 2.1.x Entra path.
+ * The verifier reads the published key sets itself and checks the signature before the SDK is
+ * asked, so the timing of every key-set request is decided here rather than by the SDK's private
+ * key cache (ADR-0005). Issuer, audience, expiry and `serviceurl` stay the SDK validator's, which
+ * the SDK root does not export: it is read from `@microsoft/teams.apps/dist/middleware/index.js`,
+ * as `InboundActivityTokenValidator` (2.1.x) or `ServiceTokenValidator` (2.0.x). The claim checks
+ * run after it on both, because that validator alone restricts no tenant on the Bot Framework path
+ * and compares no `serviceurl` on the 2.1.x Entra path.
  */
 
 import { Buffer } from "node:buffer";
+import { createPublicKey, type JsonWebKey, type KeyObject, verify } from "node:crypto";
 
 import {
   assertVerifierOptions,
@@ -21,6 +24,7 @@ import {
   type ParsedBody,
   parseActivityBody,
   readBearerToken,
+  readTokenAlgorithm,
   readTokenKeyId,
   tenantRefusalBeforeVerification,
 } from "./verified-claims.js";
@@ -36,7 +40,7 @@ export interface TeamsCloudEndpoints {
   readonly loginEndpoint: string;
   /** The Bot Framework token issuer, e.g. `https://api.botframework.com`. */
   readonly tokenIssuer: string;
-  /** The OpenID metadata URL; the SDK derives the key-set URL from it. */
+  /** The OpenID metadata URL; the SDK and the verifier derive the Bot Framework key-set URL from it. */
   readonly openIdMetadataUrl: string;
 }
 
@@ -80,6 +84,7 @@ export type TeamsActivityVerifyResult =
         | "malformed_body"
         | "validator_unavailable"
         | "invalid_token"
+        | "key_set_unavailable"
         | "audience_mismatch"
         | "serviceurl_mismatch"
         | "tenant_mismatch"
@@ -107,6 +112,8 @@ const MESSAGES: Readonly<Record<RefusalReason, string>> = {
   validator_unavailable: "the Teams SDK token validator could not be loaded",
   invalid_token:
     "the Teams SDK did not accept the token (bad signature, unknown key, wrong audience or issuer, expired, or a serviceurl it compared and found different)",
+  key_set_unavailable:
+    "the published signing keys could not be read, so the token's signature could not be checked; a retry may succeed",
   audience_mismatch: "the token's aud claim is not this bot's app id",
   serviceurl_mismatch:
     "the token's serviceurl claim is absent or differs from the activity's serviceUrl",
@@ -247,17 +254,20 @@ async function loadValidator(options: TeamsActivityVerifierOptions): Promise<Loa
  */
 const MAX_BODY_BYTES = 1024 * 1024;
 
-/** The body as text, or `undefined` once it passes {@link MAX_BODY_BYTES}. Reads no further. */
-async function readBoundedText(request: Request): Promise<string | undefined> {
-  if (request.body === null) return "";
-  const reader = request.body.getReader();
+/** A stream as text, or `undefined` once it passes `maxBytes`. Reads no further. */
+async function readBoundedStream(
+  body: ReadableStream<Uint8Array> | null,
+  maxBytes: number,
+): Promise<string | undefined> {
+  if (body === null) return "";
+  const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > MAX_BODY_BYTES) {
+    if (size > maxBytes) {
       await reader.cancel();
       return undefined;
     }
@@ -268,7 +278,7 @@ async function readBoundedText(request: Request): Promise<string | undefined> {
 
 async function readBody(request: Request): Promise<ParsedBody> {
   try {
-    const text = await readBoundedText(request);
+    const text = await readBoundedStream(request.body, MAX_BODY_BYTES);
     return text === undefined ? { ok: false, reason: "malformed_body" } : parseActivityBody(text);
   } catch {
     return { ok: false, reason: "malformed_body" };
@@ -310,62 +320,36 @@ async function sdkCheck(
   }
 }
 
+/** The least time between two reads of one key set, whatever asks for the read. */
+const KEY_SET_READ_INTERVAL_MS = 10_000;
+
 /**
- * How many tokens whose `kid` no accepted token used may reach the SDK per window. The SDK's
- * key-set client is built with its rate limit off and caches only keys it found, so each such token
- * is one key-set request, made before any signature check, for a value the sender chose. Ten per
- * minute is that client's own default request limit, the bound the SDK leaves off.
+ * The age at which a held key set is read again even though it lists the key asked for, so a key
+ * Microsoft retired stops verifying within this long. A proposal, not a measurement: the SDK's own
+ * key client, which still checks every token after this verifier, keeps a key for 10 minutes.
  */
-const UNKNOWN_KEY_CHECKS_PER_WINDOW = 10;
-const UNKNOWN_KEY_WINDOW_MS = 60_000;
+const KEY_SET_MAX_AGE_MS = 60 * 60 * 1000;
+
+/** How long one read of a key set may take before it counts as failed. */
+const KEY_SET_READ_TIMEOUT_MS = 10_000;
+
+/** The largest key-set document the verifier reads. Microsoft's is far smaller. */
+const MAX_KEY_SET_BYTES = 1024 * 1024;
+
+/** The most keys one key-set document may list; a document listing more is a failed read. */
+const MAX_KEYS_PER_SET = 1000;
 
 const NO_KEY_ID =
   "the token is not a JWT whose header names its signing key (a non-empty string kid), so the Teams SDK was not asked";
 
+const NOT_RS256 =
+  "the token's header does not name RS256, the one algorithm the Teams SDK accepts, so the Teams SDK was not asked";
+
 const KEY_NOT_PUBLISHED =
-  "the token names a signing key that no accepted token used and that the Bot Framework key set, as last read, does not list; 10 such tokens already reached the Teams SDK this minute";
+  "the token names a signing key the published key set, as last read, does not list, so the Teams SDK was not asked";
 
-const TENANT_KEY_LIMITED =
-  "the tenant-issued token names a signing key that no accepted tenant-issued token used, and 10 tokens with such keys already reached the Teams SDK this minute";
-
-const KEY_SET_UNREADABLE =
-  "the token names a signing key that no accepted token used, 10 such tokens already reached the Teams SDK this minute, and the Bot Framework key set could not be read";
-
-/**
- * Which tokens may reach the SDK without consulting the published key set. A `kid` an accepted
- * token used always may; any other spends one of {@link UNKNOWN_KEY_CHECKS_PER_WINDOW} per fixed
- * window. Only a kid whose token the SDK accepted is learned.
- */
-function unknownKeyBudget(): {
-  admit(kid: string): boolean;
-  learn(kid: string): void;
-} {
-  const known = new Set<string>();
-  let windowStart = Number.NEGATIVE_INFINITY;
-  let used = 0;
-  return {
-    admit(kid) {
-      if (known.has(kid)) return true;
-      const now = Date.now();
-      if (now - windowStart >= UNKNOWN_KEY_WINDOW_MS) {
-        windowStart = now;
-        used = 0;
-      }
-      if (used >= UNKNOWN_KEY_CHECKS_PER_WINDOW) return false;
-      used += 1;
-      return true;
-    },
-    learn(kid) {
-      known.add(kid);
-    },
-  };
-}
-
-/** The longest the verifier waits between two reads of the published key set. */
-const KEY_SET_READ_INTERVAL_MS = 10_000;
-
-/** How long one read of the published key set may take before it counts as failed. */
-const KEY_SET_READ_TIMEOUT_MS = 10_000;
+const BAD_SIGNATURE =
+  "the token's RS256 signature does not verify against the published key it names, so the Teams SDK was not asked";
 
 /**
  * The key-set URL the SDK validator derives from the cloud's OpenID metadata URL: both 2.0.15 and
@@ -377,111 +361,167 @@ function keySetUrl(cloud: TeamsCloudEndpoints | undefined): string {
   return metadata.replace(/\/openidconfiguration$/, "/keys");
 }
 
-/** The `kid` of every key in a key-set document, or `undefined` when it is not one. */
-function listedKeyIds(document: unknown): Set<string> | undefined {
-  const keys = (document as { keys?: unknown } | null)?.keys;
-  if (!Array.isArray(keys)) return undefined;
-  const kids = new Set<string>();
-  for (const key of keys) {
-    const kid = (key as { kid?: unknown } | null)?.kid;
-    if (typeof kid === "string" && kid.length > 0) kids.add(kid);
-  }
-  return kids;
+/** The key-set URL SDK 2.1.x derives for a tenant-issued token naming `tenantId`. */
+function tenantKeySetUrl(loginEndpoint: string, tenantId: string): string {
+  return `${loginEndpoint}/${tenantId}/discovery/v2.0/keys`;
 }
 
-/** Fetch the key set's kids, or `undefined` for any failure: network, status, timeout or shape. */
-async function readKeySet(url: string): Promise<Set<string> | undefined> {
+/** An RSA public key from one key-set entry, or `undefined` when the entry holds none. */
+function rsaPublicKey(
+  entry: unknown,
+): { readonly kid: string; readonly publicKey: KeyObject } | undefined {
+  const kid = (entry as { kid?: unknown } | null)?.kid;
+  if (typeof kid !== "string" || kid.length === 0) return undefined;
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(KEY_SET_READ_TIMEOUT_MS) });
-    return response.ok ? listedKeyIds(await response.json()) : undefined;
+    const publicKey = createPublicKey({ key: entry as JsonWebKey, format: "jwk" });
+    return publicKey.asymmetricKeyType === "rsa" ? { kid, publicKey } : undefined;
   } catch {
     return undefined;
   }
 }
 
 /**
- * Whether the published key set lists a `kid`, consulted only once the unknown-key budget is
- * spent. The set is read again when a kid is missing from it, at most once per
- * {@link KEY_SET_READ_INTERVAL_MS}; concurrent lookups share one read, and a failed read keeps the
- * last set that was read. So a sender inventing kids costs at most one request per interval, and a
- * genuine key is admitted on the first read after Microsoft publishes it, whatever else was sent.
+ * The RSA keys of a key-set document by `kid`, or `undefined` when it is not one: no `keys` array,
+ * or more than {@link MAX_KEYS_PER_SET} entries. An entry with no usable RSA key is skipped.
  */
-function publishedKeySet(url: string): {
-  lists(kid: string): Promise<"listed" | "unlisted" | "unreadable">;
-} {
-  let kids = new Set<string>();
-  let lastRead = Number.NEGATIVE_INFINITY;
+function publishedKeys(document: unknown): Map<string, KeyObject> | undefined {
+  const entries = (document as { keys?: unknown } | null)?.keys;
+  if (!Array.isArray(entries) || entries.length > MAX_KEYS_PER_SET) return undefined;
+  const found = new Map<string, KeyObject>();
+  for (const entry of entries) {
+    const usable = rsaPublicKey(entry);
+    if (usable !== undefined) found.set(usable.kid, usable.publicKey);
+  }
+  return found;
+}
+
+/** Fetch a key set, or `undefined` for any failure: network, status, timeout, size or shape. */
+async function readKeySet(url: string): Promise<Map<string, KeyObject> | undefined> {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(KEY_SET_READ_TIMEOUT_MS) });
+    if (!response.ok) {
+      await response.body?.cancel();
+      return undefined;
+    }
+    const text = await readBoundedStream(response.body, MAX_KEY_SET_BYTES);
+    return text === undefined ? undefined : publishedKeys(JSON.parse(text));
+  } catch {
+    return undefined;
+  }
+}
+
+/** What a key set answers for a `kid`. */
+type KeyLookup = KeyObject | "unlisted" | "unavailable";
+
+/**
+ * One published key set, read by this verifier and nothing else. A read happens when there is no
+ * copy, when the copy lacks the `kid` asked for, or when the copy is older than
+ * {@link KEY_SET_MAX_AGE_MS}; never twice within {@link KEY_SET_READ_INTERVAL_MS}, whatever asked,
+ * and concurrent lookups share one read. A successful read replaces the copy, so a retired key is
+ * gone after it; a failed read keeps the last good copy. A `kid` missing after a successful read is
+ * `unlisted`; one missing when there is no copy, or when the latest read failed, is `unavailable`.
+ */
+function keySet(url: string): { lookup(kid: string): Promise<KeyLookup> } {
+  let held: Map<string, KeyObject> | undefined;
+  let readAt = Number.NEGATIVE_INFINITY;
+  let lastAttempt = Number.NEGATIVE_INFINITY;
   let lastReadFailed = false;
   let reading: Promise<void> | undefined;
   const read = async (): Promise<void> => {
     const fresh = await readKeySet(url);
     lastReadFailed = fresh === undefined;
-    if (fresh !== undefined) kids = fresh;
+    if (fresh !== undefined) {
+      held = fresh;
+      readAt = Date.now();
+    }
+  };
+  const needsRead = (kid: string, now: number): boolean =>
+    held === undefined || !held.has(kid) || now - readAt >= KEY_SET_MAX_AGE_MS;
+  /** The read in flight, started now if none is and the interval allows one. */
+  const currentRead = (now: number): Promise<void> | undefined => {
+    if (reading === undefined && now - lastAttempt >= KEY_SET_READ_INTERVAL_MS) {
+      lastAttempt = now;
+      reading = read().finally(() => {
+        reading = undefined;
+      });
+    }
+    return reading;
   };
   return {
-    async lists(kid) {
-      if (kids.has(kid)) return "listed";
+    async lookup(kid) {
       const now = Date.now();
-      if (reading === undefined && now - lastRead >= KEY_SET_READ_INTERVAL_MS) {
-        lastRead = now;
-        reading = read().finally(() => {
-          reading = undefined;
-        });
-      }
-      await reading;
-      if (kids.has(kid)) return "listed";
-      return lastReadFailed ? "unreadable" : "unlisted";
+      if (needsRead(kid, now)) await currentRead(now);
+      const found = held?.get(kid);
+      if (found !== undefined) return found;
+      return held === undefined || lastReadFailed ? "unavailable" : "unlisted";
     },
   };
 }
 
+/** Whether `rawToken`'s RS256 signature verifies under `publicKey`. Never throws. */
+function verifiesRs256(rawToken: string, publicKey: KeyObject): boolean {
+  const [header, payload, signature] = rawToken.split(".");
+  if (header === undefined || payload === undefined || signature === undefined) return false;
+  try {
+    return verify(
+      "RSA-SHA256",
+      Buffer.from(`${header}.${payload}`),
+      publicKey,
+      Buffer.from(signature, "base64url"),
+    );
+  } catch {
+    return false;
+  }
+}
+
 type ReadableActivity = Extract<ParsedBody, { ok: true }>;
-type KeyBudget = ReturnType<typeof unknownKeyBudget> & {
-  readonly published: ReturnType<typeof publishedKeySet>;
-};
+
+/** The key sets a verifier reads: Bot Framework always, the tenant's only when one is configured. */
+interface KeySets {
+  readonly botFramework: ReturnType<typeof keySet>;
+  readonly tenant: ReturnType<typeof keySet> | undefined;
+}
 
 type TenantExpectation = Pick<ExpectedClaims, "tenantId" | "loginEndpoint">;
 
 /**
- * Whether the SDK may be asked about this token, and under which key the budget knows its `kid`;
- * or the refusal that needs no SDK work. Refused before the SDK: a token with no `kid` (the SDK's
- * key client would fetch the key set for it, and no genuine token omits it); a tenant-issued token
- * whose unverified tenant this verifier would refuse anyway (on 2.1.x it would make the SDK fetch
- * the key set of whichever tenant it names); and a token whose `kid` is unknown once the budget is
- * spent, unless it is a Bot Framework token whose `kid` the published key set lists. A
- * tenant-issued token's `kid` is learned apart from Bot Framework ones, because on 2.1.x the SDK
- * resolves it against a different key set.
+ * Whether the SDK may be asked about this token, or the refusal that needs no SDK work. In order:
+ * a token with no `kid` (no genuine token omits it); a tenant-issued token whose unverified tenant
+ * this verifier would refuse anyway; a header naming anything but RS256; a `kid` the matching key
+ * set does not list (`key_set_unavailable` when the set could not be read); and a signature that
+ * does not verify under the listed key. The key set is chosen by the unverified `iss`: an Entra
+ * issuer is checked against the configured tenant's set, anything else against Bot Framework's.
  */
 async function admitToSdk(
   rawToken: string,
-  budget: KeyBudget,
+  keySets: KeySets,
   expected: TenantExpectation,
-): Promise<{ readonly budgetKey: string } | Refusal> {
+): Promise<Refusal | undefined> {
   const kid = readTokenKeyId(rawToken);
   if (kid === undefined) return refuse("invalid_token", NO_KEY_ID);
   const tenantRefusal = tenantRefusalBeforeVerification(rawToken, expected);
   if (tenantRefusal !== undefined) return refuse(tenantRefusal);
-  const tenantIssued = isTenantIssuedToken(rawToken, expected.loginEndpoint);
-  const budgetKey = `${tenantIssued ? "tenant" : "botframework"} ${kid}`;
-  if (budget.admit(budgetKey)) return { budgetKey };
-  if (tenantIssued) return refuse("invalid_token", TENANT_KEY_LIMITED);
-  const listing = await budget.published.lists(kid);
-  if (listing === "listed") return { budgetKey };
-  return refuse("invalid_token", listing === "unreadable" ? KEY_SET_UNREADABLE : KEY_NOT_PUBLISHED);
+  const set = isTenantIssuedToken(rawToken, expected.loginEndpoint)
+    ? keySets.tenant
+    : keySets.botFramework;
+  if (set === undefined) return refuse("tenant_unverified");
+  if (readTokenAlgorithm(rawToken) !== "RS256") return refuse("invalid_token", NOT_RS256);
+  const listed = await set.lookup(kid);
+  if (listed === "unavailable") return refuse("key_set_unavailable");
+  if (listed === "unlisted") return refuse("invalid_token", KEY_NOT_PUBLISHED);
+  return verifiesRs256(rawToken, listed) ? undefined : refuse("invalid_token", BAD_SIGNATURE);
 }
 
-/** {@link sdkCheck} for a token {@link admitToSdk} admitted; a key the SDK accepted is learned. */
-async function budgetedSdkCheck(
+/** {@link sdkCheck} for a token whose signature {@link admitToSdk} verified. */
+async function gatedSdkCheck(
   validator: TokenValidatorLike,
-  budget: KeyBudget,
+  keySets: KeySets,
   read: { readonly header: string; readonly rawToken: string; readonly body: ReadableActivity },
   expected: TenantExpectation,
 ): Promise<ResolvedToken | Refusal | undefined> {
-  const admission = await admitToSdk(read.rawToken, budget, expected);
-  if ("reason" in admission) return admission;
-  const token = await sdkCheck(validator, read.header, read.body.activity);
-  if (token !== undefined && !("reason" in token)) budget.learn(admission.budgetKey);
-  return token;
+  const refusal = await admitToSdk(read.rawToken, keySets, expected);
+  if (refusal !== undefined) return refusal;
+  return sdkCheck(validator, read.header, read.body.activity);
 }
 
 /** The header, its token and the parsed body, or the refusal that needs no SDK work. */
@@ -515,17 +555,21 @@ function judgeVerifiedToken(
  * `clone()` if the body is needed afterwards) and answers with {@link TeamsActivityVerifyResult}.
  * It reads at most 1 MiB of body: a larger one is `malformed_body`, refused before any token work.
  *
- * It accepts only when the SDK validator accepted the token AND the token's `aud`, `serviceurl`
- * and tenant claims match this configuration; it never throws for a request. The SDK is imported
- * on the first request, once per verifier; a failed load is kept, so every later request refuses
- * as `validator_unavailable` until the verifier is rebuilt. A key-set outage reads as
- * `invalid_token`, the same as a forgery, and the next request retries. A token with no `kid` is
- * `invalid_token` before the SDK, and so is a tenant-issued token whose unverified tenant would
- * be refused (with that tenant reason). At most ten tokens a minute whose `kid` no accepted token used
- * reach the SDK; past that, only a `kid` the published Bot Framework key set lists does, and that
- * set is read at most once per 10 seconds, so a key Microsoft publishes is admitted within 10
- * seconds whatever else is sent. A kid an accepted token used is never limited. A `check()` that
- * fails with anything but the SDK's plain `Error` is `validator_unavailable`, naming its class.
+ * It accepts only when the token's RS256 signature verifies under a key the published key set
+ * lists, the SDK validator accepted the token, AND the token's `aud`, `serviceurl` and tenant
+ * claims match this configuration; it never throws for a request. The SDK is imported on the first
+ * request, once per verifier; a failed load is kept, so every later request refuses as
+ * `validator_unavailable` until the verifier is rebuilt.
+ *
+ * Before the SDK is asked, a token with no `kid` or whose header names anything but RS256 is
+ * `invalid_token`, and so is one whose signature does not verify; a tenant-issued token whose
+ * unverified tenant would be refused gets that tenant reason. The verifier reads the Bot Framework
+ * key set (and, with `tenantId`, that tenant's) itself: when it holds no copy, when the copy lacks
+ * the `kid`, or when the copy is an hour old, never twice in 10 seconds whatever is sent. A key
+ * Microsoft publishes is therefore accepted within 10 seconds. A key set that cannot be read and
+ * does not already list the `kid` is `key_set_unavailable`, which is retryable: answer it with a
+ * 503, not a 401. A `check()` that fails with anything but the SDK's plain `Error` is
+ * `validator_unavailable`, naming its class.
  *
  * @throws TypeError at construction for an empty `clientId`, an empty or multi-tenant `tenantId`,
  * or a `cloud` missing one of its three endpoints.
@@ -536,11 +580,17 @@ export function teamsActivityVerifier(
 ): (request: Request) => Promise<TeamsActivityVerifyResult> {
   assertVerifierOptions(options);
   let loaded: Promise<Loaded> | undefined;
-  const budget = { ...unknownKeyBudget(), published: publishedKeySet(keySetUrl(options.cloud)) };
   const expected = {
     clientId: options.clientId,
     tenantId: options.tenantId,
     loginEndpoint: options.cloud?.loginEndpoint ?? DEFAULT_LOGIN_ENDPOINT,
+  };
+  const keySets: KeySets = {
+    botFramework: keySet(keySetUrl(options.cloud)),
+    tenant:
+      options.tenantId === undefined
+        ? undefined
+        : keySet(tenantKeySetUrl(expected.loginEndpoint, options.tenantId)),
   };
 
   return async (request: Request): Promise<TeamsActivityVerifyResult> => {
@@ -551,7 +601,7 @@ export function teamsActivityVerifier(
     const load = await loaded;
     if ("unavailable" in load) return refuse("validator_unavailable", load.unavailable);
 
-    const token = await budgetedSdkCheck(load.validator, budget, read, expected);
+    const token = await gatedSdkCheck(load.validator, keySets, read, expected);
     if (token !== undefined && "reason" in token) return token;
     return judgeVerifiedToken(token, read.rawToken, read.body, expected);
   };

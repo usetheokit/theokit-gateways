@@ -27,7 +27,7 @@ describe("a token from another tenant", () => {
   });
 
   // F1 and F2 run on the installed SDK against the key server; F3 and F4 are Entra-issued tokens
-  // the 2.1.x SDK path accepts, reached through an accepting validator and the default cloud.
+  // the 2.1.x SDK path accepts, reached through an accepting validator and the key server's cloud.
   it.each([
     [
       "a Bot Framework token whose tid differs from the configured tenant",
@@ -47,7 +47,12 @@ describe("a token from another tenant", () => {
     const verify = teamsActivityVerifier(
       path === "sdk"
         ? { clientId: CLIENT_ID, cloud: ks.cloud, ...tenant }
-        : { clientId: CLIENT_ID, __validatorModule: acceptingValidatorModule().module, ...tenant },
+        : {
+            clientId: CLIENT_ID,
+            cloud: ks.cloud,
+            __validatorModule: acceptingValidatorModule().module,
+            ...tenant,
+          },
     );
     const token = signFixture(ks, fixture.claims);
 

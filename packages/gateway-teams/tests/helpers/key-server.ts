@@ -67,6 +67,13 @@ export interface KeyServer {
   signWithKid(kid: string, claims: Record<string, unknown>): string;
   /** Stop publishing the key whose id is `kid`, as Microsoft does when it retires one. */
   retire(kid: string): void;
+  /** The published key-set entries (public JWKs), oldest first. */
+  publishedJwks(): readonly Record<string, unknown>[];
+  /**
+   * A token whose payload segment is `payloadSegment` verbatim, signed with the current key under
+   * its `kid`: a signature that verifies over a payload that need not decode.
+   */
+  signRawPayload(payloadSegment: string): string;
   /** Answer the next `/keys` request with this status instead of the key set. */
   failNext(status: number): void;
   /** Answer the next `/keys` request with this JSON document instead of the key set. */
@@ -215,6 +222,11 @@ export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeySe
       const key = privateKeys.get(kid);
       if (key === undefined) throw new Error(`key server: no key with kid ${kid}`);
       return signWith(key, kid, buildClaims(cloud, claims, 600));
+    },
+    publishedJwks: () => published.map((jwk) => ({ ...jwk })),
+    signRawPayload: (payloadSegment) => {
+      const input = `${base64url({ alg: "RS256", typ: "JWT", kid: current.kid })}.${payloadSegment}`;
+      return `${input}.${sign("sha256", Buffer.from(input), current.privateKey).toString("base64url")}`;
     },
     retire: (kid) => {
       published = published.filter((jwk) => jwk.kid !== kid);

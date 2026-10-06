@@ -40,6 +40,7 @@ describe("a validator that breaks while checking", () => {
       ks = await startKeyServer();
       const verify = teamsActivityVerifier({
         clientId: CLIENT_ID,
+        cloud: ks.cloud,
         __validatorModule: throwingValidatorModule(thrown),
       });
 
@@ -55,6 +56,7 @@ describe("a validator that breaks while checking", () => {
     ks = await startKeyServer();
     const verify = teamsActivityVerifier({
       clientId: CLIENT_ID,
+      cloud: ks.cloud,
       __validatorModule: throwingValidatorModule(new Error("Invalid token")),
     });
 
