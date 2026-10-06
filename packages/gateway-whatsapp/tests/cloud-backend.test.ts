@@ -537,3 +537,20 @@ describe("WhatsAppCloudBackend.sendTemplate — the method the contract cannot r
     expect(body.to, "the template went to a different number").toBe("5511999999999");
   });
 });
+
+describe("WhatsAppCloudBackend with an empty app secret", () => {
+  it("refuses an inbound webhook with ConfigurationError instead of accepting an empty-key signature", async () => {
+    const b = new WhatsAppCloudBackend({
+      accessToken: "t",
+      phoneNumberId: "PNID",
+      appSecret: "",
+      fetch: makeFetchOk(),
+    });
+    const forged = `sha256=${crypto.createHmac("sha256", "").update(TEXT_ENVELOPE).digest("hex")}`;
+
+    await expect(b.handleWebhookPayload(TEXT_ENVELOPE, forged)).rejects.toMatchObject({
+      name: "ConfigurationError",
+      code: "missing_option",
+    });
+  });
+});

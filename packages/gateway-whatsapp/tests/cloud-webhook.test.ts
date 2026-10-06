@@ -14,6 +14,7 @@ import {
   verifyWebhookSignature,
   verifyWebhookSubscription,
 } from "../src/backend/cloud/webhook.js";
+import { ConfigurationError } from "../src/errors.js";
 
 const APP_SECRET = "test-app-secret";
 
@@ -229,4 +230,24 @@ describe("parseWebhookPayload + normalize (T2.2)", () => {
     expect(parseWebhookPayload({ random: "junk" })).toBeNull();
     expect(parseWebhookPayload("string")).toBeNull();
   });
+});
+
+describe("verifyWebhookSignature with an empty app secret", () => {
+  // An HMAC under an empty key is computable by anyone, so a match proves nothing about Meta.
+  it.each([
+    ["empty", ""],
+    ["whitespace only", "  \t"],
+  ])(
+    "throws ConfigurationError missing_option when the secret is %s, even on a matching signature",
+    (_, secret) => {
+      const body = '{"a":1}';
+      const forged = signedHeader(body, secret);
+
+      const call = () => verifyWebhookSignature(body, forged, secret);
+
+      expect(call).toThrow(ConfigurationError);
+      expect(call).toThrow(expect.objectContaining({ code: "missing_option" }));
+      expect(call).toThrow(/appSecret .*must not be empty/);
+    },
+  );
 });

@@ -56,8 +56,10 @@ export interface WhatsAppCloudConfig {
    * @platform-term Meta calls this an **app secret** — note it belongs to the Meta app, not to the
    * WhatsApp Business account, which is why it is issued somewhere different from the access token
    * above. It signs inbound payloads and never
-   * authenticates outbound calls, which is why it is optional: an adapter that only sends does
-   * not need it.
+   * authenticates outbound calls, which is why it may be empty: an adapter that only sends does
+   * not need it. Verifying a webhook needs it: `verifyWebhookSignature` throws
+   * `ConfigurationError` for an empty or whitespace-only secret, because anyone can compute an
+   * HMAC under an empty key.
    * @issued-at Meta for Developers, under the app's Settings → Basic.
    */
   readonly appSecret: string;

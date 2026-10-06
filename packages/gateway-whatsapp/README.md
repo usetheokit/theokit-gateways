@@ -23,7 +23,7 @@ import {
   WhatsAppAdapter,
 } from "@theokit/gateway-whatsapp";
 
-// cloud: { accessToken, phoneNumberId, appSecret }; handleMessage: your agent's handler.
+// cloud: { accessToken, phoneNumberId, appSecret }, appSecret non-empty; handleMessage: your agent's handler.
 const adapter = WhatsAppAdapter.fromCloud(cloud, { allowedSenders: process.env.WHATSAPP_ALLOWED });
 adapter.onInbound(handleMessage);
 // In-process only: a route served by several instances needs a shared store for this.
@@ -51,7 +51,11 @@ async function onWebhook(rawBody: string, signature: string | undefined): Promis
 }
 ```
 
-The signature check is the route's job: `toDeliverableEvents` does not do it. `theokit/server/webhook`
+The signature check is the route's job: `toDeliverableEvents` does not do it. It needs the Meta
+app secret: `fromCloud` accepts an empty `appSecret` for an adapter that only sends, but
+`verifyWebhookSignature` throws `ConfigurationError` (`missing_option`) for an empty or
+whitespace-only one, because anyone can compute an HMAC under an empty key. Pass the real secret
+to any adapter that receives webhooks. `theokit/server/webhook`
 exports `whatsapp()` and `whatsappSubscribe()` for the signature and the GET handshake. The method
 applies `allowedSenders` and the group rule exactly as `onInbound` does, so a refused sender yields
 no event and one line on stderr naming only the last four digits of the number. On an adapter built

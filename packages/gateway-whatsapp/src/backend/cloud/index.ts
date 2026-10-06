@@ -224,6 +224,8 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
    *
    * @returns `true` if signature valid + dispatched (or empty payload).
    *          `false` if signature invalid (route should return 401).
+   * @throws {ConfigurationError} `missing_option` when this backend's `appSecret` is empty or
+   *         whitespace only: a signature under an empty key proves nothing.
    */
   async handleWebhookPayload(
     rawBody: Buffer | string,
