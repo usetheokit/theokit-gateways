@@ -20,6 +20,7 @@ import {
   parseWebhookPayload,
   WhatsAppAdapter,
   type WhatsAppAdapterCommonOptions,
+  WhatsAppCloudBackend,
 } from "../src/index.js";
 
 const REFUSAL_PREFIX = "[whatsapp] dropped inbound from a sender";
@@ -298,6 +299,17 @@ describe("WhatsAppAdapter.toDeliverableEvents and the envelope's phone number id
     );
 
     expect(events).toEqual([]);
+    expect(stderrLines.filter((line) => line.includes('phone number id "OTHER"'))).toHaveLength(1);
+  });
+
+  it("drops a foreign-number message on an adapter constructed around a Cloud backend", () => {
+    const adapter = new WhatsAppAdapter(new WhatsAppCloudBackend(CLOUD));
+
+    const foreign = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "OTHER" }));
+    const own = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "PNID" }));
+
+    expect(foreign).toBeUndefined();
+    expect(own?.whatsapp.phoneNumberId).toBe("PNID");
     expect(stderrLines.filter((line) => line.includes('phone number id "OTHER"'))).toHaveLength(1);
   });
 
