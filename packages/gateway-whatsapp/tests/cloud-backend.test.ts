@@ -554,3 +554,45 @@ describe("WhatsAppCloudBackend with an empty app secret", () => {
     });
   });
 });
+
+describe("WhatsAppCloudBackend webhook entrypoint, used without WhatsAppAdapter", () => {
+  // Meta signs every number of one app with one secret, and an app-level webhook URL receives
+  // every subscribed number. A route built on the backend alone must not hand number B's customer
+  // messages to the handler of a backend constructed for number A (B-421, review finding #75).
+  const envelopeFor = (phoneNumberId: string | undefined): string => {
+    const envelope = JSON.parse(TEXT_ENVELOPE);
+    const metadata = envelope.entry[0].changes[0].value.metadata;
+    if (phoneNumberId === undefined) delete metadata.phone_number_id;
+    else metadata.phone_number_id = phoneNumberId;
+    return JSON.stringify(envelope);
+  };
+
+  it("drops a signed message addressed to another phone number id of the same app", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const b = makeBackend();
+    const handler = vi.fn(async () => {});
+    b.onInbound(handler);
+    const body = envelopeFor("OTHER_PNID");
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect(ok).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+    expect(stderr.mock.calls.map((c) => String(c[0])).join("")).toContain('"OTHER_PNID"');
+    stderr.mockRestore();
+  });
+
+  it("drops a signed message that names no phone number id", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const b = makeBackend();
+    const handler = vi.fn(async () => {});
+    b.onInbound(handler);
+    const body = envelopeFor(undefined);
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect(ok).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+    stderr.mockRestore();
+  });
+});

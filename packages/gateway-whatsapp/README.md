@@ -65,7 +65,9 @@ applies `allowedSenders` and the group rule exactly as `onInbound` does, so a re
 no event and one line on stderr naming only the last four digits of the number. On an adapter built
 with `fromCloud`, or constructed around a `WhatsAppCloudBackend`, it also drops messages addressed to another `phone_number_id`: one Meta app signs
 every number's webhooks with the same secret, so a shared route must not hand one number's
-messages to another number's agent.
+messages to another number's agent. A route that calls `WhatsAppCloudBackend.handleWebhookPayload`
+directly, with no adapter, gets the same check: the backend's inbound handler receives only
+messages addressed to the backend's own `phoneNumberId`.
 
 Answer 200 only when every event returned `ok`. `no_handler` means nothing received the message,
 and `handler_threw` means your handler failed on it; a non-2xx makes Meta retry the whole envelope,

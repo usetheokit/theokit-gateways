@@ -6,7 +6,8 @@
  * numbers already reported, which the caller owns). `WhatsAppAdapter` holds the configuration and
  * passes it in; every adapter path that decides an inbound message goes through
  * `toDeliverableEvent`, which calls `isForAnotherNumber` and `decideInbound`, so there is one rule
- * set to keep.
+ * set to keep. `WhatsAppCloudBackend.handleWebhookPayload` calls `isForAnotherNumber` as well, so a
+ * route built on the backend alone is scoped to its number too.
  */
 
 import type { WhatsAppMessageEvent } from "@theokit/gateway";

@@ -22,8 +22,9 @@ import type {
   WhatsAppSendResult,
   WhatsAppStatusReceipt,
 } from "../../backend-types.js";
+import { isForAnotherNumber } from "../../inbound-rules.js";
 import { WhatsAppCloudClient } from "./client.js";
-import type { MetaTemplateComponent } from "./types.js";
+import type { MetaTemplateComponent, MetaWebhookEnvelope } from "./types.js";
 import {
   normalizeInboundMessages,
   normalizeStatusReceipts,
@@ -79,6 +80,8 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
    * this backend can refuse a signed message addressed to another number of the same app.
    */
   readonly phoneNumberId: string;
+  /** Phone number ids already named on stderr, so a misrouted number is reported once. */
+  private readonly reportedForeignNumbers = new Set<string>();
   private inboundHandler?: (event: WhatsAppInboundEvent) => Promise<void>;
   private statusHandler?: (receipt: WhatsAppStatusReceipt) => Promise<void>;
 
@@ -228,6 +231,12 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
    * Webhook entrypoint. The user calls this from inside their POST /webhook
    * route after `verifyWebhookSubscription` on GET.
    *
+   * Only messages addressed to this backend's `phoneNumberId` reach the inbound handler. Meta
+   * signs every number of one app with one secret and an app-level webhook URL receives every
+   * subscribed number, so a valid signature does not say which number a message was for; one for
+   * another number, or naming none, is dropped and its id written to stderr once
+   * (`isForAnotherNumber`, the rule `WhatsAppAdapter` applies too).
+   *
    * @returns `true` if signature valid + dispatched (or empty payload).
    *          `false` if signature invalid (route should return 401).
    * @throws {ConfigurationError} `missing_option` when this backend's `appSecret` is empty or
@@ -244,15 +253,21 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
     if (json === undefined) return false;
     const envelope = parseWebhookPayload(json);
     if (envelope === null) return true; // valid signature, unrecognized shape — nothing to dispatch
-    for (const event of normalizeInboundMessages(envelope)) {
-      if (this.inboundHandler === undefined) continue;
-      await this.dispatchContained(() => this.inboundHandler?.(event), "handler");
-    }
+    await this.dispatchInbound(envelope);
     for (const receipt of normalizeStatusReceipts(envelope)) {
       if (this.statusHandler === undefined) continue;
       await this.dispatchContained(() => this.statusHandler?.(receipt), "status handler");
     }
     return true;
+  }
+
+  /** Hand each message addressed to this backend's number to the inbound handler. */
+  private async dispatchInbound(envelope: MetaWebhookEnvelope): Promise<void> {
+    for (const event of normalizeInboundMessages(envelope)) {
+      if (this.inboundHandler === undefined) continue;
+      if (isForAnotherNumber(event, this.phoneNumberId, this.reportedForeignNumbers)) continue;
+      await this.dispatchContained(() => this.inboundHandler?.(event), "handler");
+    }
   }
 
   /**
