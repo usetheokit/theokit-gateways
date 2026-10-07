@@ -23,7 +23,8 @@ import {
   WhatsAppAdapter,
 } from "@theokit/gateway-whatsapp";
 
-// cloud: { accessToken, phoneNumberId, appSecret }, appSecret non-empty; handleMessage: your agent's handler.
+// cloud: { accessToken, phoneNumberId, appSecret }, appSecret non-empty; handleMessage: your agent's
+// handler; handleReceipt: what you do with a sent / delivered / read / failed receipt.
 const adapter = WhatsAppAdapter.fromCloud(cloud, { allowedSenders: process.env.WHATSAPP_ALLOWED });
 adapter.onInbound(handleMessage);
 // In-process only: a route served by several instances needs a shared store for this.
@@ -49,7 +50,8 @@ async function onWebhook(rawBody: string, signature: string | undefined): Promis
     }
   }
   for (const receipt of normalizeStatusReceipts(envelope)) {
-    // handle sent / delivered / read / failed here
+    if (receipt.phoneNumberId !== cloud.phoneNumberId) continue; // another number of the same app
+    await handleReceipt(receipt);
   }
   return 200;
 }
@@ -82,7 +84,10 @@ A handler slower than Meta's timeout should answer 200 first and hand the events
 
 Status receipts never reach `onStatusReceipt` on this path: that handler listens to the backend,
 and your route is what receives the webhook. Read them from the envelope with
-`normalizeStatusReceipts`, as above.
+`normalizeStatusReceipts`, as above, and skip any whose `phoneNumberId` is not your number: a
+receipt names the recipient's phone number, so another number's receipts are another tenant's
+customer data. `WhatsAppCloudBackend.handleWebhookPayload` applies the same rule before its status
+handler sees a receipt.
 
 `baileys` and `web` hold **their own socket** — there is no webhook to host, and messages reach
 `onInbound` once `connect()` resolves.

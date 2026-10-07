@@ -82,6 +82,14 @@ export interface WhatsAppStatusReceipt {
   readonly recipient: string;
   /** Receipt timestamp. */
   readonly timestamp: number;
+  /**
+   * Cloud only: the `phone_number_id` the receipt was addressed to, from the webhook's
+   * `metadata`. One Meta app signs every number's webhooks with one secret, so a route serving
+   * several numbers needs this to keep one number's receipts, and the recipient numbers they name,
+   * away from another number's handler. Absent on the web and Baileys backends, which serve one
+   * account each, and on a Cloud envelope that names no number.
+   */
+  readonly phoneNumberId?: string;
 }
 
 /**

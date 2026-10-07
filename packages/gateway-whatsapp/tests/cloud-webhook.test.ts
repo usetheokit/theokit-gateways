@@ -256,6 +256,40 @@ describe("parseWebhookPayload + normalize (T2.2)", () => {
     expect(receipts[1]!.status).toBe("read");
   });
 
+  it("carries the phone number id each status receipt was addressed to", () => {
+    const env = parseWebhookPayload({
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: "e",
+          changes: [
+            {
+              field: "messages",
+              value: {
+                messaging_product: "whatsapp",
+                metadata: { display_phone_number: "1", phone_number_id: "111" },
+                statuses: [{ id: "wamid.a", status: "sent", timestamp: "1", recipient_id: "5511" }],
+              },
+            },
+            {
+              field: "messages",
+              value: {
+                messaging_product: "whatsapp",
+                metadata: { display_phone_number: "2", phone_number_id: "222" },
+                statuses: [{ id: "wamid.b", status: "read", timestamp: "2", recipient_id: "5522" }],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const receipts = normalizeStatusReceipts(env!);
+    expect(receipts.map((r) => [r.wamid, r.phoneNumberId])).toEqual([
+      ["wamid.a", "111"],
+      ["wamid.b", "222"],
+    ]);
+  });
+
   it("returns null on unrecognized shape", () => {
     expect(parseWebhookPayload(null)).toBeNull();
     expect(parseWebhookPayload({ random: "junk" })).toBeNull();

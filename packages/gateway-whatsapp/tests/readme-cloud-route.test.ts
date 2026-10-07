@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 import type { WhatsAppMessageEvent } from "@theokit/gateway";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { WhatsAppStatusReceipt } from "../src/index.js";
+
 const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CLOUD = { accessToken: "t", phoneNumberId: "PNID", appSecret: "route-secret" } as const;
 
@@ -33,10 +35,12 @@ const tempDirs: string[] = [];
 
 /**
  * Load a fresh copy of the README route, so each test gets its own adapter and its own record of
- * delivered messages. `cloud` and `handleMessage` are the two names the snippet leaves to the host.
+ * delivered messages. `cloud`, `handleMessage` and `handleReceipt` are the names the snippet leaves
+ * to the host.
  */
 async function loadRoute(
   handleMessage: (event: WhatsAppMessageEvent) => Promise<void>,
+  handleReceipt: (receipt: WhatsAppStatusReceipt) => Promise<void> = async () => {},
 ): Promise<OnWebhook> {
   const source = readmeRouteSource();
   const importTarget = JSON.stringify(join(PACKAGE_DIR, "src", "index.ts"));
@@ -50,12 +54,16 @@ async function loadRoute(
     file,
     [
       "// biome-ignore-all lint: generated from README.md",
-      "const { cloud, handleMessage } = (globalThis as any).__whatsappReadmeRoute;",
+      "const { cloud, handleMessage, handleReceipt } = (globalThis as any).__whatsappReadmeRoute;",
       source.replace('from "@theokit/gateway-whatsapp"', `from ${importTarget}`),
       "export { onWebhook };",
     ].join("\n"),
   );
-  (globalThis as Record<string, unknown>).__whatsappReadmeRoute = { cloud: CLOUD, handleMessage };
+  (globalThis as Record<string, unknown>).__whatsappReadmeRoute = {
+    cloud: CLOUD,
+    handleMessage,
+    handleReceipt,
+  };
   const loaded = (await import(/* @vite-ignore */ file)) as { onWebhook: OnWebhook };
   return loaded.onWebhook;
 }
@@ -80,6 +88,37 @@ function signedBody(wamid: string): { body: string; signature: string } {
                   timestamp: "1700000000",
                   type: "text",
                   text: { body: "hello" },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+  const hex = crypto.createHmac("sha256", CLOUD.appSecret).update(body).digest("hex");
+  return { body, signature: `sha256=${hex}` };
+}
+
+/** A signed envelope holding one status receipt addressed to `phoneNumberId`. */
+function signedReceipt(phoneNumberId: string): { body: string; signature: string } {
+  const body = JSON.stringify({
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: "WABA",
+        changes: [
+          {
+            field: "messages",
+            value: {
+              messaging_product: "whatsapp",
+              metadata: { display_phone_number: "15550000000", phone_number_id: phoneNumberId },
+              statuses: [
+                {
+                  id: "wamid.receipt",
+                  status: "delivered",
+                  timestamp: "1700000000",
+                  recipient_id: "5588000",
                 },
               ],
             },
@@ -152,6 +191,34 @@ describe("the Cloud route documented in README.md", () => {
 
     expect(statuses).toEqual([200, 200]);
     expect(received).toEqual(["wamid.done"]);
+  });
+
+  it("hands a status receipt addressed to its own number to the receipt handler", async () => {
+    const receipts: WhatsAppStatusReceipt[] = [];
+    const onWebhook = await loadRoute(
+      async () => {},
+      async (receipt) => {
+        receipts.push(receipt);
+      },
+    );
+    const { body, signature } = signedReceipt(CLOUD.phoneNumberId);
+
+    expect(await onWebhook(body, signature)).toBe(200);
+    expect(receipts.map((r) => r.recipient)).toEqual(["5588000"]);
+  });
+
+  it("does not hand a status receipt addressed to another number to the receipt handler", async () => {
+    const receipts: WhatsAppStatusReceipt[] = [];
+    const onWebhook = await loadRoute(
+      async () => {},
+      async (receipt) => {
+        receipts.push(receipt);
+      },
+    );
+    const { body, signature } = signedReceipt("ANOTHER_PNID");
+
+    expect(await onWebhook(body, signature)).toBe(200);
+    expect(receipts).toEqual([]);
   });
 
   it("refuses a body whose signature does not match", async () => {

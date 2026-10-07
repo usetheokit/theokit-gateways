@@ -231,11 +231,12 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
    * Webhook entrypoint. The user calls this from inside their POST /webhook
    * route after `verifyWebhookSubscription` on GET.
    *
-   * Only messages addressed to this backend's `phoneNumberId` reach the inbound handler. Meta
-   * signs every number of one app with one secret and an app-level webhook URL receives every
-   * subscribed number, so a valid signature does not say which number a message was for; one for
-   * another number, or naming none, is dropped and its id written to stderr once
-   * (`isForAnotherNumber`, the rule `WhatsAppAdapter` applies too).
+   * Only messages addressed to this backend's `phoneNumberId` reach the inbound handler, and only
+   * status receipts addressed to it reach the status handler. Meta signs every number of one app
+   * with one secret and an app-level webhook URL receives every subscribed number, so a valid
+   * signature does not say which number a message or receipt was for; one for another number, or
+   * naming none, is dropped and its id written to stderr once (`isForAnotherNumber`, the rule
+   * `WhatsAppAdapter` applies too).
    *
    * @returns `true` if signature valid + dispatched (or empty payload).
    *          `false` if signature invalid (route should return 401).
@@ -254,11 +255,22 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
     const envelope = parseWebhookPayload(json);
     if (envelope === null) return true; // valid signature, unrecognized shape — nothing to dispatch
     await this.dispatchInbound(envelope);
+    await this.dispatchStatusReceipts(envelope);
+    return true;
+  }
+
+  /**
+   * Hand each status receipt addressed to this backend's number to the status handler.
+   *
+   * Same rule as messages: a receipt names the recipient's phone number, so one number's receipts
+   * reaching another number's handler hands one tenant's customer numbers to another tenant.
+   */
+  private async dispatchStatusReceipts(envelope: MetaWebhookEnvelope): Promise<void> {
     for (const receipt of normalizeStatusReceipts(envelope)) {
       if (this.statusHandler === undefined) continue;
+      if (isForAnotherNumber(receipt, this.phoneNumberId, this.reportedForeignNumbers)) continue;
       await this.dispatchContained(() => this.statusHandler?.(receipt), "status handler");
     }
-    return true;
   }
 
   /** Hand each message addressed to this backend's number to the inbound handler. */

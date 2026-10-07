@@ -6,14 +6,15 @@
  * numbers already reported, which the caller owns). `WhatsAppAdapter` holds the configuration and
  * passes it in; every adapter path that decides an inbound message goes through
  * `toDeliverableEvent`, which calls `isForAnotherNumber` and `decideInbound`, so there is one rule
- * set to keep. `WhatsAppCloudBackend.handleWebhookPayload` calls `isForAnotherNumber` as well, so a
- * route built on the backend alone is scoped to its number too.
+ * set to keep. `WhatsAppCloudBackend.handleWebhookPayload` calls `isForAnotherNumber` as well, for
+ * messages and for status receipts, so a route built on the backend alone is scoped to its number
+ * too.
  */
 
 import type { WhatsAppMessageEvent } from "@theokit/gateway";
 
 import { isSenderAllowed } from "./allowlist.js";
-import type { WhatsAppInboundEvent } from "./backend-types.js";
+import type { WhatsAppInboundEvent, WhatsAppStatusReceipt } from "./backend-types.js";
 
 /** The configuration the inbound rules read, held by the adapter. */
 export interface InboundRules {
@@ -95,7 +96,7 @@ function redactedSender(fromPhone: string): string {
 }
 
 /**
- * Is this message addressed to a Cloud number other than `ownPhoneNumberId`?
+ * Is this message, or status receipt, addressed to a Cloud number other than `ownPhoneNumberId`?
  *
  * Meta signs every number of one app with one secret, so a valid signature does not say which
  * number an envelope was for. `undefined` means the adapter has no Cloud number to compare, and
@@ -104,7 +105,7 @@ function redactedSender(fromPhone: string): string {
  * and this function adds to it.
  */
 export function isForAnotherNumber(
-  inbound: WhatsAppInboundEvent,
+  inbound: Pick<WhatsAppInboundEvent | WhatsAppStatusReceipt, "phoneNumberId">,
   ownPhoneNumberId: string | undefined,
   reported: Set<string>,
 ): boolean {

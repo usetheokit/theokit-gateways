@@ -582,6 +582,92 @@ describe("WhatsAppCloudBackend webhook entrypoint, used without WhatsAppAdapter"
     stderr.mockRestore();
   });
 
+  // The same envelope carries a second event kind. A status receipt names the recipient's phone
+  // number, so one number's receipts reaching another number's handler hands one tenant's customer
+  // numbers to another tenant (B-421 review finding #31, B-432).
+  const receiptEnvelopeFor = (phoneNumberId: string | undefined): string =>
+    JSON.stringify({
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: "e",
+          changes: [
+            {
+              field: "messages",
+              value: {
+                messaging_product: "whatsapp",
+                metadata:
+                  phoneNumberId === undefined
+                    ? { display_phone_number: "x" }
+                    : { display_phone_number: "x", phone_number_id: phoneNumberId },
+                statuses: [
+                  {
+                    id: "wamid.s",
+                    status: "delivered",
+                    timestamp: "1700",
+                    recipient_id: "5588000",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+  const backendFor111 = (): WhatsAppCloudBackend =>
+    new WhatsAppCloudBackend({
+      accessToken: "t",
+      phoneNumberId: "111",
+      appSecret: APP_SECRET,
+      fetch: makeFetchOk(),
+    });
+
+  it("drops a signed status receipt addressed to another phone number id of the same app", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const b = backendFor111();
+    const statusHandler = vi.fn(async () => {});
+    b.onStatusReceipt(statusHandler);
+    const body = receiptEnvelopeFor("222");
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect(ok).toBe(true);
+    expect(statusHandler).not.toHaveBeenCalled();
+    expect(stderr.mock.calls.map((c) => String(c[0])).join("")).toContain('"222"');
+    stderr.mockRestore();
+  });
+
+  it("drops a signed status receipt that names no phone number id", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const b = backendFor111();
+    const statusHandler = vi.fn(async () => {});
+    b.onStatusReceipt(statusHandler);
+    const body = receiptEnvelopeFor(undefined);
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect(ok).toBe(true);
+    expect(statusHandler).not.toHaveBeenCalled();
+    stderr.mockRestore();
+  });
+
+  it("hands a signed status receipt addressed to its own number to the status handler", async () => {
+    const b = backendFor111();
+    const statusHandler = vi.fn(async () => {});
+    b.onStatusReceipt(statusHandler);
+    const body = receiptEnvelopeFor("111");
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect(ok).toBe(true);
+    expect(statusHandler).toHaveBeenCalledTimes(1);
+    expect((statusHandler.mock.calls[0] as unknown[])[0]).toMatchObject({
+      wamid: "wamid.s",
+      recipient: "5588000",
+      phoneNumberId: "111",
+    });
+  });
+
   it("drops a signed message that names no phone number id", async () => {
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const b = makeBackend();

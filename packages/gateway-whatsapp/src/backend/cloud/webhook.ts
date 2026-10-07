@@ -131,22 +131,26 @@ export function normalizeStatusReceipts(envelope: MetaWebhookEnvelope): WhatsApp
   const out: WhatsAppStatusReceipt[] = [];
   for (const entry of envelope.entry) {
     for (const change of entry.changes) {
-      const statuses = change.value?.statuses ?? [];
-      for (const s of statuses) {
-        out.push(metaStatusToReceipt(s));
+      const phoneNumberId = change.value?.metadata?.phone_number_id;
+      for (const s of change.value?.statuses ?? []) {
+        out.push(metaStatusToReceipt(s, phoneNumberId));
       }
     }
   }
   return out;
 }
 
-function metaStatusToReceipt(s: MetaStatusUpdate): WhatsAppStatusReceipt {
-  return {
+function metaStatusToReceipt(
+  s: MetaStatusUpdate,
+  phoneNumberId: string | undefined,
+): WhatsAppStatusReceipt {
+  const receipt = {
     wamid: s.id,
     status: s.status,
     recipient: s.recipient_id,
     timestamp: Number(s.timestamp) * 1000 || Date.now(),
   };
+  return phoneNumberId === undefined ? receipt : { ...receipt, phoneNumberId };
 }
 
 /** @internal — test seam to reset the one-shot warn de-dup. */
