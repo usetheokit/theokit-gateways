@@ -28,7 +28,12 @@ const BF_ISSUER = "https://api.botframework.com";
 
 const validClaims = { iss: BF_ISSUER, aud: CLIENT_ID, serviceurl: SERVICE_URL };
 
-const expectedClaims = { clientId: CLIENT_ID, loginEndpoint: ENTRA_LOGIN, serviceUrl: SERVICE_URL };
+const expectedClaims = {
+  clientId: CLIENT_ID,
+  loginEndpoint: ENTRA_LOGIN,
+  serviceUrl: SERVICE_URL,
+  channelId: "msteams",
+};
 
 function expectedFor(tenantId: string | undefined) {
   return tenantId === undefined ? expectedClaims : { ...expectedClaims, tenantId };
@@ -64,6 +69,31 @@ describe("checkVerifiedClaims", () => {
         ok: true,
       });
     }
+  });
+
+  it("refuses an activity whose channelId is absent, another channel or not a string as channel_mismatch", () => {
+    for (const channelId of [undefined, "directline", "webchat", "emulator", "MSTEAMS", 42]) {
+      expect(
+        checkVerifiedClaims(validClaims, { ...expectedClaims, channelId }),
+        String(channelId),
+      ).toEqual({ ok: false, reason: "channel_mismatch" });
+    }
+  });
+
+  it("checks serviceurl before channelId", () => {
+    const r = checkVerifiedClaims(
+      { ...validClaims, serviceurl: "https://evil.example/" },
+      { ...expectedClaims, channelId: "directline" },
+    );
+    expect(r).toEqual({ ok: false, reason: "serviceurl_mismatch" });
+  });
+
+  it("checks channelId before tid", () => {
+    const r = checkVerifiedClaims(
+      { ...validClaims, tid: OTHER_TENANT },
+      { ...expectedClaims, channelId: "directline", tenantId: TENANT },
+    );
+    expect(r).toEqual({ ok: false, reason: "channel_mismatch" });
   });
 
   it("compares serviceurl ignoring one trailing slash and letter case", () => {

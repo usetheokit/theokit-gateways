@@ -23,7 +23,7 @@ describe("a signed activity", () => {
   it("accepts a token signed by the published key from a plain Request and returns the activity and its service url", async () => {
     ks = await startKeyServer();
     const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud });
-    const activity = { type: "message", text: "hi", serviceUrl: SERVICE_URL };
+    const activity = { type: "message", text: "hi", serviceUrl: SERVICE_URL, channelId: "msteams" };
 
     const res = await verify(activityRequest(ks.signToken({}), activity));
 

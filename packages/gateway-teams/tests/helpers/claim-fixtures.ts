@@ -129,7 +129,7 @@ export function signFixture(ks: KeyServer, claims: Readonly<Record<string, unkno
 /** A POST the connector would send: a bearer token (when given) and a JSON body. */
 export function activityRequest(
   token: string | undefined,
-  body: unknown = { type: "message", serviceUrl: SERVICE_URL },
+  body: unknown = { type: "message", serviceUrl: SERVICE_URL, channelId: "msteams" },
 ): Request {
   const headers = new Headers({ "content-type": "application/json" });
   if (token !== undefined) headers.set("authorization", `Bearer ${token}`);

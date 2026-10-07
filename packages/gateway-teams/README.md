@@ -41,7 +41,13 @@ The verifier checks the token's RS256 signature against Microsoft's published ke
 SDK's own token validator, so the issuer, audience and expiry rules stay Microsoft's. It then checks three claims of the token the SDK accepted: `aud` must be this bot's
 app id (or one of its `api://` forms), `serviceurl` must match the activity's `serviceUrl`, and the tenant must be the one you
 configured; with no `tenantId`, a token issued by a specific Entra tenant is refused as
-`tenant_unverified`. It never throws for a request; a refusal is `{ ok: false, reason, message }`,
+`tenant_unverified`. The activity's `channelId` must be `msteams`: one bot's connector tokens are
+not bound to a channel, so a genuine token also arrives with activities from the bot's Web Chat and
+Direct Line channels (on by default for an Azure Bot resource), where the client sets `from` and
+`channelData`. Such an activity, or one with no `channelId`, is refused as `channel_mismatch`, a
+client fault to answer with a 4xx (the example's 401). The Azure portal's "Test in Web Chat"
+(`webchat`) and the Bot Framework Emulator (`emulator`) are refused the same way: test in Teams.
+It never throws for a request; a refusal is `{ ok: false, reason, message }`,
 and the message never contains the token. Building the verifier throws a `TypeError` for an empty
 `clientId`, an empty `tenantId`, a `tenantId` of `common`, `organizations` or `consumers`, or a
 `cloud` missing one of `loginEndpoint`, `tokenIssuer` and `openIdMetadataUrl`.

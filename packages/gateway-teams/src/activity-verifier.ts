@@ -1,7 +1,8 @@
 /**
  * `teamsActivityVerifier`: refuse an inbound Teams activity on an app's own HTTP route unless its
- * RS256 signature verifies under a published key, the Microsoft SDK validated its token, and the
- * token's `aud`, `serviceurl` and `tid` claims match this app (ADR-0003, ADR-0005).
+ * RS256 signature verifies under a published key, the Microsoft SDK validated its token, the
+ * token's `aud`, `serviceurl` and `tid` claims match this app, and the activity's `channelId` is
+ * `msteams` (ADR-0003, ADR-0005).
  *
  * The verifier reads the published key sets itself and checks the signature before the SDK is
  * asked, so the timing of every key-set request a sender can cause is decided here rather than by
@@ -89,6 +90,7 @@ export type TeamsActivityVerifyResult =
         | "key_set_unavailable"
         | "audience_mismatch"
         | "serviceurl_mismatch"
+        | "channel_mismatch"
         | "tenant_mismatch"
         | "tenant_unverified";
       readonly message: string;
@@ -119,6 +121,8 @@ const MESSAGES: Readonly<Record<RefusalReason, string>> = {
   audience_mismatch: "the token's aud claim is not this bot's app id",
   serviceurl_mismatch:
     "the token's serviceurl claim is absent or differs from the activity's serviceUrl",
+  channel_mismatch:
+    "the activity's channelId is absent or is not msteams: the token is the bot's, but the activity did not come from Teams",
   tenant_mismatch: "the token's tid claim names a tenant other than the configured one",
   tenant_unverified:
     "the token's tenant cannot be confirmed: no tid with a tenant configured, or a tenant-issued token with none configured",
@@ -608,7 +612,11 @@ function judgeVerifiedToken(
 ): TeamsActivityVerifyResult {
   const claims = token === undefined ? undefined : decodeVerifiedClaims(rawToken);
   if (token === undefined || claims === undefined) return refuse("invalid_token");
-  const verdict = checkVerifiedClaims(claims, { ...expected, serviceUrl: body.serviceUrl });
+  const verdict = checkVerifiedClaims(claims, {
+    ...expected,
+    serviceUrl: body.serviceUrl,
+    channelId: body.activity.channelId,
+  });
   return verdict.ok ? { ok: true, activity: body.activity, token } : refuse(verdict.reason);
 }
 
@@ -619,7 +627,9 @@ function judgeVerifiedToken(
  *
  * It accepts only when the token's RS256 signature verifies under a key the published key set
  * lists, the SDK validator accepted the token, AND the token's `aud`, `serviceurl` and tenant
- * claims match this configuration; it never throws for a request. The SDK is imported on the first
+ * claims match this configuration AND the activity's `channelId` is `msteams`; it never throws for a
+ * request. An activity from the bot's other channels (Web Chat, Direct Line, the Bot Framework
+ * Emulator) is `channel_mismatch` even with a genuine token, a client fault: answer it with a 4xx. The SDK is imported on the first
  * request, once per verifier; a failed load is kept, so every later request refuses as
  * `validator_unavailable` until the verifier is rebuilt.
  *

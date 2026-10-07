@@ -1,7 +1,7 @@
 /**
  * The decisions `teamsActivityVerifier` makes without the SDK: option validation, reading the
- * bearer token, parsing the body, decoding the verified token's claims, and the three claim checks
- * that run after the SDK accepted the token (ADR-0003).
+ * bearer token, parsing the body, decoding the verified token's claims, and the four checks that
+ * run after the SDK accepted the token (ADR-0003).
  *
  * Pure on purpose: no I/O and no SDK import, so the package's mutation run covers every security
  * decision here, and the orchestration in `activity-verifier.ts` stays outside it.
@@ -15,6 +15,7 @@ import { Buffer } from "node:buffer";
 export type ClaimRefusal =
   | "audience_mismatch"
   | "serviceurl_mismatch"
+  | "channel_mismatch"
   | "tenant_mismatch"
   | "tenant_unverified";
 
@@ -26,7 +27,19 @@ export interface ExpectedClaims {
   readonly loginEndpoint: string;
   /** The `serviceUrl` of the activity body the token arrived with. */
   readonly serviceUrl: string;
+  /**
+   * The `channelId` of the activity body the token arrived with, unchecked. Only
+   * {@link TEAMS_CHANNEL_ID} is accepted.
+   */
+  readonly channelId: unknown;
 }
+
+/**
+ * The `channelId` Teams sets on every activity. A connector token is issued for the bot, not for
+ * one channel, so the same token shape arrives from the bot's Web Chat and Direct Line channels,
+ * where the client sets `from` and `channelData`.
+ */
+export const TEAMS_CHANNEL_ID = "msteams";
 
 /** Multi-tenant authority names: none of them names a tenant, so none can restrict one. */
 const MULTI_TENANT_NAMES = ["common", "organizations", "consumers"];
@@ -214,9 +227,9 @@ export function tenantRefusalBeforeVerification(
 }
 
 /**
- * Check the claims of a token the SDK accepted, in a fixed order: `aud`, then `serviceurl`, then
- * the tenant. The first refusal wins, so a token wrong in several ways is reported by its most
- * fundamental mismatch.
+ * Check the claims of a token the SDK accepted, and the activity's channel, in a fixed order:
+ * `aud`, then `serviceurl`, then the activity's `channelId`, then the tenant. The first refusal
+ * wins, so a request wrong in several ways is reported by its most fundamental mismatch.
  */
 export function checkVerifiedClaims(
   claims: Record<string, unknown>,
@@ -227,6 +240,9 @@ export function checkVerifiedClaims(
   }
   if (!serviceUrlMatches(claims.serviceurl, expected.serviceUrl)) {
     return { ok: false, reason: "serviceurl_mismatch" };
+  }
+  if (expected.channelId !== TEAMS_CHANNEL_ID) {
+    return { ok: false, reason: "channel_mismatch" };
   }
   const tenantRefusal = checkTenant(claims, expected);
   return tenantRefusal === undefined ? { ok: true } : { ok: false, reason: tenantRefusal };

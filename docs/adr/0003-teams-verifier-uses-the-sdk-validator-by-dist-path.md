@@ -99,6 +99,27 @@ prefer only because the claim checks run after it on both.
 - The control test in `packages/gateway-teams/tests/` deep-imports `ServiceTokenValidator`; a
   lockfile bump to an SDK without that name fails it at load, which fails closed.
 
+## Amended 2026-10-07: the activity must come from Teams
+
+A verified token binds a request to the bot and, through `serviceurl`, to a connector endpoint; it
+does not bind it to a channel. The bot's Web Chat and Direct Line channels (enabled by default on
+an Azure Bot resource) receive connector tokens with the same audience and a `serviceurl` equal to
+their activity's `serviceUrl`, and on those channels the client sets `from` and `channelData`,
+which `normalizeTeamsActivity` turns into the sender, tenant and team (code review #94). So the
+fixed order is now `aud`, `serviceurl`, the activity's `channelId`, then the tenant: a `channelId`
+that is absent or not `msteams` is `channel_mismatch`, checked in `checkVerifiedClaims` so the
+mutation run covers it. It runs after the SDK, like the claim checks, so a forged token on another
+channel is still `invalid_token`.
+
+Not adopted: filtering published keys by their `endorsements`, the Bot Framework's channel binding
+for keys. The `channelId` check already refuses every non-Teams activity, and `endorsements` is not
+read by the SDK validator either. The Azure portal's "Test in Web Chat" (`webchat`) and the Bot
+Framework Emulator (`emulator`) are refused by design; no option re-admits them, because the
+adapter would read client-chosen identity fields as Teams ones. Emulator tokens were already
+refused before this change: they are Entra-issued (`sts.windows.net` or the login endpoint) and
+carry no `serviceurl` claim, so they get a tenant reason or `serviceurl_mismatch`. Inferred from the
+issuers the Bot Framework documents for the Emulator; not run against an Emulator.
+
 ## Alternatives considered
 
 - **`app.server.handleRequest({ body, headers })`, the public seam.** Rejected: it dispatches the
