@@ -58,9 +58,11 @@ Two refusals follow from Microsoft's tokens rather than from a fault, and both a
 
 The verifier reads Microsoft's published key sets itself, from the URLs the SDK uses: the Bot
 Framework set (from your `cloud`'s `openIdMetadataUrl`) and, only when `tenantId` is set,
-`{loginEndpoint}/{tenantId}/discovery/v2.0/keys`. It reads a set when it holds no copy, when its
-copy lacks the token's `kid`, or when its copy is an hour old, and never more than once every 10
-seconds per set, whatever is sent. A token whose header names anything but RS256, whose `kid` the
+`{loginEndpoint}/{tenantId}/discovery/v2.0/keys`. It reads a set when it holds no copy or its
+copy lacks the token's `kid`, and starts a read in the background when its copy is an hour old,
+answering from that copy meanwhile, so a slow or hanging key endpoint adds no wait to a token
+whose key it already holds. No read starts within 10 seconds of the end of the previous one, per
+set, whatever is sent. A token whose header names anything but RS256, whose `kid` the
 set does not list, or whose signature does not verify is refused as `invalid_token` before the SDK
 is asked, so a forged token never makes the bot fetch the key set. A key Microsoft has just
 published can be refused for up to 10 seconds. A token issued by an Entra tenant this verifier

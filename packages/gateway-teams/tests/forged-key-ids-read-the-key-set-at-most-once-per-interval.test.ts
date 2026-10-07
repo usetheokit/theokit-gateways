@@ -247,6 +247,10 @@ describe("forged key ids", () => {
     await verify(activityRequest(ks.signToken({}, { kid: retired, key: stray })));
     const stillHeld = ks.hits();
     vi.advanceTimersByTime(1);
+    // Answered from the hour-old copy; it starts the read in the background.
+    await verify(activityRequest(ks.signToken({}, { kid: retired, key: stray })));
+    // A kid the copy lacks waits for that read, so the read has completed after it.
+    await verify(activityRequest(forged(ks)));
 
     const res = await verify(activityRequest(genuine));
 

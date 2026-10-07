@@ -371,13 +371,17 @@ async function sdkCheck(
   return verdict;
 }
 
-/** The least time between two reads of one key set, whatever asks for the read. */
+/**
+ * The least time between the end of one read of a key set and the start of the next, whatever asks
+ * for the read.
+ */
 const KEY_SET_READ_INTERVAL_MS = 10_000;
 
 /**
  * The age at which a held key set is read again even though it lists the key asked for, so a key
- * Microsoft retired stops verifying within this long. A proposal, not a measurement: the SDK's own
- * key client, which still checks every token after this verifier, keeps a key for 10 minutes.
+ * Microsoft retired stops verifying once that read completes. The read runs in the background: the
+ * key is answered from the held copy meanwhile. A proposal, not a measurement: the SDK's own key
+ * client, which still checks every token after this verifier, keeps a key for 10 minutes.
  */
 const KEY_SET_MAX_AGE_MS = 60 * 60 * 1000;
 
@@ -465,19 +469,23 @@ async function readKeySet(url: string): Promise<Map<string, KeyObject> | undefin
 type KeyLookup = KeyObject | "unlisted" | "unavailable";
 
 /**
- * One published key set, read by this verifier and nothing else. A read happens when there is no
- * copy, when the copy lacks the `kid` asked for, or when the copy is older than
- * {@link KEY_SET_MAX_AGE_MS}; never twice within {@link KEY_SET_READ_INTERVAL_MS}, whatever asked,
- * and concurrent lookups share one read. A successful read replaces the copy, so a retired key is
- * gone after it; a failed read keeps the last good copy. A `kid` missing after a successful read is
+ * One published key set, read by this verifier and nothing else. A `kid` the held copy lists is
+ * answered from it at once; when the copy is older than {@link KEY_SET_MAX_AGE_MS}, a read is
+ * started in the background and not awaited (stale-while-revalidate). A `kid` the copy lacks, or
+ * any `kid` when there is no copy, waits for a read. Concurrent lookups share the read in flight,
+ * and no read starts within {@link KEY_SET_READ_INTERVAL_MS} of the end of the previous one (so
+ * nor of its start), whatever asked: an endpoint that hangs until the read times out cannot drive
+ * reads back to back. A successful read replaces the copy, so a retired key is gone
+ * after it; a failed read keeps the last good copy. A `kid` missing after a successful read is
  * `unlisted`; one missing when there is no copy, or when the latest read failed, is `unavailable`.
  */
 function keySet(url: string): { lookup(kid: string): Promise<KeyLookup> } {
   let held: Map<string, KeyObject> | undefined;
   let readAt = Number.NEGATIVE_INFINITY;
-  let lastAttempt = Number.NEGATIVE_INFINITY;
+  let nextReadAt = Number.NEGATIVE_INFINITY;
   let lastReadFailed = false;
   let reading: Promise<void> | undefined;
+  /** Never rejects: {@link readKeySet} turns every failure into `undefined`. */
   const read = async (): Promise<void> => {
     const fresh = await readKeySet(url);
     lastReadFailed = fresh === undefined;
@@ -486,13 +494,11 @@ function keySet(url: string): { lookup(kid: string): Promise<KeyLookup> } {
       readAt = Date.now();
     }
   };
-  const needsRead = (kid: string, now: number): boolean =>
-    held === undefined || !held.has(kid) || now - readAt >= KEY_SET_MAX_AGE_MS;
   /** The read in flight, started now if none is and the interval allows one. */
   const currentRead = (now: number): Promise<void> | undefined => {
-    if (reading === undefined && now - lastAttempt >= KEY_SET_READ_INTERVAL_MS) {
-      lastAttempt = now;
+    if (reading === undefined && now >= nextReadAt) {
       reading = read().finally(() => {
+        nextReadAt = Date.now() + KEY_SET_READ_INTERVAL_MS;
         reading = undefined;
       });
     }
@@ -501,7 +507,12 @@ function keySet(url: string): { lookup(kid: string): Promise<KeyLookup> } {
   return {
     async lookup(kid) {
       const now = Date.now();
-      if (needsRead(kid, now)) await currentRead(now);
+      const listed = held?.get(kid);
+      if (listed !== undefined) {
+        if (now - readAt >= KEY_SET_MAX_AGE_MS) void currentRead(now);
+        return listed;
+      }
+      await currentRead(now);
       const found = held?.get(kid);
       if (found !== undefined) return found;
       return held === undefined || lastReadFailed ? "unavailable" : "unlisted";
@@ -615,13 +626,13 @@ function judgeVerifiedToken(
  * Before the SDK is asked, a token with no `kid` or whose header names anything but RS256 is
  * `invalid_token`, and so is one whose signature does not verify; a tenant-issued token whose
  * unverified tenant would be refused gets that tenant reason. The verifier reads the Bot Framework
- * key set (and, with `tenantId`, that tenant's) itself: when it holds no copy, when the copy lacks
- * the `kid`, or when the copy is an hour old, never twice in 10 seconds whatever is sent. A key
- * Microsoft publishes is therefore accepted within 10 seconds. A key set that cannot be read and
- * does not already list the `kid` is `key_set_unavailable`, which is retryable: answer it with a
- * 503, not a 401; so is a token whose signature verified when the SDK then reports it could not
- * read the key itself. A `check()` that fails with anything but the SDK's plain `Error` is
- * `validator_unavailable`, naming its class.
+ * key set (and, with `tenantId`, that tenant's) itself: when it holds no copy or the copy lacks the
+ * `kid`, and in the background when the copy is an hour old, never within 10 seconds of the end of
+ * the previous read whatever is sent. A key Microsoft publishes is therefore accepted
+ * within 10 seconds of the last read. A key set that cannot be read and does not already list the
+ * `kid` is `key_set_unavailable`, which is retryable: answer it with a 503, not a 401; so is a token
+ * whose signature verified when the SDK then reports it could not read the key itself. A `check()`
+ * that fails with anything but the SDK's plain `Error` is `validator_unavailable`, naming its class.
  *
  * @throws TypeError at construction for an empty `clientId`, an empty or multi-tenant `tenantId`,
  * or a `cloud` missing one of its three endpoints.

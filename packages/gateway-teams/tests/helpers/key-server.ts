@@ -78,6 +78,12 @@ export interface KeyServer {
   failNext(status: number): void;
   /** Answer the next `/keys` request with this JSON document instead of the key set. */
   answerNext(document: unknown): void;
+  /**
+   * Leave the next `/keys` request unanswered, as a hanging endpoint does. It still counts in
+   * {@link KeyServer.hits} when it arrives. The returned function answers it: with `status` when
+   * given, with the key set otherwise. Closing the server drops it unanswered.
+   */
+  holdNext(): (status?: number) => void;
   close(): Promise<void>;
   /** Sign `claims` (merged over valid defaults; `undefined` removes a claim) with the published key. */
   signToken(claims: Record<string, unknown>, opts?: SignOptions): string;
@@ -179,10 +185,16 @@ export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeySe
   const paths: string[] = [];
   let pendingFailure: number | undefined;
   let pendingDocument: { readonly document: unknown } | undefined;
+  let held: { response?: ServerResponse; answer?: (res: ServerResponse) => void } | undefined;
   let unpublished: KeyObject | undefined;
 
   const answerKeys = (res: ServerResponse): void => {
     hitCount += 1;
+    if (held !== undefined && held.response === undefined) {
+      held.response = res;
+      if (held.answer !== undefined) held.answer(res);
+      return;
+    }
     if (pendingFailure !== undefined) {
       res.writeHead(pendingFailure).end();
       pendingFailure = undefined;
@@ -236,6 +248,20 @@ export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeySe
     },
     answerNext: (document) => {
       pendingDocument = { document };
+    },
+    holdNext: () => {
+      const hold: { response?: ServerResponse; answer?: (res: ServerResponse) => void } = {};
+      held = hold;
+      return (status) => {
+        hold.answer = (res) => {
+          if (held === hold) held = undefined;
+          if (status === undefined) {
+            res.writeHead(200, { "content-type": "application/json" });
+            res.end(JSON.stringify({ keys: published }));
+          } else res.writeHead(status).end();
+        };
+        if (hold.response !== undefined) hold.answer(hold.response);
+      };
     },
     close: () =>
       new Promise<void>((resolve, reject) => {
