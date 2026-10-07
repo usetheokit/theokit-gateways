@@ -29,8 +29,12 @@ const verify = teamsActivityVerifier({ clientId });
 export async function onTeamsRequest(request: Request): Promise<Response> {
   const result = await verify(request.clone());
   if (!result.ok) {
-    const status = result.reason === "key_set_unavailable" ? 503 : 401;
-    return new Response(result.reason, { status });
+    // The verifier itself could not judge the token: log why and let Microsoft retry.
+    if (result.reason === "key_set_unavailable" || result.reason === "validator_unavailable") {
+      console.error(`teams verifier: ${result.message}`); // the message never contains the token
+      return new Response(result.reason, { status: 503 });
+    }
+    return new Response(result.reason, { status: result.reason === "malformed_body" ? 400 : 401 });
   }
   const outcome = await adapter.deliver(normalizeTeamsActivity(result.activity));
   return new Response(null, { status: outcome === "ok" ? 200 : 500 });
