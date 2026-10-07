@@ -140,6 +140,13 @@ and fetched as the key set; the document has no `keys` array, so every request w
 `TypeError` naming `cloud.openIdMetadataUrl` and the suffix when it is built, the same way it
 refuses an empty one. The SDK's public, US government and China values all end in the suffix.
 
+The same review found that a failed read kept no cause (code review #96): every failure became
+`undefined` and the refusal message was fixed, so a blocked egress, a 404 and a 503 looked alike
+and nothing was logged. A read now returns its failure: the HTTP status, a timeout, the network
+error's class and code, or a document too large, not JSON, with no `keys` array or too many keys.
+The key set keeps its latest failure, and `key_set_unavailable` names the set, its URL and that
+failure. Nothing in it comes from the request, and the verifier still writes no log of its own.
+
 ## Verification
 
 `packages/gateway-teams/tests/` holds the evidence. Seven tests were written first and failed on

@@ -428,6 +428,19 @@ function tenantKeySetUrl(loginEndpoint: string, tenantId: string): string {
   return `${loginEndpoint}/${tenantId}/discovery/v2.0/keys`;
 }
 
+/**
+ * The `key_set_unavailable` message for one key set: which set, its URL, and why its latest read
+ * failed. All three come from the configuration and the key endpoint, none from the request.
+ */
+function keySetUnavailableMessage(
+  label: string,
+  url: string,
+  failure: KeySetReadFailure | undefined,
+): string {
+  const why = failure === undefined ? "" : `: ${failure.failed}`;
+  return `the published signing keys could not be read (${label} key set at ${url}${why}), so the token's signature could not be checked; a retry may succeed`;
+}
+
 /** An RSA public key from one key-set entry, or `undefined` when the entry holds none. */
 function rsaPublicKey(
   entry: unknown,
@@ -442,13 +455,21 @@ function rsaPublicKey(
   }
 }
 
+/** Why one read of a key set produced no key set, in words an operator can act on. */
+interface KeySetReadFailure {
+  readonly failed: string;
+}
+
 /**
- * The RSA keys of a key-set document by `kid`, or `undefined` when it is not one: no `keys` array,
+ * The RSA keys of a key-set document by `kid`, or the failure when it is not one: no `keys` array,
  * or more than {@link MAX_KEYS_PER_SET} entries. An entry with no usable RSA key is skipped.
  */
-function publishedKeys(document: unknown): Map<string, KeyObject> | undefined {
+function publishedKeys(document: unknown): Map<string, KeyObject> | KeySetReadFailure {
   const entries = (document as { keys?: unknown } | null)?.keys;
-  if (!Array.isArray(entries) || entries.length > MAX_KEYS_PER_SET) return undefined;
+  if (!Array.isArray(entries)) return { failed: "the document has no keys array" };
+  if (entries.length > MAX_KEYS_PER_SET) {
+    return { failed: `the document lists more than ${MAX_KEYS_PER_SET} keys` };
+  }
   const found = new Map<string, KeyObject>();
   for (const entry of entries) {
     const usable = rsaPublicKey(entry);
@@ -457,23 +478,56 @@ function publishedKeys(document: unknown): Map<string, KeyObject> | undefined {
   return found;
 }
 
-/** Fetch a key set, or `undefined` for any failure: network, status, timeout, size or shape. */
-async function readKeySet(url: string): Promise<Map<string, KeyObject> | undefined> {
+/**
+ * A failed request or body read: the timeout, or the network error's class and code (`TypeError`
+ * from `fetch` carries the socket error, e.g. `ECONNREFUSED`, as its `cause`). Never the error's
+ * text.
+ */
+function requestFailure(error: unknown): KeySetReadFailure {
+  if ((error as { name?: unknown } | null)?.name === "TimeoutError") {
+    return { failed: `no answer within ${KEY_SET_READ_TIMEOUT_MS / 1000} s` };
+  }
+  const cause = (error as { cause?: unknown } | null)?.cause;
+  return { failed: `the request failed (${errorKind(cause ?? error)})` };
+}
+
+/** The body of a key-set response as text, or the failure: too large, or the read failed. */
+async function readKeySetText(response: Response): Promise<string | KeySetReadFailure> {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(KEY_SET_READ_TIMEOUT_MS) });
-    if (!response.ok) {
-      await response.body?.cancel();
-      return undefined;
-    }
     const text = await readBoundedStream(response.body, MAX_KEY_SET_BYTES);
-    return text === undefined ? undefined : publishedKeys(JSON.parse(text));
-  } catch {
-    return undefined;
+    return text ?? { failed: `the document is over ${MAX_KEY_SET_BYTES} bytes` };
+  } catch (error) {
+    return requestFailure(error);
   }
 }
 
-/** What a key set answers for a `kid`. */
-type KeyLookup = KeyObject | "unlisted" | "unavailable";
+/** Fetch a key set, or the reason it could not be had: network, status, timeout, size or shape. */
+async function readKeySet(url: string): Promise<Map<string, KeyObject> | KeySetReadFailure> {
+  let response: Response;
+  try {
+    response = await fetch(url, { signal: AbortSignal.timeout(KEY_SET_READ_TIMEOUT_MS) });
+  } catch (error) {
+    return requestFailure(error);
+  }
+  if (!response.ok) {
+    // The status is the failure reported; a body that will not cancel changes nothing about it.
+    await response.body?.cancel().catch(ignore);
+    return { failed: `HTTP ${response.status}` };
+  }
+  const text = await readKeySetText(response);
+  if (typeof text !== "string") return text;
+  try {
+    return publishedKeys(JSON.parse(text));
+  } catch {
+    return { failed: "the document is not JSON" };
+  }
+}
+
+/**
+ * What a key set answers for a `kid`: the key, `unlisted` after a read that succeeded without it,
+ * or `unavailable` with the refusal message naming the set and why its latest read failed.
+ */
+type KeyLookup = KeyObject | "unlisted" | { readonly unavailable: string };
 
 /**
  * One published key set, read by this verifier and nothing else. A `kid` the held copy lists is
@@ -486,21 +540,25 @@ type KeyLookup = KeyObject | "unlisted" | "unavailable";
  * after it; a failed read keeps the last good copy. A `kid` missing after a successful read is
  * `unlisted`; one missing when there is no copy, or when the latest read failed, is `unavailable`.
  */
-function keySet(url: string): { lookup(kid: string): Promise<KeyLookup> } {
+function keySet(label: string, url: string): { lookup(kid: string): Promise<KeyLookup> } {
   let held: Map<string, KeyObject> | undefined;
   let readAt = Number.NEGATIVE_INFINITY;
   let nextReadAt = Number.NEGATIVE_INFINITY;
-  let lastReadFailed = false;
+  /** Why the latest read failed; `undefined` once a read succeeds. */
+  let lastFailure: KeySetReadFailure | undefined;
   let reading: Promise<void> | undefined;
-  /** Never rejects: {@link readKeySet} turns every failure into `undefined`. */
+  /** Never rejects: {@link readKeySet} turns every failure into a value. */
   const read = async (): Promise<void> => {
     const fresh = await readKeySet(url);
-    lastReadFailed = fresh === undefined;
-    if (fresh !== undefined) {
+    if (fresh instanceof Map) {
+      lastFailure = undefined;
       held = fresh;
       readAt = Date.now();
-    }
+    } else lastFailure = fresh;
   };
+  const unavailable = (): KeyLookup => ({
+    unavailable: keySetUnavailableMessage(label, url, lastFailure),
+  });
   /** The read in flight, started now if none is and the interval allows one. */
   const currentRead = (now: number): Promise<void> | undefined => {
     if (reading === undefined && now >= nextReadAt) {
@@ -522,7 +580,7 @@ function keySet(url: string): { lookup(kid: string): Promise<KeyLookup> } {
       await currentRead(now);
       const found = held?.get(kid);
       if (found !== undefined) return found;
-      return held === undefined || lastReadFailed ? "unavailable" : "unlisted";
+      return held === undefined || lastFailure !== undefined ? unavailable() : "unlisted";
     },
   };
 }
@@ -576,8 +634,8 @@ async function admitToSdk(
   if (set === undefined) return refuse("tenant_unverified");
   if (readTokenAlgorithm(rawToken) !== "RS256") return refuse("invalid_token", NOT_RS256);
   const listed = await set.lookup(kid);
-  if (listed === "unavailable") return refuse("key_set_unavailable");
   if (listed === "unlisted") return refuse("invalid_token", KEY_NOT_PUBLISHED);
+  if ("unavailable" in listed) return refuse("key_set_unavailable", listed.unavailable);
   return verifiesRs256(rawToken, listed) ? undefined : refuse("invalid_token", BAD_SIGNATURE);
 }
 
@@ -663,11 +721,14 @@ export function teamsActivityVerifier(
     loginEndpoint: options.cloud?.loginEndpoint ?? DEFAULT_LOGIN_ENDPOINT,
   };
   const keySets: KeySets = {
-    botFramework: keySet(keySetUrl(options.cloud)),
+    botFramework: keySet("Bot Framework", keySetUrl(options.cloud)),
     tenant:
       options.tenantId === undefined
         ? undefined
-        : keySet(tenantKeySetUrl(expected.loginEndpoint, options.tenantId)),
+        : keySet(
+            `tenant ${options.tenantId}`,
+            tenantKeySetUrl(expected.loginEndpoint, options.tenantId),
+          ),
   };
 
   return async (request: Request): Promise<TeamsActivityVerifyResult> => {
