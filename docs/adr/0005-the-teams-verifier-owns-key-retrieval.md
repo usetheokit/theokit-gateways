@@ -46,7 +46,8 @@ before it calls the SDK `check()`. The SDK remains the authority on issuer, audi
   a `kid` missing from the copy, or by a copy older than one hour.
 - A successful read replaces the whole set; nothing is learned, so a retired key is gone after the
   next read. A failed read keeps the last good copy. The response is capped at 1 MiB and 1000 keys.
-  Keys are kept as `node:crypto` `KeyObject`s, and only RSA keys are kept.
+  Keys are kept as `node:crypto` `KeyObject`s, and only RSA keys are kept. A read is successful only
+  when the document lists at least one usable RSA key (amended 2026-10-07, below).
 - Per request, after the checks that cost nothing (missing header, oversized or malformed body, no
   `kid`, a tenant the verifier would refuse anyway): the set is chosen by the unverified `iss`, the
   header must name `RS256`, the `kid` must be listed, and the signature must verify. An unlisted
@@ -146,6 +147,17 @@ and nothing was logged. A read now returns its failure: the HTTP status, a timeo
 error's class and code, or a document too large, not JSON, with no `keys` array or too many keys.
 The key set keeps its latest failure, and `key_set_unavailable` names the set, its URL and that
 failure. Nothing in it comes from the request, and the verifier still writes no log of its own.
+
+## Amended 2026-10-07: a document with no usable RSA key is a failed read
+
+A document whose `keys` array was empty, or whose every entry was skipped (key material that
+`createPublicKey` refuses, or a key that is not RSA), produced an empty set and counted as a
+successful read: it replaced the last good copy, every genuine token's `kid` was then unlisted and
+refused as `invalid_token`, and no read could start for 10 seconds (code review #39). Such a
+document says nothing about which tokens are genuine; it is an empty, truncated or proxied answer
+from the key endpoint. It is now a failed read with the cause "the document lists no usable RSA
+key": the last good copy is kept, and with no copy the refusal is `key_set_unavailable`. Entries
+with no usable RSA key are still skipped when at least one usable RSA key is listed.
 
 ## Verification
 

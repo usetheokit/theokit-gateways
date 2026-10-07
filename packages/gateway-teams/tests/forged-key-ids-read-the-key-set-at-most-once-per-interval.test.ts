@@ -331,7 +331,11 @@ describe("forged key ids", () => {
       __validatorModule: { InboundActivityTokenValidator: CountingValidator },
     });
     const ec = generateKeyPairSync("ec", { namedCurve: "P-256" });
-    ks.answerNext({ keys: [{ ...ec.publicKey.export({ format: "jwk" }), kid: "ec" }] });
+    // Published beside the RSA keys: a document listing only the EC key lists no usable RSA key,
+    // which is a failed read (key_set_unavailable), not the listed-but-unusable case this covers.
+    ks.answerNext({
+      keys: [...ks.publishedJwks(), { ...ec.publicKey.export({ format: "jwk" }), kid: "ec" }],
+    });
 
     const res = await verify(activityRequest(ks.signToken({}, { kid: "ec", key: ec.privateKey })));
 

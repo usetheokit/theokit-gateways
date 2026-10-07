@@ -462,7 +462,10 @@ interface KeySetReadFailure {
 
 /**
  * The RSA keys of a key-set document by `kid`, or the failure when it is not one: no `keys` array,
- * or more than {@link MAX_KEYS_PER_SET} entries. An entry with no usable RSA key is skipped.
+ * more than {@link MAX_KEYS_PER_SET} entries, or no entry holding a usable RSA key. An entry with
+ * no usable RSA key is skipped, but a document with none at all is a failed read: it is an empty,
+ * truncated or proxied answer from the key endpoint, and taken as the key set it would replace the
+ * last good copy and turn every genuine token into a non-retryable refusal.
  */
 function publishedKeys(document: unknown): Map<string, KeyObject> | KeySetReadFailure {
   const entries = (document as { keys?: unknown } | null)?.keys;
@@ -475,6 +478,7 @@ function publishedKeys(document: unknown): Map<string, KeyObject> | KeySetReadFa
     const usable = rsaPublicKey(entry);
     if (usable !== undefined) found.set(usable.kid, usable.publicKey);
   }
+  if (found.size === 0) return { failed: "the document lists no usable RSA key" };
   return found;
 }
 
@@ -536,9 +540,10 @@ type KeyLookup = KeyObject | "unlisted" | { readonly unavailable: string };
  * any `kid` when there is no copy, waits for a read. Concurrent lookups share the read in flight,
  * and no read starts within {@link KEY_SET_READ_INTERVAL_MS} of the end of the previous one (so
  * nor of its start), whatever asked: an endpoint that hangs until the read times out cannot drive
- * reads back to back. A successful read replaces the copy, so a retired key is gone
- * after it; a failed read keeps the last good copy. A `kid` missing after a successful read is
- * `unlisted`; one missing when there is no copy, or when the latest read failed, is `unavailable`.
+ * reads back to back. A successful read replaces the copy, so a retired key is gone after it; a
+ * failed read, which includes a document listing no usable RSA key, keeps the last good copy. A
+ * `kid` missing after a successful read is `unlisted`; one missing when there is no copy, or when
+ * the latest read failed, is `unavailable`.
  */
 function keySet(label: string, url: string): { lookup(kid: string): Promise<KeyLookup> } {
   let held: Map<string, KeyObject> | undefined;

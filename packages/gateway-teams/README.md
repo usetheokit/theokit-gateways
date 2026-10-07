@@ -84,8 +84,10 @@ list the token's key: the token could not be checked. Answer it with a 503, as t
 so the Bot Framework retries; a cold start during a key-set outage refuses this way until a read
 succeeds, at most one read every 10 seconds. Its message names the key set, its URL and why the
 latest read failed: an HTTP status, no answer within 10 s, a network error code (for example
-`ECONNREFUSED`), or a document that is too large, is not JSON, has no `keys` array or lists too many
-keys. A 404 or a `keys`-less document points at your `cloud` configuration, not at Microsoft. The SDK still reads the key through its own client
+`ECONNREFUSED`), or a document that is too large, is not JSON, has no `keys` array, lists too many
+keys or lists no usable RSA key. A document with no usable RSA key (an empty `keys` array, or only
+keys of another type) is a failed read like the others: the copy held is kept, so it cannot turn
+genuine tokens into `invalid_token`. A 404 or a `keys`-less document points at your `cloud` configuration, not at Microsoft. The SDK still reads the key through its own client
 for a token whose signature verified (its client keeps a key for 10 minutes), and when that read
 fails the answer is also `key_set_unavailable`, not `invalid_token`. That read and its timeout
 belong to the SDK, so bound the `verify` call with your route's own timeout. The limits are per verifier, not per client: put your own
