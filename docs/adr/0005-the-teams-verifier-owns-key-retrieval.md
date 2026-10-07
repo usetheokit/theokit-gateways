@@ -103,6 +103,33 @@ before it calls the SDK `check()`. The SDK remains the authority on issuer, audi
   still checks every accepted token with its own 10-minute cache, bounds how long a revoked key
   can be accepted whatever this value is.
 
+## Amended 2026-10-07: stale-while-revalidate, and the SDK's own key read
+
+Two review findings changed how the decision above runs, without changing what it decides.
+
+- **A copy an hour old no longer holds a request.** The performance review (PF-D7.1) found that
+  `lookup()` awaited the hourly read even for a `kid` the copy lists, and that, with the read
+  interval equal to the 10-second read timeout, a hanging endpoint drove reads back to back, so
+  almost every request waited up to 10 seconds for as long as the endpoint hung. Now a `kid` the
+  held copy lists is answered from it at once, and an hour-old copy starts a read in the
+  background that nothing awaits; only a missing copy or a missing `kid` waits for a read. The
+  10-second gap is counted from the end of the previous read, so no read starts within 10 seconds
+  of another's start or end. The rest stands: one read in flight per set, shared; the 1 MiB and
+  1000-key caps; replace on success; the last good copy kept on failure. The cost: after the hour,
+  a retired key verifies until the background read completes, which is as long as one read takes,
+  or for as long as reads fail, as before.
+- **The SDK's own key read is no longer read as a forgery** (code review #68). The SDK still reads
+  the key for a token whose signature the verifier verified, and when that read fails it refuses
+  with the plain `Error` it uses for a forgery, so a genuine activity during a key-endpoint outage
+  longer than its 10-minute cache was answered `invalid_token`. The verifier now hands the SDK a
+  logger that, inside the `check()` call that logged it (`AsyncLocalStorage`), notes the SDK's
+  "Failed to get signing key" line, and answers such a refusal `key_set_unavailable`. A
+  `SigningKeyNotFoundError` is left out: there the SDK's read succeeded and does not list the key.
+  This reads a log line, not an API: it is the same text in 2.0.15 (run), and 2.0.16 and 2.1.0
+  (read in the tarballs). If an SDK changes it, the answer falls back to `invalid_token`, the
+  behaviour before this amendment, never to an acceptance; a test on the installed SDK pins it.
+  Option 4 above stays rejected: nothing replaces the SDK's key client.
+
 ## Verification
 
 `packages/gateway-teams/tests/` holds the evidence. Seven tests were written first and failed on
