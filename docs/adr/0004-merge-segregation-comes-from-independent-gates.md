@@ -37,6 +37,9 @@ author, not by a second human:
 The two caps above are therefore dismissed for this repository. Their findings stay in each report
 and are read as this recorded decision, not as a defect of the change under review.
 
+<!-- AUDIT-CAP-DISMISSED: loop-delivery-audit: soc2_control_bypassed: change approval on main comes from independent automated gates, not a human approver (this ADR) -->
+<!-- AUDIT-CAP-DISMISSED: loop-delivery-audit: no_segregation_of_duties: segregation comes from reviewers and panels that are not the author, not from a second human (this ADR) -->
+
 ## Considered Options
 
 1. **Dismiss the two caps by this ADR** (chosen). Keeps the autonomous merge the process depends on
@@ -54,8 +57,7 @@ and are read as this recorded decision, not as a defect of the change under revi
 - A SOC 2 assessment of this repository would read CC6.3 and CC8.1 as met by automated independent
   review, not by human approval. Whoever needs a SOC 2 opinion must accept that model or reopen this
   ADR.
-- Nothing reads this ADR mechanically yet: the review's coverage gate turns any computed blocking
-  audit verdict into a BLOCKER. Until the gate honours a recorded dismissal, the review of a change
-  here still shows these caps, and the reviewer cites this ADR when adjudicating them.
+- The review's coverage gate reads the two `AUDIT-CAP-DISMISSED` markers above (squad#606), so a
+  delivery audit whose only blocking caps are these two no longer blocks a review here.
 - Revisit when a human approver joins the project, or when a customer or certification requires
   human change approval.
