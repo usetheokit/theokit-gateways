@@ -49,8 +49,12 @@ client fault to answer with a 4xx (the example's 401). The Azure portal's "Test 
 (`webchat`) and the Bot Framework Emulator (`emulator`) are refused the same way: test in Teams.
 It never throws for a request; a refusal is `{ ok: false, reason, message }`,
 and the message never contains the token. Building the verifier throws a `TypeError` for an empty
-`clientId`, an empty `tenantId`, a `tenantId` of `common`, `organizations` or `consumers`, or a
-`cloud` missing one of `loginEndpoint`, `tokenIssuer` and `openIdMetadataUrl`.
+`clientId`, an empty `tenantId`, a `tenantId` of `common`, `organizations` or `consumers`, a
+`cloud` missing one of `loginEndpoint`, `tokenIssuer` and `openIdMetadataUrl`, or an
+`openIdMetadataUrl` that does not end in `/openidconfiguration` (no trailing slash, no query): the
+key-set URL is that URL with the suffix replaced by `/keys`, as in the SDK's own cloud values, and
+the OIDC-standard `/.well-known/openid-configuration` spelling would otherwise be fetched as the
+key set and refuse every request.
 
 Two refusals follow from Microsoft's tokens rather than from a fault, and both are deliberate:
 

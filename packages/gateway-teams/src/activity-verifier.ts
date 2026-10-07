@@ -43,7 +43,10 @@ export interface TeamsCloudEndpoints {
   readonly loginEndpoint: string;
   /** The Bot Framework token issuer, e.g. `https://api.botframework.com`. */
   readonly tokenIssuer: string;
-  /** The OpenID metadata URL; the SDK and the verifier derive the Bot Framework key-set URL from it. */
+  /**
+   * The OpenID metadata URL; the SDK and the verifier derive the Bot Framework key-set URL from it
+   * by replacing its trailing `/openidconfiguration` with `/keys`, so it must end in that suffix.
+   */
   readonly openIdMetadataUrl: string;
 }
 
@@ -413,7 +416,7 @@ const BAD_SIGNATURE =
 /**
  * The key-set URL the SDK validator derives from the cloud's OpenID metadata URL: both 2.0.15 and
  * 2.1.0 replace a trailing `/openidconfiguration` with `/keys` and fetch that, without reading the
- * metadata document.
+ * metadata document. Construction refuses a metadata URL without that suffix.
  */
 function keySetUrl(cloud: TeamsCloudEndpoints | undefined): string {
   const metadata = cloud?.openIdMetadataUrl ?? DEFAULT_OPENID_METADATA_URL;
@@ -645,7 +648,8 @@ function judgeVerifiedToken(
  * that fails with anything but the SDK's plain `Error` is `validator_unavailable`, naming its class.
  *
  * @throws TypeError at construction for an empty `clientId`, an empty or multi-tenant `tenantId`,
- * or a `cloud` missing one of its three endpoints.
+ * a `cloud` missing one of its three endpoints, or a `cloud.openIdMetadataUrl` that does not end
+ * in `/openidconfiguration`.
  * @public
  */
 export function teamsActivityVerifier(

@@ -55,6 +55,13 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * The suffix the verifier and the SDK replace with `/keys` to find the Bot Framework key set. A
+ * metadata URL ending any other way would be fetched as the key set itself, and every request
+ * would be refused as a retryable `key_set_unavailable` for as long as the configuration stood.
+ */
+const OPENID_METADATA_SUFFIX = "/openidconfiguration";
+
 function assertCloud(cloud: unknown): void {
   if (cloud === undefined) return;
   const fields = ["loginEndpoint", "tokenIssuer", "openIdMetadataUrl"] as const;
@@ -64,12 +71,18 @@ function assertCloud(cloud: unknown): void {
       throw new TypeError(`teamsActivityVerifier: cloud.${field} must be a non-empty string`);
     }
   }
+  if (!(record.openIdMetadataUrl as string).endsWith(OPENID_METADATA_SUFFIX)) {
+    throw new TypeError(
+      `teamsActivityVerifier: cloud.openIdMetadataUrl must end in ${OPENID_METADATA_SUFFIX} (no trailing slash or query): the Bot Framework key-set URL is derived by replacing that suffix with /keys, as the Teams SDK does`,
+    );
+  }
 }
 
 /**
  * Refuse, at construction, options no request could ever be verified against.
  *
- * @throws TypeError naming the field and, for a multi-tenant `tenantId`, the value.
+ * @throws TypeError naming the field and, for a multi-tenant `tenantId`, the value; and for a
+ * `cloud.openIdMetadataUrl` that does not end in {@link OPENID_METADATA_SUFFIX}.
  */
 export function assertVerifierOptions(options: {
   readonly clientId: unknown;

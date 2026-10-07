@@ -130,6 +130,16 @@ Two review findings changed how the decision above runs, without changing what i
   behaviour before this amendment, never to an acceptance; a test on the installed SDK pins it.
   Option 4 above stays rejected: nothing replaces the SDK's key client.
 
+## Amended 2026-10-07: a metadata URL the key-set URL cannot be derived from
+
+The Bot Framework key-set URL is the cloud's `openIdMetadataUrl` with its trailing
+`/openidconfiguration` replaced by `/keys`. A URL ending any other way (the OIDC-standard
+`/.well-known/openid-configuration`, a trailing slash, a query string) was passed through unchanged
+and fetched as the key set; the document has no `keys` array, so every request was refused as
+`key_set_unavailable`, which says a retry may succeed (code review #95). The verifier now throws a
+`TypeError` naming `cloud.openIdMetadataUrl` and the suffix when it is built, the same way it
+refuses an empty one. The SDK's public, US government and China values all end in the suffix.
+
 ## Verification
 
 `packages/gateway-teams/tests/` holds the evidence. Seven tests were written first and failed on
