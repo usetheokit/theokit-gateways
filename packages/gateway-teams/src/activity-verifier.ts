@@ -4,14 +4,16 @@
  * token's `aud`, `serviceurl` and `tid` claims match this app (ADR-0003, ADR-0005).
  *
  * The verifier reads the published key sets itself and checks the signature before the SDK is
- * asked, so the timing of every key-set request is decided here rather than by the SDK's private
- * key cache (ADR-0005). Issuer, audience, expiry and `serviceurl` stay the SDK validator's, which
+ * asked, so the timing of every key-set request a sender can cause is decided here rather than by
+ * the SDK's private key cache (ADR-0005). The SDK still reads the key again for a token whose
+ * signature verified; when that read fails, the refusal is `key_set_unavailable`. Issuer, audience, expiry and `serviceurl` stay the SDK validator's, which
  * the SDK root does not export: it is read from `@microsoft/teams.apps/dist/middleware/index.js`,
  * as `InboundActivityTokenValidator` (2.1.x) or `ServiceTokenValidator` (2.0.x). The claim checks
  * run after it on both, because that validator alone restricts no tenant on the Bot Framework path
  * and compares no `serviceurl` on the 2.1.x Entra path.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { Buffer } from "node:buffer";
 import { createPublicKey, type JsonWebKey, type KeyObject, verify } from "node:crypto";
 
@@ -150,12 +152,41 @@ type ValidatorClass = new (
 
 const ignore = (): void => {};
 
+/** What one `check()` call learned from the SDK's logger. */
+interface SdkCheckReport {
+  keyReadFailed: boolean;
+}
+
+/** The report of the `check()` call whose async context the SDK logs from. */
+const sdkCheckReports = new AsyncLocalStorage<SdkCheckReport>();
+
+/**
+ * The text the SDK's `JwtValidator` logs, with the key client's error, when it cannot get a
+ * signing key (2.0.15, 2.0.16 and 2.1.0 read alike). It refuses the token as it refuses a forgery
+ * right after, so this log line is the one place the two can be told apart.
+ */
+const SDK_KEY_READ_FAILED = "Failed to get signing key";
+
+/**
+ * Note, for the `check()` in progress, that the SDK could not read the signing key. A
+ * `SigningKeyNotFoundError` is left out: there the read succeeded and the set did not list the key,
+ * which is a refusal on the merits. Writes nothing anywhere.
+ */
+function noteSdkKeyReadFailure(...msg: unknown[]): void {
+  const [text, cause] = msg;
+  if (typeof text !== "string" || !text.startsWith(SDK_KEY_READ_FAILED)) return;
+  if ((cause as { name?: unknown } | null)?.name === "SigningKeyNotFoundError") return;
+  const report = sdkCheckReports.getStore();
+  if (report !== undefined) report.keyReadFailed = true;
+}
+
 /**
  * The logger handed to the SDK validator. Without one the SDK logs every refused token through its
  * `ConsoleLogger`, claim values included, and those values are chosen by whoever sent the request.
+ * It writes nothing; its `error` only notes a failed key read for the `check()` that logged it.
  */
 const SILENT_LOGGER: SdkLogger = {
-  error: ignore,
+  error: noteSdkKeyReadFailure,
   warn: ignore,
   info: ignore,
   debug: ignore,
@@ -294,11 +325,11 @@ function isTokenRefusal(error: unknown): boolean {
   return error instanceof Error && error.constructor === Error;
 }
 
-/**
- * The SDK's verdict on this exact header: the token it resolved, `undefined` when it refused the
- * token, or a `validator_unavailable` refusal when `check()` failed in a way that is no verdict.
- */
-async function sdkCheck(
+const SDK_KEYS_UNREADABLE =
+  "the Teams SDK could not read the published signing keys to check the token, so it could not judge it; a retry may succeed";
+
+/** The SDK's verdict, read in {@link sdkCheck}: the resolved token, or `undefined` for a refusal. */
+async function sdkVerdict(
   validator: TokenValidatorLike,
   header: string,
   activity: Record<string, unknown>,
@@ -318,6 +349,26 @@ async function sdkCheck(
       `the Teams SDK token validator failed instead of judging the token (${errorKind(error)})`,
     );
   }
+}
+
+/**
+ * The SDK's verdict on this exact header: the token it resolved, `undefined` when it refused the
+ * token, or a refusal when its answer is no verdict on the token: `validator_unavailable` when
+ * `check()` failed with something but its own refusal, and `key_set_unavailable` when it refused
+ * after failing to read the signing key. Only a token whose signature this verifier already
+ * verified reaches here, so that refusal is the SDK's key endpoint failing, not a forgery.
+ */
+async function sdkCheck(
+  validator: TokenValidatorLike,
+  header: string,
+  activity: Record<string, unknown>,
+): Promise<ResolvedToken | Refusal | undefined> {
+  const report: SdkCheckReport = { keyReadFailed: false };
+  const verdict = await sdkCheckReports.run(report, () => sdkVerdict(validator, header, activity));
+  if (verdict === undefined && report.keyReadFailed) {
+    return refuse("key_set_unavailable", SDK_KEYS_UNREADABLE);
+  }
+  return verdict;
 }
 
 /** The least time between two reads of one key set, whatever asks for the read. */
@@ -568,7 +619,8 @@ function judgeVerifiedToken(
  * the `kid`, or when the copy is an hour old, never twice in 10 seconds whatever is sent. A key
  * Microsoft publishes is therefore accepted within 10 seconds. A key set that cannot be read and
  * does not already list the `kid` is `key_set_unavailable`, which is retryable: answer it with a
- * 503, not a 401. A `check()` that fails with anything but the SDK's plain `Error` is
+ * 503, not a 401; so is a token whose signature verified when the SDK then reports it could not
+ * read the key itself. A `check()` that fails with anything but the SDK's plain `Error` is
  * `validator_unavailable`, naming its class.
  *
  * @throws TypeError at construction for an empty `clientId`, an empty or multi-tenant `tenantId`,

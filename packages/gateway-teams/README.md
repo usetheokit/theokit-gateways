@@ -70,9 +70,10 @@ reason before the SDK.
 `key_set_unavailable` means the key set could not be read and the copy held, if any, does not
 list the token's key: the token could not be checked. Answer it with a 503, as the example does,
 so the Bot Framework retries; a cold start during a key-set outage refuses this way until a read
-succeeds, at most one read every 10 seconds. The SDK still reads the key set through its own
-client on a cold start, and that read and its timeout belong to the SDK, so bound the `verify`
-call with your route's own timeout. The limits are per verifier, not per client: put your own
+succeeds, at most one read every 10 seconds. The SDK still reads the key through its own client
+for a token whose signature verified (its client keeps a key for 10 minutes), and when that read
+fails the answer is also `key_set_unavailable`, not `invalid_token`. That read and its timeout
+belong to the SDK, so bound the `verify` call with your route's own timeout. The limits are per verifier, not per client: put your own
 per-client rate limit in front of the route as well (ADR-0003, ADR-0005).
 
 What else to expect from the verifier:
