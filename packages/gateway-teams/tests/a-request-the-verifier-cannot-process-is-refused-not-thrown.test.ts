@@ -49,11 +49,14 @@ describe("a request the verifier cannot process", () => {
 
   it("refuses as invalid_token when the validator resolves something that is not a token", async () => {
     ks = await startKeyServer();
+    let checks = 0;
     const verify = teamsActivityVerifier({
       clientId: CLIENT_ID,
+      cloud: ks.cloud,
       __validatorModule: {
         InboundActivityTokenValidator: class {
           async check() {
+            checks += 1;
             return undefined;
           }
         },
@@ -62,6 +65,11 @@ describe("a request the verifier cannot process", () => {
 
     const res = await verify(activityRequest(ks.signToken({})));
 
-    expect(res).toMatchObject({ ok: false, reason: "invalid_token" });
+    expect(res).toMatchObject({
+      ok: false,
+      reason: "invalid_token",
+      message: expect.stringContaining("the Teams SDK did not accept the token"),
+    });
+    expect([checks, ks.hits()]).toEqual([1, 1]);
   });
 });
