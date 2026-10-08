@@ -12,9 +12,23 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest } from "./helpers/claim-fixtures.js";
-import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
 
 const stray = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
+
+/** What the verifier answers for the default activity a genuine token carries. */
+const ACCEPTED = {
+  ok: true,
+  activity: { type: "message", serviceUrl: SERVICE_URL, channelId: "msteams" },
+  token: { appId: CLIENT_ID, serviceUrl: SERVICE_URL },
+};
+
+/** A refusal of a token naming a key the held copy of the key set does not list. */
+const UNLISTED = {
+  ok: false,
+  reason: "invalid_token",
+  message: expect.stringContaining("the published key set, as last read, does not list"),
+};
 
 describe("forged key ids", () => {
   let ks: KeyServer | undefined;
@@ -95,20 +109,24 @@ describe("forged key ids", () => {
   it("accept a genuine token whatever forged traffic preceded it", async () => {
     const { ks, verify } = await verifierWithKeys();
     const first = await verify(activityRequest(ks.signToken({})));
-    for (let i = 0; i < 20; i += 1) await verify(activityRequest(forged(ks)));
+    const refused = [];
+    for (let i = 0; i < 20; i += 1) refused.push(await verify(activityRequest(forged(ks))));
 
     const after = await verify(activityRequest(ks.signToken({})));
 
-    expect([first.ok, after.ok]).toEqual([true, true]);
+    expect([first, after]).toEqual([ACCEPTED, ACCEPTED]);
+    expect(refused).toEqual(Array.from({ length: 20 }, () => UNLISTED));
   });
 
   it("accept a genuine token that arrives after forged tokens at a cold start", async () => {
     const { ks, verify } = await verifierWithKeys();
-    for (let i = 0; i < 10; i += 1) await verify(activityRequest(forged(ks)));
+    const refused = [];
+    for (let i = 0; i < 10; i += 1) refused.push(await verify(activityRequest(forged(ks))));
 
     const res = await verify(activityRequest(ks.signToken({})));
 
-    expect(res.ok).toBe(true);
+    expect(res).toEqual(ACCEPTED);
+    expect(refused).toEqual(Array.from({ length: 10 }, () => UNLISTED));
   });
 
   it("accept a token signed with a newly published key after forged tokens, once 10 seconds have passed", async () => {
@@ -120,7 +138,7 @@ describe("forged key ids", () => {
 
     const rotated = await verify(activityRequest(ks.signToken({})));
 
-    expect([first.ok, rotated.ok]).toEqual([true, true]);
+    expect([first, rotated]).toEqual([ACCEPTED, ACCEPTED]);
   });
 
   it("read the published key set at most once per 10 seconds for fresh kids", async () => {
@@ -151,7 +169,9 @@ describe("forged key ids", () => {
     vi.advanceTimersByTime(1);
     const onTime = await verify(activityRequest(ks.signToken({})));
 
-    expect([early.ok, onTime.ok]).toEqual([false, true]);
+    // Within 10 s of the last read nothing reads the set again, so the new kid is not yet listed.
+    expect(early).toEqual(UNLISTED);
+    expect(onTime).toEqual(ACCEPTED);
   });
 
   it("share one key-set read among concurrent tokens", async () => {
@@ -310,8 +330,11 @@ describe("forged key ids", () => {
     });
 
     const res = await verify(activityRequest(ks.signToken({})));
+    const unlisted = await verify(activityRequest(ks.signToken({}, { kid: "no-material" })));
 
-    expect(res.ok).toBe(true);
+    expect(res).toEqual(ACCEPTED);
+    // The entries skipped are not listed: a kid only a skipped entry named is a key nobody publishes.
+    expect(unlisted).toEqual(UNLISTED);
   });
 
   it("refuse a token naming a published EC key without asking the SDK", async () => {

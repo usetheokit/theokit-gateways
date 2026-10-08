@@ -79,6 +79,16 @@ export interface KeyServer {
   /** Answer the next `/keys` request with this JSON document instead of the key set. */
   answerNext(document: unknown): void;
   /**
+   * Answer the next `/keys` request with `status` and `body` written verbatim (no body when
+   * `undefined`), whatever they are: a proxy's HTML page, a 304 with no body, a 204.
+   */
+  answerNextRaw(status: number, body?: string): void;
+  /**
+   * Answer the next `/keys` request with a 200 and the start of a body, then drop the connection,
+   * so the body read fails part-way, as it does when a proxy or the network cuts it.
+   */
+  breakNext(): void;
+  /**
    * Leave the next `/keys` request unanswered, as a hanging endpoint does. It still counts in
    * {@link KeyServer.hits} when it arrives. The returned function answers it: with `status` when
    * given, with the key set otherwise. Closing the server drops it unanswered.
@@ -183,8 +193,8 @@ export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeySe
   let hitCount = 0;
   const tenantHitCounts = new Map<string, number>();
   const paths: string[] = [];
-  let pendingFailure: number | undefined;
-  let pendingDocument: { readonly document: unknown } | undefined;
+  /** How the next `/keys` request is answered instead of with the key set, when set. */
+  let pendingRaw: ((res: ServerResponse) => void) | undefined;
   let held: { response?: ServerResponse; answer?: (res: ServerResponse) => void } | undefined;
   let unpublished: KeyObject | undefined;
 
@@ -195,14 +205,14 @@ export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeySe
       if (held.answer !== undefined) held.answer(res);
       return;
     }
-    if (pendingFailure !== undefined) {
-      res.writeHead(pendingFailure).end();
-      pendingFailure = undefined;
+    if (pendingRaw !== undefined) {
+      const answer = pendingRaw;
+      pendingRaw = undefined;
+      answer(res);
       return;
     }
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify(pendingDocument ? pendingDocument.document : { keys: published }));
-    pendingDocument = undefined;
+    res.end(JSON.stringify({ keys: published }));
   };
 
   const answerTenantKeys = (tenant: string, res: ServerResponse): void => {
@@ -244,10 +254,25 @@ export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeySe
       published = published.filter((jwk) => jwk.kid !== kid);
     },
     failNext: (status) => {
-      pendingFailure = status;
+      pendingRaw = (res) => res.writeHead(status).end();
     },
     answerNext: (document) => {
-      pendingDocument = { document };
+      pendingRaw = (res) => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(document));
+      };
+    },
+    answerNextRaw: (status, body) => {
+      pendingRaw = (res) => {
+        res.writeHead(status, body === undefined ? {} : { "content-type": "text/html" });
+        res.end(body);
+      };
+    },
+    breakNext: () => {
+      pendingRaw = (res) => {
+        res.writeHead(200, { "content-type": "application/json", "content-length": "100000" });
+        res.write('{"keys":[', () => res.socket?.destroy());
+      };
     },
     holdNext: () => {
       const hold: { response?: ServerResponse; answer?: (res: ServerResponse) => void } = {};

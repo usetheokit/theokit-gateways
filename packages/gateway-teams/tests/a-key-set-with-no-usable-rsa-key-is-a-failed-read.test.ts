@@ -16,6 +16,19 @@ import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.
 
 const stray = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
 
+/**
+ * A key-set document whose one entry is valid RSA key material with `kid` replaced by `kid`
+ * (`undefined` removes it). No token can name that key, so it is no usable RSA key.
+ */
+function rsaWithKid(kid: unknown): { keys: unknown[] } {
+  const { kid: _published, ...material } = { kid: "", ...rsaJwk };
+  return { keys: [kid === undefined ? material : { ...material, kid }] };
+}
+
+const rsaJwk = generateKeyPairSync("rsa", { modulusLength: 2048 }).publicKey.export({
+  format: "jwk",
+});
+
 /** A key-set document whose one key is an EC key, which the Teams SDK cannot verify RS256 with. */
 function ecOnlyDocument(): { keys: unknown[] } {
   const ec = generateKeyPairSync("ec", { namedCurve: "P-256" }).publicKey.export({ format: "jwk" });
@@ -52,6 +65,9 @@ describe("a key-set document with no usable RSA key", () => {
   it.each([
     ["an empty keys array", { keys: [] }],
     ["only an EC key", ecOnlyDocument()],
+    ["only an RSA key with no kid", rsaWithKid(undefined)],
+    ["only an RSA key whose kid is a number", rsaWithKid(7)],
+    ["only an RSA key whose kid is empty", rsaWithKid("")],
   ])("keeps the last good copy after a read listing %s", async (_, document) => {
     const { server, verify, readTrigger } = await afterGoodReadThenAnswer(document);
 
@@ -60,14 +76,17 @@ describe("a key-set document with no usable RSA key", () => {
     expect(readTrigger).toMatchObject({
       ok: false,
       reason: "key_set_unavailable",
-      message: expect.stringContaining("no usable RSA key"),
+      message: expect.stringContaining("/keys: the document lists no usable RSA key)"),
     });
-    expect(genuine.ok).toBe(true);
+    expect(genuine).toMatchObject({ ok: true, token: { appId: CLIENT_ID } });
   });
 
   it.each([
     ["only an EC key", ecOnlyDocument()],
     ["an empty keys array", { keys: [] }],
+    ["only an RSA key with no kid", rsaWithKid(undefined)],
+    ["only an RSA key whose kid is a number", rsaWithKid(7)],
+    ["only an RSA key whose kid is empty", rsaWithKid("")],
     [
       "only entries whose key material createPublicKey refuses",
       {
@@ -88,7 +107,7 @@ describe("a key-set document with no usable RSA key", () => {
     expect(res).toMatchObject({
       ok: false,
       reason: "key_set_unavailable",
-      message: expect.stringContaining("no usable RSA key"),
+      message: expect.stringContaining("/keys: the document lists no usable RSA key)"),
     });
   });
 });

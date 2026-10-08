@@ -82,6 +82,66 @@ describe("the SDK validator", () => {
     }
   });
 
+  it.each<[string, unknown]>([
+    ["a null module", null],
+    ["an empty module", {}],
+    ["a module whose default export is empty", { default: {} }],
+    ["an export that is not a class", { InboundActivityTokenValidator: "not-a-class" }],
+    ["a default export that is not a class", { default: { ServiceTokenValidator: 7 } }],
+  ])("says it found neither class for %s", async (_, module) => {
+    ks = await startKeyServer();
+    const verify = teamsActivityVerifier({
+      clientId: CLIENT_ID,
+      cloud: ks.cloud,
+      __validatorModule: module,
+    });
+
+    const res = await verify(activityRequest(ks.signToken({})));
+
+    expect(res).toEqual({
+      ok: false,
+      reason: "validator_unavailable",
+      message: expect.stringMatching(/^found neither class: expected .* exporting /),
+    });
+  });
+
+  it("says it could not read the classes when reading the export throws", async () => {
+    ks = await startKeyServer();
+    const module = {
+      get InboundActivityTokenValidator(): never {
+        throw new RangeError("getter failed");
+      },
+    };
+    const verify = teamsActivityVerifier({
+      clientId: CLIENT_ID,
+      cloud: ks.cloud,
+      __validatorModule: module,
+    });
+
+    const res = await verify(activityRequest(ks.signToken({})));
+
+    expect(res).toEqual({
+      ok: false,
+      reason: "validator_unavailable",
+      message: expect.stringMatching(/^could not read the validator classes of .*\(RangeError\)$/),
+    });
+    expect(res.ok ? "" : res.message).not.toContain("getter failed");
+  });
+
+  it("uses ServiceTokenValidator exported at the top level", async () => {
+    ks = await startKeyServer();
+    const service = { n: 0 };
+    const verify = teamsActivityVerifier({
+      clientId: CLIENT_ID,
+      cloud: ks.cloud,
+      __validatorModule: { ServiceTokenValidator: countingClass(service), default: {} },
+    });
+
+    const res = await verify(activityRequest(ks.signToken({})));
+
+    expect([res.ok, service.n]).toEqual([true, 1]);
+  });
+
   it("loads a validator from the installed SDK's middleware module with no test seam", async () => {
     ks = await startKeyServer();
     const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud });

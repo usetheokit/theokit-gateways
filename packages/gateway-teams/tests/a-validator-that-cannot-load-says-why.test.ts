@@ -71,6 +71,16 @@ describe("a validator that cannot load", () => {
       "(an unnamed error)",
     ],
     ["a thrown null", null, "(a thrown object)"],
+    [
+      "a name that is not a string, though it reads as one",
+      Object.assign(new Error("x"), { name: { toString: () => "Spoofed" } }),
+      "(an unnamed error)",
+    ],
+    [
+      "a code that is not a string, though it reads as one",
+      Object.assign(new RangeError("x"), { code: { toString: () => "ESPOOFED" } }),
+      "(RangeError)",
+    ],
   ])("refuses a constructor failure with %s without repeating it", async (_, thrown, kind) => {
     ks = await startKeyServer();
     const { teamsActivityVerifier } = await import("../src/index.js");
