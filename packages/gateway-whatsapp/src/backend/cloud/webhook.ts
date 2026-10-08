@@ -41,12 +41,44 @@ export function verifyWebhookSubscription(
 // normalizers below (see tests/MUTATION.md); it is re-exported so the import path is unchanged.
 export { verifyWebhookSignature } from "./signature.js";
 
-/** Parse the raw JSON payload into a typed envelope. Returns `null` if shape is unrecognized. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
+/** Absent, or an array whose every item is an object: what the normalizers iterate. */
+function isOptionalRecordArray(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every(isRecord));
+}
+
+/** A change's `value`: absent, or an object whose lists are lists of objects. */
+function isWellFormedValue(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (!isRecord(value)) return false;
+  return (
+    isOptionalRecordArray(value.contacts) &&
+    isOptionalRecordArray(value.messages) &&
+    isOptionalRecordArray(value.statuses)
+  );
+}
+
+function isWellFormedEntry(entry: unknown): boolean {
+  if (!isRecord(entry) || !Array.isArray(entry.changes)) return false;
+  return entry.changes.every((change) => isRecord(change) && isWellFormedValue(change.value));
+}
+
+/**
+ * Parse the raw JSON payload into a typed envelope, or `null` when its shape is not one the
+ * normalizers can read: no `object`, an `entry` that is not an array, or any entry, change or
+ * listed contact, message or status that is not an object (an entry with no `changes` array, a
+ * `null` change, `messages: 5`). The whole body is refused rather than its bad entries skipped, so
+ * nothing in a batch is dropped without the route seeing it. Past a non-null result neither
+ * normalizer throws. The fields of each message and status are not checked here.
+ */
 export function parseWebhookPayload(json: unknown): MetaWebhookEnvelope | null {
-  if (json === null || typeof json !== "object") return null;
-  const env = json as MetaWebhookEnvelope;
-  if (env.object === undefined || !Array.isArray(env.entry)) return null;
-  return env;
+  if (!isRecord(json)) return null;
+  if (json.object === undefined || !Array.isArray(json.entry)) return null;
+  if (!json.entry.every(isWellFormedEntry)) return null;
+  return json as unknown as MetaWebhookEnvelope;
 }
 
 /**

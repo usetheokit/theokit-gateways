@@ -71,6 +71,14 @@ messages to another number's agent. A route that calls `WhatsAppCloudBackend.han
 directly, with no adapter, gets the same check: the backend's inbound handler receives only
 messages addressed to the backend's own `phoneNumberId`.
 
+`parseWebhookPayload` returns `null` for a body whose shape the normalizers cannot read: an entry
+with no `changes` array, a `null` entry or change, or a `messages`, `statuses` or `contacts` list
+that is not a list of objects. The whole body is refused, not just its bad entries, so the route
+answers it (400 in the example) instead of dropping part of a batch unseen. Any non-null envelope
+is safe to hand to `toDeliverableEvents` and `normalizeStatusReceipts`: neither throws on it.
+`handleWebhookPayload` answers such a body `true` and dispatches nothing, as it does for any
+unrecognized shape.
+
 Answer 200 only when every event returned `ok`. `no_handler` means nothing received the message,
 and `handler_threw` means your handler failed on it; a non-2xx makes Meta retry the whole envelope,
 so a handler that always throws on one message sees it again on every retry. Meta also redelivers
