@@ -17,14 +17,18 @@ describe("a request the verifier cannot process", () => {
     ks = undefined;
   });
 
-  it("refuses a request whose body was already read as malformed_body instead of throwing", async () => {
+  it("refuses a request whose body was already read as validator_unavailable instead of throwing", async () => {
     ks = await startKeyServer();
     const { module } = acceptingValidatorModule();
     const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: module });
     const req = activityRequest(ks.signToken({}));
     await req.text();
 
-    expect(await verify(req)).toMatchObject({ ok: false, reason: "malformed_body" });
+    expect(await verify(req)).toMatchObject({
+      ok: false,
+      reason: "validator_unavailable",
+      message: expect.stringContaining("request.clone()"),
+    });
   });
 
   it("refuses every request as validator_unavailable when the validator constructor throws", async () => {

@@ -100,10 +100,18 @@ per-client rate limit in front of the route as well (ADR-0003, ADR-0005).
 What else to expect from the verifier:
 
 - It reads at most 1 MiB of the body, before any token work, because the `serviceurl` check needs
-  the activity. A larger body is refused as `malformed_body`. Your server may cap it lower.
-- `validator_unavailable` means the SDK validator could not be loaded, or failed with something
-  other than its own token refusal. The message names the error's class and code, never its text.
-  A failed load is kept: that verifier refuses every request until you build a new one.
+  the activity. A larger body is refused as `malformed_body`, and so is a body whose stream fails
+  part-way through the read. Your server may cap it lower.
+- Pass it a request whose body nothing has read: `verify(request.clone())`, as the example does,
+  when your route reads the body too. A request whose body was already read, or is locked by
+  another reader (a framework or middleware that consumed it first), is `validator_unavailable`,
+  not `malformed_body`: the fault is the route's, not the sender's, so it gets the 503 and the
+  logged message, which says the body was already read and to pass an unread request. A retry
+  fails the same way until the route is fixed.
+- `validator_unavailable` means the SDK validator could not be loaded, failed with something
+  other than its own token refusal, or was never asked because the body was already read. For an
+  SDK failure the message names the error's class and code, never its text. A failed load is
+  kept: that verifier refuses every request until you build a new one.
 - It hands the SDK validator a silent logger, so a refused token writes nothing to your logs. The
   SDK would otherwise log claim values the sender chose. Log the `reason` yourself if you want a
   trace.

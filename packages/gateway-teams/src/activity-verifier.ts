@@ -314,7 +314,18 @@ async function readBoundedStream(
   return new TextDecoder().decode(Buffer.concat(chunks));
 }
 
-async function readBody(request: Request): Promise<ParsedBody> {
+const BODY_ALREADY_READ =
+  "the request body was already read or is locked by another reader, so the verifier could not read the activity: this is the route's fault, not the sender's; pass the verifier an unread request, for example request.clone()";
+
+/**
+ * The parsed activity, `malformed_body` when the sender's bytes are over the limit, are not an
+ * activity, or fail while being read, or `validator_unavailable` when the route handed over a body
+ * already read or locked: no byte of it came from this read, so the sender is not at fault.
+ */
+async function readBody(request: Request): Promise<ParsedBody | Refusal> {
+  if (request.bodyUsed || request.body?.locked === true) {
+    return refuse("validator_unavailable", BODY_ALREADY_READ);
+  }
   try {
     const text = await readBoundedStream(request.body, MAX_BODY_BYTES);
     return text === undefined ? { ok: false, reason: "malformed_body" } : parseActivityBody(text);
@@ -666,7 +677,8 @@ async function readRequest(
   const rawToken = readBearerToken(header);
   if (header === null || rawToken === undefined) return refuse("missing_authorization");
   const body = await readBody(request);
-  return body.ok ? { header, rawToken, body } : refuse("malformed_body");
+  if (!body.ok) return "message" in body ? body : refuse("malformed_body");
+  return { header, rawToken, body };
 }
 
 /** The verdict on a token the SDK resolved (or refused): decode its claims and check them. */
@@ -689,7 +701,10 @@ function judgeVerifiedToken(
 /**
  * Build a verifier for one Teams bot. The returned function reads a Fetch `Request` (pass a
  * `clone()` if the body is needed afterwards) and answers with {@link TeamsActivityVerifyResult}.
- * It reads at most 1 MiB of body: a larger one is `malformed_body`, refused before any token work.
+ * It reads at most 1 MiB of body: a larger one is `malformed_body`, refused before any token work,
+ * and so is a body that fails part-way through the read. A request whose body was already read or
+ * is locked by another reader is `validator_unavailable`, a server-side fault, whose message says
+ * to pass an unread request such as `request.clone()`.
  *
  * It accepts only when the token's RS256 signature verifies under a key the published key set
  * lists, the SDK validator accepted the token, AND the token's `aud`, `serviceurl` and tenant
