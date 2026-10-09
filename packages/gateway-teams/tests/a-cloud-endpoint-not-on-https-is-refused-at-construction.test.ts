@@ -32,17 +32,16 @@ describe("a cloud endpoint's scheme", () => {
     expect(build).toThrow(`cloud.${field} must be an https: URL`);
   });
 
-  it.each([
-    "http://127.0.0.1:8080",
-    "http://localhost:8080",
-    "http://[::1]:8080",
-  ])("accepts the loopback endpoint %s over http", (origin) => {
-    const cloud = {
-      loginEndpoint: origin,
-      tokenIssuer: "https://api.botframework.com",
-      openIdMetadataUrl: `${origin}/openidconfiguration`,
-    };
+  it.each(["http://127.0.0.1:8080", "http://localhost:8080", "http://[::1]:8080"])(
+    "accepts the loopback endpoint %s over http",
+    (origin) => {
+      const cloud = {
+        loginEndpoint: origin,
+        tokenIssuer: "https://api.botframework.com",
+        openIdMetadataUrl: `${origin}/openidconfiguration`,
+      };
 
-    expect(() => teamsActivityVerifier({ clientId: CLIENT_ID, cloud })).not.toThrow();
-  });
+      expect(() => teamsActivityVerifier({ clientId: CLIENT_ID, cloud })).not.toThrow();
+    },
+  );
 });
