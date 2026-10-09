@@ -96,8 +96,12 @@ function signedBody(wamid: string): { body: string; signature: string } {
       },
     ],
   });
-  const hex = crypto.createHmac("sha256", CLOUD.appSecret).update(body).digest("hex");
-  return { body, signature: `sha256=${hex}` };
+  return { body, signature: sign(body) };
+}
+
+/** The `X-Hub-Signature-256` value Meta would send for `body`. */
+function sign(body: string): string {
+  return `sha256=${crypto.createHmac("sha256", CLOUD.appSecret).update(body).digest("hex")}`;
 }
 
 /** A signed envelope holding one status receipt addressed to `phoneNumberId`. */
@@ -127,8 +131,7 @@ function signedReceipt(phoneNumberId: string): { body: string; signature: string
       },
     ],
   });
-  const hex = crypto.createHmac("sha256", CLOUD.appSecret).update(body).digest("hex");
-  return { body, signature: `sha256=${hex}` };
+  return { body, signature: sign(body) };
 }
 
 beforeEach(() => {
@@ -219,6 +222,31 @@ describe("the Cloud route documented in README.md", () => {
 
     expect(await onWebhook(body, signature)).toBe(200);
     expect(receipts).toEqual([]);
+  });
+
+  it("answers 400 to a signed body that is not JSON, and delivers nothing", async () => {
+    const received: string[] = [];
+    const onWebhook = await loadRoute(async (event) => {
+      received.push(event.id);
+    });
+    const body = "{ not json";
+
+    expect(await onWebhook(body, sign(body))).toBe(400);
+    expect(received).toEqual([]);
+  });
+
+  it("answers 400 to a signed body parseWebhookPayload does not recognize, and delivers nothing", async () => {
+    const received: string[] = [];
+    const onWebhook = await loadRoute(async (event) => {
+      received.push(event.id);
+    });
+    // A well-formed message beside a null entry: the parser refuses the whole body, so the route
+    // must not deliver the good message either.
+    const good = JSON.parse(signedBody("wamid.beside-null").body) as { entry: unknown[] };
+    const body = JSON.stringify({ ...good, entry: [...good.entry, null] });
+
+    expect(await onWebhook(body, sign(body))).toBe(400);
+    expect(received).toEqual([]);
   });
 
   it("refuses a body whose signature does not match", async () => {
