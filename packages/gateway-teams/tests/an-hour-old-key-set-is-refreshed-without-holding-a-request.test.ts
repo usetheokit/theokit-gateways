@@ -40,7 +40,7 @@ describe("a key set an hour old", () => {
 
   /** A verifier holding a copy read at 12:00, with the SDK stood in so only the verifier reads. */
   async function warmVerifier() {
-    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.useFakeTimers({ toFake: ["Date", "performance"] });
     vi.setSystemTime(new Date("2026-10-06T12:00:00Z"));
     ks = await startKeyServer();
     const verify = teamsActivityVerifier({

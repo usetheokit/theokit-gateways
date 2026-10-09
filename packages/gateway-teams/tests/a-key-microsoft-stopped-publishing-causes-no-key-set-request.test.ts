@@ -26,7 +26,7 @@ describe("a key Microsoft stopped publishing", () => {
   });
 
   it("adds at most one key-set request for 20 forged tokens naming it", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.useFakeTimers({ toFake: ["Date", "performance"] });
     vi.setSystemTime(new Date("2026-10-06T12:00:00Z"));
     ks = await startKeyServer();
     const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud });

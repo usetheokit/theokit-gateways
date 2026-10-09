@@ -181,6 +181,8 @@ export interface PublishedKeySet {
  * the latest read failed, is `unavailable`.
  */
 export function keySet(label: string, url: string): PublishedKeySet {
+  // Times are read from the monotonic clock: a wall clock stepped back would hold the next read
+  // off by the size of the step, and one stepped forward would age the held copy early.
   let held: Map<string, KeyObject> | undefined;
   let readAt = Number.NEGATIVE_INFINITY;
   let nextReadAt = Number.NEGATIVE_INFINITY;
@@ -193,7 +195,7 @@ export function keySet(label: string, url: string): PublishedKeySet {
     if (fresh instanceof Map) {
       lastFailure = undefined;
       held = fresh;
-      readAt = Date.now();
+      readAt = performance.now();
     } else lastFailure = fresh;
   };
   const unavailable = (): KeyLookup => ({
@@ -203,7 +205,7 @@ export function keySet(label: string, url: string): PublishedKeySet {
   const currentRead = (now: number): Promise<void> | undefined => {
     if (reading === undefined && now >= nextReadAt) {
       reading = read().finally(() => {
-        nextReadAt = Date.now() + KEY_SET_READ_INTERVAL_MS;
+        nextReadAt = performance.now() + KEY_SET_READ_INTERVAL_MS;
         reading = undefined;
       });
     }
@@ -211,7 +213,7 @@ export function keySet(label: string, url: string): PublishedKeySet {
   };
   return {
     async lookup(kid) {
-      const now = Date.now();
+      const now = performance.now();
       const listed = held?.get(kid);
       if (listed !== undefined) {
         if (now - readAt >= KEY_SET_MAX_AGE_MS) void currentRead(now);

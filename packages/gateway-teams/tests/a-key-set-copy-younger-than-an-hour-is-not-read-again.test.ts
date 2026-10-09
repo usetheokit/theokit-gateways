@@ -27,7 +27,7 @@ describe("a held key-set copy that lists the key", () => {
   });
 
   async function warmVerifier() {
-    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.useFakeTimers({ toFake: ["Date", "performance"] });
     vi.setSystemTime(new Date("2026-10-07T12:00:00Z"));
     ks = await startKeyServer();
     const keys = `${ks.cloud.loginEndpoint}/keys`;

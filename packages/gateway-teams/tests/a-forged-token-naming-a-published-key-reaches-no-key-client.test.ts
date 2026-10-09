@@ -22,7 +22,7 @@ describe("a forged token naming a published key", () => {
   });
 
   it("reads the key set once for 30 forged tokens cycling through 8 listed kids", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.useFakeTimers({ toFake: ["Date", "performance"] });
     vi.setSystemTime(new Date("2026-10-06T12:00:00Z"));
     ks = await startKeyServer({ extraKeys: 7 });
     const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud });

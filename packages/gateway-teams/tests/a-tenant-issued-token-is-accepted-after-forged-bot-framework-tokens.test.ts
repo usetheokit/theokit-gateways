@@ -22,7 +22,7 @@ describe("a tenant-issued token after forged Bot Framework tokens", () => {
   });
 
   it("is accepted", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.useFakeTimers({ toFake: ["Date", "performance"] });
     vi.setSystemTime(new Date("2026-10-06T12:00:00Z"));
     ks = await startKeyServer();
     const verify = teamsActivityVerifier({

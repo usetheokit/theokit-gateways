@@ -46,7 +46,7 @@ describe("a key-set document with no usable RSA key", () => {
 
   /** A verifier that has read the key set once, and whose next read is answered with `document`. */
   async function afterGoodReadThenAnswer(document: unknown) {
-    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.useFakeTimers({ toFake: ["Date", "performance"] });
     vi.setSystemTime(new Date("2026-10-07T12:00:00Z"));
     ks = await startKeyServer();
     const server = ks;

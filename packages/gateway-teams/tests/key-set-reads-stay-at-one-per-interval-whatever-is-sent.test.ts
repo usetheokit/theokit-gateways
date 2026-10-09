@@ -21,7 +21,7 @@ describe("key-set reads", () => {
   });
 
   it("stay at one per set for 1000 mixed forged requests inside 10 seconds", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.useFakeTimers({ toFake: ["Date", "performance"] });
     vi.setSystemTime(new Date("2026-10-06T12:00:00Z"));
     ks = await startKeyServer({ extraKeys: 7 });
     const verify = teamsActivityVerifier({

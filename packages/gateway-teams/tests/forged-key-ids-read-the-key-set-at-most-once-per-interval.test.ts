@@ -40,7 +40,7 @@ describe("forged key ids", () => {
   });
 
   async function verifierWithKeys() {
-    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.useFakeTimers({ toFake: ["Date", "performance"] });
     vi.setSystemTime(new Date("2026-10-06T12:00:00Z"));
     ks = await startKeyServer();
     return { ks, verify: teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud }) };
@@ -338,7 +338,7 @@ describe("forged key ids", () => {
   });
 
   it("refuse a token naming a published EC key without asking the SDK", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.useFakeTimers({ toFake: ["Date", "performance"] });
     vi.setSystemTime(new Date("2026-10-06T12:00:00Z"));
     ks = await startKeyServer();
     let checks = 0;
