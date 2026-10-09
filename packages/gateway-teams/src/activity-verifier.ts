@@ -200,8 +200,8 @@ function judgeVerifiedToken(
  *
  * @throws TypeError at construction for an empty `clientId`, an empty or multi-tenant `tenantId`,
  * a `cloud` missing one of its three endpoints or with one that is not an `https:` URL (`http:` is
- * accepted on a loopback host only), or a `cloud.openIdMetadataUrl` that does not end in
- * `/openidconfiguration`.
+ * accepted on a loopback host only), a `cloud.loginEndpoint` ending in a slash, or a
+ * `cloud.openIdMetadataUrl` that does not end in `/openidconfiguration`.
  * @public
  */
 export function teamsActivityVerifier(

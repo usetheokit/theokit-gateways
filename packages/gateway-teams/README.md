@@ -68,7 +68,8 @@ and the message never contains the token. Building the verifier throws a `TypeEr
 `clientId`, an empty `tenantId`, a `tenantId` of `common`, `organizations` or `consumers`, a
 `cloud` missing one of `loginEndpoint`, `tokenIssuer` and `openIdMetadataUrl` or with one that is
 not an `https:` URL (`http:` is accepted only on `localhost`, `127.0.0.1` or `[::1]`, since the
-verifier reads its signing keys from these endpoints), or an `openIdMetadataUrl` that does not end in `/openidconfiguration` (no trailing slash, no query): the
+verifier reads its signing keys from these endpoints), a `loginEndpoint` ending in a slash, or an
+`openIdMetadataUrl` that does not end in `/openidconfiguration` (no trailing slash, no query): the
 key-set URL is that URL with the suffix replaced by `/keys`, as in the SDK's own cloud values, and
 the OIDC-standard `/.well-known/openid-configuration` spelling would otherwise be fetched as the
 key set and refuse every request.

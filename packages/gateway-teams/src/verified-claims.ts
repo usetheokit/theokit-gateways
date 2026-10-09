@@ -96,6 +96,11 @@ function assertCloud(cloud: unknown): void {
       );
     }
   }
+  if ((record.loginEndpoint as string).endsWith("/")) {
+    throw new TypeError(
+      "teamsActivityVerifier: cloud.loginEndpoint must not end in a slash: the tenant key-set URL and the issuer check append /{tenant} to it, as the Teams SDK does",
+    );
+  }
   if (!(record.openIdMetadataUrl as string).endsWith(OPENID_METADATA_SUFFIX)) {
     throw new TypeError(
       `teamsActivityVerifier: cloud.openIdMetadataUrl must end in ${OPENID_METADATA_SUFFIX} (no trailing slash or query): the Bot Framework key-set URL is derived by replacing that suffix with /keys, as the Teams SDK does`,
@@ -107,8 +112,9 @@ function assertCloud(cloud: unknown): void {
  * Refuse, at construction, options no request could ever be verified against.
  *
  * @throws TypeError naming the field and, for a multi-tenant `tenantId`, the value; for a `cloud`
- * endpoint that is not an `https:` URL (or `http:` on a loopback host); and for a
- * `cloud.openIdMetadataUrl` that does not end in {@link OPENID_METADATA_SUFFIX}.
+ * endpoint that is not an `https:` URL (or `http:` on a loopback host); for a
+ * `cloud.loginEndpoint` ending in a slash; and for a `cloud.openIdMetadataUrl` that does not end in
+ * {@link OPENID_METADATA_SUFFIX}.
  */
 export function assertVerifierOptions(options: {
   readonly clientId: unknown;
@@ -221,9 +227,15 @@ function serviceUrlMatches(claim: unknown, expected: string): boolean {
   return typeof claim === "string" && normalizeServiceUrl(claim) === normalizeServiceUrl(expected);
 }
 
+/**
+ * Whether an issuer is an Entra one: under the login endpoint's path, or Entra v1's. The endpoint
+ * is compared with its trailing slash, so an issuer on a host that merely starts with the
+ * endpoint's host name (`https://login.microsoftonline.com.example/...`) is not taken for it.
+ */
 function isTenantIssued(iss: unknown, loginEndpoint: string): boolean {
   return (
-    typeof iss === "string" && (iss.startsWith(loginEndpoint) || iss.startsWith(STS_ISSUER_PREFIX))
+    typeof iss === "string" &&
+    (iss.startsWith(`${loginEndpoint}/`) || iss.startsWith(STS_ISSUER_PREFIX))
   );
 }
 

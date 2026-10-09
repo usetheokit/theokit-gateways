@@ -10,6 +10,7 @@ import {
   assertVerifierOptions,
   checkVerifiedClaims,
   decodeVerifiedClaims,
+  isTenantIssuedToken,
   parseActivityBody,
   readBearerToken,
   readTokenKeyId,
@@ -273,8 +274,33 @@ describe("tenantRefusalBeforeVerification", () => {
       undefined,
     ],
     ["a payload that is not a JSON object", ["iss"], configured, undefined],
+    [
+      "a token whose issuer only starts with the login endpoint's host name",
+      { iss: `${ENTRA_LOGIN}.attacker.example/x/v2.0`, tid: OTHER_TENANT },
+      configured,
+      undefined,
+    ],
   ])("answers %s with %s", (_, payload, expected, reason) => {
     expect(tenantRefusalBeforeVerification(token(payload), expected)).toBe(reason);
+  });
+});
+
+describe("isTenantIssuedToken", () => {
+  const token = (iss: string) =>
+    `e30.${Buffer.from(JSON.stringify({ iss })).toString("base64url")}.c`;
+
+  it.each([
+    ["an issuer under the login endpoint", `${ENTRA_LOGIN}/x/v2.0`, true],
+    ["an Entra v1 issuer", "https://sts.windows.net/x/", true],
+    [
+      "the login endpoint's host name with a longer host",
+      `${ENTRA_LOGIN}.attacker.example/x/v2.0`,
+      false,
+    ],
+    ["the login endpoint followed by no path", ENTRA_LOGIN, false],
+    ["the Bot Framework issuer", BF_ISSUER, false],
+  ])("answers %s with %s", (_, iss, tenantIssued) => {
+    expect(isTenantIssuedToken(token(iss), ENTRA_LOGIN)).toBe(tenantIssued);
   });
 });
 
@@ -302,6 +328,12 @@ describe("assertVerifierOptions", () => {
     expect(() =>
       assertVerifierOptions({ clientId: CLIENT_ID, cloud: { ...cloud, loginEndpoint: "" } }),
     ).toThrow(/cloud\.loginEndpoint/);
+    expect(() =>
+      assertVerifierOptions({
+        clientId: CLIENT_ID,
+        cloud: { ...cloud, loginEndpoint: `${ENTRA_LOGIN}/` },
+      }),
+    ).toThrow(/cloud\.loginEndpoint must not end in a slash/);
     expect(() =>
       assertVerifierOptions({ clientId: CLIENT_ID, cloud: { ...cloud, openIdMetadataUrl: 1 } }),
     ).toThrow(/cloud\.openIdMetadataUrl/);
