@@ -18,6 +18,9 @@ Two behaviours change on every inbound path, `onInbound` included. An adapter bu
 `fromCloud` drops a message addressed to another `phone_number_id`, naming that id on stderr once,
 because one Meta app signs every number's webhooks with the same secret. The allowlist refusal line
 names the sender by the last four digits of the number only (`a sender ending in 8888`), where it
-used to print the whole number.
+used to print the whole number. `toDeliverableEvents` throws `ConfigurationError`
+(`missing_phone_number_id`) when the adapter's backend declares no `phoneNumberId`, so a backend
+that wraps `WhatsAppCloudBackend` must expose the field instead of silently receiving every
+number's messages.
 
 No existing export changes.

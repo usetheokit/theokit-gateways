@@ -177,6 +177,8 @@ export interface WhatsAppBackend {
    * not say which number an envelope was for. A `WhatsAppAdapter` reads this field, not the
    * backend's class, to drop a message addressed to another number: a wrapped backend, a test
    * double, or one built from the package's other module format keeps the check by declaring it.
+   * `WhatsAppAdapter.toDeliverableEvents` refuses to run on a backend that does not, rather
+   * than deliver every number's messages.
    */
   readonly phoneNumberId?: string;
   /**

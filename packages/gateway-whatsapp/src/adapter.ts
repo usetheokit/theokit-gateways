@@ -486,17 +486,34 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
    * The events of one Meta Cloud webhook envelope that may reach the agent, in envelope order, with
    * the sender allowlist and the group rule applied. Status receipts and non-text messages yield no
    * event, so a status-only envelope returns `[]`. Each refused or dropped message writes the
-   * same stderr line `onInbound` writes. On an adapter holding a Cloud backend, messages addressed
-   * to another `phone_number_id` are dropped (see `toDeliverableEvent`).
+   * same stderr line `onInbound` writes. Messages addressed to another `phone_number_id` are
+   * dropped (see `toDeliverableEvent`).
+   *
+   * The adapter's backend must declare its `phoneNumberId`. `fromCloud` and any
+   * `WhatsAppCloudBackend` do; a backend that wraps one by delegation must expose the field too.
+   * Without it there is no number to compare, and every number of the Meta app would reach this
+   * adapter's agent, so this method fails closed instead (docs/adr/0006).
    *
    * The route that receives the webhook verifies `X-Hub-Signature-256` first (with
    * `verifyWebhookSignature`, or theokit's `whatsapp()` route validator); this method does not. Meta redelivers on timeout, and
    * `event.whatsapp.wamid` is the key a route can use to ignore a repeat. Neither the backend nor
    * the network is called.
    *
+   * @throws {ConfigurationError} (`missing_phone_number_id`) when the backend declares no
+   * `phoneNumberId`.
    * @public
    */
   toDeliverableEvents(envelope: MetaWebhookEnvelope): WhatsAppMessageEvent[] {
+    if (this.ownPhoneNumberId === undefined) {
+      throw new ConfigurationError({
+        code: "missing_phone_number_id",
+        message:
+          "gateway-whatsapp: toDeliverableEvents needs the backend to declare its phoneNumberId. " +
+          "One Meta app signs every number's webhooks with one secret, so without it this adapter " +
+          "would deliver every number's messages. Use fromCloud, or expose phoneNumberId on a " +
+          "backend that wraps WhatsAppCloudBackend.",
+      });
+    }
     const events: WhatsAppMessageEvent[] = [];
     for (const inbound of normalizeInboundMessages(envelope)) {
       const event = this.toDeliverableEvent(inbound);

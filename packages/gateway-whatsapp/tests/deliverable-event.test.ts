@@ -18,6 +18,7 @@ import type {
   WhatsAppStatusReceipt,
 } from "../src/backend-types.js";
 import {
+  ConfigurationError,
   type MetaWebhookEnvelope,
   parseWebhookPayload,
   WhatsAppAdapter,
@@ -55,9 +56,13 @@ class FakeBackend implements WhatsAppBackend {
   }
 }
 
-/** Every method throws: converting an envelope must never touch the backend. */
+/**
+ * Every method throws: converting an envelope must never touch the backend. It declares its Cloud
+ * number, as `toDeliverableEvents` requires.
+ */
 class ThrowingBackend implements WhatsAppBackend {
   readonly kind = "cloud" as const;
+  readonly phoneNumberId = "PNID";
   connect(): Promise<boolean> {
     throw new Error("backend must not be called");
   }
@@ -338,14 +343,74 @@ describe("WhatsAppAdapter.toDeliverableEvents and the envelope's phone number id
     expect(own?.whatsapp.phoneNumberId).toBe("PNID");
   });
 
-  it("keeps the envelope's phone number id on the event of an adapter with no Cloud number", () => {
+  it("refuses to convert an envelope on an adapter whose backend declares no Cloud number", () => {
+    // Fail closed: with no number to compare, every number's messages would reach this agent.
     const adapter = new WhatsAppAdapter(new FakeBackend());
 
-    const events = adapter.toDeliverableEvents(
-      envelopeOf([{ from: "5511999999999", id: "wamid.1", body: "hello" }], FOREIGN),
+    expect(() =>
+      adapter.toDeliverableEvents(
+        envelopeOf([{ from: "5511999999999", id: "wamid.1", body: "hello" }], FOREIGN),
+      ),
+    ).toThrow(ConfigurationError);
+  });
+
+  /** A logging or metrics wrapper around a Cloud backend, delegating every call. */
+  class DelegatingCloudBackend implements WhatsAppBackend {
+    readonly kind = "cloud" as const;
+    constructor(protected readonly inner: WhatsAppCloudBackend) {}
+    connect(): Promise<boolean> {
+      return this.inner.connect();
+    }
+    disconnect(): Promise<void> {
+      return this.inner.disconnect();
+    }
+    send(message: WhatsAppOutboundMessage): Promise<WhatsAppSendResult> {
+      return this.inner.send(message);
+    }
+    onInbound(handler: (e: WhatsAppInboundEvent) => Promise<void>): () => void {
+      return this.inner.onInbound(handler);
+    }
+    onStatusReceipt(handler: (r: WhatsAppStatusReceipt) => Promise<void>): () => void {
+      return this.inner.onStatusReceipt(handler);
+    }
+  }
+
+  it("throws the typed configuration error for a delegating wrapper of the Cloud backend that does not declare its number", () => {
+    const adapter = new WhatsAppAdapter(
+      new DelegatingCloudBackend(new WhatsAppCloudBackend(CLOUD)),
     );
 
-    expect(events.map((e) => e.whatsapp.phoneNumberId)).toEqual([FOREIGN]);
+    let thrown: unknown;
+    try {
+      adapter.toDeliverableEvents(
+        envelopeOf([{ from: "5511999999999", id: "wamid.1", body: "hello" }], FOREIGN),
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(ConfigurationError);
+    expect((thrown as ConfigurationError).code).toBe("missing_phone_number_id");
+    expect((thrown as Error).message).toContain("phoneNumberId");
+  });
+
+  it("drops a foreign-number message on a delegating wrapper that declares its number", () => {
+    class NumberDeclaringWrapper extends DelegatingCloudBackend {
+      readonly phoneNumberId = this.inner.phoneNumberId;
+    }
+    const adapter = new WhatsAppAdapter(
+      new NumberDeclaringWrapper(new WhatsAppCloudBackend(CLOUD)),
+    );
+
+    const foreign = adapter.toDeliverableEvents(
+      envelopeOf([{ from: "5511999999999", id: "wamid.1", body: "hello" }], FOREIGN),
+    );
+    const own = adapter.toDeliverableEvents(
+      envelopeOf([{ from: "5511999999999", id: "wamid.2", body: "hello" }], "PNID"),
+    );
+
+    expect(foreign).toEqual([]);
+    expect(own.map((e) => e.whatsapp.phoneNumberId)).toEqual(["PNID"]);
   });
 });
 

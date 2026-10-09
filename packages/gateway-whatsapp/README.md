@@ -82,7 +82,10 @@ no event and one line on stderr naming only the last four digits of the number. 
 with `fromCloud`, or constructed around any backend that declares a `phoneNumberId` (every
 `WhatsAppCloudBackend` does), it also drops messages addressed to another `phone_number_id`: one Meta app signs
 every number's webhooks with the same secret, so a shared route must not hand one number's
-messages to another number's agent. A route that calls `WhatsAppCloudBackend.handleWebhookPayload`
+messages to another number's agent. For that reason `toDeliverableEvents` throws
+`ConfigurationError` (`missing_phone_number_id`) on an adapter whose backend declares no
+`phoneNumberId`: a backend that wraps `WhatsAppCloudBackend` by delegation must expose the field. A
+route that calls `WhatsAppCloudBackend.handleWebhookPayload`
 directly, with no adapter, gets the same check: the backend's inbound handler receives only
 messages addressed to the backend's own `phoneNumberId`.
 
