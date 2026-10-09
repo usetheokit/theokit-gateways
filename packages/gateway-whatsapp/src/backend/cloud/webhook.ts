@@ -15,7 +15,41 @@
 import type { WhatsAppInboundEvent, WhatsAppStatusReceipt } from "../../backend-types.js";
 import type { MetaIncomingMessage, MetaStatusUpdate, MetaWebhookEnvelope } from "./types.js";
 
+/**
+ * The Meta message types a log line may name. Anything else, including a type a forged envelope
+ * made up, is named "an unknown type".
+ */
+const KNOWN_NON_TEXT_TYPES: ReadonlySet<string> = new Set([
+  "audio",
+  "button",
+  "contacts",
+  "document",
+  "image",
+  "interactive",
+  "location",
+  "order",
+  "reaction",
+  "request_welcome",
+  "sticker",
+  "system",
+  "unsupported",
+  "video",
+]);
+
+/**
+ * Labels already written to stderr. Keyed by `nonTextTypeLabel`, not by the raw type, so it holds
+ * at most one entry per known type plus one for "an unknown type".
+ */
 const warnedNonTextTypes = new Set<string>();
+
+/**
+ * A non-text message type as the log names it. `msg.type` comes from the envelope, and
+ * `toDeliverableEvents` does not verify the signature, so the raw value is text anyone wrote: it
+ * could carry a newline that forges a log line. Only a type from a fixed list is named.
+ */
+function nonTextTypeLabel(type: unknown): string {
+  return typeof type === "string" && KNOWN_NON_TEXT_TYPES.has(type) ? type : "an unknown type";
+}
 
 /**
  * Verify Meta's GET `/webhook?hub.mode=subscribe&hub.challenge=...&hub.verify_token=...`
@@ -130,10 +164,11 @@ function normalizeOneMessage(
 ): WhatsAppInboundEvent | null {
   // EC-4: text-only in v1.
   if (msg.type !== "text") {
-    if (!warnedNonTextTypes.has(msg.type)) {
-      warnedNonTextTypes.add(msg.type);
+    const label = nonTextTypeLabel(msg.type);
+    if (!warnedNonTextTypes.has(label)) {
+      warnedNonTextTypes.add(label);
       process.stderr.write(
-        `[whatsapp] ignoring ${msg.type} message — v1 text-only (will be supported in v0.2+).\n`,
+        `[whatsapp] ignoring ${label} message — v1 text-only (will be supported in v0.2+).\n`,
       );
     }
     return null;
