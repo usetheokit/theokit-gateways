@@ -191,7 +191,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
    * when its `phoneNumberId` is this one.
    */
   private readonly ownPhoneNumberId: string | undefined;
-  /** Phone number ids already named on stderr, so a misrouted number is reported once. */
+  /** Foreign phone number id endings already named on stderr, so each is reported once. */
   private readonly reportedForeignNumbers = new Set<string>();
   /** Mirrors the sibling adapters: guards connect() against opening a second session. */
   private connected = false;

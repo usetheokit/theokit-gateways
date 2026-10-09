@@ -81,7 +81,7 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
    * addressed to another number of the same app.
    */
   readonly phoneNumberId: string;
-  /** Phone number ids already named on stderr, so a misrouted number is reported once. */
+  /** Foreign phone number id endings already named on stderr, so each is reported once. */
   private readonly reportedForeignNumbers = new Set<string>();
   private inboundHandler?: (event: WhatsAppInboundEvent) => Promise<void>;
   private statusHandler?: (receipt: WhatsAppStatusReceipt) => Promise<void>;

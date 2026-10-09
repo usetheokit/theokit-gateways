@@ -27,6 +27,9 @@ import {
 
 const REFUSAL_PREFIX = "[whatsapp] dropped inbound from a sender";
 const CLOUD = { accessToken: "t", phoneNumberId: "PNID", appSecret: "s" } as const;
+/** Another number of the same Meta app; stderr names it only by its last four digits. */
+const FOREIGN = "109900001111";
+const FOREIGN_LABEL = "a phone number id ending in 1111";
 
 class FakeBackend implements WhatsAppBackend {
   readonly kind = "cloud" as const;
@@ -302,22 +305,22 @@ describe("WhatsAppAdapter.toDeliverableEvents and the envelope's phone number id
     const adapter = WhatsAppAdapter.fromCloud(CLOUD);
 
     const events = adapter.toDeliverableEvents(
-      envelopeOf([{ from: "5511999999999", id: "wamid.1", body: "hello" }], "OTHER"),
+      envelopeOf([{ from: "5511999999999", id: "wamid.1", body: "hello" }], FOREIGN),
     );
 
     expect(events).toEqual([]);
-    expect(stderrLines.filter((line) => line.includes('phone number id "OTHER"'))).toHaveLength(1);
+    expect(stderrLines.filter((line) => line.includes(FOREIGN_LABEL))).toHaveLength(1);
   });
 
   it("drops a foreign-number message on an adapter constructed around a Cloud backend", () => {
     const adapter = new WhatsAppAdapter(new WhatsAppCloudBackend(CLOUD));
 
-    const foreign = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "OTHER" }));
+    const foreign = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: FOREIGN }));
     const own = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "PNID" }));
 
     expect(foreign).toBeUndefined();
     expect(own?.whatsapp.phoneNumberId).toBe("PNID");
-    expect(stderrLines.filter((line) => line.includes('phone number id "OTHER"'))).toHaveLength(1);
+    expect(stderrLines.filter((line) => line.includes(FOREIGN_LABEL))).toHaveLength(1);
   });
 
   it("drops a foreign-number message on an adapter around a backend that is not WhatsAppCloudBackend but declares its number", () => {
@@ -328,7 +331,7 @@ describe("WhatsAppAdapter.toDeliverableEvents and the envelope's phone number id
     }
     const adapter = new WhatsAppAdapter(new NumberDeclaringBackend());
 
-    const foreign = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "OTHER" }));
+    const foreign = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: FOREIGN }));
     const own = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "PNID" }));
 
     expect(foreign).toBeUndefined();
@@ -339,10 +342,10 @@ describe("WhatsAppAdapter.toDeliverableEvents and the envelope's phone number id
     const adapter = new WhatsAppAdapter(new FakeBackend());
 
     const events = adapter.toDeliverableEvents(
-      envelopeOf([{ from: "5511999999999", id: "wamid.1", body: "hello" }], "OTHER"),
+      envelopeOf([{ from: "5511999999999", id: "wamid.1", body: "hello" }], FOREIGN),
     );
 
-    expect(events.map((e) => e.whatsapp.phoneNumberId)).toEqual(["OTHER"]);
+    expect(events.map((e) => e.whatsapp.phoneNumberId)).toEqual([FOREIGN]);
   });
 });
 
@@ -352,10 +355,10 @@ describe("the foreign phone number id on the single-message and backend-hosted p
   it("toDeliverableEvent on a fromCloud adapter drops a message for another number", () => {
     const adapter = WhatsAppAdapter.fromCloud(CLOUD);
 
-    const event = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "OTHER" }));
+    const event = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: FOREIGN }));
 
     expect(event).toBeUndefined();
-    expect(stderrLines.filter((line) => line.includes('phone number id "OTHER"'))).toHaveLength(1);
+    expect(stderrLines.filter((line) => line.includes(FOREIGN_LABEL))).toHaveLength(1);
   });
 
   it("onInbound on a fromCloud adapter receives the own number's message and not another's", async () => {
@@ -373,17 +376,17 @@ describe("the foreign phone number id on the single-message and backend-hosted p
       return backend.handleWebhookPayload(body, `sha256=${hex}`);
     };
 
-    expect(await post("wamid.foreign", "OTHER")).toBe(true);
+    expect(await post("wamid.foreign", FOREIGN)).toBe(true);
     expect(await post("wamid.own", "PNID")).toBe(true);
 
     expect(received).toEqual(["wamid.own"]);
-    expect(stderrLines.filter((line) => line.includes('phone number id "OTHER"'))).toHaveLength(1);
+    expect(stderrLines.filter((line) => line.includes(FOREIGN_LABEL))).toHaveLength(1);
   });
 });
 
 describe("the foreign phone number id report", () => {
-  const foreignLines = (id: string): string[] =>
-    stderrLines.filter((line) => line.includes(`phone number id "${id}"`));
+  const foreignLines = (label: string): string[] =>
+    stderrLines.filter((line) => line.includes(`addressed to ${label}:`));
 
   it("names a foreign number once however many of its messages arrive", () => {
     const adapter = WhatsAppAdapter.fromCloud(CLOUD);
@@ -394,29 +397,29 @@ describe("the foreign phone number id report", () => {
           { from: "5511999999999", id: "wamid.1", body: "one" },
           { from: "5511999999999", id: "wamid.2", body: "two" },
         ],
-        "OTHER",
+        FOREIGN,
       ),
     );
     const later = adapter.toDeliverableEvents(
-      envelopeOf([{ from: "5511999999999", id: "wamid.3", body: "three" }], "OTHER"),
+      envelopeOf([{ from: "5511999999999", id: "wamid.3", body: "three" }], FOREIGN),
     );
 
     expect([...first, ...later]).toEqual([]);
-    expect(foreignLines("OTHER")).toHaveLength(1);
-    expect(foreignLines("OTHER")[0]).toContain('this adapter answers for "PNID"');
+    expect(foreignLines(FOREIGN_LABEL)).toHaveLength(1);
+    expect(foreignLines(FOREIGN_LABEL)[0]).toContain('this adapter answers for "PNID"');
   });
 
   it("names each foreign number on its own line", () => {
     const adapter = WhatsAppAdapter.fromCloud(CLOUD);
 
-    adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "OTHER" }));
-    adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "THIRD" }));
+    adapter.toDeliverableEvent(makeInbound({ phoneNumberId: FOREIGN }));
+    adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "109900002222" }));
 
-    expect(foreignLines("OTHER")).toHaveLength(1);
-    expect(foreignLines("THIRD")).toHaveLength(1);
+    expect(foreignLines(FOREIGN_LABEL)).toHaveLength(1);
+    expect(foreignLines("a phone number id ending in 2222")).toHaveLength(1);
   });
 
-  it("drops a Cloud message with no phone number id and names it (none), once", () => {
+  it("drops a Cloud message with no phone number id and says so, once", () => {
     const adapter = WhatsAppAdapter.fromCloud(CLOUD);
 
     const first = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: undefined }));
@@ -425,14 +428,14 @@ describe("the foreign phone number id report", () => {
     );
 
     expect([first, second]).toEqual([undefined, undefined]);
-    expect(foreignLines("(none)")).toHaveLength(1);
+    expect(foreignLines("no phone number id")).toHaveLength(1);
   });
 
   it("still delivers the adapter's own number after dropping a foreign one", () => {
     const adapter = WhatsAppAdapter.fromCloud(CLOUD);
 
     const events = adapter.toDeliverableEvents(
-      envelopeOf([{ from: "5511999999999", id: "wamid.foreign", body: "x" }], "OTHER"),
+      envelopeOf([{ from: "5511999999999", id: "wamid.foreign", body: "x" }], FOREIGN),
     );
     const own = adapter.toDeliverableEvents(
       envelopeOf([{ from: "5511999999999", id: "wamid.own", body: "y" }], "PNID"),

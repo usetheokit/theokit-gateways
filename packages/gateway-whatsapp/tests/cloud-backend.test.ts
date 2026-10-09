@@ -572,13 +572,15 @@ describe("WhatsAppCloudBackend webhook entrypoint, used without WhatsAppAdapter"
     const b = makeBackend();
     const handler = vi.fn(async () => {});
     b.onInbound(handler);
-    const body = envelopeFor("OTHER_PNID");
+    const body = envelopeFor("109900001111");
 
     const ok = await b.handleWebhookPayload(body, signedHeader(body));
 
     expect(ok).toBe(true);
     expect(handler).not.toHaveBeenCalled();
-    expect(stderr.mock.calls.map((c) => String(c[0])).join("")).toContain('"OTHER_PNID"');
+    expect(stderr.mock.calls.map((c) => String(c[0])).join("")).toContain(
+      "a phone number id ending in 1111",
+    );
     stderr.mockRestore();
   });
 
@@ -633,7 +635,9 @@ describe("WhatsAppCloudBackend webhook entrypoint, used without WhatsAppAdapter"
 
     expect(ok).toBe(true);
     expect(statusHandler).not.toHaveBeenCalled();
-    expect(stderr.mock.calls.map((c) => String(c[0])).join("")).toContain('"222"');
+    expect(stderr.mock.calls.map((c) => String(c[0])).join("")).toContain(
+      "a phone number id ending in 222:",
+    );
     stderr.mockRestore();
   });
 
