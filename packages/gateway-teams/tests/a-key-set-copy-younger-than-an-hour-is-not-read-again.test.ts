@@ -26,9 +26,11 @@ describe("a held key-set copy that lists the key", () => {
     ks = undefined;
   });
 
-  async function warmVerifier() {
+  /** A verifier whose first read happened after the process had run for `uptimeMs`. */
+  async function warmVerifier(uptimeMs = 0) {
     vi.useFakeTimers({ toFake: ["Date", "performance"] });
     vi.setSystemTime(new Date("2026-10-07T12:00:00Z"));
+    vi.advanceTimersByTime(uptimeMs);
     ks = await startKeyServer();
     const keys = `${ks.cloud.loginEndpoint}/keys`;
     const fetchSpy = vi.spyOn(globalThis, "fetch");
@@ -59,5 +61,14 @@ describe("a held key-set copy that lists the key", () => {
     const res = await verify(activityRequest(ks.signToken({})));
 
     expect([res.ok, reads()]).toEqual([true, 2]);
+  });
+
+  it("is not read again one millisecond short of an hour after a read made hours into the process", async () => {
+    const { ks, verify, reads } = await warmVerifier(2 * HOUR_MS);
+
+    vi.advanceTimersByTime(HOUR_MS - 1);
+    const res = await verify(activityRequest(ks.signToken({})));
+
+    expect([res.ok, reads()]).toEqual([true, 1]);
   });
 });

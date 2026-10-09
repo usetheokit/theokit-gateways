@@ -23,6 +23,7 @@ describe("a cloud endpoint's scheme", () => {
     ["tokenIssuer", "http://api.botframework.com"],
     ["openIdMetadataUrl", "http://login.botframework.com/v1/.well-known/openidconfiguration"],
     ["loginEndpoint", "ftp://login.microsoftonline.com"],
+    ["loginEndpoint", "ftp://localhost:8080"],
     ["loginEndpoint", "login.microsoftonline.com"],
   ])("refuses %s %s at construction with a TypeError naming the field", (field, value) => {
     const build = () =>
@@ -44,4 +45,14 @@ describe("a cloud endpoint's scheme", () => {
       expect(() => teamsActivityVerifier({ clientId: CLIENT_ID, cloud })).not.toThrow();
     },
   );
+
+  it("refuses a missing endpoint as a missing string, not as a wrong scheme", () => {
+    const build = () =>
+      teamsActivityVerifier({
+        clientId: CLIENT_ID,
+        cloud: { ...PUBLIC_CLOUD, tokenIssuer: undefined as unknown as string },
+      });
+
+    expect(build).toThrow("teamsActivityVerifier: cloud.tokenIssuer must be a non-empty string");
+  });
 });
