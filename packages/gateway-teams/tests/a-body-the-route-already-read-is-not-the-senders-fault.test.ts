@@ -1,9 +1,11 @@
 /**
- * Finding #25: a request whose body the route (or a framework before it) already read or locked is
- * a fault on the server side, not a malformed activity from the sender. It is refused as
- * `validator_unavailable`, which the README answers with a 503 and a logged message, and the
- * message tells the operator to pass an unread request. A sender's stream that fails while the
- * verifier reads it stays `malformed_body`.
+ * A request whose body the route (or a framework before it) already read or locked is a fault on
+ * the server side, not a malformed activity from the sender, and not a validator that failed to
+ * load: the validator is never reached. It is refused as `body_already_read`, which the README
+ * answers with a 500 and a logged message: a retry cannot succeed until the route is fixed, so a
+ * 503 would only make the Bot Framework retry forever. The message tells the operator to pass an
+ * unread request. A sender's stream that fails while the verifier reads it stays
+ * `malformed_body`, and so does a POST with no body at all.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -23,7 +25,7 @@ describe("a request body the verifier cannot read", () => {
     ks = undefined;
   });
 
-  it("refuses a body the route already read as validator_unavailable, before any key or SDK work", async () => {
+  it("refuses a body the route already read as body_already_read, before any key or SDK work", async () => {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
     const verify = teamsActivityVerifier({
@@ -36,13 +38,13 @@ describe("a request body the verifier cannot read", () => {
 
     expect(await verify(req)).toEqual({
       ok: false,
-      reason: "validator_unavailable",
+      reason: "body_already_read",
       message: BODY_ALREADY_READ,
     });
     expect([calls.ctor.length, calls.check, ks.hits()]).toEqual([0, 0, 0]);
   });
 
-  it("refuses a body another reader holds locked as validator_unavailable", async () => {
+  it("refuses a body another reader holds locked as body_already_read", async () => {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
     const verify = teamsActivityVerifier({
@@ -55,7 +57,7 @@ describe("a request body the verifier cannot read", () => {
 
     expect(await verify(req)).toEqual({
       ok: false,
-      reason: "validator_unavailable",
+      reason: "body_already_read",
       message: BODY_ALREADY_READ,
     });
     expect([calls.check, ks.hits()]).toEqual([0, 0]);
@@ -85,6 +87,24 @@ describe("a request body the verifier cannot read", () => {
     } as RequestInit);
 
     expect(await verify(req)).toMatchObject({ ok: false, reason: "malformed_body" });
+    expect([calls.check, ks.hits()]).toEqual([0, 0]);
+  });
+
+  it("refuses a POST that carries no body as malformed_body instead of throwing", async () => {
+    ks = await startKeyServer();
+    const { module, calls } = acceptingValidatorModule();
+    const verify = teamsActivityVerifier({
+      clientId: CLIENT_ID,
+      cloud: ks.cloud,
+      __validatorModule: module,
+    });
+    const req = new Request("https://bot.test/api/messages", {
+      method: "POST",
+      headers: { authorization: `Bearer ${ks.signToken({})}` },
+    });
+    expect(req.body).toBeNull();
+
+    await expect(verify(req)).resolves.toMatchObject({ ok: false, reason: "malformed_body" });
     expect([calls.check, ks.hits()]).toEqual([0, 0]);
   });
 });

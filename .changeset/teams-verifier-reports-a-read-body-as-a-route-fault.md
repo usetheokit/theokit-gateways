@@ -2,9 +2,8 @@
 "@theokit/gateway-teams": patch
 ---
 
-`teamsActivityVerifier` now refuses a request whose body was already read, or is locked by another
-reader, as `validator_unavailable`, with a message saying the body was already read and to pass an
-unread request such as `request.clone()`. Before, it was `malformed_body`, so a route whose
-framework consumed the body first answered every Teams request with a 400 that blamed the sender.
-A body that fails part-way through the read is still `malformed_body`. The reason union is
-unchanged.
+`teamsActivityVerifier` refuses a request whose body was already read, or is locked by another
+reader, as `body_already_read`, with a message saying the body was already read and to pass an
+unread request such as `request.clone()`. It is the route's fault, not the sender's and not the
+validator's, and no retry clears it, so the README route answers it with a 500. A body that fails
+part-way through the read, and a POST with no body, are `malformed_body`.

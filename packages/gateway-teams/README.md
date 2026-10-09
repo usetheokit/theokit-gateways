@@ -34,6 +34,11 @@ export async function onTeamsRequest(request: Request): Promise<Response> {
       console.error(`teams verifier: ${result.message}`); // the message never contains the token
       return new Response(result.reason, { status: 503 });
     }
+    // This route handed the verifier a body it had already read: a bug here, which no retry clears.
+    if (result.reason === "body_already_read") {
+      console.error(`teams verifier: ${result.message}`);
+      return new Response(result.reason, { status: 500 });
+    }
     return new Response(result.reason, { status: result.reason === "malformed_body" ? 400 : 401 });
   }
   const outcome = await adapter.deliver(normalizeTeamsActivity(result.activity));
@@ -104,14 +109,14 @@ What else to expect from the verifier:
   part-way through the read. Your server may cap it lower.
 - Pass it a request whose body nothing has read: `verify(request.clone())`, as the example does,
   when your route reads the body too. A request whose body was already read, or is locked by
-  another reader (a framework or middleware that consumed it first), is `validator_unavailable`,
-  not `malformed_body`: the fault is the route's, not the sender's, so it gets the 503 and the
-  logged message, which says the body was already read and to pass an unread request. A retry
-  fails the same way until the route is fixed.
-- `validator_unavailable` means the SDK validator could not be loaded, failed with something
-  other than its own token refusal, or was never asked because the body was already read. For an
-  SDK failure the message names the error's class and code, never its text. A failed load is
-  kept: that verifier refuses every request until you build a new one.
+  another reader (a framework or middleware that consumed it first), is `body_already_read`: the
+  fault is the route's, not the sender's and not the validator's, and a retry fails the same way
+  until the route is fixed, so the example answers it with a 500 rather than a 503 that would
+  have the Bot Framework retry it. Its message says the body was already read and to pass an
+  unread request. A POST with no body at all is the sender's `malformed_body`.
+- `validator_unavailable` means the SDK validator could not be loaded or failed with something
+  other than its own token refusal. The message names the error's class and code, never its
+  text. A failed load is kept: that verifier refuses every request until you build a new one.
 - It hands the SDK validator a silent logger, so a refused token writes nothing to your logs. The
   SDK would otherwise log claim values the sender chose. Log the `reason` yourself if you want a
   trace.

@@ -17,7 +17,7 @@ describe("a request the verifier cannot process", () => {
     ks = undefined;
   });
 
-  it("refuses a request whose body was already read as validator_unavailable instead of throwing", async () => {
+  it("refuses a request whose body was already read as body_already_read instead of throwing", async () => {
     ks = await startKeyServer();
     const { module } = acceptingValidatorModule();
     const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: module });
@@ -26,7 +26,7 @@ describe("a request the verifier cannot process", () => {
 
     expect(await verify(req)).toMatchObject({
       ok: false,
-      reason: "validator_unavailable",
+      reason: "body_already_read",
       message: expect.stringContaining("request.clone()"),
     });
   });

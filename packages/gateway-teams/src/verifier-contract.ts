@@ -59,6 +59,7 @@ export type TeamsActivityVerifyResult =
       readonly reason:
         | "missing_authorization"
         | "malformed_body"
+        | "body_already_read"
         | "validator_unavailable"
         | "invalid_token"
         | "key_set_unavailable"
@@ -77,6 +78,8 @@ const MESSAGES: Readonly<Record<RefusalReason, string>> = {
   missing_authorization: "no Authorization header: the request carries no Bot Framework token",
   malformed_body:
     "the request body is over 1 MiB or is not a readable JSON activity with a non-empty string serviceUrl",
+  body_already_read:
+    "the request body was already read or is locked by another reader, so the verifier could not read the activity: this is the route's fault, not the sender's; pass the verifier an unread request, for example request.clone()",
   validator_unavailable: "the Teams SDK token validator could not be loaded",
   invalid_token:
     "the Teams SDK did not accept the token (bad signature, unknown key, wrong audience or issuer, expired, or a serviceurl it compared and found different)",

@@ -59,17 +59,15 @@ const DEFAULT_LOGIN_ENDPOINT = "https://login.microsoftonline.com";
  */
 const MAX_BODY_BYTES = 1024 * 1024;
 
-const BODY_ALREADY_READ =
-  "the request body was already read or is locked by another reader, so the verifier could not read the activity: this is the route's fault, not the sender's; pass the verifier an unread request, for example request.clone()";
-
 /**
  * The parsed activity, `malformed_body` when the sender's bytes are over the limit, are not an
- * activity, or fail while being read, or `validator_unavailable` when the route handed over a body
- * already read or locked: no byte of it came from this read, so the sender is not at fault.
+ * activity, are absent, or fail while being read, or `body_already_read` when the route handed over
+ * a body already read or locked: no byte of it came from this read, so the sender is not at fault,
+ * and the validator was never reached, so it is not `validator_unavailable` either.
  */
 async function readBody(request: Request): Promise<ParsedBody | Refusal> {
   if (request.bodyUsed || request.body?.locked === true) {
-    return refuse("validator_unavailable", BODY_ALREADY_READ);
+    return refuse("body_already_read");
   }
   try {
     const text = await readBoundedStream(request.body, MAX_BODY_BYTES);
@@ -176,9 +174,10 @@ function judgeVerifiedToken(
  * Build a verifier for one Teams bot. The returned function reads a Fetch `Request` (pass a
  * `clone()` if the body is needed afterwards) and answers with {@link TeamsActivityVerifyResult}.
  * It reads at most 1 MiB of body: a larger one is `malformed_body`, refused before any token work,
- * and so is a body that fails part-way through the read. A request whose body was already read or
- * is locked by another reader is `validator_unavailable`, a server-side fault, whose message says
- * to pass an unread request such as `request.clone()`.
+ * and so is a body that fails part-way through the read or a POST with no body. A request whose
+ * body was already read or is locked by another reader is `body_already_read`, a fault of the route
+ * that no retry clears (answer it with a 500), whose message says to pass an unread request such as
+ * `request.clone()`.
  *
  * It accepts only when the token's RS256 signature verifies under a key the published key set
  * lists, the SDK validator accepted the token, AND the token's `aud`, `serviceurl` and tenant
