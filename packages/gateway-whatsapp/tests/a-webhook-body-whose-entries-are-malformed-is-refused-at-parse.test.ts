@@ -6,7 +6,7 @@
 
 import * as crypto from "node:crypto";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { WhatsAppCloudBackend } from "../src/backend/cloud/index.js";
 import {
@@ -90,17 +90,61 @@ describe("a webhook body whose nested levels have the wrong shape", () => {
     expect(env).not.toBeNull();
     expect([normalizeInboundMessages(env!), normalizeStatusReceipts(env!)]).toEqual([[], []]);
   });
+});
 
-  it("lets the Cloud backend answer a signed body with a null entry instead of rejecting", async () => {
+/**
+ * Code-review finding #14: the property above, that nothing in a batch is dropped without the
+ * route seeing it, has to hold on `WhatsAppCloudBackend.handleWebhookPayload` too. It answered such
+ * a body `true`, the answer a dispatched batch gets, so a route built on it answered 200, Meta did
+ * not redeliver, and every message of the batch was lost with nothing logged. It now answers
+ * `false`, as it does for a signed body that is not JSON, and writes one line to stderr.
+ */
+describe("the Cloud backend given a signed body it cannot read", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function backendWithHandler(): { backend: WhatsAppCloudBackend; received: string[] } {
     const backend = new WhatsAppCloudBackend({
       accessToken: "t",
       phoneNumberId: "PNID",
       appSecret: APP_SECRET,
       fetch: (async () => new Response("{}")) as typeof fetch,
     });
-    const body = JSON.stringify(envelope([null]));
-    const signature = `sha256=${crypto.createHmac("sha256", APP_SECRET).update(body).digest("hex")}`;
+    const received: string[] = [];
+    backend.onInbound(async (event) => {
+      received.push(event.wamid);
+    });
+    return { backend, received };
+  }
 
-    await expect(backend.handleWebhookPayload(body, signature)).resolves.toBe(true);
+  function signed(body: string): string {
+    return `sha256=${crypto.createHmac("sha256", APP_SECRET).update(body).digest("hex")}`;
+  }
+
+  it("answers false and writes one stderr line for a null entry, instead of rejecting", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const { backend } = backendWithHandler();
+    const body = JSON.stringify(envelope([null]));
+
+    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe(false);
+    expect(stderr.mock.calls.map(([line]) => String(line))).toEqual([
+      expect.stringContaining("[whatsapp-cloud] signed webhook body has a shape"),
+    ]);
+  });
+
+  it("answers false for a batch whose good message sits beside a malformed entry, delivering none", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const { backend, received } = backendWithHandler();
+    const good = change({
+      ...VALUE,
+      messages: [
+        { from: "5511999", id: "wamid.good", timestamp: "1", type: "text", text: { body: "hi" } },
+      ],
+    });
+    const body = JSON.stringify(envelope([good, { id: "biz-2" }]));
+
+    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe(false);
+    expect(received).toEqual([]);
   });
 });

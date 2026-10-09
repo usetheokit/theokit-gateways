@@ -76,8 +76,9 @@ with no `changes` array, a `null` entry or change, or a `messages`, `statuses` o
 that is not a list of objects. The whole body is refused, not just its bad entries, so the route
 answers it (400 in the example) instead of dropping part of a batch unseen. Any non-null envelope
 is safe to hand to `toDeliverableEvents` and `normalizeStatusReceipts`: neither throws on it.
-`handleWebhookPayload` answers such a body `true` and dispatches nothing, as it does for any
-unrecognized shape.
+`WhatsAppCloudBackend.handleWebhookPayload` refuses such a body the same way: it answers `false`,
+as it does for a signed body that is not JSON, dispatches nothing and writes one line to stderr,
+so a route built on it answers non-2xx and Meta redelivers instead of losing the batch.
 
 Answer 200 only when every event returned `ok`. `no_handler` means nothing received the message,
 and `handler_threw` means your handler failed on it; a non-2xx makes Meta retry the whole envelope,

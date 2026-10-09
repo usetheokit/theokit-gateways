@@ -238,8 +238,11 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
    * naming none, is dropped and its id written to stderr once (`isForAnotherNumber`, the rule
    * `WhatsAppAdapter` applies too).
    *
-   * @returns `true` if signature valid + dispatched (or empty payload).
-   *          `false` if signature invalid (route should return 401).
+   * @returns `true` if the signature is valid and the body was dispatched (or held nothing to
+   *          dispatch). `false` if the signature is invalid, or if the signed body is not JSON or
+   *          has a shape {@link parseWebhookPayload} refuses: the whole body is refused, never a
+   *          part of it dropped, and one line on stderr says which. Answer `false` with a non-2xx
+   *          (401 for a bad signature) so the drop is seen and Meta redelivers.
    * @throws {ConfigurationError} `missing_option` when this backend's `appSecret` is empty or
    *         whitespace only: a signature under an empty key proves nothing.
    */
@@ -253,7 +256,13 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
     const json = this.parseBody(rawBody);
     if (json === undefined) return false;
     const envelope = parseWebhookPayload(json);
-    if (envelope === null) return true; // valid signature, unrecognized shape — nothing to dispatch
+    if (envelope === null) {
+      // Answering true would let the route say 200 and Meta never redeliver the batch.
+      process.stderr.write(
+        "[whatsapp-cloud] signed webhook body has a shape the parser refuses (no object, no entry array, or a malformed entry, change or list); refused whole, nothing dispatched\n",
+      );
+      return false;
+    }
     await this.dispatchInbound(envelope);
     await this.dispatchStatusReceipts(envelope);
     return true;
