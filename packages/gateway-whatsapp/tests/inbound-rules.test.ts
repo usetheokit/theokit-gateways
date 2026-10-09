@@ -77,6 +77,25 @@ describe("decideInbound", () => {
     ]);
   });
 
+  it("decideInbound names a refused group sender once and writes no group line", () => {
+    // The allowlist runs before the group rule. With requireMention on and botPhoneId unset the
+    // group rule would drop this message too, with its own line; the refusal must come first, so
+    // the sender is named and the group line is never written.
+    const refused = decideInbound(
+      inboundFrom("5511888888888", {
+        conversationType: "group",
+        channelId: "g@g.us",
+        text: "hello all",
+      }),
+      rules({ allowedSenders: "5511999999999" }),
+    );
+
+    expect(refused).toBeUndefined();
+    expect(stderrLines).toEqual([
+      "[whatsapp] dropped inbound from a sender ending in 8888: not in the configured allowlist\n",
+    ]);
+  });
+
   it("decideInbound keeps the owner's own note under an allowlist", () => {
     const note = decideInbound(
       { ...inboundFrom("231116569108705@lid"), fromSelf: true },
