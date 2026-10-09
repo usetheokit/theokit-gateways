@@ -120,6 +120,49 @@ refused before this change: they are Entra-issued (`sts.windows.net` or the logi
 carry no `serviceurl` claim, so they get a tenant reason or `serviceurl_mismatch`. Inferred from the
 issuers the Bot Framework documents for the Emulator; not run against an Emulator.
 
+## Amended 2026-10-09: a body the route already read is the route's fault
+
+The plan's tie-break D5 (b) said a body the verifier cannot read is `malformed_body`. Commit
+4db76b8 then answered a request whose body was already read, or locked by another reader, with
+`validator_unavailable`, so a route bug no longer read as a sender's malformed body. The review of
+2026-10-08 found that answer false and harmful (findings F-arch-3 and F-xval-2): the validator had
+loaded and was never reached, so a consumer switching on the reason was told the wrong thing, and
+the README answers `validator_unavailable` with a 503, which has the Bot Framework retry a fault no
+retry can clear for as long as the route stands.
+
+**Decision.** Such a request has its own reason, `body_already_read`, in
+`TeamsActivityVerifyResult` (commit 9e74992). Its message says the body was already read or is
+locked and to pass the verifier an unread request. The README route answers it with a 500 and logs
+that message. Two neighbouring cases keep the sender's reason: a body stream that fails part-way
+through the read, and a POST with no body at all (`request.body` is `null`), are both
+`malformed_body`.
+
+**Alternatives considered.**
+
+- `validator_unavailable`, the 4db76b8 answer. Rejected for the two reasons above: the name
+  describes a different fault, and its 503 starts a retry loop.
+- `malformed_body`, the plan's D5 (b). Rejected: the sender's bytes were never examined, so a 400
+  blames the sender for the route's bug, and the Bot Framework does not retry a 4xx, so the
+  activity is lost while the operator looks for a bad client.
+- A `TypeError` thrown for a programming fault, as `rules/error-handling.md` allows for a misuse.
+  Rejected: FR-003 promises a refusal for every request and never a throw, and a throw on the
+  webhook path becomes the framework's own 500 with no reason a route can log or count.
+
+**Consequences.** The reason union grows to eleven members. A route that switches exhaustively over
+`reason` needs the new case; none is published yet (`@theokit/gateway-teams` 0.2.1 has no
+verifier). `the-readme-route-answers-each-verdict-with-its-status.test.ts` runs the README route and
+pins the 500.
+
+## Amended 2026-10-09: the verifier's code is split by job
+
+`activity-verifier.ts` had grown to 766 lines against the plan's 500-line budget and held six jobs
+(finding F-arch-2). Commit 43ec118 split it with no behaviour change: the SDK load, the silent
+logger and the `check()` call moved to `sdk-validator.ts`; the public types and refusal messages to
+`verifier-contract.ts`; `activity-verifier.ts` keeps the factory, the body read, the admission to
+the SDK and the orchestration. The decision of this ADR, the lazy `import()` of the `dist` path
+under either class name, now lives in `sdk-validator.ts`. The key-set and signature modules are
+recorded in [ADR-0005](0005-the-teams-verifier-owns-key-retrieval.md).
+
 ## Alternatives considered
 
 - **`app.server.handleRequest({ body, headers })`, the public seam.** Rejected: it dispatches the

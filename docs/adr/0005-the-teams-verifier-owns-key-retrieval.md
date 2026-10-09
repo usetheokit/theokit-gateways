@@ -159,6 +159,92 @@ from the key endpoint. It is now a failed read with the cause "the document list
 key": the last good copy is kept, and with no copy the refusal is `key_set_unavailable`. Entries
 with no usable RSA key are still skipped when at least one usable RSA key is listed.
 
+## Amended 2026-10-09: what this decision supersedes outside this repository's ADRs
+
+The decision above has the package read key sets and verify RS256 signatures itself. Three records
+written before it said the package would not, and the review of 2026-10-08 found none of them
+amended (findings F-arch-1 and F-xval-3). This ADR supersedes, for B-420:
+
+- the clause of the alignment brief's NFR-004 "No signature or key handling is written in the
+  package", and FR-009's "the verifier does no signature work of its own";
+- the plan's "writes no signature code" and its D1 rationale that the SDK does all signature, key
+  and expiry work;
+- AC-006's grep for `jsonwebtoken` and `jwks` as the whole proof of NFR-004.
+
+What still holds, and what the amended brief and plan now state: no new runtime dependency, no
+`dependencies` field, the same two peers, and no import of `jose`, `jwks-rsa` or `jsonwebtoken`.
+The only cryptography is `node:crypto`: `createPublicKey` in `published-key-set.ts` and `verify` in
+`rs256-signature.ts`. The SDK remains the authority on issuer, audience, expiry and `serviceurl`.
+
+## Amended 2026-10-09: keys are read over https only, and never through a redirect
+
+Construction checked only that each cloud endpoint was a non-empty string, and the key-set read
+used the global `fetch`, which follows redirects (finding F-dom-infra-2). A cloud configured with
+`http:` had the signature pre-check read its keys in plaintext, where anyone on the network path
+could substitute the key set, and a key endpoint could bounce the read to a host nobody configured.
+
+**Decision** (commit 1221c2d).
+
+- Construction refuses, with a `TypeError` naming the field, a `cloud.loginEndpoint`,
+  `cloud.tokenIssuer` or `cloud.openIdMetadataUrl` that does not parse as an `https:` URL.
+- `http:` stays accepted on three loopback hosts: `localhost`, `127.0.0.1` and `[::1]`. Traffic to
+  them never leaves the machine, so there is no network path for an attacker to stand on, and it is
+  how the package's tests reach their local key server, which serves plain `http:`. Any other host
+  over `http:`, and any other scheme (`ftp:`, none), is refused.
+- Every key-set read passes `redirect: "error"`. A 3xx answer is a failed read, kept as such: the
+  last good copy stays, and with no copy the refusal is `key_set_unavailable`. The set a redirect
+  points at is never fetched.
+- A `cloud.loginEndpoint` ending in a slash is refused at construction, and an unverified `iss` is
+  taken for an Entra issuer only when it starts with `{loginEndpoint}/` (commit 8275e2d, finding
+  F-dom-2 of the auth review). Without the separator,
+  `https://login.microsoftonline.com.attacker.example/...` was classified as tenant-issued. It was
+  not exploitable, since the classification only chooses the key set and the SDK still checks the
+  issuer, but it changed the refusal reason, and the SDK's own 2.0.15 tenant check includes the
+  slash.
+
+**Alternatives** (weighed when this amendment was recorded, after the code). Rewriting `http:` to
+`https:` silently: rejected, the verifier would fetch a URL the operator did not write, and the typo
+would stay hidden. Accepting `http:` behind an opt-in flag for tests: rejected, a flag in a public
+options type is a way to switch the check off in production, and the loopback rule already serves
+the tests. Following redirects that stay on the configured host: rejected, it adds code for a case
+no configured endpoint needed; a key endpoint that redirects is a configuration to fix.
+
+**Consequences.** A sovereign or private cloud configured over `http:` on a real host now fails at
+startup instead of at the first request. The SDK's public, US government and China values are all
+`https:`. Pinned by `a-cloud-endpoint-not-on-https-is-refused-at-construction.test.ts` and
+`a-key-set-read-that-redirects-is-a-failed-read.test.ts`.
+
+## Amended 2026-10-09: read intervals run on the monotonic clock
+
+The 10-second read interval and the one-hour maximum age were computed from `Date.now()`, a wall
+clock (finding F-dom-infra-1). A host clock stepped backwards (an NTP correction, a resumed VM, a
+restored container snapshot) left the next allowed read in the future by the size of the step, and
+for that long a key Microsoft had just published was refused as `invalid_token`, which the README
+answers with a 401 the Bot Framework does not retry.
+
+**Decision** (commit 67cc46f). Both are measured with `performance.now()`, which only moves
+forward. The key-set cache no longer reads `Date` at all.
+
+**Alternatives** (weighed when this amendment was recorded, after the code). Keeping `Date.now()`
+and resetting the interval when the clock is seen to go backwards: rejected, it catches only the
+steps it happens to observe and adds a branch to get wrong. `process.hrtime.bigint()`: equivalent
+as a clock; not chosen because it returns nanoseconds as a `bigint`, while `performance.now()`
+returns milliseconds as a number, the unit of the interval and age constants it is compared with.
+
+**Consequences.** A step of the wall clock in either direction changes nothing about when a read
+may happen. Pinned by `a-wall-clock-stepped-back-does-not-stop-key-set-reads.test.ts`; the timing
+tests now fake `performance` as well as `Date`, with their assertions unchanged.
+
+## Amended 2026-10-09: where this decision lives in the code
+
+Commit 43ec118 split the verifier by job (finding F-arch-2), with no behaviour change. This
+decision is implemented by `published-key-set.ts` (the key-set URLs, the read, its caps and the
+cache that decides when a read may happen) and `rs256-signature.ts` (the `node:crypto` verify),
+which share `bounded-stream.ts` (a size-limited read) and `error-kind.ts` (the class and code of a
+failure, never its text) with the request path. `sdk-validator.ts` holds the logger that notes the
+SDK's own failed key read, from the 2026-10-07 amendment. Every one of these files is in the
+package's Stryker `mutate` list, so the split moved no code out of the mutation ratchet.
+
 ## Verification
 
 `packages/gateway-teams/tests/` holds the evidence. Seven tests were written first and failed on
