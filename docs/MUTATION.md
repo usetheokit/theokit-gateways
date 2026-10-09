@@ -28,7 +28,7 @@ Until 2026-08-30 only `packages/gateway` had ever been measured. The ten adapter
 | gateway-discord | 62.50% | 87.50% | 1 | 75 |
 | gateway-slack | 76.40% | 87.28% | 20 | 86 |
 | gateway-email | 62.42% | 86.71% | 39 | 86 |
-| gateway-teams | 70.43% | 93.15% (after the B-420 test-quality pass, 2026-10-08; each survivor in `packages/gateway-teams/tests/MUTATION.md`) | 53 + 3 no coverage | 92 |
+| gateway-teams | 70.43% | 93.05% (2026-10-09, after the B-420 verifier was split into modules; four more mutants killed since, about 93.5%; each survivor in `packages/gateway-teams/tests/MUTATION.md`) | 53 + 3 no coverage | 92 |
 
 `break` is each package's measured figure with one mutant of headroom. It is a **ratchet**: raise it
 when the score rises, never lower it to make a red run green under an unchanged scope. Where the
@@ -42,7 +42,9 @@ files that decide something. `adapter.ts` is excluded in every package, because 
 orchestration whose tests drive fakes, and mutating it measures the fakes rather than the adapter.
 The WhatsApp bridge is a `.mjs` child process Stryker cannot instrument.
 
-One exception: gateway-teams mutates `activity-verifier.ts` since 2026-10-06. It reads a request
+One exception: gateway-teams mutates `activity-verifier.ts` since 2026-10-06, and since 2026-10-09
+the modules it was split into (`published-key-set.ts`, `rs256-signature.ts`, `sdk-validator.ts`,
+`verifier-contract.ts`, `bounded-stream.ts`, `error-kind.ts`). It reads a request
 and calls the SDK, but it also decides refusals (the body bound, which SDK errors are token
 refusals, the guards after the SDK answers), and outside the ratchet it measured 70.18%. With it in
 scope the package went from 86.56% to 87.73%; most of its survivors are refusal message texts. Those texts are asserted since 2026-10-08, and the survivors left in the file are listed with their reasons in `packages/gateway-teams/tests/MUTATION.md`.
