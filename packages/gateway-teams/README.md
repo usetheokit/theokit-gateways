@@ -26,20 +26,27 @@ adapter.onInbound(async (event) => {
 });
 const verify = teamsActivityVerifier({ clientId });
 
+/** The status each refusal gets. */
+function refusalStatus(reason: string): number {
+  // The verifier itself could not judge the token: let Microsoft retry.
+  if (reason === "key_set_unavailable" || reason === "validator_unavailable") return 503;
+  // Something read the body before the verifier: a bug in this route, which no retry clears.
+  if (reason === "body_already_read") return 500;
+  return reason === "malformed_body" ? 400 : 401;
+}
+
 export async function onTeamsRequest(request: Request): Promise<Response> {
-  const result = await verify(request.clone());
+  const result = await verify(request);
   if (!result.ok) {
-    // The verifier itself could not judge the token: log why and let Microsoft retry.
-    if (result.reason === "key_set_unavailable" || result.reason === "validator_unavailable") {
-      console.error(`teams verifier: ${result.message}`); // the message never contains the token
-      return new Response(result.reason, { status: 503 });
+    const status = refusalStatus(result.reason);
+    if (status >= 500) {
+      // A fault on this side or Microsoft's: the message says what failed, never the token.
+      console.error(`teams verifier refused (${result.reason}): ${result.message}`);
+    } else {
+      // A sender fault: log the reason only, never the token or a claim value.
+      console.warn(`teams verifier refused (${result.reason})`);
     }
-    // This route handed the verifier a body it had already read: a bug here, which no retry clears.
-    if (result.reason === "body_already_read") {
-      console.error(`teams verifier: ${result.message}`);
-      return new Response(result.reason, { status: 500 });
-    }
-    return new Response(result.reason, { status: result.reason === "malformed_body" ? 400 : 401 });
+    return new Response(result.reason, { status });
   }
   const outcome = await adapter.deliver(normalizeTeamsActivity(result.activity));
   return new Response(null, { status: outcome === "ok" ? 200 : 500 });
@@ -107,8 +114,10 @@ What else to expect from the verifier:
 - It reads at most 1 MiB of the body, before any token work, because the `serviceurl` check needs
   the activity. A larger body is refused as `malformed_body`, and so is a body whose stream fails
   part-way through the read. Your server may cap it lower.
-- Pass it a request whose body nothing has read: `verify(request.clone())`, as the example does,
-  when your route reads the body too. A request whose body was already read, or is locked by
+- Pass it a request whose body nothing has read. The example passes the request itself because it
+  reads the activity from the result; if your route reads the body too, pass `request.clone()`,
+  taken before anything reads it (`clone()` throws a `TypeError` on a body already read). A
+  request whose body was already read, or is locked by
   another reader (a framework or middleware that consumed it first), is `body_already_read`: the
   fault is the route's, not the sender's and not the validator's, and a retry fails the same way
   until the route is fixed, so the example answers it with a 500 rather than a 503 that would
@@ -118,5 +127,6 @@ What else to expect from the verifier:
   other than its own token refusal. The message names the error's class and code, never its
   text. A failed load is kept: that verifier refuses every request until you build a new one.
 - It hands the SDK validator a silent logger, so a refused token writes nothing to your logs. The
-  SDK would otherwise log claim values the sender chose. Log the `reason` yourself if you want a
-  trace.
+  SDK would otherwise log claim values the sender chose. The example logs the `reason` of every
+  refusal instead, so refusals can be counted by reason, and the `message` only for the 5xx ones:
+  neither ever holds the token or a claim value.
