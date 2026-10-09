@@ -62,13 +62,38 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  */
 const OPENID_METADATA_SUFFIX = "/openidconfiguration";
 
+/** Hosts whose traffic never leaves the machine, so plain `http:` exposes nothing on a network. */
+const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+
+/**
+ * Whether `value` is an `https:` URL, or an `http:` one on a loopback host. The verifier fetches
+ * its signing keys from these endpoints, and over plain `http:` anyone on the network path could
+ * substitute the key set.
+ */
+function isTransportSafeUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol === "https:") return true;
+  return url.protocol === "http:" && LOOPBACK_HOSTS.includes(url.hostname);
+}
+
 function assertCloud(cloud: unknown): void {
   if (cloud === undefined) return;
   const fields = ["loginEndpoint", "tokenIssuer", "openIdMetadataUrl"] as const;
   const record = isPlainObject(cloud) ? cloud : {};
   for (const field of fields) {
-    if (!isNonEmptyString(record[field])) {
+    const value = record[field];
+    if (!isNonEmptyString(value)) {
       throw new TypeError(`teamsActivityVerifier: cloud.${field} must be a non-empty string`);
+    }
+    if (!isTransportSafeUrl(value)) {
+      throw new TypeError(
+        `teamsActivityVerifier: cloud.${field} must be an https: URL (http: is accepted only on localhost, 127.0.0.1 or [::1]): the verifier reads its signing keys from the cloud's endpoints`,
+      );
     }
   }
   if (!(record.openIdMetadataUrl as string).endsWith(OPENID_METADATA_SUFFIX)) {
@@ -81,7 +106,8 @@ function assertCloud(cloud: unknown): void {
 /**
  * Refuse, at construction, options no request could ever be verified against.
  *
- * @throws TypeError naming the field and, for a multi-tenant `tenantId`, the value; and for a
+ * @throws TypeError naming the field and, for a multi-tenant `tenantId`, the value; for a `cloud`
+ * endpoint that is not an `https:` URL (or `http:` on a loopback host); and for a
  * `cloud.openIdMetadataUrl` that does not end in {@link OPENID_METADATA_SUFFIX}.
  */
 export function assertVerifierOptions(options: {

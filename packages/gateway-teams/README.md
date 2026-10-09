@@ -66,8 +66,9 @@ client fault to answer with a 4xx (the example's 401). The Azure portal's "Test 
 It never throws for a request; a refusal is `{ ok: false, reason, message }`,
 and the message never contains the token. Building the verifier throws a `TypeError` for an empty
 `clientId`, an empty `tenantId`, a `tenantId` of `common`, `organizations` or `consumers`, a
-`cloud` missing one of `loginEndpoint`, `tokenIssuer` and `openIdMetadataUrl`, or an
-`openIdMetadataUrl` that does not end in `/openidconfiguration` (no trailing slash, no query): the
+`cloud` missing one of `loginEndpoint`, `tokenIssuer` and `openIdMetadataUrl` or with one that is
+not an `https:` URL (`http:` is accepted only on `localhost`, `127.0.0.1` or `[::1]`, since the
+verifier reads its signing keys from these endpoints), or an `openIdMetadataUrl` that does not end in `/openidconfiguration` (no trailing slash, no query): the
 key-set URL is that URL with the suffix replaced by `/keys`, as in the SDK's own cloud values, and
 the OIDC-standard `/.well-known/openid-configuration` spelling would otherwise be fetched as the
 key set and refuse every request.
@@ -88,7 +89,8 @@ Framework set (from your `cloud`'s `openIdMetadataUrl`) and, only when `tenantId
 copy lacks the token's `kid`, and starts a read in the background when its copy is an hour old,
 answering from that copy meanwhile, so a slow or hanging key endpoint adds no wait to a token
 whose key it already holds. No read starts within 10 seconds of the end of the previous one, per
-set, whatever is sent. A token whose header names anything but RS256, whose `kid` the
+set, whatever is sent. A key endpoint that answers with a redirect is a failed read: keys come
+only from the URL your `cloud` names. A token whose header names anything but RS256, whose `kid` the
 set does not list, or whose signature does not verify is refused as `invalid_token` before the SDK
 is asked, so a forged token never makes the bot fetch the key set. A key Microsoft has just
 published can be refused for up to 10 seconds. A token issued by an Entra tenant this verifier

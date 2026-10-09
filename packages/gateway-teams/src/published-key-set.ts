@@ -135,7 +135,11 @@ async function readKeySetText(response: Response): Promise<string | KeySetReadFa
 async function readKeySet(url: string): Promise<Map<string, KeyObject> | KeySetReadFailure> {
   let response: Response;
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(KEY_SET_READ_TIMEOUT_MS) });
+    // A redirect is a failed read: the keys come only from the URL the cloud configured.
+    response = await fetch(url, {
+      redirect: "error",
+      signal: AbortSignal.timeout(KEY_SET_READ_TIMEOUT_MS),
+    });
   } catch (error) {
     return requestFailure(error);
   }

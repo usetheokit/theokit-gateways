@@ -199,8 +199,9 @@ function judgeVerifiedToken(
  * that fails with anything but the SDK's plain `Error` is `validator_unavailable`, naming its class.
  *
  * @throws TypeError at construction for an empty `clientId`, an empty or multi-tenant `tenantId`,
- * a `cloud` missing one of its three endpoints, or a `cloud.openIdMetadataUrl` that does not end
- * in `/openidconfiguration`.
+ * a `cloud` missing one of its three endpoints or with one that is not an `https:` URL (`http:` is
+ * accepted on a loopback host only), or a `cloud.openIdMetadataUrl` that does not end in
+ * `/openidconfiguration`.
  * @public
  */
 export function teamsActivityVerifier(
