@@ -153,8 +153,8 @@ function shouldDropGroupMessage(
   if (inbound.conversationType !== "group" || !requireMention) return false;
   if (botPhoneId.length === 0) {
     // Misconfigured: with no id to look for, every group message looks unaddressed. Saying
-    // so matters more here than anywhere — the sibling allowlist check makes the same point
-    // fifteen lines below, and a gateway that answers no group message and explains nothing
+    // so matters more here than anywhere: the allowlist check above (isRefusedBySenderAllowlist)
+    // makes the same point, and a gateway that answers no group message and explains nothing
     // is indistinguishable from a broken one. Common with `fromWeb`, which has no phone
     // number id to default from.
     process.stderr.write(

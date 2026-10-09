@@ -326,7 +326,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     if (cloud.apiVersion !== undefined) {
       requireNonEmpty([["apiVersion", cloud.apiVersion]]);
     }
-    const adapter = new WhatsAppAdapter(
+    return new WhatsAppAdapter(
       new WhatsAppCloudBackend({
         accessToken: cloud.accessToken,
         phoneNumberId: cloud.phoneNumberId,
@@ -335,7 +335,6 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
       }),
       { ...opts, botPhoneId: opts.botPhoneId ?? cloud.phoneNumberId },
     );
-    return adapter;
   }
 
   /**
