@@ -12,6 +12,7 @@ files and not the others, is in `stryker.config.json`.
 | 2026-08-30 (first ever) | 73.96% | 125 | 44 |
 | 2026-08-30 (after this pass) | 95.86% | 162 | 7 |
 | 2026-10-06 (`inbound-rules.ts` and `signature.ts` in scope) | 96.90% | 281 | 9 |
+| 2026-10-09 (foreign phone number id redacted in `inbound-rules.ts`) | 97.00% | 291 | 9 |
 
 `break` is set to the measured figure with headroom for two mutants (one mutant is ~0.59% of 169).
 It is a ratchet: raise it when the score rises, never lower it to make a red run green.
@@ -68,7 +69,7 @@ the next reader does not spend an afternoon writing a test that cannot exist.
 private methods of `adapter.ts`, which is why no run had measured them. B-421 first measured it with
 `pnpm exec stryker run --mutate src/inbound-rules.ts`; the review's fix pass then added it to
 `mutate`, so `break` guards it. The whole configured scope measured 95.38% (238 mutants) on
-2026-10-06, before the last row below: the three survivors on `redactedSender`'s "no number"
+2026-10-06, before the "refusal line redacted" row below: the three survivors on `redactedSender`'s "no number"
 branch were then killed by a test for a sender with no digit.
 
 | Date | Score | Killed | Survived |
@@ -77,6 +78,7 @@ branch were then killed by a test for a sender with no digit.
 | 2026-10-06 (after four boundary tests) | 93.94% | 62 | 4 |
 | 2026-10-06 (after removing the dead filter) | 98.33% | 59 | 1 |
 | 2026-10-06 (refusal line redacted, in `mutate`) | 94.2% | 65 | 3 + 1 no coverage |
+| 2026-10-09 (foreign phone number id redacted and its report set bounded) | 98.97% | 96 | 1 |
 
 Seven survivors were real gaps: a bot number at the very start or end of a group message, a
 one-digit run, and the exact "dropping every group message" line. Three sat on
@@ -111,5 +113,5 @@ guard had no survivor, and ten mutants of the function survived, handled this wa
 |---|---|---|
 | hex check | `/^[0-9a-f]+$/i` becomes `/[0-9a-f]+$/i` | EQUIVALENT. Without `^`, only a header whose hex part starts with a non-hex character passes the check differently, and `Buffer.from(hex, "hex")` stops at the first non-hex character, so that header decodes to an empty buffer and fails the length guard either way |
 
-The foreign phone number id check (`isForAnotherNumber`, in `inbound-rules.ts` since B-421's fix
-pass) left no survivor.
+The foreign phone number id check (`isForAnotherNumber`, in `inbound-rules.ts`) left no survivor,
+and still left none on 2026-10-09 after it began naming the id by its last four digits.
