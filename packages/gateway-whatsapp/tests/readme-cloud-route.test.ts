@@ -196,6 +196,31 @@ describe("the Cloud route documented in README.md", () => {
     expect(received).toEqual(["wamid.done"]);
   });
 
+  it("forgets a delivered wamid once Meta's redelivery window has passed", async () => {
+    // The claim store must stay bounded in a long-running process: it keeps a wamid for the
+    // seven days Meta retries a webhook, then drops it.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-01T00:00:00Z"));
+      const received: string[] = [];
+      const onWebhook = await loadRoute(async (event) => {
+        received.push(event.id);
+      });
+      const { body, signature } = signedBody("wamid.old");
+
+      const statuses = [await onWebhook(body, signature)];
+      vi.setSystemTime(new Date("2026-10-07T23:59:59Z"));
+      statuses.push(await onWebhook(body, signature));
+      vi.setSystemTime(new Date("2026-10-08T00:00:01Z"));
+      statuses.push(await onWebhook(body, signature));
+
+      expect(statuses).toEqual([200, 200, 200]);
+      expect(received).toEqual(["wamid.old", "wamid.old"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("hands a status receipt addressed to its own number to the receipt handler", async () => {
     const receipts: WhatsAppStatusReceipt[] = [];
     const onWebhook = await loadRoute(

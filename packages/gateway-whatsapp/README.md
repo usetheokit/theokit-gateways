@@ -27,8 +27,22 @@ import {
 // handler; handleReceipt: what you do with a sent / delivered / read / failed receipt.
 const adapter = WhatsAppAdapter.fromCloud(cloud, { allowedSenders: process.env.WHATSAPP_ALLOWED });
 adapter.onInbound(handleMessage);
-// In-process only: a route served by several instances needs a shared store for this.
-const claimed = new Set<string>();
+// In-process only: a route served by several instances needs a shared store for this. A claim is
+// kept for Meta's seven-day redelivery window and then forgotten, so the store stays bounded.
+const CLAIM_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const claimed = new Map<string, number>(); // wamid -> when it was claimed, oldest first
+
+/** Claim `wamid` for delivery; false when it is already claimed. */
+function claim(wamid: string): boolean {
+  const now = Date.now();
+  for (const [id, claimedAt] of claimed) {
+    if (now - claimedAt < CLAIM_WINDOW_MS) break; // every later entry is newer
+    claimed.delete(id);
+  }
+  if (claimed.has(wamid)) return false;
+  claimed.set(wamid, now);
+  return true;
+}
 
 async function onWebhook(rawBody: string, signature: string | undefined): Promise<number> {
   if (!verifyWebhookSignature(rawBody, signature, cloud.appSecret)) return 401;
@@ -42,8 +56,8 @@ async function onWebhook(rawBody: string, signature: string | undefined): Promis
   if (envelope === null) return 400;
   for (const event of adapter.toDeliverableEvents(envelope)) {
     const wamid = event.whatsapp.wamid;
-    if (claimed.has(wamid)) continue; // delivered, or being delivered by an earlier request
-    claimed.add(wamid); // before the await, so a redelivery during a slow handler skips it
+    // Claimed before the await, so a redelivery during a slow handler skips it.
+    if (!claim(wamid)) continue; // delivered, or being delivered by an earlier request
     if ((await adapter.deliver(event)) !== "ok") {
       claimed.delete(wamid); // Meta's retry may deliver it again
       return 503;
@@ -91,6 +105,11 @@ already claimed, which covers both cases; it releases the claim when delivery fa
 delivers that message again. One case stays open: when a redelivery was answered 200 because it
 skipped a message that was still running, and that first delivery then fails, Meta does not retry.
 A handler slower than Meta's timeout should answer 200 first and hand the events to a queue.
+
+The claim store forgets a `wamid` seven days after claiming it. Without a bound it would hold one
+entry per message for as long as the process runs. Seven days is the retry period Meta's webhook
+documentation gives; it was taken from there and not measured here, so check the current figure
+and keep the window at least that long.
 
 Status receipts never reach `onStatusReceipt` on this path: that handler listens to the backend,
 and your route is what receives the webhook. Read them from the envelope with
