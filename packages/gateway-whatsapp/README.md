@@ -65,7 +65,8 @@ to any adapter that receives webhooks. `theokit/server/webhook`
 exports `whatsapp()` and `whatsappSubscribe()` for the signature and the GET handshake. The method
 applies `allowedSenders` and the group rule exactly as `onInbound` does, so a refused sender yields
 no event and one line on stderr naming only the last four digits of the number. On an adapter built
-with `fromCloud`, or constructed around a `WhatsAppCloudBackend`, it also drops messages addressed to another `phone_number_id`: one Meta app signs
+with `fromCloud`, or constructed around any backend that declares a `phoneNumberId` (every
+`WhatsAppCloudBackend` does), it also drops messages addressed to another `phone_number_id`: one Meta app signs
 every number's webhooks with the same secret, so a shared route must not hand one number's
 messages to another number's agent. A route that calls `WhatsAppCloudBackend.handleWebhookPayload`
 directly, with no adapter, gets the same check: the backend's inbound handler receives only

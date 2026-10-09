@@ -320,6 +320,21 @@ describe("WhatsAppAdapter.toDeliverableEvents and the envelope's phone number id
     expect(stderrLines.filter((line) => line.includes('phone number id "OTHER"'))).toHaveLength(1);
   });
 
+  it("drops a foreign-number message on an adapter around a backend that is not WhatsAppCloudBackend but declares its number", () => {
+    // A wrapper, a test double, or a WhatsAppCloudBackend from the package's other build (ESM vs
+    // CJS) is not an instance of this module's class. The number the backend declares decides.
+    class NumberDeclaringBackend extends FakeBackend {
+      readonly phoneNumberId = "PNID";
+    }
+    const adapter = new WhatsAppAdapter(new NumberDeclaringBackend());
+
+    const foreign = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "OTHER" }));
+    const own = adapter.toDeliverableEvent(makeInbound({ phoneNumberId: "PNID" }));
+
+    expect(foreign).toBeUndefined();
+    expect(own?.whatsapp.phoneNumberId).toBe("PNID");
+  });
+
   it("keeps the envelope's phone number id on the event of an adapter with no Cloud number", () => {
     const adapter = new WhatsAppAdapter(new FakeBackend());
 

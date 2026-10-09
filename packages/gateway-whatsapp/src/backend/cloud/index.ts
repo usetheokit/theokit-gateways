@@ -76,8 +76,9 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
   private generation = 0;
   private readonly appSecret: string;
   /**
-   * The Meta phone number id this backend sends as and answers for. Public so an adapter holding
-   * this backend can refuse a signed message addressed to another number of the same app.
+   * The Meta phone number id this backend sends as and answers for. Declared through
+   * `WhatsAppBackend.phoneNumberId`, so an adapter holding this backend can refuse a signed message
+   * addressed to another number of the same app.
    */
   readonly phoneNumberId: string;
   /** Phone number ids already named on stderr, so a misrouted number is reported once. */

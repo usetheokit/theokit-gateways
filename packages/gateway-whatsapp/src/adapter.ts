@@ -184,10 +184,11 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
   /** The sender allowlist and group rule the inbound path decides by. */
   private readonly rules: InboundRules;
   /**
-   * The Cloud phone number id this adapter answers for, read from a `WhatsAppCloudBackend` at
-   * construction (so `fromCloud` and `new WhatsAppAdapter(new WhatsAppCloudBackend(...))` decide
-   * alike), `undefined` for any other backend. Meta signs every number of one app with one secret,
-   * so a signed message is only this adapter's when its `phoneNumberId` is this one.
+   * The Cloud phone number id this adapter answers for, read from the backend's declared
+   * `phoneNumberId` at construction (so `fromCloud`, `new WhatsAppAdapter(new WhatsAppCloudBackend(...))`
+   * and any backend declaring the field decide alike), `undefined` for a backend that declares none.
+   * Meta signs every number of one app with one secret, so a signed message is only this adapter's
+   * when its `phoneNumberId` is this one.
    */
   private readonly ownPhoneNumberId: string | undefined;
   /** Phone number ids already named on stderr, so a misrouted number is reported once. */
@@ -363,8 +364,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
   constructor(backendImpl: WhatsAppBackend, opts: WhatsAppAdapterCommonOptions = {}) {
     super();
     this.backendImpl = backendImpl;
-    this.ownPhoneNumberId =
-      backendImpl instanceof WhatsAppCloudBackend ? backendImpl.phoneNumberId : undefined;
+    this.ownPhoneNumberId = backendImpl.phoneNumberId;
     this.botPhoneId = digitsOnly(opts.botPhoneId ?? "");
     this.rules = {
       requireMention: opts.requireMention ?? true,
@@ -467,10 +467,10 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
    * sender allowlist refuses it or the group rule drops it. A refusal writes the same stderr line
    * `onInbound` writes.
    *
-   * An adapter holding a `WhatsAppCloudBackend` (built with `fromCloud` or constructed around one)
-   * also drops a message addressed to another phone number id (one app may serve several numbers
-   * under one secret), naming that id on stderr once. An adapter on any other backend has no Cloud
-   * number to compare and does not check it.
+   * An adapter whose backend declares a `phoneNumberId` (every `WhatsAppCloudBackend`, however the
+   * adapter was built) also drops a message addressed to another phone number id (one app may
+   * serve several numbers under one secret), naming that id on stderr once. An adapter on a backend
+   * that declares no number has none to compare and does not check it.
    *
    * Pass the result to `deliver()`. Neither the backend nor the network is called.
    *
