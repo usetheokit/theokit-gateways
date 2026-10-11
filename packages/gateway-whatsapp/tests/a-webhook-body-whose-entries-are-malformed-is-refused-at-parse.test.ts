@@ -82,6 +82,45 @@ describe("a webhook body whose nested levels have the wrong shape", () => {
     expect(parseWebhookPayload(envelope([change(value)]))).toBeNull();
   });
 
+  // Code-review finding #19: the normalizers copy these fields into fields typed as strings, so a
+  // contact name of 42 became `sender.displayName` 42 and a status id of 5 became a receipt's wamid.
+  it.each([
+    [
+      "a contact whose name is a number",
+      { ...VALUE, contacts: [{ wa_id: "5511888", profile: { name: 42 } }] },
+    ],
+    [
+      "a contact whose profile is a string",
+      { ...VALUE, contacts: [{ wa_id: "5511888", profile: "Ana" }] },
+    ],
+    ["a contact whose wa_id is a number", { ...VALUE, contacts: [{ wa_id: 5511888 }] }],
+    [
+      "a status whose id is a number",
+      { ...VALUE, statuses: [{ id: 7, status: "read", recipient_id: "5511", timestamp: "1" }] },
+    ],
+    [
+      "a status whose status is an object",
+      { ...VALUE, statuses: [{ id: "w", status: {}, recipient_id: "5511", timestamp: "1" }] },
+    ],
+    [
+      "a status whose recipient_id is null",
+      { ...VALUE, statuses: [{ id: "w", status: "read", recipient_id: null, timestamp: "1" }] },
+    ],
+  ])("parses %s as null", (_, value) => {
+    expect(parseWebhookPayload(envelope([change(value)]))).toBeNull();
+  });
+
+  it("still parses a contact with no profile, and names no sender for it", () => {
+    const env = parseWebhookPayload(
+      envelope([
+        change({ ...VALUE, contacts: [{ wa_id: "5511888" }], messages: [textMessage({})] }),
+      ]),
+    );
+
+    expect(env).not.toBeNull();
+    expect(normalizeInboundMessages(env!).map((e) => e.contactName)).toEqual([undefined]);
+  });
+
   it("still parses a value with no metadata and a text message with no text", () => {
     const env = parseWebhookPayload(
       envelope([
@@ -184,6 +223,23 @@ describe("the Cloud backend given a signed body it cannot read", () => {
     const body = JSON.stringify(
       envelope([
         change({ ...VALUE, metadata: { phone_number_id: 999123 }, messages: [textMessage({})] }),
+      ]),
+    );
+
+    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe(false);
+    expect(received).toEqual([]);
+  });
+
+  it("answers false for a body whose contact name is a number, delivering nothing", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const { backend, received } = backendWithHandler();
+    const body = JSON.stringify(
+      envelope([
+        change({
+          ...VALUE,
+          contacts: [{ wa_id: "5511888", profile: { name: 42 } }],
+          messages: [textMessage({})],
+        }),
       ]),
     );
 

@@ -106,17 +106,44 @@ function isReadableMessage(message: Record<string, unknown>): boolean {
   return text === undefined || (isRecord(text) && typeof text.body === "string");
 }
 
-/** A change's `value`: absent, or an object whose lists are lists of objects. */
+/**
+ * A contact the normalizer copies into a message: a string `wa_id`, and a `profile` that is absent
+ * or carries a `name` that is absent or a string. That name becomes `sender.displayName`.
+ */
+function isReadableContact(contact: Record<string, unknown>): boolean {
+  if (typeof contact.wa_id !== "string") return false;
+  const profile = contact.profile;
+  if (profile === undefined) return true;
+  return isRecord(profile) && (profile.name === undefined || typeof profile.name === "string");
+}
+
+/** A status the normalizer turns into a receipt: string `id`, `status` and `recipient_id`. */
+function isReadableStatus(status: Record<string, unknown>): boolean {
+  return (
+    typeof status.id === "string" &&
+    typeof status.status === "string" &&
+    typeof status.recipient_id === "string"
+  );
+}
+
+/** Absent, or a list of objects that each pass `isReadable`. */
+function isOptionalReadableList(
+  list: unknown,
+  isReadable: (item: Record<string, unknown>) => boolean,
+): boolean {
+  if (!isOptionalRecordArray(list)) return false;
+  return list === undefined || (list as Record<string, unknown>[]).every(isReadable);
+}
+
+/** A change's `value`: absent, or an object whose lists hold items the normalizers can read. */
 function isWellFormedValue(value: unknown): boolean {
   if (value === undefined || value === null) return true;
   if (!isRecord(value)) return false;
   return (
     isWellFormedMetadata(value.metadata) &&
-    isOptionalRecordArray(value.contacts) &&
-    isOptionalRecordArray(value.messages) &&
-    (value.messages === undefined ||
-      (value.messages as Record<string, unknown>[]).every(isReadableMessage)) &&
-    isOptionalRecordArray(value.statuses)
+    isOptionalReadableList(value.contacts, isReadableContact) &&
+    isOptionalReadableList(value.messages, isReadableMessage) &&
+    isOptionalReadableList(value.statuses, isReadableStatus)
   );
 }
 
@@ -132,9 +159,10 @@ function isWellFormedEntry(entry: unknown): boolean {
  * `null` change, `messages: 5`). The whole body is refused rather than its bad entries skipped, so
  * nothing in a batch is dropped without the route seeing it. A body is also refused when a field the
  * inbound rules read with string methods is not a string: a `metadata.phone_number_id` that is not
- * absent or a string, or a text message whose `id`, `from` or `text.body` is not a string. Past a
- * non-null result neither normalizer throws. The other fields of each message and status are not
- * checked here.
+ * absent or a string, a text message whose `id`, `from` or `text.body` is not a string, a contact
+ * whose `wa_id` or `profile.name` is not a string, or a status whose `id`, `status` or
+ * `recipient_id` is not a string. Past a non-null result neither normalizer throws, and every
+ * string field of an event or receipt holds a string. Timestamps are not checked here.
  */
 export function parseWebhookPayload(json: unknown): MetaWebhookEnvelope | null {
   if (!isRecord(json)) return null;
