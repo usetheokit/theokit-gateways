@@ -45,7 +45,7 @@ before it calls the SDK `check()`. The SDK remains the authority on issuer, audi
   10 seconds of the previous one, whatever triggered it. A read is triggered by having no copy, by
   a `kid` missing from the copy, or by a copy older than one hour.
 - A successful read replaces the whole set; nothing is learned, so a retired key is gone after the
-  next read. A failed read keeps the last good copy. The response is capped at 1 MiB and 1000 keys.
+  next read. A failed read keeps the last good copy. The response is capped at 1 MiB and 1000 keys (8 MiB since 2026-10-11, below).
   Keys are kept as `node:crypto` `KeyObject`s, and only RSA keys are kept. A read is successful only
   when the document lists at least one usable RSA key (amended 2026-10-07, below).
 - Per request, after the checks that cost nothing (missing header, oversized or malformed body, no
@@ -115,7 +115,7 @@ Two review findings changed how the decision above runs, without changing what i
   held copy lists is answered from it at once, and an hour-old copy starts a read in the
   background that nothing awaits; only a missing copy or a missing `kid` waits for a read. The
   10-second gap is counted from the end of the previous read, so no read starts within 10 seconds
-  of another's start or end. The rest stands: one read in flight per set, shared; the 1 MiB and
+  of another's start or end. The rest stands: one read in flight per set, shared; the size and
   1000-key caps; replace on success; the last good copy kept on failure. The cost: after the hour,
   a retired key verifies until the background read completes, which is as long as one read takes,
   or for as long as reads fail, as before.
@@ -244,6 +244,20 @@ which share `bounded-stream.ts` (a size-limited read) and `error-kind.ts` (the c
 failure, never its text) with the request path. `sdk-validator.ts` holds the logger that notes the
 SDK's own failed key read, from the 2026-10-07 amendment. Every one of these files is in the
 package's Stryker `mutate` list, so the split moved no code out of the mutation ratchet.
+
+## Amended 2026-10-11: the size cap is 8 MiB
+
+The infrastructure audit of this change (loop-infra-audit, SD-10.10) measured the live Bot
+Framework key set at 876,002 bytes listing 251 keys, 84% of the 1 MiB cap; this decision had
+recorded 239 keys, so the set grows. Past the cap every read fails, so a cold start refuses every
+token as `key_set_unavailable` and a warm verifier refuses every rotated key, while the SDK's own
+key client, which has no cap, would still read the document. The cap is now 8 MiB: about ten
+times the measured document, and room for the 1000-key cap at about 3.5 KB a key, which 1 MiB
+never was. A cap stays, because it bounds what an endpoint can make the verifier buffer.
+
+Rejected: no cap (an endpoint, or whatever answers in its place, could make the verifier buffer
+without limit); twice the document (the margin the audit named as the defect, spent in a few
+years of growth at the observed rate).
 
 ## Verification
 

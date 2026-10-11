@@ -301,9 +301,9 @@ describe("forged key ids", () => {
     expect(res).toMatchObject({ ok: false, reason: "key_set_unavailable" });
   });
 
-  it("say key_set_unavailable when the key set is larger than 1 MiB", async () => {
+  it("say key_set_unavailable when the key set is larger than 8 MiB", async () => {
     const { ks, verify } = await verifierWithKeys();
-    ks.answerNext({ keys: ks.publishedJwks(), padding: "x".repeat(1024 * 1024) });
+    ks.answerNext({ keys: ks.publishedJwks(), padding: "x".repeat(8 * 1024 * 1024) });
 
     const res = await verify(activityRequest(ks.signToken({})));
 

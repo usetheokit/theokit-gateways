@@ -12,7 +12,8 @@ import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
 
-const MAX_KEY_SET_BYTES = 1024 * 1024;
+/** 8 MiB: about ten times the live Bot Framework set (876,002 bytes, 251 keys, 2026-10-11). */
+const MAX_KEY_SET_BYTES = 8 * 1024 * 1024;
 
 /** A JSON key-set document of exactly `bytes` bytes, listing `keys`. */
 function documentOfSize(keys: readonly unknown[], bytes: number): string {
@@ -117,15 +118,15 @@ describe("a key-set answer that is not a key set", () => {
     expect(res).toEqual(accepted);
   });
 
-  it("says the document is too large when it is one byte over 1 MiB", async () => {
+  it("says the document is too large when it is one byte over 8 MiB", async () => {
     const res = await coldStart((ks) =>
       ks.answerNextRaw(200, documentOfSize(ks.publishedJwks(), MAX_KEY_SET_BYTES + 1)),
     );
 
-    expect(res).toEqual(unavailable("/keys: the document is over 1048576 bytes)"));
+    expect(res).toEqual(unavailable("/keys: the document is over 8388608 bytes)"));
   });
 
-  it("reads a document of exactly 1 MiB", async () => {
+  it("reads a document of exactly 8 MiB", async () => {
     const res = await coldStart((ks) =>
       ks.answerNextRaw(200, documentOfSize(ks.publishedJwks(), MAX_KEY_SET_BYTES)),
     );

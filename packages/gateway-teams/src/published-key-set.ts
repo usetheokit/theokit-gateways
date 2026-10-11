@@ -31,8 +31,14 @@ const KEY_SET_MAX_AGE_MS = 60 * 60 * 1000;
 /** How long one read of a key set may take before it counts as failed. */
 const KEY_SET_READ_TIMEOUT_MS = 10_000;
 
-/** The largest key-set document the verifier reads. Microsoft's is far smaller. */
-const MAX_KEY_SET_BYTES = 1024 * 1024;
+/**
+ * The largest key-set document the verifier reads. Measured 2026-10-11, the live Bot Framework set
+ * was 876,002 bytes listing 251 keys, about 3.5 KB a key: a 1 MiB cap sat at 84% of it, and crossing
+ * a cap refuses every new key. 8 MiB is about ten times that document and holds
+ * {@link MAX_KEYS_PER_SET} keys of that size; the cap still bounds what an endpoint can make the
+ * verifier buffer.
+ */
+const MAX_KEY_SET_BYTES = 8 * 1024 * 1024;
 
 /** The most keys one key-set document may list; a document listing more is a failed read. */
 const MAX_KEYS_PER_SET = 1000;
