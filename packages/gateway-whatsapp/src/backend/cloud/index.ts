@@ -240,10 +240,14 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
    * `WhatsAppAdapter` applies too).
    *
    * @returns `true` if the signature is valid and the body was dispatched (or held nothing to
-   *          dispatch). `false` if the signature is invalid, or if the signed body is not JSON or
-   *          has a shape {@link parseWebhookPayload} refuses: the whole body is refused, never a
-   *          part of it dropped, and one line on stderr says which. Answer `false` with a non-2xx
-   *          (401 for a bad signature) so the drop is seen and Meta redelivers.
+   *          dispatch). `false` if the signature is invalid, if the signed body is not JSON or
+   *          has a shape {@link parseWebhookPayload} refuses, or if it holds a message for this
+   *          number while no inbound handler is subscribed (before `onInbound`, or after
+   *          `disconnect()`): the whole body is refused, never a part of it dropped, and one line
+   *          on stderr says which. Answer `false` with a non-2xx (401 for a bad signature) so the
+   *          drop is seen and Meta redelivers. Status receipts with no status handler subscribed
+   *          are discarded on purpose: subscribing to receipts is optional, and refusing them
+   *          would make Meta redeliver every receipt to a route that never wants one.
    * @throws {ConfigurationError} `missing_option` when this backend's `appSecret` is empty or
    *         whitespace only: a signature under an empty key proves nothing.
    */
@@ -264,7 +268,17 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
       );
       return false;
     }
-    await this.dispatchInbound(envelope);
+    const messages = normalizeInboundMessages(envelope).filter(
+      (event) => !isForAnotherNumber(event, this.phoneNumberId, this.reportedForeignNumbers),
+    );
+    if (messages.length > 0 && this.inboundHandler === undefined) {
+      // Answering true would let the route say 200 and Meta never redeliver these messages.
+      process.stderr.write(
+        `[whatsapp-cloud] signed webhook body holds ${messages.length} message(s) for this number and no inbound handler is subscribed; refused whole, nothing dispatched\n`,
+      );
+      return false;
+    }
+    await this.dispatchInbound(messages);
     await this.dispatchStatusReceipts(envelope);
     return true;
   }
@@ -283,11 +297,9 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
     }
   }
 
-  /** Hand each message addressed to this backend's number to the inbound handler. */
-  private async dispatchInbound(envelope: MetaWebhookEnvelope): Promise<void> {
-    for (const event of normalizeInboundMessages(envelope)) {
-      if (this.inboundHandler === undefined) continue;
-      if (isForAnotherNumber(event, this.phoneNumberId, this.reportedForeignNumbers)) continue;
+  /** Hand each message, already scoped to this backend's number, to the inbound handler. */
+  private async dispatchInbound(messages: readonly WhatsAppInboundEvent[]): Promise<void> {
+    for (const event of messages) {
       await this.dispatchContained(() => this.inboundHandler?.(event), "handler");
     }
   }

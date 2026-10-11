@@ -99,7 +99,10 @@ answers it (400 in the example) instead of dropping part of a batch unseen. Any 
 is safe to hand to `toDeliverableEvents` and `normalizeStatusReceipts`: neither throws on it.
 `WhatsAppCloudBackend.handleWebhookPayload` refuses such a body the same way: it answers `false`,
 as it does for a signed body that is not JSON, dispatches nothing and writes one line to stderr,
-so a route built on it answers non-2xx and Meta redelivers instead of losing the batch.
+so a route built on it answers non-2xx and Meta redelivers instead of losing the batch. It also
+answers `false` for a body holding a message for its number while no inbound handler is
+subscribed, before `onInbound` or after `disconnect()`. Status receipts with no status handler are
+discarded, because subscribing to them is optional.
 
 Answer 200 only when every event returned `ok`. `no_handler` means nothing received the message,
 and `handler_threw` means your handler failed on it; a non-2xx makes Meta retry the whole envelope,

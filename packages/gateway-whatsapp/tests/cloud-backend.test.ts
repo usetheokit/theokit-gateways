@@ -686,3 +686,84 @@ describe("WhatsAppCloudBackend webhook entrypoint, used without WhatsAppAdapter"
     stderr.mockRestore();
   });
 });
+
+/**
+ * Code-review finding #23: a signed batch with a message for this number answered `true` when no
+ * inbound handler was subscribed, a route wired before `onInbound` or still live after
+ * `disconnect()`. The route answered 200, Meta did not redeliver, and the messages were lost with
+ * nothing logged.
+ */
+describe("WhatsAppCloudBackend webhook entrypoint with no inbound handler subscribed", () => {
+  const STATUS_ONLY = JSON.stringify({
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: "e",
+        changes: [
+          {
+            field: "messages",
+            value: {
+              messaging_product: "whatsapp",
+              metadata: { display_phone_number: "x", phone_number_id: "PNID" },
+              statuses: [
+                { id: "wamid.s", status: "read", timestamp: "1700", recipient_id: "5511" },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  function stderrLines(): { lines: () => string[] } {
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    return { lines: () => spy.mock.calls.map((c) => String(c[0])) };
+  }
+
+  it("answers false and says so on stderr for a message to its number before onInbound", async () => {
+    const stderr = stderrLines();
+    const b = makeBackend();
+
+    const ok = await b.handleWebhookPayload(TEXT_ENVELOPE, signedHeader(TEXT_ENVELOPE));
+
+    expect(ok).toBe(false);
+    expect(stderr.lines()).toEqual([expect.stringContaining("no inbound handler is subscribed")]);
+    vi.restoreAllMocks();
+  });
+
+  it("answers false for a message to its number after disconnect cleared the handler", async () => {
+    stderrLines();
+    const b = makeBackend();
+    const handler = vi.fn(async () => {});
+    b.onInbound(handler);
+    await b.disconnect();
+
+    const ok = await b.handleWebhookPayload(TEXT_ENVELOPE, signedHeader(TEXT_ENVELOPE));
+
+    expect(ok).toBe(false);
+    expect(handler).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("answers true for a status-only body, whose receipts are discarded with no handler", async () => {
+    const stderr = stderrLines();
+    const b = makeBackend();
+
+    const ok = await b.handleWebhookPayload(STATUS_ONLY, signedHeader(STATUS_ONLY));
+
+    expect(ok).toBe(true);
+    expect(stderr.lines()).toEqual([]);
+    vi.restoreAllMocks();
+  });
+
+  it("answers true for a message addressed only to another number", async () => {
+    stderrLines();
+    const b = makeBackend();
+    const envelope = JSON.parse(TEXT_ENVELOPE);
+    envelope.entry[0].changes[0].value.metadata.phone_number_id = "109900001111";
+    const body = JSON.stringify(envelope);
+
+    expect(await b.handleWebhookPayload(body, signedHeader(body))).toBe(true);
+    vi.restoreAllMocks();
+  });
+});
