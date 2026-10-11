@@ -17,7 +17,8 @@ Scope, and why these files, is in `stryker.config.json`. The cross-package map i
 
 Read the last row with care. Stryker counts a timeout as detected, and that run timed out 20
 mutants against 3 the run before, on unchanged source. Five of the new timeouts are mutants the
-previous run reported as survivors and that no test can kill (`verified-claims.ts` 198, 199, 217;
+previous run reported as survivors and that no test can kill (`verified-claims.ts` 198, 199, and
+217, which a later test kills, see below;
 `verifier-contract.ts` 83, 87, all listed below), so the extra timeouts came from load on the
 machine, not from the tests. The comparable figure is the `4e64f4e` run plus the four mutants the
 `0ac4a8c` tests were shown to kill: about 93.5%.
@@ -88,7 +89,13 @@ B-420 created this file, so its survivors are this item's.
 | 198 | `readTokenAlgorithm` | `decodeSegment(rawToken, 0)?.alg` -> `.alg` | `admitToSdk` asks for the algorithm only after `readTokenKeyId` found a `kid` in the same header (`activity-verifier.ts` 115-116), so the decoded header is always an object there; nothing else calls it |
 | 199 | `readTokenAlgorithm` | `typeof alg === "string"` -> `true` | a non-string `alg` returned as is still fails the `!== "RS256"` test at `activity-verifier.ts` 123 |
 | 211 | `decodeSegment` | `catch { return undefined; }` -> `catch {}` | an empty block returns `undefined` too |
-| 217 | `normalizeServiceUrl` | `toLowerCase()` -> `toUpperCase()` | applied to both sides of the comparison |
+
+Line 217 (`normalizeServiceUrl`, `toLowerCase()` -> `toUpperCase()`) used to be listed here as
+equivalent because the call applies to both sides of the comparison. It is not equivalent: a dotless
+`ı` (U+0131) uppercases to `I` and lowercases to itself, so under `toUpperCase()` a body naming
+`traffıcmanager.net` would match a token signed for `trafficmanager.net`. The case in
+`a-service-url-claim-that-differs-is-refused.test.ts` kills it, which was checked by applying the
+mutant by hand and watching that test fail.
 
 `error-kind.ts` has no survivor.
 
