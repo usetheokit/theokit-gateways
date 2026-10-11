@@ -312,14 +312,16 @@ describe("assertVerifierOptions", () => {
       openIdMetadataUrl: "https://login.botframework.com/v1/.well-known/openidconfiguration",
     };
     expect(() => assertVerifierOptions({ clientId: CLIENT_ID, tenantId: "Common" })).toThrow(
-      /tenantId.*Common/,
+      /tenantId "Common" names no tenant/,
     );
     for (const tenantId of ["organizations", "CONSUMERS"]) {
       expect(() => assertVerifierOptions({ clientId: CLIENT_ID, tenantId }), tenantId).toThrow(
-        new RegExp(`tenantId.*${tenantId}`),
+        new RegExp(`tenantId "${tenantId}" names no tenant`),
       );
     }
-    expect(() => assertVerifierOptions({ clientId: CLIENT_ID, tenantId: "" })).toThrow(/tenantId/);
+    expect(() => assertVerifierOptions({ clientId: CLIENT_ID, tenantId: "" })).toThrow(
+      /tenantId, when given, must be a non-empty string/,
+    );
     expect(() => assertVerifierOptions({ clientId: "" })).toThrow(/clientId/);
     expect(() => assertVerifierOptions({ clientId: 7 })).toThrow(/clientId/);
     expect(() =>
@@ -347,7 +349,13 @@ describe("assertVerifierOptions", () => {
   });
 
   it("refuses a tenantId that is a domain, since no tid claim can equal it", () => {
-    for (const tenantId of ["contoso.onmicrosoft.com", "contoso.com", "tenant-1"]) {
+    for (const tenantId of [
+      "contoso.onmicrosoft.com",
+      "contoso.com",
+      "tenant-1",
+      `x${TENANT}`,
+      `${TENANT}x`,
+    ]) {
       expect(() => assertVerifierOptions({ clientId: CLIENT_ID, tenantId }), tenantId).toThrow(
         new RegExp(`tenantId "${tenantId}" is not a tenant id`),
       );
