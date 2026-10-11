@@ -171,6 +171,21 @@ function judgeVerifiedToken(
 }
 
 /**
+ * The options exactly as `assertVerifierOptions` checked them, frozen. The SDK validator is built on
+ * the first request, so reading the caller's object then would let a later mutation hand the SDK an
+ * app id or cloud that construction never validated (loop-code-review LCR0121).
+ */
+function snapshotOptions(options: TeamsActivityVerifierOptions): TeamsActivityVerifierOptions {
+  const { clientId, tenantId, cloud, __validatorModule } = options;
+  return Object.freeze({
+    clientId,
+    ...(tenantId === undefined ? {} : { tenantId }),
+    ...(cloud === undefined ? {} : { cloud: Object.freeze({ ...cloud }) }),
+    ...(__validatorModule === undefined ? {} : { __validatorModule }),
+  });
+}
+
+/**
  * Build a verifier for one Teams bot. The returned function reads a Fetch `Request` (pass a
  * `clone()` if the body is needed afterwards) and answers with {@link TeamsActivityVerifyResult}.
  * It reads at most 1 MiB of body: a larger one is `malformed_body`, refused before any token work,
@@ -208,20 +223,21 @@ export function teamsActivityVerifier(
   options: TeamsActivityVerifierOptions,
 ): (request: Request) => Promise<TeamsActivityVerifyResult> {
   assertVerifierOptions(options);
+  const validated = snapshotOptions(options);
   let loaded: Promise<Loaded> | undefined;
   const expected = {
-    clientId: options.clientId,
-    tenantId: options.tenantId,
-    loginEndpoint: options.cloud?.loginEndpoint ?? DEFAULT_LOGIN_ENDPOINT,
+    clientId: validated.clientId,
+    tenantId: validated.tenantId,
+    loginEndpoint: validated.cloud?.loginEndpoint ?? DEFAULT_LOGIN_ENDPOINT,
   };
   const keySets: KeySets = {
-    botFramework: keySet("Bot Framework", keySetUrl(options.cloud?.openIdMetadataUrl)),
+    botFramework: keySet("Bot Framework", keySetUrl(validated.cloud?.openIdMetadataUrl)),
     tenant:
-      options.tenantId === undefined
+      validated.tenantId === undefined
         ? undefined
         : keySet(
-            `tenant ${options.tenantId}`,
-            tenantKeySetUrl(expected.loginEndpoint, options.tenantId),
+            `tenant ${validated.tenantId}`,
+            tenantKeySetUrl(expected.loginEndpoint, validated.tenantId),
           ),
   };
 
@@ -229,7 +245,7 @@ export function teamsActivityVerifier(
     const read = await readRequest(request);
     if ("reason" in read) return read;
 
-    loaded ??= loadValidator(options);
+    loaded ??= loadValidator(validated);
     const load = await loaded;
     if ("unavailable" in load) return refuse("validator_unavailable", load.unavailable);
 
