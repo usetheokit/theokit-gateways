@@ -271,14 +271,19 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
     const messages = normalizeInboundMessages(envelope).filter(
       (event) => !isForAnotherNumber(event, this.phoneNumberId, this.reportedForeignNumbers),
     );
-    if (messages.length > 0 && this.inboundHandler === undefined) {
+    const inboundHandler = this.inboundHandler;
+    if (messages.length > 0 && inboundHandler === undefined) {
       // Answering true would let the route say 200 and Meta never redeliver these messages.
       process.stderr.write(
         `[whatsapp-cloud] signed webhook body holds ${messages.length} message(s) for this number and no inbound handler is subscribed; refused whole, nothing dispatched\n`,
       );
       return false;
     }
-    await this.dispatchInbound(messages);
+    // The handler that accepted the batch receives all of it. Re-reading it per message let a
+    // `disconnect()` or unsubscribe inside the first message's handler skip the rest while this
+    // still answered true; refusing mid-batch instead would make Meta redeliver the messages
+    // already handled.
+    if (inboundHandler !== undefined) await this.dispatchInbound(messages, inboundHandler);
     await this.dispatchStatusReceipts(envelope);
     return true;
   }
@@ -298,9 +303,12 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
   }
 
   /** Hand each message, already scoped to this backend's number, to the inbound handler. */
-  private async dispatchInbound(messages: readonly WhatsAppInboundEvent[]): Promise<void> {
+  private async dispatchInbound(
+    messages: readonly WhatsAppInboundEvent[],
+    handler: (event: WhatsAppInboundEvent) => Promise<void>,
+  ): Promise<void> {
     for (const event of messages) {
-      await this.dispatchContained(() => this.inboundHandler?.(event), "handler");
+      await this.dispatchContained(() => handler(event), "handler");
     }
   }
 

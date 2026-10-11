@@ -745,6 +745,54 @@ describe("WhatsAppCloudBackend webhook entrypoint with no inbound handler subscr
     vi.restoreAllMocks();
   });
 
+  /**
+   * Code-review LCR0111/LCR0602: the handler was checked once before the batch and re-read per
+   * message, so one removed while the batch was being dispatched (a shutdown calling
+   * `disconnect()`, or the unsubscribe `onInbound` returned) skipped the rest with nothing logged,
+   * and the method still answered `true`.
+   */
+  function threeMessageBatch(): string {
+    const envelope = JSON.parse(TEXT_ENVELOPE);
+    const [first] = envelope.entry[0].changes[0].value.messages;
+    envelope.entry[0].changes[0].value.messages = ["wamid.1", "wamid.2", "wamid.3"].map((id) => ({
+      ...first,
+      id,
+    }));
+    return JSON.stringify(envelope);
+  }
+
+  it("delivers the whole batch when disconnect runs inside the handler of its first message", async () => {
+    stderrLines();
+    const b = makeBackend();
+    const seen: string[] = [];
+    b.onInbound(async (event) => {
+      seen.push(event.wamid);
+      if (seen.length === 1) await b.disconnect();
+    });
+    const body = threeMessageBatch();
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect({ ok, seen }).toEqual({ ok: true, seen: ["wamid.1", "wamid.2", "wamid.3"] });
+    vi.restoreAllMocks();
+  });
+
+  it("delivers the whole batch when the handler unsubscribes itself on its first message", async () => {
+    stderrLines();
+    const b = makeBackend();
+    const seen: string[] = [];
+    const off = b.onInbound(async (event) => {
+      seen.push(event.wamid);
+      off();
+    });
+    const body = threeMessageBatch();
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect({ ok, seen }).toEqual({ ok: true, seen: ["wamid.1", "wamid.2", "wamid.3"] });
+    vi.restoreAllMocks();
+  });
+
   it("answers true for a status-only body, whose receipts are discarded with no handler", async () => {
     const stderr = stderrLines();
     const b = makeBackend();
