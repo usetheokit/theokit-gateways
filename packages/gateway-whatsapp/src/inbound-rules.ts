@@ -5,8 +5,8 @@
  * the gateway's event shape, as functions of their inputs (the only state is the set of foreign
  * numbers already reported, which the caller owns). `WhatsAppAdapter` holds the configuration and
  * passes it in; every adapter path that decides an inbound message goes through
- * `toDeliverableEvent`, which calls `isForAnotherNumber` and `decideInbound`, so there is one rule
- * set to keep. `WhatsAppCloudBackend.handleWebhookPayload` calls `isForAnotherNumber` as well, for
+ * `decideForOwnNumber` (own-number.ts), which calls `isForAnotherNumber` and `decideInbound`, so
+ * there is one rule set to keep. `WhatsAppCloudBackend.handleWebhookPayload` calls `isForAnotherNumber` as well, for
  * messages and for status receipts, so a route built on the backend alone is scoped to its number
  * too.
  */

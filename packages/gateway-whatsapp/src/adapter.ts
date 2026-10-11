@@ -29,12 +29,8 @@ import type {
   WhatsAppStatusReceipt,
 } from "./backend-types.js";
 import { ConfigurationError } from "./errors.js";
-import {
-  decideInbound,
-  digitsOnly,
-  type InboundRules,
-  isForAnotherNumber,
-} from "./inbound-rules.js";
+import { digitsOnly, type InboundRules, isForAnotherNumber } from "./inbound-rules.js";
+import { decideForOwnNumber, requireOwnPhoneNumberId } from "./own-number.js";
 import { splitForWhatsApp } from "./split.js";
 
 export { digitsOnly };
@@ -193,6 +189,9 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
   private readonly ownPhoneNumberId: string | undefined;
   /** Foreign phone number id endings already named on stderr, so each is reported once. */
   private readonly reportedForeignNumbers = new Set<string>();
+  /** The rules both inbound paths share; `onInbound` skips the precondition (see `decideForOwnNumber`). */
+  private readonly decide = (inbound: WhatsAppInboundEvent): WhatsAppMessageEvent | undefined =>
+    decideForOwnNumber(inbound, this.ownPhoneNumberId, this.reportedForeignNumbers, this.rules);
   /** Mirrors the sibling adapters: guards connect() against opening a second session. */
   private connected = false;
   private handler?: (event: GatewayMessageEvent) => Promise<void>;
@@ -440,7 +439,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
 
     const off = this.backendImpl.onInbound(async (inbound) => {
       if (!this.handler) return;
-      const event = this.toDeliverableEvent(inbound);
+      const event = this.decide(inbound);
       if (event === undefined) return;
       await this.handler(event);
     });
@@ -466,20 +465,22 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
    * sender allowlist refuses it or the group rule drops it. A refusal writes the same stderr line
    * `onInbound` writes.
    *
-   * An adapter whose backend declares a `phoneNumberId` (every `WhatsAppCloudBackend`, however the
-   * adapter was built) also drops a message addressed to another phone number id (one app may
-   * serve several numbers under one secret), naming that id on stderr once. An adapter on a backend
-   * that declares no number has none to compare and does not check it.
+   * It also drops a message addressed to another phone number id than the one the backend
+   * declares (one app may serve several numbers under one secret), naming that id on stderr once.
+   * A Cloud message on an adapter whose backend declares no `phoneNumberId` throws, as in
+   * `toDeliverableEvents`; a WhatsApp Web or Baileys message has no number to compare.
    *
    * Pass the result to `deliver()`. Neither the backend nor the network is called.
    *
+   * @throws {ConfigurationError} (`missing_phone_number_id`) for a Cloud message when the backend
+   * declares no `phoneNumberId`.
    * @public
    */
   toDeliverableEvent(inbound: WhatsAppInboundEvent): WhatsAppMessageEvent | undefined {
-    if (isForAnotherNumber(inbound, this.ownPhoneNumberId, this.reportedForeignNumbers)) {
-      return undefined;
+    if (inbound.backend === "cloud") {
+      requireOwnPhoneNumberId(this.ownPhoneNumberId, "toDeliverableEvent");
     }
-    return decideInbound(inbound, this.rules);
+    return this.decide(inbound);
   }
 
   /**
@@ -504,16 +505,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
    * @public
    */
   toDeliverableEvents(envelope: MetaWebhookEnvelope): WhatsAppMessageEvent[] {
-    if (this.ownPhoneNumberId === undefined) {
-      throw new ConfigurationError({
-        code: "missing_phone_number_id",
-        message:
-          "gateway-whatsapp: toDeliverableEvents needs the backend to declare its phoneNumberId. " +
-          "One Meta app signs every number's webhooks with one secret, so without it this adapter " +
-          "would deliver every number's messages. Use fromCloud, or expose phoneNumberId on a " +
-          "backend that wraps WhatsAppCloudBackend.",
-      });
-    }
+    requireOwnPhoneNumberId(this.ownPhoneNumberId, "toDeliverableEvents");
     const events: WhatsAppMessageEvent[] = [];
     for (const inbound of normalizeInboundMessages(envelope)) {
       const event = this.toDeliverableEvent(inbound);

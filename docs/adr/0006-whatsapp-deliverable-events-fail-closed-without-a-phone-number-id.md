@@ -36,7 +36,8 @@ adapter's backend declares no `phoneNumberId`.**
   so.
 - `toDeliverableEvent(inbound)` and the `onInbound` path are unchanged. Neither takes a Cloud
   envelope from an application route, and `isForAnotherNumber` keeps its contract that `undefined`
-  means "no number to compare".
+  means "no number to compare". (Amended on 2026-10-11 for `toDeliverableEvent`; see the
+  amendment below.)
 
 `toDeliverableEvents` is new in this unreleased minor version of `@theokit/gateway-whatsapp`, so
 tightening it breaks no published consumer.
@@ -67,6 +68,35 @@ tightening it breaks no published consumer.
   throws, declared filters. `inbound-rules.test.ts`, which pins `isForAnotherNumber` with
   `undefined`, is unchanged, because that function's contract did not change. This closes review
   finding #32.
+
+## Amendment, 2026-10-11: `toDeliverableEvent` fails closed for a Cloud message
+
+The bullet above was wrong about `toDeliverableEvent`. It is public, and `normalizeInboundMessages`
+is exported too, so a route can build events one message at a time from an unfiltered envelope.
+Loop-code-review finding #22 (LCR0121, at `adapter.ts:478`) probed it: on an adapter over a
+delegating wrapper that declares no number, `toDeliverableEvents` threw `missing_phone_number_id`
+and `toDeliverableEvent` returned the foreign message. Two public methods gave two answers to one
+tenant-isolation question.
+
+**`toDeliverableEvent` now throws the same `ConfigurationError` when the message is a Cloud message
+(`inbound.backend === "cloud"`) and the backend declares no `phoneNumberId`.** A WhatsApp Web or
+Baileys message has no number to compare and still converts.
+
+The `onInbound` path keeps the old answer, deliberately. A backend that declares no number and
+still hands the adapter Cloud messages is a wrapper around `WhatsAppCloudBackend`, and that backend
+has already dropped other numbers' messages by its own `phoneNumberId`. Throwing there would turn
+every message of such a deployment into a contained handler failure. Both paths share
+`decideForOwnNumber`; only the public method checks the precondition first.
+
+Who is affected: a caller of `toDeliverableEvent` on an adapter whose backend declares no number,
+with Cloud messages. `toDeliverableEvent` is new in the same unreleased minor as
+`toDeliverableEvents`, so no published consumer breaks. The parity tests in
+`deliverable-event.test.ts` now run on a backend that declares `PNID`, since they hand Cloud
+messages to `toDeliverableEvent`.
+
+Rejected: leaving the singular method fail-open with its docblock saying so. The finding's point is
+that the precondition then lives only in the reader's head, and the first caller who misses it
+delivers another tenant's messages.
 
 ## The webhook signature module belongs to B-421
 

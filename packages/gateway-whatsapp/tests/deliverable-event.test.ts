@@ -57,6 +57,14 @@ class FakeBackend implements WhatsAppBackend {
 }
 
 /**
+ * A Cloud backend declaring its number, as `toDeliverableEvent` requires for a Cloud message.
+ * `makeInbound` addresses that number.
+ */
+class NumberedFakeBackend extends FakeBackend {
+  readonly phoneNumberId = "PNID";
+}
+
+/**
  * Every method throws: converting an envelope must never touch the backend. It declares its Cloud
  * number, as `toDeliverableEvents` requires.
  */
@@ -394,6 +402,52 @@ describe("WhatsAppAdapter.toDeliverableEvents and the envelope's phone number id
     expect((thrown as Error).message).toContain("phoneNumberId");
   });
 
+  // Code-review finding #22: the singular method answered the same tenant-isolation question
+  // fail-open, so a route building events per message got what toDeliverableEvents refuses.
+  it("throws the typed configuration error from toDeliverableEvent for a Cloud message on a wrapper that does not declare its number", () => {
+    const adapter = new WhatsAppAdapter(
+      new DelegatingCloudBackend(new WhatsAppCloudBackend(CLOUD)),
+    );
+
+    let thrown: unknown;
+    try {
+      adapter.toDeliverableEvent(makeInbound({ phoneNumberId: FOREIGN }));
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(ConfigurationError);
+    expect((thrown as ConfigurationError).code).toBe("missing_phone_number_id");
+  });
+
+  it("still converts a WhatsApp Web message on an adapter whose backend declares no number", () => {
+    const adapter = new WhatsAppAdapter(new FakeBackend());
+
+    const event = adapter.toDeliverableEvent(
+      makeInbound({ backend: "web", phoneNumberId: undefined }),
+    );
+
+    expect(event?.whatsapp.backend).toBe("web");
+  });
+
+  it("still delivers the own number's message through onInbound on a wrapper that does not declare its number", async () => {
+    // The wrapped WhatsAppCloudBackend filters by number before the adapter runs, so this path
+    // stays open; only the methods a route calls with an unfiltered envelope fail closed.
+    const inner = new WhatsAppCloudBackend(CLOUD);
+    const adapter = new WhatsAppAdapter(new DelegatingCloudBackend(inner));
+    const received: string[] = [];
+    adapter.onInbound(async (event) => {
+      received.push(event.id);
+    });
+    const body = JSON.stringify(
+      envelopeJson([{ from: "5511999999999", id: "wamid.own", body: "hello" }], "PNID"),
+    );
+    const hex = createHmac("sha256", CLOUD.appSecret).update(body).digest("hex");
+
+    expect(await inner.handleWebhookPayload(body, `sha256=${hex}`)).toBe(true);
+    expect(received).toEqual(["wamid.own"]);
+  });
+
   it("drops a foreign-number message on a delegating wrapper that declares its number", () => {
     class NumberDeclaringWrapper extends DelegatingCloudBackend {
       readonly phoneNumberId = this.inner.phoneNumberId;
@@ -567,7 +621,7 @@ describe("the foreign phone number id report", () => {
 
 describe("WhatsAppAdapter.toDeliverableEvent", () => {
   it("drops a group message that does not mention the bot", () => {
-    const adapter = new WhatsAppAdapter(new FakeBackend(), { botPhoneId: "5511777777777" });
+    const adapter = new WhatsAppAdapter(new NumberedFakeBackend(), { botPhoneId: "5511777777777" });
 
     const dropped = adapter.toDeliverableEvent(
       makeInbound({ conversationType: "group", channelId: "group@g.us", text: "hello all" }),
@@ -648,7 +702,7 @@ describe("WhatsAppAdapter.toDeliverableEvent", () => {
   ];
 
   async function decideBothWays(row: ParityRow) {
-    const backend = new FakeBackend();
+    const backend = new NumberedFakeBackend();
     const viaInbound = new WhatsAppAdapter(backend, row.options);
     const seen: unknown[] = [];
     viaInbound.onInbound(async (event) => {
@@ -659,7 +713,7 @@ describe("WhatsAppAdapter.toDeliverableEvent", () => {
     const inboundStderr = [...stderrLines];
 
     stderrLines = [];
-    const viaMethod = new WhatsAppAdapter(new FakeBackend(), row.options);
+    const viaMethod = new WhatsAppAdapter(new NumberedFakeBackend(), row.options);
     const decided = viaMethod.toDeliverableEvent(row.inbound);
     const methodStderr = [...stderrLines];
     return { seen, decided, inboundStderr, methodStderr };
