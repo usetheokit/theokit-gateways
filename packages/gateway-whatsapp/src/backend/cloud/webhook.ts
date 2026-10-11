@@ -84,13 +84,38 @@ function isOptionalRecordArray(value: unknown): boolean {
   return value === undefined || (Array.isArray(value) && value.every(isRecord));
 }
 
+/**
+ * `metadata`: absent, or an object whose `phone_number_id` is absent or a string. The inbound rules
+ * compare and redact that id with string methods, so a number or `null` there would throw past the
+ * boundary.
+ */
+function isWellFormedMetadata(metadata: unknown): boolean {
+  if (metadata === undefined || metadata === null) return true;
+  if (!isRecord(metadata)) return false;
+  return metadata.phone_number_id === undefined || typeof metadata.phone_number_id === "string";
+}
+
+/**
+ * A text message's fields the normalizer and the inbound rules read: `id` and `from` are strings,
+ * and `text` is absent or carries a string `body`. Other types are dropped before any field is read.
+ */
+function isReadableMessage(message: Record<string, unknown>): boolean {
+  if (message.type !== "text") return true;
+  if (typeof message.id !== "string" || typeof message.from !== "string") return false;
+  const text = message.text;
+  return text === undefined || (isRecord(text) && typeof text.body === "string");
+}
+
 /** A change's `value`: absent, or an object whose lists are lists of objects. */
 function isWellFormedValue(value: unknown): boolean {
   if (value === undefined || value === null) return true;
   if (!isRecord(value)) return false;
   return (
+    isWellFormedMetadata(value.metadata) &&
     isOptionalRecordArray(value.contacts) &&
     isOptionalRecordArray(value.messages) &&
+    (value.messages === undefined ||
+      (value.messages as Record<string, unknown>[]).every(isReadableMessage)) &&
     isOptionalRecordArray(value.statuses)
   );
 }
@@ -105,8 +130,11 @@ function isWellFormedEntry(entry: unknown): boolean {
  * normalizers can read: no `object`, an `entry` that is not an array, or any entry, change or
  * listed contact, message or status that is not an object (an entry with no `changes` array, a
  * `null` change, `messages: 5`). The whole body is refused rather than its bad entries skipped, so
- * nothing in a batch is dropped without the route seeing it. Past a non-null result neither
- * normalizer throws. The fields of each message and status are not checked here.
+ * nothing in a batch is dropped without the route seeing it. A body is also refused when a field the
+ * inbound rules read with string methods is not a string: a `metadata.phone_number_id` that is not
+ * absent or a string, or a text message whose `id`, `from` or `text.body` is not a string. Past a
+ * non-null result neither normalizer throws. The other fields of each message and status are not
+ * checked here.
  */
 export function parseWebhookPayload(json: unknown): MetaWebhookEnvelope | null {
   if (!isRecord(json)) return null;

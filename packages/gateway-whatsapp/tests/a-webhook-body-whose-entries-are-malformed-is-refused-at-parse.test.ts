@@ -30,6 +30,17 @@ const VALUE = {
   metadata: { display_phone_number: "5511", phone_number_id: "PNID" },
 };
 
+function textMessage(overrides: Record<string, unknown>): Record<string, unknown> {
+  return {
+    from: "5511888",
+    id: "wamid.t",
+    timestamp: "1700000000",
+    type: "text",
+    text: { body: "hi" },
+    ...overrides,
+  };
+}
+
 describe("a webhook body whose nested levels have the wrong shape", () => {
   it.each([
     ["a null entry", envelope([null])],
@@ -46,6 +57,40 @@ describe("a webhook body whose nested levels have the wrong shape", () => {
     ["a null contact", envelope([change({ ...VALUE, contacts: [null] })])],
   ])("parses %s as null", (_, body) => {
     expect(parseWebhookPayload(body)).toBeNull();
+  });
+
+  // Code-review finding #16: the rules downstream call string methods on these fields, so a
+  // well-shaped envelope with a number or null in one of them threw TypeError past the boundary.
+  it.each([
+    ["a numeric phone_number_id", { ...VALUE, metadata: { phone_number_id: 999123 } }],
+    ["a null phone_number_id", { ...VALUE, metadata: { phone_number_id: null } }],
+    ["metadata that is a string", { ...VALUE, metadata: "PNID" }],
+    [
+      "a text message whose from is a number",
+      { ...VALUE, messages: [textMessage({ from: 5511 })] },
+    ],
+    ["a text message whose id is a number", { ...VALUE, messages: [textMessage({ id: 7 })] }],
+    [
+      "a text message whose body is a number",
+      { ...VALUE, messages: [textMessage({ text: { body: 42 } })] },
+    ],
+    [
+      "a text message whose text is a string",
+      { ...VALUE, messages: [textMessage({ text: "hi" })] },
+    ],
+  ])("parses %s as null", (_, value) => {
+    expect(parseWebhookPayload(envelope([change(value)]))).toBeNull();
+  });
+
+  it("still parses a value with no metadata and a text message with no text", () => {
+    const env = parseWebhookPayload(
+      envelope([
+        change({ messaging_product: "whatsapp", messages: [textMessage({ text: undefined })] }),
+      ]),
+    );
+
+    expect(env).not.toBeNull();
+    expect(normalizeInboundMessages(env!).map((e) => [e.wamid, e.text])).toEqual([["wamid.t", ""]]);
   });
 
   it("still parses and normalizes a valid envelope with a message and a status", () => {
@@ -131,6 +176,19 @@ describe("the Cloud backend given a signed body it cannot read", () => {
     expect(stderr.mock.calls.map(([line]) => String(line))).toEqual([
       expect.stringContaining("[whatsapp-cloud] signed webhook body has a shape"),
     ]);
+  });
+
+  it("answers false for a numeric phone_number_id, instead of rejecting with a TypeError", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const { backend, received } = backendWithHandler();
+    const body = JSON.stringify(
+      envelope([
+        change({ ...VALUE, metadata: { phone_number_id: 999123 }, messages: [textMessage({})] }),
+      ]),
+    );
+
+    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe(false);
+    expect(received).toEqual([]);
   });
 
   it("answers false for a batch whose good message sits beside a malformed entry, delivering none", async () => {

@@ -274,6 +274,18 @@ describe("the Cloud route documented in README.md", () => {
     expect(received).toEqual([]);
   });
 
+  it("answers 400 to a signed body whose message sender is a number, and delivers nothing", async () => {
+    const received: string[] = [];
+    const onWebhook = await loadRoute(async (event) => {
+      received.push(event.id);
+    });
+    const body = signedBody("wamid.numeric-from").body.replace(/"from":"[^"]*"/, '"from":5511');
+
+    expect(body).toContain('"from":5511');
+    expect(await onWebhook(body, sign(body))).toBe(400);
+    expect(received).toEqual([]);
+  });
+
   it("refuses a body whose signature does not match", async () => {
     const received: string[] = [];
     const onWebhook = await loadRoute(async (event) => {

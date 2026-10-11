@@ -90,8 +90,9 @@ directly, with no adapter, gets the same check: the backend's inbound handler re
 messages addressed to the backend's own `phoneNumberId`.
 
 `parseWebhookPayload` returns `null` for a body whose shape the normalizers cannot read: an entry
-with no `changes` array, a `null` entry or change, or a `messages`, `statuses` or `contacts` list
-that is not a list of objects. The whole body is refused, not just its bad entries, so the route
+with no `changes` array, a `null` entry or change, a `messages`, `statuses` or `contacts` list
+that is not a list of objects, a `metadata.phone_number_id` that is not a string, or a text message
+whose `id`, `from` or `text.body` is not a string. The whole body is refused, not just its bad entries, so the route
 answers it (400 in the example) instead of dropping part of a batch unseen. Any non-null envelope
 is safe to hand to `toDeliverableEvents` and `normalizeStatusReceipts`: neither throws on it.
 `WhatsAppCloudBackend.handleWebhookPayload` refuses such a body the same way: it answers `false`,
