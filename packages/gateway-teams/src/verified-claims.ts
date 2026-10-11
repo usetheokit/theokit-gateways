@@ -44,6 +44,12 @@ export const TEAMS_CHANNEL_ID = "msteams";
 /** Multi-tenant authority names: none of them names a tenant, so none can restrict one. */
 const MULTI_TENANT_NAMES = ["common", "organizations", "consumers"];
 
+/**
+ * A tenant id, the shape Microsoft issues every `tid` claim in. Entra also accepts a verified
+ * domain wherever an authority takes a tenant, but a domain can never equal a `tid`.
+ */
+const TENANT_ID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** The issuer prefix Entra v1 tokens carry, which no cloud setting changes. */
 const STS_ISSUER_PREFIX = "https://sts.windows.net/";
 
@@ -111,7 +117,7 @@ function assertCloud(cloud: unknown): void {
 /**
  * Refuse, at construction, options no request could ever be verified against.
  *
- * @throws TypeError naming the field and, for a multi-tenant `tenantId`, the value; for a `cloud`
+ * @throws TypeError naming the field and, for a multi-tenant or non-GUID `tenantId`, the value; for a `cloud`
  * endpoint that is not an `https:` URL (or `http:` on a loopback host); for a
  * `cloud.loginEndpoint` ending in a slash; and for a `cloud.openIdMetadataUrl` that does not end in
  * {@link OPENID_METADATA_SUFFIX}.
@@ -134,6 +140,11 @@ export function assertVerifierOptions(options: {
     if (MULTI_TENANT_NAMES.includes(tenantId.toLowerCase())) {
       throw new TypeError(
         `teamsActivityVerifier: tenantId "${tenantId}" names no tenant; pass the tenant's id, or omit tenantId`,
+      );
+    }
+    if (!TENANT_ID_SHAPE.test(tenantId)) {
+      throw new TypeError(
+        `teamsActivityVerifier: tenantId "${tenantId}" is not a tenant id: every token's tid claim is the tenant's GUID, so a domain or any other name would refuse every request; pass the Directory (tenant) ID from Entra`,
       );
     }
   }

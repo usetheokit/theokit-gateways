@@ -66,6 +66,8 @@ client fault to answer with a 4xx (the example's 401). The Azure portal's "Test 
 It never throws for a request; a refusal is `{ ok: false, reason, message }`,
 and the message never contains the token. Building the verifier throws a `TypeError` for an empty
 `clientId`, an empty `tenantId`, a `tenantId` of `common`, `organizations` or `consumers`, a
+`tenantId` that is not a tenant GUID (a domain such as `contoso.onmicrosoft.com` can never equal a
+token's `tid` claim, so it would refuse every request), a
 `cloud` missing one of `loginEndpoint`, `tokenIssuer` and `openIdMetadataUrl` or with one that is
 not an `https:` URL (`http:` is accepted only on `localhost`, `127.0.0.1` or `[::1]`, since the
 verifier reads its signing keys from these endpoints), a `loginEndpoint` ending in a slash, or an

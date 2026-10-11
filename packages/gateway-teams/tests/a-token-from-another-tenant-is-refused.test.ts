@@ -67,4 +67,10 @@ describe("a token from another tenant", () => {
       /tenantId.*common/,
     );
   });
+
+  it("throws a TypeError at construction for a tenantId given as a domain", () => {
+    expect(() =>
+      teamsActivityVerifier({ clientId: CLIENT_ID, tenantId: "contoso.onmicrosoft.com" }),
+    ).toThrow(TypeError);
+  });
 });

@@ -47,7 +47,8 @@ A failed SDK load is kept, and that verifier refuses every request as `validator
 until it is rebuilt.
 
 Construction throws a `TypeError` for an empty `clientId`; an empty `tenantId` or one of `common`,
-`organizations` and `consumers`; a `cloud` missing one of its three endpoints or with one that is
+`organizations` and `consumers`; a `tenantId` that is not a tenant GUID, such as a domain, which
+no token's `tid` claim can equal; a `cloud` missing one of its three endpoints or with one that is
 not an `https:` URL (`http:` is accepted only on `localhost`, `127.0.0.1` and `[::1]`); a
 `cloud.loginEndpoint` ending in a slash; and a `cloud.openIdMetadataUrl` that does not end in
 `/openidconfiguration`.

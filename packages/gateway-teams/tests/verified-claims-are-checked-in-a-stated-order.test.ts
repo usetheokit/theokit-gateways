@@ -345,4 +345,18 @@ describe("assertVerifierOptions", () => {
     ).not.toThrow();
     expect(() => assertVerifierOptions({ clientId: CLIENT_ID })).not.toThrow();
   });
+
+  it("refuses a tenantId that is a domain, since no tid claim can equal it", () => {
+    for (const tenantId of ["contoso.onmicrosoft.com", "contoso.com", "tenant-1"]) {
+      expect(() => assertVerifierOptions({ clientId: CLIENT_ID, tenantId }), tenantId).toThrow(
+        new RegExp(`tenantId "${tenantId}" is not a tenant id`),
+      );
+    }
+  });
+
+  it("accepts a tenant id written in upper case", () => {
+    expect(() =>
+      assertVerifierOptions({ clientId: CLIENT_ID, tenantId: TENANT.toUpperCase() }),
+    ).not.toThrow();
+  });
 });
