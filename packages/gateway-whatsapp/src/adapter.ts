@@ -522,11 +522,15 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     return events;
   }
 
-  /** Status receipts (sent/delivered/read/failed). Adapter-specific (D307). */
+  /**
+   * Status receipts (sent/delivered/read/failed). Adapter-specific (D307). A receipt names the
+   * customer's number, so one addressed to another phone number id is dropped, as messages are.
+   */
   onStatusReceipt(handler: (receipt: WhatsAppStatusReceipt) => Promise<void>): () => void {
     this.statusUnsubscribe?.();
     this.statusHandler = handler;
     const off = this.backendImpl.onStatusReceipt(async (r) => {
+      if (isForAnotherNumber(r, this.ownPhoneNumberId, this.reportedForeignNumbers)) return;
       await this.statusHandler?.(r);
     });
     this.statusUnsubscribe = off;

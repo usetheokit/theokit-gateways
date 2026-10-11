@@ -449,6 +449,60 @@ describe("the foreign phone number id on the single-message and backend-hosted p
   });
 });
 
+/**
+ * Code-review finding #16: the adapter scoped messages to its backend's number and forwarded every
+ * status receipt. A receipt names the customer's number, so one tenant's receipt handler saw
+ * another tenant's customers.
+ */
+describe("WhatsAppAdapter.onStatusReceipt and the backend's phone number id", () => {
+  class ReceiptEmittingBackend extends FakeBackend {
+    receiptHandler?: (r: WhatsAppStatusReceipt) => Promise<void>;
+    override onStatusReceipt(handler: (r: WhatsAppStatusReceipt) => Promise<void>): () => void {
+      this.receiptHandler = handler;
+      return () => {
+        this.receiptHandler = undefined;
+      };
+    }
+    async emitReceipt(receipt: WhatsAppStatusReceipt): Promise<void> {
+      await this.receiptHandler?.(receipt);
+    }
+  }
+
+  function receipt(wamid: string, phoneNumberId: string | undefined): WhatsAppStatusReceipt {
+    const base = { wamid, status: "delivered" as const, recipient: "5511999999999", timestamp: 1 };
+    return phoneNumberId === undefined ? base : { ...base, phoneNumberId };
+  }
+
+  async function receivedThrough(backend: ReceiptEmittingBackend): Promise<string[]> {
+    const adapter = new WhatsAppAdapter(backend);
+    const received: string[] = [];
+    adapter.onStatusReceipt(async (r) => {
+      received.push(r.wamid);
+    });
+    await backend.emitReceipt(receipt("wamid.foreign", FOREIGN));
+    await backend.emitReceipt(receipt("wamid.own", "PNID"));
+    await backend.emitReceipt(receipt("wamid.none", undefined));
+    return received;
+  }
+
+  it("hands its handler only the receipts addressed to the number its backend declares", async () => {
+    class NumberDeclaringBackend extends ReceiptEmittingBackend {
+      readonly phoneNumberId = "PNID";
+    }
+
+    expect(await receivedThrough(new NumberDeclaringBackend())).toEqual(["wamid.own"]);
+    expect(stderrLines.filter((line) => line.includes(FOREIGN_LABEL))).toHaveLength(1);
+  });
+
+  it("hands its handler every receipt when its backend declares no number", async () => {
+    expect(await receivedThrough(new ReceiptEmittingBackend())).toEqual([
+      "wamid.foreign",
+      "wamid.own",
+      "wamid.none",
+    ]);
+  });
+});
+
 describe("the foreign phone number id report", () => {
   const foreignLines = (label: string): string[] =>
     stderrLines.filter((line) => line.includes(`addressed to ${label}:`));
