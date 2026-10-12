@@ -43,6 +43,7 @@ import {
   refuse,
   type TeamsActivityVerifierOptions,
   type TeamsActivityVerifyResult,
+  type TeamsCloudEndpoints,
 } from "./verifier-contract.js";
 
 export type {
@@ -181,18 +182,31 @@ function judgeVerifiedToken(
 }
 
 /**
- * The options exactly as `assertVerifierOptions` checked them, frozen. The SDK validator is built on
- * the first request, so reading the caller's object then would let a later mutation hand the SDK an
- * app id or cloud that construction never validated (loop-code-review LCR0121).
+ * The options read once, frozen: `assertVerifierOptions` checks this copy and everything after it
+ * uses only this copy. The SDK validator is built on the first request, so reading the caller's
+ * object then would let a later mutation hand the SDK an app id or cloud construction never
+ * validated; and a copy taken after the check would see a getter's second answer, or drop an
+ * endpoint the cloud inherits, which the check had read (loop-code-review LCR0121).
  */
 function snapshotOptions(options: TeamsActivityVerifierOptions): TeamsActivityVerifierOptions {
   const { clientId, tenantId, cloud, __validatorModule } = options;
   return Object.freeze({
     clientId,
     ...(tenantId === undefined ? {} : { tenantId }),
-    ...(cloud === undefined ? {} : { cloud: Object.freeze({ ...cloud }) }),
+    ...(cloud === undefined ? {} : { cloud: snapshotCloud(cloud) }),
     ...(__validatorModule === undefined ? {} : { __validatorModule }),
   });
+}
+
+/**
+ * The cloud with its three endpoints read explicitly, so an endpoint inherited from a prototype or
+ * served by a getter is kept, as `assertVerifierOptions` reads it; its other own fields are kept as
+ * they are. A value that is not an object is returned unchanged for the check to refuse.
+ */
+function snapshotCloud(cloud: TeamsCloudEndpoints): TeamsCloudEndpoints {
+  if (typeof cloud !== "object" || cloud === null) return cloud;
+  const { loginEndpoint, tokenIssuer, openIdMetadataUrl } = cloud;
+  return Object.freeze({ ...cloud, loginEndpoint, tokenIssuer, openIdMetadataUrl });
 }
 
 /**
@@ -233,8 +247,8 @@ function snapshotOptions(options: TeamsActivityVerifierOptions): TeamsActivityVe
 export function teamsActivityVerifier(
   options: TeamsActivityVerifierOptions,
 ): (request: Request) => Promise<TeamsActivityVerifyResult> {
-  assertVerifierOptions(options);
   const validated = snapshotOptions(options);
+  assertVerifierOptions(validated);
   let loaded: Promise<Loaded> | undefined;
   const expected = {
     clientId: validated.clientId,

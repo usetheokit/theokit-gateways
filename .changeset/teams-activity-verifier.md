@@ -54,8 +54,10 @@ Construction throws a `TypeError` for an empty `clientId`; an empty `tenantId` o
 no token's `tid` claim can equal; a `cloud` missing one of its three endpoints or with one that is
 not an `https:` URL (`http:` is accepted only on `localhost`, `127.0.0.1` and `[::1]`); a
 `cloud.loginEndpoint` ending in a slash; and a `cloud.openIdMetadataUrl` that does not end in
-`/openidconfiguration`. The verifier keeps a frozen copy of the options it validated, so changing
-the options object afterwards does not reach the SDK validator, which is built on the first request.
+`/openidconfiguration`. The verifier reads each option once and validates that frozen copy, so
+changing the options object afterwards does not reach the SDK validator, which is built on the
+first request, and a `cloud` endpoint inherited from a prototype or served by a getter is the value
+both checked and used.
 
 Two refusals are deliberate: with `tenantId` set, a Bot Framework token with no `tid` claim is
 `tenant_unverified`, and Microsoft documents none on connector tokens; an agentic-identity (Entra)
