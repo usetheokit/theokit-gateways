@@ -123,7 +123,11 @@ describe("the message of a refusal", () => {
   });
 
   it.each<[string, ClaimFixture, string]>([
-    ["another app's audience", F7_BF_OTHER_APP, "the token's aud claim is not this bot's app id"],
+    [
+      "an aud array that also names this app",
+      { ...F7_BF_OTHER_APP, claims: { ...F7_BF_OTHER_APP.claims, aud: ["other-app", CLIENT_ID] } },
+      "the token's aud claim is not this bot's app id",
+    ],
     [
       "a serviceurl that differs",
       F5_BF_SERVICE_URL_DIFFERS,

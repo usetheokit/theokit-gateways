@@ -87,7 +87,8 @@ describe("the real SDK 2.1.0 validator", () => {
       const res = await verify(activityRequest(signFixture(ks, F7_BF_OTHER_APP.claims)));
 
       expect(res).toMatchObject({ ok: false, reason: "invalid_token" });
-      expect(ks.hits()).toBe(2);
+      // The verifier refuses it before the SDK is asked, so only the verifier read the key set.
+      expect(ks.hits()).toBe(1);
     });
 
     it("refuses a token expired by more than 300 seconds as invalid_token", async () => {
@@ -96,7 +97,8 @@ describe("the real SDK 2.1.0 validator", () => {
       const res = await verify(activityRequest(ks.signToken({ exp: now() - 361 })));
 
       expect(res).toMatchObject({ ok: false, reason: "invalid_token" });
-      expect(ks.hits()).toBe(2);
+      // The verifier refuses it before the SDK is asked, so only the verifier read the key set.
+      expect(ks.hits()).toBe(1);
     });
 
     it("refuses a token signed by a key the key set does not hold as invalid_token", async () => {

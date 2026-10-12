@@ -76,9 +76,18 @@ before it calls the SDK `check()`. The SDK remains the authority on issuer, audi
 ## Consequences
 
 - **Outbound ceiling.** At most 12 key-set reads a minute from the verifier (6 per set, and the
-  tenant set only with `tenantId`), plus the SDK's own fetch for tokens Microsoft actually signed:
-  one per genuine `kid` per 10 minutes. A sender cannot cause an SDK fetch. Before this change the
-  ceiling grew with the request rate (#64).
+  tenant set only with `tenantId`), plus the SDK's own fetch for tokens Microsoft actually signed
+  for this app and that are within their validity window: one per genuine `kid` per 10 minutes. A
+  sender cannot cause an SDK fetch with a token it forged, nor with a genuinely signed one issued for
+  another app or expired, because the verifier refuses those on `aud`, `exp` and `nbf` before the SDK
+  reads a key. Before this change the ceiling grew with the request rate (#64).
+
+  *Amended 2026-10-12.* This paragraph first said a sender could cause no SDK fetch at all while
+  the verifier checked only the signature. loop-code-review (LCR0103) measured 34 key-set reads from
+  35 tokens signed under 7 published keys but issued for another app or a day expired: the SDK's
+  key client reads the set before `jsonwebtoken` checks audience and expiry, and its cache holds 5
+  keys. The audience and validity checks now run before the SDK is asked, with the SDK's own
+  300-second tolerance, and a test counts the reads.
 - **Accepted cold-start cost.** On first use the key set is read twice, once by the verifier and
   once by the SDK. ADR-0003 cited this cost when it rejected reading the set in the verifier; it is
   now the price of deciding when reads happen.

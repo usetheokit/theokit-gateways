@@ -14,6 +14,9 @@ contains the token. It accepts an activity only when:
 
 - the token's RS256 signature verifies under a key Microsoft publishes, checked by the verifier
   itself before the Teams SDK is asked, so a forged token never makes the bot fetch a key set;
+  a genuinely signed token issued for another app, or expired or not yet valid by more than the
+  SDK's 300-second tolerance, is refused as `invalid_token` at that point too, because the SDK
+  reads a key before it checks those claims;
 - the Microsoft SDK's own token validator accepts the token, so issuer, audience and expiry stay
   Microsoft's rules;
 - the token's `aud` is this bot's app id, its `serviceurl` matches the activity's `serviceUrl`,

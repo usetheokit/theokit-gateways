@@ -35,6 +35,7 @@ import {
   readBearerToken,
   readTokenAlgorithm,
   readTokenKeyId,
+  sdkRefusesTokenClaims,
   tenantRefusalBeforeVerification,
 } from "./verified-claims.js";
 import {
@@ -89,6 +90,9 @@ const KEY_NOT_PUBLISHED =
 const BAD_SIGNATURE =
   "the token's RS256 signature does not verify against the published key it names, so the Teams SDK was not asked";
 
+const SDK_WOULD_REFUSE =
+  "the token's audience is not this app's, or it is expired or not yet valid beyond the SDK's 300-second tolerance, so the Teams SDK was not asked";
+
 type ReadableActivity = Extract<ParsedBody, { ok: true }>;
 
 /** The key sets a verifier reads: Bot Framework always, the tenant's only when one is configured. */
@@ -97,14 +101,16 @@ interface KeySets {
   readonly tenant: PublishedKeySet | undefined;
 }
 
-type TenantExpectation = Pick<ExpectedClaims, "tenantId" | "loginEndpoint">;
+type TenantExpectation = Pick<ExpectedClaims, "clientId" | "tenantId" | "loginEndpoint">;
 
 /**
  * Whether the SDK may be asked about this token, or the refusal that needs no SDK work. In order:
  * a token with no `kid` (no genuine token omits it); a tenant-issued token whose unverified tenant
  * this verifier would refuse anyway; a header naming anything but RS256; a `kid` the matching key
  * set does not list (`key_set_unavailable` when the set could not be read); and a signature that
- * does not verify under the listed key. The key set is chosen by the unverified `iss`: an Entra
+ * does not verify under the listed key. A token whose signature verifies is still refused when the
+ * SDK would refuse it on its audience, expiry or not-before claim, because the SDK reads the key set
+ * before it checks them. The key set is chosen by the unverified `iss`: an Entra
  * issuer is checked against the configured tenant's set, anything else against Bot Framework's.
  */
 async function admitToSdk(
@@ -124,7 +130,11 @@ async function admitToSdk(
   const listed = await set.lookup(kid);
   if (listed === "unlisted") return refuse("invalid_token", KEY_NOT_PUBLISHED);
   if ("unavailable" in listed) return refuse("key_set_unavailable", listed.unavailable);
-  return verifiesRs256(rawToken, listed) ? undefined : refuse("invalid_token", BAD_SIGNATURE);
+  if (!verifiesRs256(rawToken, listed)) return refuse("invalid_token", BAD_SIGNATURE);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  return sdkRefusesTokenClaims(rawToken, expected.clientId, nowSeconds)
+    ? refuse("invalid_token", SDK_WOULD_REFUSE)
+    : undefined;
 }
 
 /** {@link sdkCheck} for a token whose signature {@link admitToSdk} verified. */
@@ -203,7 +213,8 @@ function snapshotOptions(options: TeamsActivityVerifierOptions): TeamsActivityVe
  * `validator_unavailable` until the verifier is rebuilt.
  *
  * Before the SDK is asked, a token with no `kid` or whose header names anything but RS256 is
- * `invalid_token`, and so is one whose signature does not verify; a tenant-issued token whose
+ * `invalid_token`, and so is one whose signature does not verify or that the SDK would refuse on
+ * its audience, or on an `exp` or `nbf` more than 300 seconds off; a tenant-issued token whose
  * unverified tenant would be refused gets that tenant reason. The verifier reads the Bot Framework
  * key set (and, with `tenantId`, that tenant's) itself: when it holds no copy or the copy lacks the
  * `kid`, and in the background when the copy is an hour old, never within 10 seconds of the end of

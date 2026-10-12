@@ -1,6 +1,7 @@
 /**
  * AC-014: a token issued for another app id is refused, whether the SDK checked the audience
- * (installed path) or a validator accepted it anyway.
+ * (installed path) or a validator would have accepted it anyway: its signature verified, so the
+ * verifier refuses it on its audience before any validator is asked (loop-code-review LCR0103).
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -33,9 +34,9 @@ describe("a token for another app", () => {
     expect(JSON.stringify(res).includes(token)).toBe(false);
   });
 
-  it("refuses it as audience_mismatch through an accepting validator", async () => {
+  it("refuses it as invalid_token before an accepting validator is asked", async () => {
     ks = await startKeyServer();
-    const { module } = acceptingValidatorModule();
+    const { module, calls } = acceptingValidatorModule();
     const verify = teamsActivityVerifier({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
@@ -45,7 +46,7 @@ describe("a token for another app", () => {
 
     const res = await verify(activityRequest(token));
 
-    expect(res).toMatchObject({ ok: false, reason: "audience_mismatch" });
+    expect([res, calls.check]).toMatchObject([{ ok: false, reason: "invalid_token" }, 0]);
     expect(JSON.stringify(res).includes(token)).toBe(false);
   });
 });
