@@ -437,11 +437,14 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     this.inboundUnsubscribe?.();
     this.handler = handler;
 
+    // The bridge calls the handler it was created for, never `this.handler`: the backend hands a
+    // signed batch whole to the bridge that accepted it, and re-reading the current handler per
+    // message let a disconnect or unsubscribe inside the first message drop the rest of a batch
+    // already answered 200. New batches stop at the backend, because `off()` removes the bridge.
     const off = this.backendImpl.onInbound(async (inbound) => {
-      if (!this.handler) return;
       const event = this.decide(inbound);
       if (event === undefined) return;
-      await this.handler(event);
+      await handler(event);
     });
     this.inboundUnsubscribe = off;
 

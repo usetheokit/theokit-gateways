@@ -504,6 +504,68 @@ describe("the foreign phone number id on the single-message and backend-hosted p
 });
 
 /**
+ * Code-review finding #33/#36: the backend delivers a signed batch whole to the handler that
+ * accepted it, but the adapter's bridge re-read its current handler per message, so a disconnect or
+ * unsubscribe inside the first message dropped the rest while the webhook answered true.
+ */
+describe("a signed batch through WhatsAppAdapter reaches the handler that accepted it", () => {
+  const threeMessageBody = (): string =>
+    JSON.stringify(
+      envelopeJson([
+        { from: "5511999999999", id: "wamid.1", body: "one" },
+        { from: "5511999999999", id: "wamid.2", body: "two" },
+        { from: "5511999999999", id: "wamid.3", body: "three" },
+      ]),
+    );
+  const postSigned = (adapter: WhatsAppAdapter, body: string): Promise<boolean> => {
+    const hex = createHmac("sha256", CLOUD.appSecret).update(body).digest("hex");
+    return (adapter.getBackend() as WhatsAppCloudBackend).handleWebhookPayload(
+      body,
+      `sha256=${hex}`,
+    );
+  };
+
+  it("delivers every message when the handler disconnects the adapter on the first one", async () => {
+    const adapter = WhatsAppAdapter.fromCloud(CLOUD);
+    const seen: string[] = [];
+    adapter.onInbound(async (event) => {
+      seen.push(event.id);
+      if (seen.length === 1) await adapter.disconnect();
+    });
+
+    const ok = await postSigned(adapter, threeMessageBody());
+
+    expect({ ok, seen }).toEqual({ ok: true, seen: ["wamid.1", "wamid.2", "wamid.3"] });
+  });
+
+  it("delivers every message when the handler unsubscribes itself on the first one", async () => {
+    const adapter = WhatsAppAdapter.fromCloud(CLOUD);
+    const seen: string[] = [];
+    const off = adapter.onInbound(async (event) => {
+      seen.push(event.id);
+      off();
+    });
+
+    const ok = await postSigned(adapter, threeMessageBody());
+
+    expect({ ok, seen }).toEqual({ ok: true, seen: ["wamid.1", "wamid.2", "wamid.3"] });
+  });
+
+  it("delivers the next batch to nobody once the handler has unsubscribed", async () => {
+    const adapter = WhatsAppAdapter.fromCloud(CLOUD);
+    const seen: string[] = [];
+    const off = adapter.onInbound(async (event) => {
+      seen.push(event.id);
+    });
+    off();
+
+    await postSigned(adapter, threeMessageBody());
+
+    expect(seen).toEqual([]);
+  });
+});
+
+/**
  * Code-review finding #16: the adapter scoped messages to its backend's number and forwarded every
  * status receipt. A receipt names the customer's number, so one tenant's receipt handler saw
  * another tenant's customers.
