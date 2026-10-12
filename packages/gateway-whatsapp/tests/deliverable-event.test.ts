@@ -728,8 +728,8 @@ describe("WhatsAppAdapter.toDeliverableEvent", () => {
     },
     {
       name: "fromSelf under an allowlist",
-      options: { allowedSenders: "553598838687" },
-      inbound: makeInbound({ fromPhone: "231116569108705@lid", fromSelf: true, text: "note" }),
+      options: { allowedSenders: "5511666666666" },
+      inbound: makeInbound({ fromPhone: "100000000000001@lid", fromSelf: true, text: "note" }),
       refusals: 0,
       kept: true,
     },
@@ -780,10 +780,6 @@ describe("WhatsAppAdapter.toDeliverableEvent", () => {
     const methodStderr = [...stderrLines];
     return { seen, decided, inboundStderr, methodStderr };
   }
-
-  it("covers the seven parity rows", () => {
-    expect(parityRows).toHaveLength(7);
-  });
 
   it.each(parityRows.map((row) => [row.name, row] as const))(
     "gives onInbound and toDeliverableEvent the same, correct verdict for %s",

@@ -64,9 +64,9 @@ describe("decideInbound", () => {
 
   it("decideInbound never writes a refused sender's full number to stderr", () => {
     decideInbound(inboundFrom("5511888888888"), rules({ allowedSenders: "5511999999999" }));
-    decideInbound(inboundFrom("231116569108705@lid"), rules({ allowedSenders: "5511999999999" }));
+    decideInbound(inboundFrom("100000000000001@lid"), rules({ allowedSenders: "5511999999999" }));
 
-    expect(stderrLines.join("")).not.toMatch(/5511888888888|231116569108705/);
+    expect(stderrLines.join("")).not.toMatch(/5511888888888|100000000000001/);
   });
 
   it("decideInbound names a refused sender with no digit as a sender with no number", () => {
@@ -98,8 +98,8 @@ describe("decideInbound", () => {
 
   it("decideInbound keeps the owner's own note under an allowlist", () => {
     const note = decideInbound(
-      { ...inboundFrom("231116569108705@lid"), fromSelf: true },
-      rules({ allowedSenders: "553598838687" }),
+      { ...inboundFrom("100000000000001@lid"), fromSelf: true },
+      rules({ allowedSenders: "5511666666666" }),
     );
     expect(note).toBeDefined();
     expect(note?.text).toBe("note to self");
