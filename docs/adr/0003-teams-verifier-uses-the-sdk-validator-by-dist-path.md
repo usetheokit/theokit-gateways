@@ -111,9 +111,10 @@ that is absent or not `msteams` is `channel_mismatch`, checked in `checkVerified
 mutation run covers it. It runs after the SDK, like the claim checks, so a forged token on another
 channel is still `invalid_token`.
 
-Not adopted: filtering published keys by their `endorsements`, the Bot Framework's channel binding
-for keys. The `channelId` check already refuses every non-Teams activity, and `endorsements` is not
-read by the SDK validator either. The Azure portal's "Test in Web Chat" (`webchat`) and the Bot
+Not adopted on this date, and adopted on 2026-10-13 (see that amendment): filtering published keys
+by their `endorsements`, the Bot Framework's channel binding for keys. The reasoning here was that
+the `channelId` check already refuses every non-Teams activity; it does not, because the signer
+writes the `channelId`. The Azure portal's "Test in Web Chat" (`webchat`) and the Bot
 Framework Emulator (`emulator`) are refused by design; no option re-admits them, because the
 adapter would read client-chosen identity fields as Teams ones. Emulator tokens were already
 refused before this change: they are Entra-issued (`sts.windows.net` or the login endpoint) and
@@ -163,6 +164,33 @@ the SDK and the orchestration. The decision of this ADR, the lazy `import()` of 
 under either class name, now lives in `sdk-validator.ts`. The key-set and signature modules are
 recorded in [ADR-0005](0005-the-teams-verifier-owns-key-retrieval.md).
 
+## Amended 2026-10-13: a Bot Framework key must be endorsed for the activity's channel
+
+The 2026-10-07 amendment named the `channelId` check as the channel control and left key
+`endorsements` unread. Loop-code-review finding #40 (LCR0133) showed the gap: the activity's
+`channelId` is written by whoever holds the signing key, so a key endorsed only for another channel
+can sign an activity that says `msteams`, with sender, tenant and `serviceurl` of its choosing. On
+2026-10-13 the live Bot Framework set held 256 RSA keys, and 176 of them did not list `msteams`. A
+probe signed a `msteams` activity with a key endorsed only for `conversationconductorivr` and the
+verifier accepted it. The precondition is a compromised or misbehaving Microsoft channel service,
+so this is defence in depth, not an anonymous bypass.
+
+The verifier now keeps each published key's `endorsements` beside its `KeyObject`
+(`published-key-set.ts`), and `admitToSdk` refuses a token as `invalid_token` before the SDK is
+asked when its Bot Framework key does not list the activity's `channelId`. A key with no
+`endorsements` is endorsed for nothing. The rule is `keyEndorsesChannel` in `verified-claims.ts`,
+inside the mutation run. It compares against the activity's channel, as `botframework-connector`'s
+endorsement check does, rather than against `msteams`. A genuine Web Chat or Direct Line activity is
+signed by a key endorsed for its own channel, so it still reaches the SDK and is refused as
+`channel_mismatch`, the reason that names what happened. An activity with no `channelId` names no
+channel to endorse and is left to that check too. Entra tenant keys carry no `endorsements` and are
+not judged by them.
+
+`a-key-not-endorsed-for-teams-cannot-sign-a-teams-activity.test.ts` pins it with a key-server key
+endorsed only for another channel, a key with no endorsements, a key endorsed for `msteams` among
+others, and a tenant key. The local key server now publishes its keys endorsed for `msteams`, as
+the Bot Framework publishes the keys Teams signs with.
+
 ## Alternatives considered
 
 - **`app.server.handleRequest({ body, headers })`, the public seam.** Rejected: it dispatches the
@@ -190,6 +218,9 @@ recorded in [ADR-0005](0005-the-teams-verifier-owns-key-retrieval.md).
 
 ## Verification
 
-`packages/gateway-teams/tests/` holds the evidence: the installed 2.0.15 validator against a local
-key server for the Bot Framework path, and an accepting validator through the `__validatorModule`
-seam for the 2.1.x Entra path.
+`packages/gateway-teams/tests/` holds the evidence: the installed 2.0.15 validator and the 2.1.0
+validator (installed as `@microsoft/teams.apps-2-1`) against a local key server, and an accepting
+stand-in validator for the 2.1.x Entra path. The stand-in reaches the verifier only through the
+internal factory `createActivityVerifier`, wrapped by `tests/helpers/verifier-under-test.ts`. The
+public options carry no validator seam: the `__validatorModule` option was removed
+(loop-code-review LCR0121).

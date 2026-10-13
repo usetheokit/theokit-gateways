@@ -78,15 +78,33 @@ function keySetUnavailableMessage(
   return `the published signing keys could not be read (${label} key set at ${url}${why}), so the token's signature could not be checked; a retry may succeed`;
 }
 
+/**
+ * One published signing key and the channels it is endorsed for. The Bot Framework publishes one
+ * key set for every channel and binds each key to its channels through `endorsements`; an Entra
+ * tenant key carries none, so `endorsements` is `undefined` there.
+ */
+export interface PublishedKey {
+  readonly publicKey: KeyObject;
+  readonly endorsements: readonly string[] | undefined;
+}
+
+/** The string entries of an entry's `endorsements`, or `undefined` when it holds no array. */
+function endorsementsOf(entry: unknown): readonly string[] | undefined {
+  const endorsements = (entry as { endorsements?: unknown } | null)?.endorsements;
+  if (!Array.isArray(endorsements)) return undefined;
+  return endorsements.filter((channel): channel is string => typeof channel === "string");
+}
+
 /** An RSA public key from one key-set entry, or `undefined` when the entry holds none. */
 function rsaPublicKey(
   entry: unknown,
-): { readonly kid: string; readonly publicKey: KeyObject } | undefined {
+): { readonly kid: string; readonly published: PublishedKey } | undefined {
   const kid = (entry as { kid?: unknown } | null)?.kid;
   if (typeof kid !== "string" || kid.length === 0) return undefined;
   try {
     const publicKey = createPublicKey({ key: entry as JsonWebKey, format: "jwk" });
-    return publicKey.asymmetricKeyType === "rsa" ? { kid, publicKey } : undefined;
+    if (publicKey.asymmetricKeyType !== "rsa") return undefined;
+    return { kid, published: { publicKey, endorsements: endorsementsOf(entry) } };
   } catch {
     return undefined;
   }
@@ -99,16 +117,16 @@ function rsaPublicKey(
  * truncated or proxied answer from the key endpoint, and taken as the key set it would replace the
  * last good copy and turn every genuine token into a non-retryable refusal.
  */
-function publishedKeys(document: unknown): Map<string, KeyObject> | KeySetReadFailure {
+function publishedKeys(document: unknown): Map<string, PublishedKey> | KeySetReadFailure {
   const entries = (document as { keys?: unknown } | null)?.keys;
   if (!Array.isArray(entries)) return { failed: "the document has no keys array" };
   if (entries.length > MAX_KEYS_PER_SET) {
     return { failed: `the document lists more than ${MAX_KEYS_PER_SET} keys` };
   }
-  const found = new Map<string, KeyObject>();
+  const found = new Map<string, PublishedKey>();
   for (const entry of entries) {
     const usable = rsaPublicKey(entry);
-    if (usable !== undefined) found.set(usable.kid, usable.publicKey);
+    if (usable !== undefined) found.set(usable.kid, usable.published);
   }
   if (found.size === 0) return { failed: "the document lists no usable RSA key" };
   return found;
@@ -138,7 +156,7 @@ async function readKeySetText(response: Response): Promise<string | KeySetReadFa
 }
 
 /** Fetch a key set, or the reason it could not be had: network, status, timeout, size or shape. */
-async function readKeySet(url: string): Promise<Map<string, KeyObject> | KeySetReadFailure> {
+async function readKeySet(url: string): Promise<Map<string, PublishedKey> | KeySetReadFailure> {
   let response: Response;
   try {
     // A redirect is a failed read: the keys come only from the URL the cloud configured.
@@ -164,10 +182,10 @@ async function readKeySet(url: string): Promise<Map<string, KeyObject> | KeySetR
 }
 
 /**
- * What a key set answers for a `kid`: the key, `unlisted` after a read that succeeded without it,
+ * What a key set answers for a `kid`: the key with its endorsements, `unlisted` after a read that succeeded without it,
  * or `unavailable` with the refusal message naming the set and why its latest read failed.
  */
-export type KeyLookup = KeyObject | "unlisted" | { readonly unavailable: string };
+export type KeyLookup = PublishedKey | "unlisted" | { readonly unavailable: string };
 
 /** One published key set. */
 export interface PublishedKeySet {
@@ -189,7 +207,7 @@ export interface PublishedKeySet {
 export function keySet(label: string, url: string): PublishedKeySet {
   // Times are read from the monotonic clock: a wall clock stepped back would hold the next read
   // off by the size of the step, and one stepped forward would age the held copy early.
-  let held: Map<string, KeyObject> | undefined;
+  let held: Map<string, PublishedKey> | undefined;
   let readAt = Number.NEGATIVE_INFINITY;
   let nextReadAt = Number.NEGATIVE_INFINITY;
   /** Why the latest read failed; `undefined` once a read succeeds. */

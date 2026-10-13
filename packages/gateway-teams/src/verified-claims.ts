@@ -343,3 +343,18 @@ export function checkVerifiedClaims(
   const tenantRefusal = checkTenant(claims, expected);
   return tenantRefusal === undefined ? { ok: true } : { ok: false, reason: tenantRefusal };
 }
+
+/**
+ * Whether a Bot Framework signing key may sign an activity on `channelId`: its `endorsements` list
+ * that channel. The Bot Framework publishes one key set for every channel, and the activity's
+ * `channelId` is written by whoever signed the token, so the endorsement is what binds the token to
+ * the channel. A key with no `endorsements` is endorsed for nothing. A `channelId` that is not a
+ * string names no channel to endorse; {@link checkVerifiedClaims} refuses it as `channel_mismatch`.
+ */
+export function keyEndorsesChannel(
+  endorsements: readonly string[] | undefined,
+  channelId: unknown,
+): boolean {
+  if (typeof channelId !== "string") return true;
+  return endorsements?.includes(channelId) === true;
+}

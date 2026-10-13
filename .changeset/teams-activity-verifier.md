@@ -26,6 +26,11 @@ contains the token. It accepts an activity only when:
 - the activity's `channelId` is `msteams`. A connector token is issued for the bot, not for one
   channel, so a genuine token also arrives from the bot's Web Chat and Direct Line channels, where
   the client sets `from` and `channelData`.
+- the Bot Framework key that signed the token is endorsed for the activity's channel: its published
+  `endorsements` list the `channelId`. The signer writes the `channelId`, so without this a key
+  Microsoft endorses only for another channel could sign an activity that says `msteams`. A key
+  with no `endorsements` is endorsed for nothing, and such a token is `invalid_token` before the SDK
+  is asked. Tenant (Entra) keys carry no endorsements and are not judged by them.
 
 A refusal carries one of eleven reasons: `missing_authorization`, `malformed_body`,
 `body_already_read`, `validator_unavailable`, `invalid_token`, `key_set_unavailable`,

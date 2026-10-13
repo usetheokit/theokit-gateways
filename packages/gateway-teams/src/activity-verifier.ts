@@ -32,6 +32,7 @@ import {
   decodeVerifiedClaims,
   type ExpectedClaims,
   isTenantIssuedToken,
+  keyEndorsesChannel,
   type ParsedBody,
   parseActivityBody,
   readBearerToken,
@@ -90,6 +91,9 @@ const NOT_RS256 =
 const KEY_NOT_PUBLISHED =
   "the token names a signing key the published key set, as last read, does not list, so the Teams SDK was not asked";
 
+const KEY_NOT_ENDORSED =
+  "the token's Bot Framework signing key is not endorsed for the activity's channel, so the Teams SDK was not asked";
+
 const BAD_SIGNATURE =
   "the token's RS256 signature does not verify against the published key it names, so the Teams SDK was not asked";
 
@@ -108,6 +112,9 @@ interface KeySets {
 }
 
 type TenantExpectation = Pick<ExpectedClaims, "clientId" | "tenantId" | "loginEndpoint">;
+
+/** What {@link admitToSdk} compares a token against: the tenant claims and the activity's channel. */
+type AdmissionExpectation = TenantExpectation & Pick<ExpectedClaims, "channelId">;
 
 /**
  * The key set a token is checked against, chosen by its unverified `iss`: the configured tenant's for
@@ -129,8 +136,9 @@ function keySetFor(
  * Whether the SDK may be asked about this token, or the refusal that needs no SDK work. In order:
  * a token with no `kid` (no genuine token omits it); a tenant-issued token whose unverified tenant
  * this verifier would refuse anyway; a header naming anything but RS256; a `kid` the matching key
- * set does not list (`key_set_unavailable` when the set could not be read); and a signature that
- * does not verify under the listed key. A tenant-issued token is refused before its key set is read
+ * set does not list (`key_set_unavailable` when the set could not be read); a Bot Framework key
+ * whose `endorsements` do not list the activity's `channelId` (a tenant key carries none and is not
+ * judged by them); and a signature that does not verify under the listed key. A tenant-issued token is refused before its key set is read
  * when the loaded validator cannot accept one (2.0.x), because that SDK would download the whole Bot
  * Framework key set for it on every request and then refuse it. A token whose signature verifies is still refused when the
  * SDK would refuse it on its audience, expiry or not-before claim, because the SDK reads the key set
@@ -140,7 +148,7 @@ function keySetFor(
 async function admitToSdk(
   rawToken: string,
   keySets: KeySets,
-  expected: TenantExpectation,
+  expected: AdmissionExpectation,
   acceptsTenantIssued: boolean,
 ): Promise<Refusal | undefined> {
   const kid = readTokenKeyId(rawToken);
@@ -153,7 +161,13 @@ async function admitToSdk(
   const listed = await set.lookup(kid);
   if (listed === "unlisted") return refuse("invalid_token", KEY_NOT_PUBLISHED);
   if ("unavailable" in listed) return refuse("key_set_unavailable", listed.unavailable);
-  if (!verifiesRs256(rawToken, listed)) return refuse("invalid_token", BAD_SIGNATURE);
+  if (
+    set === keySets.botFramework &&
+    !keyEndorsesChannel(listed.endorsements, expected.channelId)
+  ) {
+    return refuse("invalid_token", KEY_NOT_ENDORSED);
+  }
+  if (!verifiesRs256(rawToken, listed.publicKey)) return refuse("invalid_token", BAD_SIGNATURE);
   const nowSeconds = Math.floor(Date.now() / 1000);
   return sdkRefusesTokenClaims(rawToken, expected.clientId, nowSeconds)
     ? refuse("invalid_token", SDK_WOULD_REFUSE)
@@ -167,7 +181,12 @@ async function gatedSdkCheck(
   read: { readonly header: string; readonly rawToken: string; readonly body: ReadableActivity },
   expected: TenantExpectation,
 ): Promise<ResolvedToken | Refusal | undefined> {
-  const refusal = await admitToSdk(read.rawToken, keySets, expected, sdk.acceptsTenantIssued);
+  const refusal = await admitToSdk(
+    read.rawToken,
+    keySets,
+    { ...expected, channelId: read.body.activity.channelId },
+    sdk.acceptsTenantIssued,
+  );
   if (refusal !== undefined) return refusal;
   return sdkCheck(sdk.validator, read.header, read.body.activity);
 }

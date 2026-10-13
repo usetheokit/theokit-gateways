@@ -59,8 +59,28 @@ describe("keySet", () => {
 
     const found = await set.lookup("a");
 
-    expect(found).toMatchObject({ asymmetricKeyType: "rsa" });
+    expect(found).toMatchObject({ publicKey: { asymmetricKeyType: "rsa" } });
     expect(fetch.calls()).toBe(1);
+  });
+
+  it("answers a key with the channels its entry endorses", async () => {
+    const fetch = stubFetch();
+    fetch.answer(keysDocument({ ...jwkA, endorsements: ["msteams", 7, "webchat"] }));
+    const set = keySet("Bot Framework", URL_);
+
+    const found = await set.lookup("a");
+
+    expect(found).toMatchObject({ endorsements: ["msteams", "webchat"] });
+  });
+
+  it("answers a key whose entry has no endorsements array with none", async () => {
+    const fetch = stubFetch();
+    fetch.answer(keysDocument({ ...jwkA, endorsements: "msteams" }));
+    const set = keySet("Bot Framework", URL_);
+
+    const found = await set.lookup("a");
+
+    expect(found).toMatchObject({ endorsements: undefined });
   });
 
   it("shares one read between concurrent lookups", async () => {
@@ -104,7 +124,7 @@ describe("keySet", () => {
     vi.advanceTimersByTime(1);
     const found = await set.lookup("b");
 
-    expect(found).toMatchObject({ asymmetricKeyType: "rsa" });
+    expect(found).toMatchObject({ publicKey: { asymmetricKeyType: "rsa" } });
     expect(fetch.calls()).toBe(2);
   });
 
@@ -132,7 +152,7 @@ describe("keySet", () => {
     const held = await set.lookup("a");
 
     expect(missing).toEqual({ unavailable: expect.stringContaining("the document is not JSON") });
-    expect(held).toMatchObject({ asymmetricKeyType: "rsa" });
+    expect(held).toMatchObject({ publicKey: { asymmetricKeyType: "rsa" } });
   });
 
   it("answers an hour-old key at once and reads the set again in the background", async () => {
@@ -147,8 +167,8 @@ describe("keySet", () => {
     // "b" is only in the background read's document, so this lookup waits for that read.
     const rotated = await set.lookup("b");
 
-    expect(stale).toMatchObject({ asymmetricKeyType: "rsa" });
-    expect(rotated).toMatchObject({ asymmetricKeyType: "rsa" });
+    expect(stale).toMatchObject({ publicKey: { asymmetricKeyType: "rsa" } });
+    expect(rotated).toMatchObject({ publicKey: { asymmetricKeyType: "rsa" } });
     expect(fetch.calls()).toBe(2);
     await expect(set.lookup("a")).resolves.toBe("unlisted");
   });

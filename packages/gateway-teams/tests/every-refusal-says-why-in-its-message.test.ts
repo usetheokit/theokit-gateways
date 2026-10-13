@@ -113,8 +113,9 @@ describe("the message of a refusal", () => {
       validatorModule: acceptingValidatorModule().module,
     });
     const body = { type: "message", serviceUrl: SERVICE_URL, channelId: "webchat" };
+    const token = ks.signWithKid(ks.publishKey(["webchat"]), {});
 
-    expect(await verify(activityRequest(ks.signToken({}), body))).toEqual({
+    expect(await verify(activityRequest(token, body))).toEqual({
       ok: false,
       reason: "channel_mismatch",
       message: expect.stringContaining("channelId is absent or is not msteams"),

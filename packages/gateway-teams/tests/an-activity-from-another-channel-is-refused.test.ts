@@ -4,7 +4,8 @@
  * resource) get connector tokens with the same audience, and on those channels the client, not
  * Microsoft, sets `from` and `channelData`. So an activity whose `channelId` is absent or is not
  * `msteams` is `channel_mismatch`, even when every token check passes (B-420, review findings #94
- * and #98).
+ * and #98). Each genuine token here is signed by a key endorsed for its activity's channel, as the
+ * Bot Framework's are; a key endorsed for another channel is refused before this check.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -27,8 +28,9 @@ describe("an activity from another channel", () => {
     ks = await startKeyServer();
     const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud });
     const activity = { type: "message", serviceUrl: DIRECT_LINE, channelId: "directline" };
+    const token = ks.signWithKid(ks.publishKey(["directline"]), { serviceurl: DIRECT_LINE });
 
-    const res = await verify(activityRequest(ks.signToken({ serviceurl: DIRECT_LINE }), activity));
+    const res = await verify(activityRequest(token, activity));
 
     expect(res).toMatchObject({ ok: false, reason: "channel_mismatch" });
     expect(res.ok ? "" : res.message).toContain("msteams");
@@ -38,8 +40,9 @@ describe("an activity from another channel", () => {
     ks = await startKeyServer();
     const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud });
     const activity = { type: "message", serviceUrl: SERVICE_URL, channelId: "webchat" };
+    const token = ks.signWithKid(ks.publishKey(["webchat"]), {});
 
-    const res = await verify(activityRequest(ks.signToken({}), activity));
+    const res = await verify(activityRequest(token, activity));
 
     expect(res).toMatchObject({ ok: false, reason: "channel_mismatch" });
   });

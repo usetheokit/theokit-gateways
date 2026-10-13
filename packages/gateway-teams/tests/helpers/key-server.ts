@@ -65,6 +65,11 @@ export interface KeyServer {
   publishedKids(): readonly string[];
   /** Sign `claims` with the published key whose id is `kid`, under that `kid`. */
   signWithKid(kid: string, claims: Record<string, unknown>): string;
+  /**
+   * Publish a new key beside the current ones with these `endorsements` (none at all for `null`),
+   * without signing with it by default. Returns its `kid`, for {@link KeyServer.signWithKid}.
+   */
+  publishKey(endorsements: readonly string[] | null): string;
   /** Stop publishing the key whose id is `kid`, as Microsoft does when it retires one. */
   retire(kid: string): void;
   /** The published key-set entries (public JWKs), oldest first. */
@@ -168,11 +173,23 @@ function forgeWith(
   return `${input}.${createHmac("sha256", secret).update(input).digest("base64url")}`;
 }
 
-/** A fresh RS256 key pair and its public JWK, under a random `kid`. */
-function newSigningKey() {
+/** The channels every Bot Framework key this server publishes is endorsed for by default. */
+const TEAMS_ENDORSEMENTS: readonly string[] = ["msteams"];
+
+/**
+ * A fresh RS256 key pair and its public JWK, under a random `kid`, endorsed for `endorsements`
+ * (no `endorsements` field for `null`, as an Entra tenant key has none).
+ */
+function newSigningKey(endorsements: readonly string[] | null = TEAMS_ENDORSEMENTS) {
   const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const kid = randomUUID();
-  const jwk = { ...publicKey.export({ format: "jwk" }), kid, use: "sig", alg: "RS256" };
+  const jwk = {
+    ...publicKey.export({ format: "jwk" }),
+    kid,
+    use: "sig",
+    alg: "RS256",
+    ...(endorsements === null ? {} : { endorsements: [...endorsements] }),
+  };
   return { publicKey, privateKey, kid, jwk };
 }
 
@@ -208,7 +225,7 @@ export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeySe
   let pendingRaw: ((res: ServerResponse) => void) | undefined;
   let held: { response?: ServerResponse; answer?: (res: ServerResponse) => void } | undefined;
   let unpublished: KeyObject | undefined;
-  const tenantKey = opts.separateTenantKeys === true ? newSigningKey() : undefined;
+  const tenantKey = opts.separateTenantKeys === true ? newSigningKey(null) : undefined;
 
   const answerKeys = (res: ServerResponse): void => {
     hitCount += 1;
@@ -261,6 +278,12 @@ export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeySe
     signRawPayload: (payloadSegment) => {
       const input = `${base64url({ alg: "RS256", typ: "JWT", kid: current.kid })}.${payloadSegment}`;
       return `${input}.${sign("sha256", Buffer.from(input), current.privateKey).toString("base64url")}`;
+    },
+    publishKey: (endorsements) => {
+      const key = newSigningKey(endorsements);
+      privateKeys.set(key.kid, key.privateKey);
+      published = [...published, key.jwk];
+      return key.kid;
     },
     retire: (kid) => {
       published = published.filter((jwk) => jwk.kid !== kid);

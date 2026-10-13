@@ -127,8 +127,9 @@ describe("the real SDK 2.1.0 validator", () => {
     it("refuses a genuine token on a Web Chat activity as channel_mismatch", async () => {
       const { ks, verify } = await verifierOn(module);
       const activity = { type: "message", serviceUrl: SERVICE_URL, channelId: "webchat" };
+      const webChatKid = ks.publishKey(["webchat"]);
 
-      const res = await verify(activityRequest(ks.signToken({}), activity));
+      const res = await verify(activityRequest(ks.signWithKid(webChatKid, {}), activity));
 
       expect(res).toMatchObject({ ok: false, reason: "channel_mismatch" });
     });

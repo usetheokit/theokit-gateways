@@ -11,6 +11,7 @@ import {
   checkVerifiedClaims,
   decodeVerifiedClaims,
   isTenantIssuedToken,
+  keyEndorsesChannel,
   parseActivityBody,
   readBearerToken,
   readTokenKeyId,
@@ -366,5 +367,27 @@ describe("assertVerifierOptions", () => {
     expect(() =>
       assertVerifierOptions({ clientId: CLIENT_ID, tenantId: TENANT.toUpperCase() }),
     ).not.toThrow();
+  });
+});
+
+describe("keyEndorsesChannel", () => {
+  it("admits a key whose endorsements list the activity's channel", () => {
+    expect(keyEndorsesChannel(["webchat", "msteams"], "msteams")).toBe(true);
+  });
+
+  it("refuses a key endorsed only for other channels", () => {
+    expect(keyEndorsesChannel(["conversationconductorivr"], "msteams")).toBe(false);
+  });
+
+  it("refuses a key with no endorsements", () => {
+    expect(keyEndorsesChannel(undefined, "msteams")).toBe(false);
+  });
+
+  it("refuses a key with an empty endorsements list", () => {
+    expect(keyEndorsesChannel([], "msteams")).toBe(false);
+  });
+
+  it("leaves an activity that names no channel to the channel check", () => {
+    expect(keyEndorsesChannel(undefined, undefined)).toBe(true);
   });
 });

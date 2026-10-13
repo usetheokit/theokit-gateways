@@ -63,6 +63,10 @@ Direct Line channels (on by default for an Azure Bot resource), where the client
 `channelData`. Such an activity, or one with no `channelId`, is refused as `channel_mismatch`, a
 client fault to answer with a 4xx (the example's 401). The Azure portal's "Test in Web Chat"
 (`webchat`) and the Bot Framework Emulator (`emulator`) are refused the same way: test in Teams.
+Because the signer writes the `channelId`, the Bot Framework key that signed the token must also be
+endorsed for the activity's channel (its published `endorsements` list it); a `msteams` activity
+signed by a key endorsed only for other channels, or for none, is refused as `invalid_token` before
+the SDK is asked. Tenant (Entra) keys carry no endorsements and are not judged by them.
 It never throws for a request; a refusal is `{ ok: false, reason, message }`,
 and the message never contains the token. Building the verifier throws a `TypeError` for an empty
 `clientId`, an empty `tenantId`, a `tenantId` of `common`, `organizations` or `consumers`, a
