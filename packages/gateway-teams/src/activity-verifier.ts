@@ -91,6 +91,9 @@ const KEY_NOT_PUBLISHED =
 const BAD_SIGNATURE =
   "the token's RS256 signature does not verify against the published key it names, so the Teams SDK was not asked";
 
+const NO_ENTRA_PATH =
+  "the token is tenant-issued and the loaded Teams SDK validator (2.0.x ServiceTokenValidator) has no path that accepts one, so the Teams SDK was not asked";
+
 const SDK_WOULD_REFUSE =
   "the token's audience is not this app's, or it is expired or not yet valid beyond the SDK's 300-second tolerance, so the Teams SDK was not asked";
 
@@ -105,11 +108,29 @@ interface KeySets {
 type TenantExpectation = Pick<ExpectedClaims, "clientId" | "tenantId" | "loginEndpoint">;
 
 /**
+ * The key set a token is checked against, chosen by its unverified `iss`: the configured tenant's for
+ * an Entra issuer, Bot Framework's otherwise. A tenant-issued token is refused when no tenant is
+ * configured, and when the loaded validator cannot accept one (2.0.x) before any set is read.
+ */
+function keySetFor(
+  rawToken: string,
+  keySets: KeySets,
+  loginEndpoint: string,
+  acceptsTenantIssued: boolean,
+): PublishedKeySet | Refusal {
+  if (!isTenantIssuedToken(rawToken, loginEndpoint)) return keySets.botFramework;
+  if (keySets.tenant === undefined) return refuse("tenant_unverified");
+  return acceptsTenantIssued ? keySets.tenant : refuse("invalid_token", NO_ENTRA_PATH);
+}
+
+/**
  * Whether the SDK may be asked about this token, or the refusal that needs no SDK work. In order:
  * a token with no `kid` (no genuine token omits it); a tenant-issued token whose unverified tenant
  * this verifier would refuse anyway; a header naming anything but RS256; a `kid` the matching key
  * set does not list (`key_set_unavailable` when the set could not be read); and a signature that
- * does not verify under the listed key. A token whose signature verifies is still refused when the
+ * does not verify under the listed key. A tenant-issued token is refused before its key set is read
+ * when the loaded validator cannot accept one (2.0.x), because that SDK would download the whole Bot
+ * Framework key set for it on every request and then refuse it. A token whose signature verifies is still refused when the
  * SDK would refuse it on its audience, expiry or not-before claim, because the SDK reads the key set
  * before it checks them. The key set is chosen by the unverified `iss`: an Entra
  * issuer is checked against the configured tenant's set, anything else against Bot Framework's.
@@ -118,15 +139,14 @@ async function admitToSdk(
   rawToken: string,
   keySets: KeySets,
   expected: TenantExpectation,
+  acceptsTenantIssued: boolean,
 ): Promise<Refusal | undefined> {
   const kid = readTokenKeyId(rawToken);
   if (kid === undefined) return refuse("invalid_token", NO_KEY_ID);
   const tenantRefusal = tenantRefusalBeforeVerification(rawToken, expected);
   if (tenantRefusal !== undefined) return refuse(tenantRefusal);
-  const set = isTenantIssuedToken(rawToken, expected.loginEndpoint)
-    ? keySets.tenant
-    : keySets.botFramework;
-  if (set === undefined) return refuse("tenant_unverified");
+  const set = keySetFor(rawToken, keySets, expected.loginEndpoint, acceptsTenantIssued);
+  if ("reason" in set) return set;
   if (readTokenAlgorithm(rawToken) !== "RS256") return refuse("invalid_token", NOT_RS256);
   const listed = await set.lookup(kid);
   if (listed === "unlisted") return refuse("invalid_token", KEY_NOT_PUBLISHED);
@@ -140,14 +160,14 @@ async function admitToSdk(
 
 /** {@link sdkCheck} for a token whose signature {@link admitToSdk} verified. */
 async function gatedSdkCheck(
-  validator: TokenValidatorLike,
+  sdk: { readonly validator: TokenValidatorLike; readonly acceptsTenantIssued: boolean },
   keySets: KeySets,
   read: { readonly header: string; readonly rawToken: string; readonly body: ReadableActivity },
   expected: TenantExpectation,
 ): Promise<ResolvedToken | Refusal | undefined> {
-  const refusal = await admitToSdk(read.rawToken, keySets, expected);
+  const refusal = await admitToSdk(read.rawToken, keySets, expected, sdk.acceptsTenantIssued);
   if (refusal !== undefined) return refusal;
-  return sdkCheck(validator, read.header, read.body.activity);
+  return sdkCheck(sdk.validator, read.header, read.body.activity);
 }
 
 /** The header, its token and the parsed body, or the refusal that needs no SDK work. */
@@ -274,7 +294,7 @@ export function teamsActivityVerifier(
     const load = await loaded;
     if ("unavailable" in load) return refuse("validator_unavailable", load.unavailable);
 
-    const token = await gatedSdkCheck(load.validator, keySets, read, expected);
+    const token = await gatedSdkCheck(load, keySets, read, expected);
     if (token !== undefined && "reason" in token) return token;
     return judgeVerifiedToken(token, read.rawToken, read.body, expected);
   };

@@ -95,6 +95,11 @@ export interface KeyServer {
    */
   holdNext(): (status?: number) => void;
   close(): Promise<void>;
+  /**
+   * Sign `claims` with the key the tenant key set publishes: its own key with
+   * `separateTenantKeys`, the current Bot Framework key otherwise.
+   */
+  signTenantToken(claims: Record<string, unknown>): string;
   /** Sign `claims` (merged over valid defaults; `undefined` removes a claim) with the published key. */
   signToken(claims: Record<string, unknown>, opts?: SignOptions): string;
   /** Sign with a fresh key pair the server never publishes, under the published `kid`. */
@@ -178,6 +183,12 @@ export interface KeyServerOptions {
    * test about listed kids missing that cache publishes more than 5.
    */
   readonly extraKeys?: number;
+  /**
+   * Publish a key pair of its own at `/{tenant}/discovery/v2.0/keys` instead of the Bot Framework
+   * keys, as Microsoft does: the Entra and Bot Framework key sets hold different keys. Sign for it
+   * with {@link KeyServer.signTenantToken}.
+   */
+  readonly separateTenantKeys?: boolean;
 }
 
 const TENANT_KEYS_PATH = /^\/([^/]+)\/discovery\/v2\.0\/keys$/;
@@ -197,6 +208,7 @@ export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeySe
   let pendingRaw: ((res: ServerResponse) => void) | undefined;
   let held: { response?: ServerResponse; answer?: (res: ServerResponse) => void } | undefined;
   let unpublished: KeyObject | undefined;
+  const tenantKey = opts.separateTenantKeys === true ? newSigningKey() : undefined;
 
   const answerKeys = (res: ServerResponse): void => {
     hitCount += 1;
@@ -218,7 +230,7 @@ export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeySe
   const answerTenantKeys = (tenant: string, res: ServerResponse): void => {
     tenantHitCounts.set(tenant, (tenantHitCounts.get(tenant) ?? 0) + 1);
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ keys: published }));
+    res.end(JSON.stringify({ keys: tenantKey === undefined ? published : [tenantKey.jwk] }));
   };
 
   const server = createServer((req, res) => {
@@ -304,6 +316,10 @@ export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeySe
       return alg === "RS256"
         ? signWith(key, keyId, payload)
         : forgeWith(alg, current.publicKey, keyId, payload);
+    },
+    signTenantToken: (claims) => {
+      const key = tenantKey ?? current;
+      return signWith(key.privateKey, key.kid, buildClaims(cloud, claims, 600));
     },
     otherKeySign: (claims) => {
       unpublished ??= generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;

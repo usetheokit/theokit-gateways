@@ -129,6 +129,7 @@ describe("loadValidator", () => {
 
     await expect(loadValidator({ clientId: CLIENT_ID, __validatorModule: mod })).resolves.toEqual({
       validator: expect.anything(),
+      acceptsTenantIssued: true,
     });
   });
 

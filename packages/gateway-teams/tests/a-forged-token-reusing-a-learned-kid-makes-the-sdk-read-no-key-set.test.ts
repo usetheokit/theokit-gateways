@@ -105,7 +105,7 @@ describe("a forged token reusing a kid the verifier learned from a genuine token
     expect(tenantKeySetReadsAfter(ks, 0)).toHaveLength(5);
   });
 
-  describe.each(SDKS)("through the verifier on SDK $sdk ($version)", ({ module }) => {
+  describe.each(SDKS)("through the verifier on SDK $sdk ($version)", ({ sdk, module }) => {
     async function verifierThatAcceptedOne(tenantId: string | undefined) {
       ks = await startKeyServer();
       const verify = teamsActivityVerifier({
@@ -179,7 +179,9 @@ describe("a forged token reusing a kid the verifier learned from a genuine token
 
       expect(accepted.ok).toBe(true);
       expect(results.every((r) => !r.ok && r.reason === "invalid_token")).toBe(true);
-      expect(tenantKeySetReadsAfter(ks, before)).toEqual([`/${TENANT}/discovery/v2.0/keys`]);
+      // 2.0.x cannot accept a tenant-issued token, so the verifier refuses it before reading the set.
+      const expectedReads = sdk === "2.0.x" ? [] : [`/${TENANT}/discovery/v2.0/keys`];
+      expect(tenantKeySetReadsAfter(ks, before)).toEqual(expectedReads);
     });
   });
 });

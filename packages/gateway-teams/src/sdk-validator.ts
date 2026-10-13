@@ -100,13 +100,29 @@ interface ValidatorModuleLike {
 /** The token fields the SDK validator resolved for an accepted request. */
 export type ResolvedToken = { readonly appId: string; readonly serviceUrl: string };
 
-export type Loaded = { readonly validator: TokenValidatorLike } | { readonly unavailable: string };
+/**
+ * The constructed validator and whether it can accept a tenant-issued (Entra) token: only 2.1.x's
+ * `InboundActivityTokenValidator` reads the tenant's key set. 2.0.x's `ServiceTokenValidator` looks
+ * such a token's `kid` up in the Bot Framework key set, which `jwks-rsa` re-downloads on every miss,
+ * and then refuses it.
+ */
+export type Loaded =
+  | { readonly validator: TokenValidatorLike; readonly acceptsTenantIssued: boolean }
+  | { readonly unavailable: string };
 
-function validatorClass(mod: ValidatorModuleLike | undefined): ValidatorClass | undefined {
+interface ResolvedClass {
+  readonly ctor: ValidatorClass;
+  readonly acceptsTenantIssued: boolean;
+}
+
+function validatorClass(mod: ValidatorModuleLike | undefined): ResolvedClass | undefined {
   const named =
     mod?.InboundActivityTokenValidator || mod?.ServiceTokenValidator ? mod : mod?.default;
-  const ctor = named?.InboundActivityTokenValidator ?? named?.ServiceTokenValidator;
-  return typeof ctor === "function" ? (ctor as ValidatorClass) : undefined;
+  const inbound = named?.InboundActivityTokenValidator;
+  const ctor = inbound ?? named?.ServiceTokenValidator;
+  return typeof ctor === "function"
+    ? { ctor: ctor as ValidatorClass, acceptsTenantIssued: ctor === inbound }
+    : undefined;
 }
 
 async function importMiddleware(options: TeamsActivityVerifierOptions): Promise<unknown> {
@@ -118,7 +134,7 @@ async function importMiddleware(options: TeamsActivityVerifierOptions): Promise<
 /** The validator class the module exports, or a reason it cannot be had. Never throws. */
 async function resolveValidatorClass(
   options: TeamsActivityVerifierOptions,
-): Promise<ValidatorClass | string> {
+): Promise<ResolvedClass | string> {
   let mod: unknown;
   try {
     mod = await importMiddleware(options);
@@ -137,17 +153,17 @@ async function resolveValidatorClass(
 
 /** Load and construct the SDK validator once. Every failure is a value, never a rejection. */
 export async function loadValidator(options: TeamsActivityVerifierOptions): Promise<Loaded> {
-  const Validator = await resolveValidatorClass(options);
-  if (typeof Validator === "string") return { unavailable: Validator };
+  const resolved = await resolveValidatorClass(options);
+  if (typeof resolved === "string") return { unavailable: resolved };
   try {
-    const validator = new Validator(
+    const validator = new resolved.ctor(
       options.clientId,
       options.tenantId,
       undefined,
       SILENT_LOGGER,
       options.cloud,
     );
-    return { validator };
+    return { validator, acceptsTenantIssued: resolved.acceptsTenantIssued };
   } catch (error) {
     return {
       unavailable: `could not construct the validator from ${WHICH_VALIDATOR} (${errorKind(error)})`,

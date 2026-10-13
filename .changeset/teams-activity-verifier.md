@@ -16,7 +16,9 @@ contains the token. It accepts an activity only when:
   itself before the Teams SDK is asked, so a forged token never makes the bot fetch a key set;
   a genuinely signed token issued for another app, or expired or not yet valid by more than the
   SDK's 300-second tolerance, is refused as `invalid_token` at that point too, because the SDK
-  reads a key before it checks those claims;
+  reads a key before it checks those claims; and on SDK 2.0.x, whose validator cannot accept a
+  tenant-issued (Entra) token, such a token is `invalid_token` before any key set is read, since
+  2.0.x would download the whole Bot Framework key set for it on every request and then refuse it;
 - the Microsoft SDK's own token validator accepts the token, so issuer, audience and expiry stay
   Microsoft's rules;
 - the token's `aud` is this bot's app id, its `serviceurl` matches the activity's `serviceUrl`,

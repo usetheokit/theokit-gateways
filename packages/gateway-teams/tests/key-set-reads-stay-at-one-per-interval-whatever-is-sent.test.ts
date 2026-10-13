@@ -44,6 +44,8 @@ describe("key-set reads", () => {
     }
 
     expect(results.every((r) => !r.ok)).toBe(true);
-    expect([ks.hits(), ks.tenantHits(TENANT)]).toEqual([1, 1]);
+    // The installed SDK is 2.0.x, which cannot accept a tenant-issued token: the verifier refuses
+    // those before reading the tenant's set, so only the Bot Framework set is read.
+    expect([ks.hits(), ks.tenantHits(TENANT)]).toEqual([1, 0]);
   }, 30_000);
 });
