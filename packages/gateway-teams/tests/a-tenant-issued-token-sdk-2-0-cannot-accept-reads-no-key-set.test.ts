@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest, TENANT } from "./helpers/claim-fixtures.js";
+import { INSTALLED_SDK_LINE } from "./helpers/installed-sdk.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
 
 const REPLAYS = 20;
@@ -41,18 +42,22 @@ describe("a genuine tenant-issued token with tenantId configured", () => {
     return { ks, verify, token };
   }
 
-  it("is refused as invalid_token on SDK 2.0.x with no key-set read across 20 replays", async () => {
-    const { ks, verify, token } = await verifierOn(sdk20);
+  // `sdk20` is whatever is installed; under the 2.1.x peer-major job there is no 2.0.x to ask.
+  it.runIf(INSTALLED_SDK_LINE === "2.0.x")(
+    "is refused as invalid_token on SDK 2.0.x with no key-set read across 20 replays",
+    async () => {
+      const { ks, verify, token } = await verifierOn(sdk20);
 
-    const results = [];
-    for (let i = 0; i < REPLAYS; i += 1) results.push(await verify(activityRequest(token)));
+      const results = [];
+      for (let i = 0; i < REPLAYS; i += 1) results.push(await verify(activityRequest(token)));
 
-    expect(results.every((r) => !r.ok && r.reason === "invalid_token")).toBe(true);
-    expect({ botFramework: ks.hits(), tenant: ks.tenantHits(TENANT) }).toEqual({
-      botFramework: 0,
-      tenant: 0,
-    });
-  });
+      expect(results.every((r) => !r.ok && r.reason === "invalid_token")).toBe(true);
+      expect({ botFramework: ks.hits(), tenant: ks.tenantHits(TENANT) }).toEqual({
+        botFramework: 0,
+        tenant: 0,
+      });
+    },
+  );
 
   it("is accepted on SDK 2.1.x without reading the Bot Framework key set", async () => {
     const { ks, verify, token } = await verifierOn(sdk21);

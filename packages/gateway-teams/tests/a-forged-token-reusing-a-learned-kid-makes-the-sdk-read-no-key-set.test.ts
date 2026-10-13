@@ -21,16 +21,13 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest, TENANT } from "./helpers/claim-fixtures.js";
+import { INSTALLED_SDK_LINE, INSTALLED_SDK_VERSION } from "./helpers/installed-sdk.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
 
 const require = createRequire(import.meta.url);
 
 const SDKS = [
-  {
-    sdk: "2.0.x",
-    version: (require("@microsoft/teams.apps/package.json") as { version: string }).version,
-    module: sdk20 as unknown,
-  },
+  { sdk: INSTALLED_SDK_LINE, version: INSTALLED_SDK_VERSION, module: sdk20 as unknown },
   {
     sdk: "2.1.x",
     version: (require("@microsoft/teams.apps-2-1/package.json") as { version: string }).version,

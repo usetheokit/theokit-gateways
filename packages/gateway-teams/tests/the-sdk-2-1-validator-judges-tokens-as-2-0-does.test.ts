@@ -23,6 +23,7 @@ import {
   signFixture,
   TENANT,
 } from "./helpers/claim-fixtures.js";
+import { INSTALLED_SDK_LINE } from "./helpers/installed-sdk.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
 
 const require = createRequire(import.meta.url);
@@ -51,13 +52,19 @@ describe("the real SDK 2.1.0 validator", () => {
     ks = undefined;
   });
 
-  it("is the 2.1.0 middleware module, which exports InboundActivityTokenValidator and not ServiceTokenValidator", () => {
-    const [v20, v21] = SDKS;
+  /** The rows contrasting the two lines need a real 2.0.x, which the 2.1.x peer-major job replaces. */
+  const with20Installed = it.runIf(INSTALLED_SDK_LINE === "2.0.x");
 
-    expect([v20.version, v21.version]).toEqual([expect.stringMatching(/^2\.0\./), "2.1.0"]);
-    expect(typeof sdk21.InboundActivityTokenValidator).toBe("function");
-    expect("ServiceTokenValidator" in sdk21).toBe(false);
-  });
+  with20Installed(
+    "is the 2.1.0 middleware module, which exports InboundActivityTokenValidator and not ServiceTokenValidator",
+    () => {
+      const [v20, v21] = SDKS;
+
+      expect([v20.version, v21.version]).toEqual([expect.stringMatching(/^2\.0\./), "2.1.0"]);
+      expect(typeof sdk21.InboundActivityTokenValidator).toBe("function");
+      expect("ServiceTokenValidator" in sdk21).toBe(false);
+    },
+  );
 
   async function verifierOn(module: unknown, tenantId?: string) {
     ks = await startKeyServer();
@@ -161,20 +168,23 @@ describe("the real SDK 2.1.0 validator", () => {
       });
     }
 
-    it("accepts a genuine tenant-issued token for the configured tenant on 2.1.x, which 2.0.x refuses", async () => {
-      const on21 = await verifierOn(sdk21, TENANT);
-      const accepted = await on21.verify(activityRequest(entraToken(on21.ks)));
-      const tenantReads21 = on21.ks.tenantHits(TENANT);
-      await on21.ks.close();
+    with20Installed(
+      "accepts a genuine tenant-issued token for the configured tenant on 2.1.x, which 2.0.x refuses",
+      async () => {
+        const on21 = await verifierOn(sdk21, TENANT);
+        const accepted = await on21.verify(activityRequest(entraToken(on21.ks)));
+        const tenantReads21 = on21.ks.tenantHits(TENANT);
+        await on21.ks.close();
 
-      const on20 = await verifierOn(sdk20, TENANT);
-      const refused = await on20.verify(activityRequest(entraToken(on20.ks)));
+        const on20 = await verifierOn(sdk20, TENANT);
+        const refused = await on20.verify(activityRequest(entraToken(on20.ks)));
 
-      expect(accepted).toMatchObject({ ok: true, token: { serviceUrl: SERVICE_URL } });
-      // One read by the verifier, one by the 2.1.x tenant key client: the SDK was really asked.
-      expect(tenantReads21).toBe(2);
-      expect(refused).toMatchObject({ ok: false, reason: "invalid_token" });
-    });
+        expect(accepted).toMatchObject({ ok: true, token: { serviceUrl: SERVICE_URL } });
+        // One read by the verifier, one by the 2.1.x tenant key client: the SDK was really asked.
+        expect(tenantReads21).toBe(2);
+        expect(refused).toMatchObject({ ok: false, reason: "invalid_token" });
+      },
+    );
 
     it("refuses a tenant-issued token with no serviceurl claim as serviceurl_mismatch on 2.1.x", async () => {
       const { ks, verify } = await verifierOn(sdk21, TENANT);

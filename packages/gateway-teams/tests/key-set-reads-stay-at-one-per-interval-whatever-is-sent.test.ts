@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest, OTHER_TENANT, TENANT } from "./helpers/claim-fixtures.js";
+import { INSTALLED_SDK_LINE } from "./helpers/installed-sdk.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
 
 describe("key-set reads", () => {
@@ -44,8 +45,9 @@ describe("key-set reads", () => {
     }
 
     expect(results.every((r) => !r.ok)).toBe(true);
-    // The installed SDK is 2.0.x, which cannot accept a tenant-issued token: the verifier refuses
-    // those before reading the tenant's set, so only the Bot Framework set is read.
-    expect([ks.hits(), ks.tenantHits(TENANT)]).toEqual([1, 0]);
+    // SDK 2.0.x cannot accept a tenant-issued token: the verifier refuses those before reading the
+    // tenant's set, so only the Bot Framework set is read. 2.1.x reads the tenant's set once.
+    const tenantReads = INSTALLED_SDK_LINE === "2.0.x" ? 0 : 1;
+    expect([ks.hits(), ks.tenantHits(TENANT)]).toEqual([1, tenantReads]);
   }, 30_000);
 });
