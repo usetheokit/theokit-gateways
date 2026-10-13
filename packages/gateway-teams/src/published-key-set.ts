@@ -195,14 +195,26 @@ export function keySet(label: string, url: string): PublishedKeySet {
   /** Why the latest read failed; `undefined` once a read succeeds. */
   let lastFailure: KeySetReadFailure | undefined;
   let reading: Promise<void> | undefined;
-  /** Never rejects: {@link readKeySet} turns every failure into a value. */
+  /** Keep a read that threw as the set's latest failure. */
+  const keepThrown = (error: unknown): void => {
+    lastFailure = { failed: `the read threw (${errorKind(error)})` };
+  };
+  /**
+   * Never rejects. {@link readKeySet} turns every failure it expects into a value; anything that
+   * still throws (a response whose getter throws) is kept by {@link keepThrown}, so the lookup that
+   * waits for the read gets `key_set_unavailable`, never a rejection.
+   */
   const read = async (): Promise<void> => {
-    const fresh = await readKeySet(url);
-    if (fresh instanceof Map) {
-      lastFailure = undefined;
-      held = fresh;
-      readAt = performance.now();
-    } else lastFailure = fresh;
+    try {
+      const fresh = await readKeySet(url);
+      if (fresh instanceof Map) {
+        lastFailure = undefined;
+        held = fresh;
+        readAt = performance.now();
+      } else lastFailure = fresh;
+    } catch (error) {
+      keepThrown(error);
+    }
   };
   const unavailable = (): KeyLookup => ({
     unavailable: keySetUnavailableMessage(label, url, lastFailure),
@@ -222,13 +234,10 @@ export function keySet(label: string, url: string): PublishedKeySet {
       const now = performance.now();
       const listed = held?.get(kid);
       if (listed !== undefined) {
-        // Nothing awaits the background read, so a rejection it should never produce is kept as
-        // the set's latest failure rather than left unhandled to end the process.
-        if (now - readAt >= KEY_SET_MAX_AGE_MS) {
-          void currentRead(now)?.catch((error: unknown) => {
-            lastFailure = { failed: `the read threw (${errorKind(error)})` };
-          });
-        }
+        // Nothing awaits the background read. `read` already keeps what it throws, so this
+        // `.catch` never runs; it is here because a floated promise carries its own handler
+        // (the cross-adapter contract in packages/gateway/tests/lint/adapter-contract.test.ts).
+        if (now - readAt >= KEY_SET_MAX_AGE_MS) void currentRead(now)?.catch(keepThrown);
         return listed;
       }
       await currentRead(now);
