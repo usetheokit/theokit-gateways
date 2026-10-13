@@ -40,7 +40,9 @@ tenant's set. It reads a set when it holds no copy or its copy lacks the token's
 background once its copy is an hour old, answering from that copy meanwhile. No read starts within
 10 seconds of the end of the previous one, per set, whatever is sent, and both intervals are
 measured on the monotonic clock. A failed read keeps the last good copy; a document listing no
-usable RSA key counts as a failed read, and so does a redirect. A `key_set_unavailable` message
+usable RSA key counts as a failed read, and so does a redirect or a response that throws
+while it is read; the request waiting on that read is answered `key_set_unavailable`, not a
+rejected promise. A `key_set_unavailable` message
 names the set, its URL and why its latest read failed. When the SDK, which still reads the key
 through its own client, reports that it could not read it, the answer is also
 `key_set_unavailable`.
@@ -59,7 +61,9 @@ not an `https:` URL (`http:` is accepted only on `localhost`, `127.0.0.1` and `[
 `/openidconfiguration`. The verifier reads each option once and validates that frozen copy, so
 changing the options object afterwards does not reach the SDK validator, which is built on the
 first request, and a `cloud` endpoint inherited from a prototype or served by a getter is the value
-both checked and used.
+both checked and used. The options take no other field: the SDK validator always comes from the
+installed `@microsoft/teams.apps`, and nothing on the options object or its prototype can stand
+in for it.
 
 Two refusals are deliberate: with `tenantId` set, a Bot Framework token with no `tid` claim is
 `tenant_unverified`, and Microsoft documents none on connector tokens; an agentic-identity (Entra)
