@@ -222,7 +222,13 @@ export function keySet(label: string, url: string): PublishedKeySet {
       const now = performance.now();
       const listed = held?.get(kid);
       if (listed !== undefined) {
-        if (now - readAt >= KEY_SET_MAX_AGE_MS) void currentRead(now);
+        // Nothing awaits the background read, so a rejection it should never produce is kept as
+        // the set's latest failure rather than left unhandled to end the process.
+        if (now - readAt >= KEY_SET_MAX_AGE_MS) {
+          void currentRead(now)?.catch((error: unknown) => {
+            lastFailure = { failed: `the read threw (${errorKind(error)})` };
+          });
+        }
         return listed;
       }
       await currentRead(now);
