@@ -15,7 +15,13 @@
  */
 
 import { readBoundedStream } from "./bounded-stream.js";
-import { keySet, keySetUrl, type PublishedKeySet, tenantKeySetUrl } from "./published-key-set.js";
+import {
+  type KeyLookup,
+  keySet,
+  keySetUrl,
+  type PublishedKeySet,
+  tenantKeySetUrl,
+} from "./published-key-set.js";
 import { verifiesRs256 } from "./rs256-signature.js";
 import {
   importSdkMiddleware,
@@ -158,20 +164,37 @@ async function admitToSdk(
   const set = keySetFor(rawToken, keySets, expected.loginEndpoint, acceptsTenantIssued);
   if ("reason" in set) return set;
   if (readTokenAlgorithm(rawToken) !== "RS256") return refuse("invalid_token", NOT_RS256);
-  const listed = await set.lookup(kid);
-  if (listed === "unlisted") return refuse("invalid_token", KEY_NOT_PUBLISHED);
-  if ("unavailable" in listed) return refuse("key_set_unavailable", listed.unavailable);
-  if (
-    set === keySets.botFramework &&
-    !keyEndorsesChannel(listed.endorsements, expected.channelId)
-  ) {
-    return refuse("invalid_token", KEY_NOT_ENDORSED);
-  }
-  if (!verifiesRs256(rawToken, listed.publicKey)) return refuse("invalid_token", BAD_SIGNATURE);
+  const keyRefusal = refuseListedKey(
+    rawToken,
+    await set.lookup(kid),
+    set === keySets.botFramework,
+    expected.channelId,
+  );
+  if (keyRefusal !== undefined) return keyRefusal;
   const nowSeconds = Math.floor(Date.now() / 1000);
   return sdkRefusesTokenClaims(rawToken, expected.clientId, nowSeconds)
     ? refuse("invalid_token", SDK_WOULD_REFUSE)
     : undefined;
+}
+
+/**
+ * The {@link admitToSdk} checks on the key a lookup returned, in order: a `kid` the set does not list,
+ * a set that could not be read, a Bot Framework key not endorsed for the activity's `channelId`, and a
+ * signature that does not verify under the key. `undefined` when the token passes all four.
+ */
+function refuseListedKey(
+  rawToken: string,
+  listed: KeyLookup,
+  isBotFrameworkKey: boolean,
+  channelId: unknown,
+): Refusal | undefined {
+  if (listed === "unlisted") return refuse("invalid_token", KEY_NOT_PUBLISHED);
+  if ("unavailable" in listed) return refuse("key_set_unavailable", listed.unavailable);
+  if (isBotFrameworkKey && !keyEndorsesChannel(listed.endorsements, channelId)) {
+    return refuse("invalid_token", KEY_NOT_ENDORSED);
+  }
+  if (!verifiesRs256(rawToken, listed.publicKey)) return refuse("invalid_token", BAD_SIGNATURE);
+  return undefined;
 }
 
 /** {@link sdkCheck} for a token whose signature {@link admitToSdk} verified. */
