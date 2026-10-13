@@ -8,8 +8,6 @@
 import { randomUUID } from "node:crypto";
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import {
   acceptingValidatorModule,
   activityRequest,
@@ -24,6 +22,7 @@ import {
   signFixture,
 } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 const TENANT_MISMATCH = "the token's tid claim names a tenant other than the configured one";
 const TENANT_UNVERIFIED = "the token's tenant cannot be confirmed";
@@ -42,7 +41,7 @@ describe("the message of a refusal", () => {
   }
 
   it("says no Authorization header was sent", async () => {
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: (await server()).cloud });
+    const verify = verifierUnderTest({ clientId: CLIENT_ID, cloud: (await server()).cloud });
 
     expect(await verify(activityRequest(undefined))).toEqual({
       ok: false,
@@ -53,7 +52,7 @@ describe("the message of a refusal", () => {
 
   it("says the body is not a readable activity", async () => {
     const ks = await server();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud });
+    const verify = verifierUnderTest({ clientId: CLIENT_ID, cloud: ks.cloud });
 
     expect(await verify(activityRequest(ks.signToken({}), "not json"))).toEqual({
       ok: false,
@@ -63,7 +62,7 @@ describe("the message of a refusal", () => {
   });
 
   it("says the token names no signing key", async () => {
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: (await server()).cloud });
+    const verify = verifierUnderTest({ clientId: CLIENT_ID, cloud: (await server()).cloud });
 
     expect(await verify(activityRequest("not-a-jwt"))).toEqual({
       ok: false,
@@ -74,7 +73,7 @@ describe("the message of a refusal", () => {
 
   it("says the token does not name RS256", async () => {
     const ks = await server();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud });
+    const verify = verifierUnderTest({ clientId: CLIENT_ID, cloud: ks.cloud });
 
     expect(
       await verify(activityRequest(ks.signToken({}, { alg: "HS256", kid: randomUUID() }))),
@@ -87,10 +86,10 @@ describe("the message of a refusal", () => {
 
   it("says the SDK did not accept the token when it refuses one", async () => {
     const ks = await server();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: {
+      validatorModule: {
         InboundActivityTokenValidator: class {
           async check(): Promise<never> {
             throw new Error("Invalid token");
@@ -108,10 +107,10 @@ describe("the message of a refusal", () => {
 
   it("says the activity did not come from Teams", async () => {
     const ks = await server();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: acceptingValidatorModule().module,
+      validatorModule: acceptingValidatorModule().module,
     });
     const body = { type: "message", serviceUrl: SERVICE_URL, channelId: "webchat" };
 
@@ -140,11 +139,11 @@ describe("the message of a refusal", () => {
     ["an Entra token with no tenant configured", F4_ENTRA_NO_TENANT_CONFIGURED, TENANT_UNVERIFIED],
   ])("names the claim that failed for %s", async (_, fixture, phrase) => {
     const ks = await server();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
       ...(fixture.tenantId === undefined ? {} : { tenantId: fixture.tenantId }),
-      __validatorModule: acceptingValidatorModule().module,
+      validatorModule: acceptingValidatorModule().module,
     });
 
     expect(await verify(activityRequest(signFixture(ks, fixture.claims)))).toEqual({

@@ -5,10 +5,9 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 const OVERSIZED = JSON.stringify({
   type: "message",
@@ -46,7 +45,7 @@ describe("an oversized body", () => {
   ])("refuses %s over 1 MiB as malformed_body without calling the SDK", async (_, body) => {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: module });
+    const verify = verifierUnderTest({ clientId: CLIENT_ID, validatorModule: module });
     const request = new Request("https://bot.test/api/messages", {
       method: "POST",
       headers: { authorization: `Bearer ${ks.signToken({})}`, "content-type": "application/json" },

@@ -8,10 +8,9 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest, TENANT } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 describe("the key-set URL the verifier reads", () => {
   let ks: KeyServer | undefined;
@@ -32,9 +31,9 @@ describe("the key-set URL the verifier reads", () => {
     ks = await startKeyServer();
     const fetchSpy = unreachableMicrosoft();
     const url = "https://login.botframework.com/v1/.well-known/keys";
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
-      __validatorModule: acceptingValidatorModule().module,
+      validatorModule: acceptingValidatorModule().module,
     });
 
     const res = await verify(activityRequest(ks.signToken({})));
@@ -51,10 +50,10 @@ describe("the key-set URL the verifier reads", () => {
     ks = await startKeyServer();
     const fetchSpy = unreachableMicrosoft();
     const url = `https://login.microsoftonline.com/${TENANT}/discovery/v2.0/keys`;
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       tenantId: TENANT,
-      __validatorModule: acceptingValidatorModule().module,
+      validatorModule: acceptingValidatorModule().module,
     });
     const token = ks.signToken({
       iss: `https://login.microsoftonline.com/${TENANT}/v2.0`,
@@ -74,13 +73,13 @@ describe("the key-set URL the verifier reads", () => {
   it("replaces only the trailing /openidconfiguration of the cloud's metadata URL", async () => {
     ks = await startKeyServer();
     const base = ks.cloud.loginEndpoint;
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: {
         ...ks.cloud,
         openIdMetadataUrl: `${base}/openidconfiguration/v1/openidconfiguration`,
       },
-      __validatorModule: acceptingValidatorModule().module,
+      validatorModule: acceptingValidatorModule().module,
     });
 
     const res = await verify(activityRequest(ks.signToken({})));

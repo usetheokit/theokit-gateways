@@ -21,7 +21,7 @@ vi.mock("node:crypto", async (importOriginal) => {
   };
 });
 
-const { teamsActivityVerifier } = await import("../src/index.js");
+const { verifierUnderTest } = await import("./helpers/verifier-under-test.js");
 const { acceptingValidatorModule, activityRequest } = await import("./helpers/claim-fixtures.js");
 const { CLIENT_ID, startKeyServer } = await import("./helpers/key-server.js");
 
@@ -38,10 +38,10 @@ describe("a signature check that throws", () => {
     const ks = await startKeyServer();
     close = ks.close;
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
     crypto.verifyThrows = true;
 

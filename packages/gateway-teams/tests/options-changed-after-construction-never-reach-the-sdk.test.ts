@@ -9,10 +9,9 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest, TENANT } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
@@ -34,16 +33,15 @@ describe("options changed after construction", () => {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
     const cloud: Mutable<typeof ks.cloud> = { ...ks.cloud };
-    const options: Mutable<Parameters<typeof teamsActivityVerifier>[0]> = {
+    const options: Mutable<Parameters<typeof verifierUnderTest>[0]> = {
       clientId: CLIENT_ID,
       cloud,
-      __validatorModule: module,
+      validatorModule: module,
     };
-    const verify = teamsActivityVerifier(options);
+    const verify = verifierUnderTest(options);
 
     options.clientId = "other-app";
     cloud.tokenIssuer = "http://evil.example";
-    options.__validatorModule = {};
     const res = await verify(activityRequest(ks.signToken({})));
 
     expect(res.ok).toBe(true);
@@ -59,7 +57,7 @@ describe("options changed after construction", () => {
       loginEndpoint: ks.cloud.loginEndpoint,
       openIdMetadataUrl: ks.cloud.openIdMetadataUrl,
     }) as typeof ks.cloud;
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud, __validatorModule: module });
+    const verify = verifierUnderTest({ clientId: CLIENT_ID, cloud, validatorModule: module });
 
     const res = await verify(activityRequest(ks.signToken({})));
 
@@ -82,10 +80,10 @@ describe("options changed after construction", () => {
       }
     }
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: new GetterCloud(),
-      __validatorModule: module,
+      validatorModule: module,
     });
 
     const res = await verify(activityRequest(ks.signToken({})));
@@ -108,9 +106,9 @@ describe("options changed after construction", () => {
         return reads.tenantId === 1 ? TENANT : "common";
       },
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     };
-    const verify = teamsActivityVerifier(options);
+    const verify = verifierUnderTest(options);
 
     await verify(activityRequest(ks.signToken({})));
 

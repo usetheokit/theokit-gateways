@@ -7,10 +7,9 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 /** 8 MiB: about ten times the live Bot Framework set (876,002 bytes, 251 keys, 2026-10-11). */
 const MAX_KEY_SET_BYTES = 8 * 1024 * 1024;
@@ -33,10 +32,10 @@ describe("a key-set answer that is not a key set", () => {
   /** A genuine token verified at a cold start, after `prepare` sets up the one key-set answer. */
   async function coldStart(prepare: (ks: KeyServer) => void) {
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: acceptingValidatorModule().module,
+      validatorModule: acceptingValidatorModule().module,
     });
     const token = ks.signToken({});
     prepare(ks);

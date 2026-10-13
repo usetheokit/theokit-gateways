@@ -5,10 +5,9 @@
  */
 
 import { describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, SERVICE_URL } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 describe("an Authorization header with no token", () => {
   it.each([
@@ -16,7 +15,7 @@ describe("an Authorization header with no token", () => {
     ["a Bearer prefix with no token", "Bearer "],
   ])("refuses %s as missing_authorization without calling the SDK", async (_, header) => {
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: module });
+    const verify = verifierUnderTest({ clientId: CLIENT_ID, validatorModule: module });
     const request = new Request("https://bot.test/api/messages", {
       method: "POST",
       headers: { authorization: header, "content-type": "application/json" },

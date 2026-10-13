@@ -9,10 +9,9 @@ import { Buffer } from "node:buffer";
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 const stray = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
 
@@ -43,7 +42,7 @@ describe("forged key ids", () => {
     vi.useFakeTimers({ toFake: ["Date", "performance"] });
     vi.setSystemTime(new Date("2026-10-06T12:00:00Z"));
     ks = await startKeyServer();
-    return { ks, verify: teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud }) };
+    return { ks, verify: verifierUnderTest({ clientId: CLIENT_ID, cloud: ks.cloud }) };
   }
 
   /** An RS256 token under a fresh kid, signed by a key nobody publishes. */
@@ -348,10 +347,10 @@ describe("forged key ids", () => {
         return { appId: CLIENT_ID, serviceUrl: body.serviceUrl };
       }
     }
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: { InboundActivityTokenValidator: CountingValidator },
+      validatorModule: { InboundActivityTokenValidator: CountingValidator },
     });
     const ec = generateKeyPairSync("ec", { namedCurve: "P-256" });
     // Published beside the RSA keys: a document listing only the EC key lists no usable RSA key,

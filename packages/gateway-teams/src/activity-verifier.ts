@@ -18,11 +18,13 @@ import { readBoundedStream } from "./bounded-stream.js";
 import { keySet, keySetUrl, type PublishedKeySet, tenantKeySetUrl } from "./published-key-set.js";
 import { verifiesRs256 } from "./rs256-signature.js";
 import {
+  importSdkMiddleware,
   type Loaded,
   loadValidator,
   type ResolvedToken,
   sdkCheck,
   type TokenValidatorLike,
+  type ValidatorModuleImport,
 } from "./sdk-validator.js";
 import {
   assertVerifierOptions,
@@ -209,12 +211,11 @@ function judgeVerifiedToken(
  * endpoint the cloud inherits, which the check had read (loop-code-review LCR0121).
  */
 function snapshotOptions(options: TeamsActivityVerifierOptions): TeamsActivityVerifierOptions {
-  const { clientId, tenantId, cloud, __validatorModule } = options;
+  const { clientId, tenantId, cloud } = options;
   return Object.freeze({
     clientId,
     ...(tenantId === undefined ? {} : { tenantId }),
     ...(cloud === undefined ? {} : { cloud: snapshotCloud(cloud) }),
-    ...(__validatorModule === undefined ? {} : { __validatorModule }),
   });
 }
 
@@ -267,6 +268,20 @@ function snapshotCloud(cloud: TeamsCloudEndpoints): TeamsCloudEndpoints {
 export function teamsActivityVerifier(
   options: TeamsActivityVerifierOptions,
 ): (request: Request) => Promise<TeamsActivityVerifyResult> {
+  return createActivityVerifier(options, importSdkMiddleware);
+}
+
+/**
+ * {@link teamsActivityVerifier} with the module the SDK validator is read from supplied by the
+ * caller. Not exported from the package root: the public verifier always passes the SDK's own
+ * import, so no option can stand in for the validator; tests import this from the source.
+ *
+ * @internal
+ */
+export function createActivityVerifier(
+  options: TeamsActivityVerifierOptions,
+  importValidatorModule: ValidatorModuleImport,
+): (request: Request) => Promise<TeamsActivityVerifyResult> {
   const validated = snapshotOptions(options);
   assertVerifierOptions(validated);
   let loaded: Promise<Loaded> | undefined;
@@ -290,7 +305,7 @@ export function teamsActivityVerifier(
     const read = await readRequest(request);
     if ("reason" in read) return read;
 
-    loaded ??= loadValidator(validated);
+    loaded ??= loadValidator(validated, importValidatorModule);
     const load = await loaded;
     if ("unavailable" in load) return refuse("validator_unavailable", load.unavailable);
 

@@ -10,10 +10,9 @@
 import { randomUUID } from "node:crypto";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -43,10 +42,10 @@ describe("a key set an hour old", () => {
     vi.useFakeTimers({ toFake: ["Date", "performance"] });
     vi.setSystemTime(new Date("2026-10-06T12:00:00Z"));
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: acceptingValidatorModule().module,
+      validatorModule: acceptingValidatorModule().module,
     });
     const warm = await verify(activityRequest(ks.signToken({})));
     expect([warm.ok, ks.hits()]).toEqual([true, 1]);

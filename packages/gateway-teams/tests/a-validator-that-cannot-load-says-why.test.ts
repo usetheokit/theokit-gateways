@@ -33,8 +33,8 @@ describe("a validator that cannot load", () => {
         );
       },
     };
-    const { teamsActivityVerifier } = await import("../src/index.js");
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: failedImport });
+    const { verifierUnderTest } = await import("./helpers/verifier-under-test.js");
+    const verify = verifierUnderTest({ clientId: CLIENT_ID, validatorModule: failedImport });
 
     const res = await verify(activityRequest(ks.signToken({})));
 
@@ -45,10 +45,10 @@ describe("a validator that cannot load", () => {
 
   it("names the constructor error's class in validator_unavailable without its text", async () => {
     ks = await startKeyServer();
-    const { teamsActivityVerifier } = await import("../src/index.js");
-    const verify = teamsActivityVerifier({
+    const { verifierUnderTest } = await import("./helpers/verifier-under-test.js");
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
-      __validatorModule: {
+      validatorModule: {
         InboundActivityTokenValidator: class {
           constructor() {
             throw new RangeError(PRIVATE_TEXT);
@@ -83,10 +83,10 @@ describe("a validator that cannot load", () => {
     ],
   ])("refuses a constructor failure with %s without repeating it", async (_, thrown, kind) => {
     ks = await startKeyServer();
-    const { teamsActivityVerifier } = await import("../src/index.js");
-    const verify = teamsActivityVerifier({
+    const { verifierUnderTest } = await import("./helpers/verifier-under-test.js");
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
-      __validatorModule: {
+      validatorModule: {
         InboundActivityTokenValidator: class {
           constructor() {
             throw thrown;

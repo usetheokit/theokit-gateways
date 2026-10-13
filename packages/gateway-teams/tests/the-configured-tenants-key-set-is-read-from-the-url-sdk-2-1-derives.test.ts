@@ -5,10 +5,9 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest, TENANT } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 describe("the configured tenant's key set", () => {
   let ks: KeyServer | undefined;
@@ -20,11 +19,11 @@ describe("the configured tenant's key set", () => {
 
   it("is read from the loginEndpoint, tenant and discovery/v2.0/keys, and the Bot Framework set is not", async () => {
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       tenantId: TENANT,
       cloud: ks.cloud,
-      __validatorModule: acceptingValidatorModule().module,
+      validatorModule: acceptingValidatorModule().module,
     });
 
     const res = await verify(

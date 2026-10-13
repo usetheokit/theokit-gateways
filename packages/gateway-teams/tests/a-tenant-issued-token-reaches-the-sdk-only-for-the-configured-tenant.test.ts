@@ -10,10 +10,9 @@ import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest, TENANT } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 describe("a tenant-issued token", () => {
   let ks: KeyServer | undefined;
@@ -26,10 +25,10 @@ describe("a tenant-issued token", () => {
   async function verifierThatAcceptedOne(tenantId: string | undefined) {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
       ...(tenantId === undefined ? {} : { tenantId }),
     });
     const accepted = await verify(activityRequest(ks.signToken({ tid: tenantId })));
@@ -70,11 +69,11 @@ describe("a tenant-issued token", () => {
         return { appId: CLIENT_ID, serviceUrl: body.serviceUrl };
       }
     }
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       tenantId: TENANT,
       cloud: ks.cloud,
-      __validatorModule: { InboundActivityTokenValidator: BotFrameworkOnlyValidator },
+      validatorModule: { InboundActivityTokenValidator: BotFrameworkOnlyValidator },
     });
     const accepted = await verify(activityRequest(ks.signToken({ tid: TENANT })));
 

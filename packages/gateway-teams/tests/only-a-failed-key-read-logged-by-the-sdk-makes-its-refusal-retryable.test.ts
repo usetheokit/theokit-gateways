@@ -8,10 +8,9 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 interface LoggerLike {
   error(...msg: unknown[]): void;
@@ -57,10 +56,10 @@ describe("a line the SDK logs while checking a token", () => {
 
   async function verifyWith(module: unknown) {
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
     return verify(activityRequest(ks.signToken({})));
   }

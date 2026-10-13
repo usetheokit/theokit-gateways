@@ -8,10 +8,9 @@
 import * as sdk20 from "@microsoft/teams.apps/dist/middleware/index.js";
 import * as sdk21 from "@microsoft/teams.apps-2-1/dist/middleware/index.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 const OTHER_APP = "00000000-0000-0000-0000-0000000000b2";
 const SDKS = [
@@ -38,10 +37,10 @@ describe.each(SDKS)("a signed token the SDK would refuse, on SDK $sdk", ({ modul
 
   async function verifierOn() {
     ks = await startKeyServer({ extraKeys: 7 });
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
     return { ks, verify };
   }

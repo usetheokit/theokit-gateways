@@ -9,10 +9,9 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -35,10 +34,10 @@ describe("a held key-set copy that lists the key", () => {
     const keys = `${ks.cloud.loginEndpoint}/keys`;
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const reads = () => fetchSpy.mock.calls.filter(([url]) => String(url) === keys).length;
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: acceptingValidatorModule().module,
+      validatorModule: acceptingValidatorModule().module,
     });
     const first = await verify(activityRequest(ks.signToken({})));
     expect([first.ok, reads()]).toEqual([true, 1]);

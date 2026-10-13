@@ -4,10 +4,9 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 describe("a request the verifier cannot process", () => {
   let ks: KeyServer | undefined;
@@ -20,7 +19,7 @@ describe("a request the verifier cannot process", () => {
   it("refuses a request whose body was already read as body_already_read instead of throwing", async () => {
     ks = await startKeyServer();
     const { module } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: module });
+    const verify = verifierUnderTest({ clientId: CLIENT_ID, validatorModule: module });
     const req = activityRequest(ks.signToken({}));
     await req.text();
 
@@ -33,9 +32,9 @@ describe("a request the verifier cannot process", () => {
 
   it("refuses every request as validator_unavailable when the validator constructor throws", async () => {
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
-      __validatorModule: {
+      validatorModule: {
         InboundActivityTokenValidator: class {
           constructor() {
             throw new Error("bad cloud");
@@ -54,10 +53,10 @@ describe("a request the verifier cannot process", () => {
   it("refuses as invalid_token when the validator resolves something that is not a token", async () => {
     ks = await startKeyServer();
     let checks = 0;
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: {
+      validatorModule: {
         InboundActivityTokenValidator: class {
           async check() {
             checks += 1;

@@ -6,10 +6,9 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 const PRIVATE_TEXT = "private-detail-91c2";
 
@@ -38,10 +37,10 @@ describe("a validator that breaks while checking", () => {
     "refuses %s from check() as validator_unavailable naming its kind",
     async (_, thrown, kind) => {
       ks = await startKeyServer();
-      const verify = teamsActivityVerifier({
+      const verify = verifierUnderTest({
         clientId: CLIENT_ID,
         cloud: ks.cloud,
-        __validatorModule: throwingValidatorModule(thrown),
+        validatorModule: throwingValidatorModule(thrown),
       });
 
       const res = await verify(activityRequest(ks.signToken({})));
@@ -54,10 +53,10 @@ describe("a validator that breaks while checking", () => {
 
   it("refuses the SDK's own plain Error from check() as invalid_token", async () => {
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: throwingValidatorModule(new Error("Invalid token")),
+      validatorModule: throwingValidatorModule(new Error("Invalid token")),
     });
 
     const res = await verify(activityRequest(ks.signToken({})));

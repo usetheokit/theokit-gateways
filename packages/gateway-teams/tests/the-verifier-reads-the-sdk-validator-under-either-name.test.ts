@@ -5,10 +5,9 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 function countingClass(counter: { n: number }) {
   return class {
@@ -31,10 +30,10 @@ describe("the SDK validator", () => {
     ks = await startKeyServer();
     const inbound = { n: 0 };
     const service = { n: 0 };
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: {
+      validatorModule: {
         InboundActivityTokenValidator: countingClass(inbound),
         ServiceTokenValidator: countingClass(service),
       },
@@ -50,10 +49,10 @@ describe("the SDK validator", () => {
   it("uses ServiceTokenValidator when only that name exists", async () => {
     ks = await startKeyServer();
     const service = { n: 0 };
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: { default: { ServiceTokenValidator: countingClass(service) } },
+      validatorModule: { default: { ServiceTokenValidator: countingClass(service) } },
     });
 
     const res = await verify(activityRequest(ks.signToken({})));
@@ -64,10 +63,10 @@ describe("the SDK validator", () => {
 
   it("refuses every request as validator_unavailable when the SDK exports neither", async () => {
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: {},
+      validatorModule: {},
     });
 
     const r1 = await verify(activityRequest(ks.signToken({})));
@@ -90,10 +89,10 @@ describe("the SDK validator", () => {
     ["a default export that is not a class", { default: { ServiceTokenValidator: 7 } }],
   ])("says it found neither class for %s", async (_, module) => {
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
 
     const res = await verify(activityRequest(ks.signToken({})));
@@ -112,10 +111,10 @@ describe("the SDK validator", () => {
         throw new RangeError("getter failed");
       },
     };
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
 
     const res = await verify(activityRequest(ks.signToken({})));
@@ -131,10 +130,10 @@ describe("the SDK validator", () => {
   it("uses ServiceTokenValidator exported at the top level", async () => {
     ks = await startKeyServer();
     const service = { n: 0 };
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: { ServiceTokenValidator: countingClass(service), default: {} },
+      validatorModule: { ServiceTokenValidator: countingClass(service), default: {} },
     });
 
     const res = await verify(activityRequest(ks.signToken({})));
@@ -144,7 +143,7 @@ describe("the SDK validator", () => {
 
   it("loads a validator from the installed SDK's middleware module with no test seam", async () => {
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud });
+    const verify = verifierUnderTest({ clientId: CLIENT_ID, cloud: ks.cloud });
 
     const res = await verify(activityRequest(ks.signToken({})));
 

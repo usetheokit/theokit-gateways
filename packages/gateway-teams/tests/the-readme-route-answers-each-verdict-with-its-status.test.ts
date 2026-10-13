@@ -53,16 +53,17 @@ async function loadRoute(verifierOptions: Record<string, unknown>): Promise<OnTe
   const dir = mkdtempSync(join(tmpdir(), "teams-readme-route-"));
   tempDirs.push(dir);
   const index = JSON.stringify(join(PACKAGE_DIR, "src", "index.ts"));
+  const underTest = JSON.stringify(join(PACKAGE_DIR, "tests", "helpers", "verifier-under-test.ts"));
   const shim = join(dir, "shim.ts");
   writeFileSync(
     shim,
     [
       "// biome-ignore-all lint: test shim over the package source",
-      `import * as real from ${index};`,
+      `import { verifierUnderTest } from ${underTest};`,
       `export * from ${index};`,
       "export function teamsActivityVerifier(options: any) {",
       "  const extra = (globalThis as any).__teamsReadmeRoute.verifierOptions;",
-      "  return real.teamsActivityVerifier({ ...options, ...extra });",
+      "  return verifierUnderTest({ ...options, ...extra });",
       "}",
     ].join("\n"),
   );
@@ -170,7 +171,7 @@ describe("the route documented in README.md", () => {
   });
 
   it("answers a validator that cannot load with 503 and logs why", async () => {
-    const onTeamsRequest = await loadRoute({ cloud: ks.cloud, __validatorModule: {} });
+    const onTeamsRequest = await loadRoute({ cloud: ks.cloud, validatorModule: {} });
 
     const response = await onTeamsRequest(activityRequest(ks.signToken({})));
 

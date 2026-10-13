@@ -4,10 +4,9 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 describe("an activity with no service url", () => {
   let ks: KeyServer | undefined;
@@ -23,7 +22,7 @@ describe("an activity with no service url", () => {
   ])("refuses an activity with %s as malformed_body with 0 validator calls", async (_, body) => {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, __validatorModule: module });
+    const verify = verifierUnderTest({ clientId: CLIENT_ID, validatorModule: module });
 
     const res = await verify(activityRequest(ks.signToken({}), body));
 

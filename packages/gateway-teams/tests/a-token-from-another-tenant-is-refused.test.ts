@@ -5,8 +5,6 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import {
   acceptingValidatorModule,
   activityRequest,
@@ -17,6 +15,7 @@ import {
   signFixture,
 } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 describe("a token from another tenant", () => {
   let ks: KeyServer | undefined;
@@ -44,13 +43,13 @@ describe("a token from another tenant", () => {
   ] as const)("refuses %s by its tenant reason", async (_, fixture, path) => {
     ks = await startKeyServer();
     const tenant = fixture.tenantId === undefined ? {} : { tenantId: fixture.tenantId };
-    const verify = teamsActivityVerifier(
+    const verify = verifierUnderTest(
       path === "sdk"
         ? { clientId: CLIENT_ID, cloud: ks.cloud, ...tenant }
         : {
             clientId: CLIENT_ID,
             cloud: ks.cloud,
-            __validatorModule: acceptingValidatorModule().module,
+            validatorModule: acceptingValidatorModule().module,
             ...tenant,
           },
     );
@@ -63,14 +62,14 @@ describe("a token from another tenant", () => {
   });
 
   it("throws a TypeError at construction for tenantId common", () => {
-    expect(() => teamsActivityVerifier({ clientId: CLIENT_ID, tenantId: "common" })).toThrow(
+    expect(() => verifierUnderTest({ clientId: CLIENT_ID, tenantId: "common" })).toThrow(
       /tenantId.*common/,
     );
   });
 
   it("throws a TypeError at construction for a tenantId given as a domain", () => {
     expect(() =>
-      teamsActivityVerifier({ clientId: CLIENT_ID, tenantId: "contoso.onmicrosoft.com" }),
+      verifierUnderTest({ clientId: CLIENT_ID, tenantId: "contoso.onmicrosoft.com" }),
     ).toThrow(TypeError);
   });
 });

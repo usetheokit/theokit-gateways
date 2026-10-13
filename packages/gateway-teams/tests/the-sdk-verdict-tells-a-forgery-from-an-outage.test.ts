@@ -28,7 +28,7 @@ function moduleWith(behaviour: (logger: Logger) => Promise<unknown>): Record<str
 }
 
 async function validatorFor(mod: unknown): Promise<TokenValidatorLike> {
-  const loaded = await loadValidator({ clientId: CLIENT_ID, __validatorModule: mod });
+  const loaded = await loadValidator({ clientId: CLIENT_ID }, async () => mod);
   if (!("validator" in loaded)) throw new Error(`stand-in did not load: ${loaded.unavailable}`);
   return loaded.validator;
 }
@@ -119,7 +119,7 @@ describe("sdkCheck", () => {
 
 describe("loadValidator", () => {
   it("names a module that exports neither validator class", async () => {
-    const loaded = await loadValidator({ clientId: CLIENT_ID, __validatorModule: {} });
+    const loaded = await loadValidator({ clientId: CLIENT_ID }, async () => ({}));
 
     expect(loaded).toEqual({ unavailable: expect.stringContaining("found neither class") });
   });
@@ -127,7 +127,7 @@ describe("loadValidator", () => {
   it("reads the classes from a module's default export", async () => {
     const mod = { default: moduleWith(async () => ({ appId: CLIENT_ID, serviceUrl: "s" })) };
 
-    await expect(loadValidator({ clientId: CLIENT_ID, __validatorModule: mod })).resolves.toEqual({
+    await expect(loadValidator({ clientId: CLIENT_ID }, async () => mod)).resolves.toEqual({
       validator: expect.anything(),
       acceptsTenantIssued: true,
     });
@@ -139,10 +139,9 @@ describe("loadValidator", () => {
         throw new RangeError("bad cloud");
       }
     }
-    const loaded = await loadValidator({
-      clientId: CLIENT_ID,
-      __validatorModule: { ServiceTokenValidator: Throwing },
-    });
+    const loaded = await loadValidator({ clientId: CLIENT_ID }, async () => ({
+      ServiceTokenValidator: Throwing,
+    }));
 
     expect(loaded).toEqual({
       unavailable: expect.stringMatching(/could not construct .*\(RangeError\)$/),

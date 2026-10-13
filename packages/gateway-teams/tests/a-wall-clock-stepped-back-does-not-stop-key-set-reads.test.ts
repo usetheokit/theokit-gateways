@@ -7,10 +7,9 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -28,10 +27,10 @@ describe("a wall clock stepped back", () => {
     vi.setSystemTime(new Date("2026-10-09T12:00:00Z"));
     ks = await startKeyServer();
     const { module } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
     const first = await verify(activityRequest(ks.signToken({})));
 

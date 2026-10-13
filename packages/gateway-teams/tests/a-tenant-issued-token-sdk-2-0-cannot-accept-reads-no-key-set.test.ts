@@ -10,11 +10,10 @@
 import * as sdk20 from "@microsoft/teams.apps/dist/middleware/index.js";
 import * as sdk21 from "@microsoft/teams.apps-2-1/dist/middleware/index.js";
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest, TENANT } from "./helpers/claim-fixtures.js";
 import { INSTALLED_SDK_LINE } from "./helpers/installed-sdk.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 const REPLAYS = 20;
 
@@ -28,11 +27,11 @@ describe("a genuine tenant-issued token with tenantId configured", () => {
 
   async function verifierOn(module: unknown) {
     ks = await startKeyServer({ separateTenantKeys: true });
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       tenantId: TENANT,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
     const token = ks.signTenantToken({
       iss: `${ks.cloud.loginEndpoint}/${TENANT}/v2.0`,

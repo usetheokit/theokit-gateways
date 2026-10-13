@@ -125,19 +125,24 @@ function validatorClass(mod: ValidatorModuleLike | undefined): ResolvedClass | u
     : undefined;
 }
 
-async function importMiddleware(options: TeamsActivityVerifierOptions): Promise<unknown> {
-  if (options.__validatorModule !== undefined) return options.__validatorModule;
+/** Imports the module the SDK validator is read from. */
+export type ValidatorModuleImport = () => Promise<unknown>;
+
+/**
+ * The SDK's middleware module. The only import the public verifier uses: no option reaches it, so
+ * nothing a caller passes can stand in for the SDK (loop-code-review LCR0121).
+ */
+export const importSdkMiddleware: ValidatorModuleImport = () =>
   // A literal specifier, not MIDDLEWARE_MODULE: the bundler keeps only a static one external.
-  return import("@microsoft/teams.apps/dist/middleware/index.js");
-}
+  import("@microsoft/teams.apps/dist/middleware/index.js");
 
 /** The validator class the module exports, or a reason it cannot be had. Never throws. */
 async function resolveValidatorClass(
-  options: TeamsActivityVerifierOptions,
+  importModule: ValidatorModuleImport,
 ): Promise<ResolvedClass | string> {
   let mod: unknown;
   try {
-    mod = await importMiddleware(options);
+    mod = await importModule();
   } catch (error) {
     return `could not import ${WHICH_VALIDATOR} (${errorKind(error)})`;
   }
@@ -151,9 +156,15 @@ async function resolveValidatorClass(
   }
 }
 
-/** Load and construct the SDK validator once. Every failure is a value, never a rejection. */
-export async function loadValidator(options: TeamsActivityVerifierOptions): Promise<Loaded> {
-  const resolved = await resolveValidatorClass(options);
+/**
+ * Load and construct the SDK validator once, from the module `importModule` answers (the SDK's own
+ * by default). Every failure is a value, never a rejection.
+ */
+export async function loadValidator(
+  options: TeamsActivityVerifierOptions,
+  importModule: ValidatorModuleImport = importSdkMiddleware,
+): Promise<Loaded> {
+  const resolved = await resolveValidatorClass(importModule);
   if (typeof resolved === "string") return { unavailable: resolved };
   try {
     const validator = new resolved.ctor(

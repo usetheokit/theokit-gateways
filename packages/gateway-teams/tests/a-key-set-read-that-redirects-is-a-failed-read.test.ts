@@ -9,10 +9,9 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 /** A server that answers every request with a 302 to `location`. */
 async function startRedirector(location: string): Promise<Server> {
@@ -40,14 +39,14 @@ describe("a key-set read that redirects", () => {
     redirector = await startRedirector(`http://127.0.0.1:${ks.port}/keys`);
     const origin = `http://127.0.0.1:${(redirector.address() as AddressInfo).port}`;
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: {
         loginEndpoint: origin,
         tokenIssuer: ks.cloud.tokenIssuer,
         openIdMetadataUrl: `${origin}/openidconfiguration`,
       },
-      __validatorModule: module,
+      validatorModule: module,
     });
 
     const result = await verify(activityRequest(ks.signToken({})));

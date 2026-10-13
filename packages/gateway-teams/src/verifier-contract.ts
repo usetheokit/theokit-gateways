@@ -38,8 +38,6 @@ export interface TeamsActivityVerifierOptions {
   readonly tenantId?: string;
   /** The cloud to validate against. Defaults to the SDK's public cloud. */
   readonly cloud?: TeamsCloudEndpoints;
-  /** Test seam: a module standing in for the SDK's middleware module. @internal */
-  readonly __validatorModule?: unknown;
 }
 
 /**

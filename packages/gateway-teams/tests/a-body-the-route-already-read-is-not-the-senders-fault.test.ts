@@ -9,10 +9,9 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 const BODY_ALREADY_READ =
   "the request body was already read or is locked by another reader, so the verifier could not read the activity: this is the route's fault, not the sender's; pass the verifier an unread request, for example request.clone()";
@@ -28,10 +27,10 @@ describe("a request body the verifier cannot read", () => {
   it("refuses a body the route already read as body_already_read, before any key or SDK work", async () => {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
     const req = activityRequest(ks.signToken({}));
     await req.text();
@@ -47,10 +46,10 @@ describe("a request body the verifier cannot read", () => {
   it("refuses a body another reader holds locked as body_already_read", async () => {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
     const req = activityRequest(ks.signToken({}));
     req.body?.getReader();
@@ -66,10 +65,10 @@ describe("a request body the verifier cannot read", () => {
   it("refuses a sender's body that fails part-way through the read as malformed_body", async () => {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -93,10 +92,10 @@ describe("a request body the verifier cannot read", () => {
   it("refuses a POST that carries no body as malformed_body instead of throwing", async () => {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
     const req = new Request("https://bot.test/api/messages", {
       method: "POST",

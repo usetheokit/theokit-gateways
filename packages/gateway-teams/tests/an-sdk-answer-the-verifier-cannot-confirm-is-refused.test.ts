@@ -5,10 +5,9 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 function resolvingValidatorModule(result: unknown) {
   return {
@@ -31,10 +30,10 @@ describe("an SDK answer the verifier cannot confirm", () => {
   it("refuses as invalid_token when the SDK accepts a token whose payload does not decode", async () => {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
 
     const res = await verify(activityRequest(ks.signRawPayload("!!!")));
@@ -49,10 +48,10 @@ describe("an SDK answer the verifier cannot confirm", () => {
     ["an appId and a serviceUrl that is not a string", { appId: CLIENT_ID, serviceUrl: 42 }],
   ])("refuses as invalid_token when the SDK resolves %s", async (_, result) => {
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: resolvingValidatorModule(result),
+      validatorModule: resolvingValidatorModule(result),
     });
 
     const res = await verify(activityRequest(ks.signToken({})));
@@ -63,10 +62,10 @@ describe("an SDK answer the verifier cannot confirm", () => {
   it("recognises a token issued by the configured cloud's login endpoint as tenant-issued", async () => {
     ks = await startKeyServer();
     const { module } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
     const token = ks.signToken({ iss: `${ks.cloud.loginEndpoint}/some-tenant/v2.0` });
 

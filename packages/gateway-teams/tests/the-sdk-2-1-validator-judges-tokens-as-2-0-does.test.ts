@@ -13,8 +13,6 @@ import { createRequire } from "node:module";
 import * as sdk20 from "@microsoft/teams.apps/dist/middleware/index.js";
 import * as sdk21 from "@microsoft/teams.apps-2-1/dist/middleware/index.js";
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import {
   activityRequest,
   F5_BF_SERVICE_URL_DIFFERS,
@@ -25,6 +23,7 @@ import {
 } from "./helpers/claim-fixtures.js";
 import { INSTALLED_SDK_LINE } from "./helpers/installed-sdk.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 const require = createRequire(import.meta.url);
 
@@ -68,10 +67,10 @@ describe("the real SDK 2.1.0 validator", () => {
 
   async function verifierOn(module: unknown, tenantId?: string) {
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
       ...(tenantId === undefined ? {} : { tenantId }),
     });
     return { ks, verify };

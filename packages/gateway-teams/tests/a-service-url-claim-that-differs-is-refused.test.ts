@@ -5,8 +5,6 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import {
   acceptingValidatorModule,
   activityRequest,
@@ -16,6 +14,7 @@ import {
   signFixture,
 } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 describe("a service url claim that differs", () => {
   let ks: KeyServer | undefined;
@@ -27,7 +26,7 @@ describe("a service url claim that differs", () => {
 
   it("refuses a token whose serviceurl claim differs from the body on the installed SDK path", async () => {
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud });
+    const verify = verifierUnderTest({ clientId: CLIENT_ID, cloud: ks.cloud });
     const token = signFixture(ks, F5_BF_SERVICE_URL_DIFFERS.claims);
 
     const res = await verify(activityRequest(token));
@@ -43,10 +42,10 @@ describe("a service url claim that differs", () => {
     ks = await startKeyServer();
     const { module } = acceptingValidatorModule();
     const tenant = fixture.tenantId === undefined ? {} : { tenantId: fixture.tenantId };
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
       ...tenant,
     });
     const token = signFixture(ks, fixture.claims);
@@ -60,10 +59,10 @@ describe("a service url claim that differs", () => {
   it("refuses a body serviceUrl that differs from the claim only by a dotless i, which uppercasing would merge", async () => {
     ks = await startKeyServer();
     const { module, calls } = acceptingValidatorModule();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       cloud: ks.cloud,
-      __validatorModule: module,
+      validatorModule: module,
     });
     const token = signFixture(ks, { aud: CLIENT_ID, iss: BF, serviceurl: SERVICE_URL });
     const lookalike = SERVICE_URL.replace("traffic", "traff\u0131c");

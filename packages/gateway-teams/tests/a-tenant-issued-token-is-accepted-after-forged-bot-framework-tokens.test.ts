@@ -7,10 +7,9 @@
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest, TENANT } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 describe("a tenant-issued token after forged Bot Framework tokens", () => {
   let ks: KeyServer | undefined;
@@ -25,11 +24,11 @@ describe("a tenant-issued token after forged Bot Framework tokens", () => {
     vi.useFakeTimers({ toFake: ["Date", "performance"] });
     vi.setSystemTime(new Date("2026-10-06T12:00:00Z"));
     ks = await startKeyServer();
-    const verify = teamsActivityVerifier({
+    const verify = verifierUnderTest({
       clientId: CLIENT_ID,
       tenantId: TENANT,
       cloud: ks.cloud,
-      __validatorModule: acceptingValidatorModule().module,
+      validatorModule: acceptingValidatorModule().module,
     });
     const stray = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
     const refused = [];
