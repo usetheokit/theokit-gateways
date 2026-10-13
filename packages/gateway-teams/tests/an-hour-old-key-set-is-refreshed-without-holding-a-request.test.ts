@@ -123,6 +123,41 @@ describe("a key set an hour old", () => {
     expect([hitsAtEnd, hitsBeforeInterval, ks.hits()]).toEqual([2, 2, 3]);
   });
 
+  it("reports a background refresh that rejects in the next waiting lookup's key_set_unavailable message", async () => {
+    const { verify } = await warmVerifier();
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown) => rejections.push(reason);
+    process.on("unhandledRejection", onRejection);
+    try {
+      // A response whose status getter throws escapes every catch in the read, so the read rejects.
+      const fetched = vi.fn(async () => ({
+        get ok(): boolean {
+          throw new RangeError("status unreadable");
+        },
+      }));
+      vi.stubGlobal("fetch", fetched);
+      vi.advanceTimersByTime(HOUR_MS);
+      const fromCopy = await verify(activityRequest(ks!.signToken({})));
+      await vi.waitFor(() => expect(fetched).toHaveBeenCalledTimes(1));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const waited = await verify(activityRequest(unlisted(ks!)));
+
+      expect([fromCopy.ok, waited]).toEqual([
+        true,
+        expect.objectContaining({
+          ok: false,
+          reason: "key_set_unavailable",
+          message: expect.stringContaining("the read threw (RangeError)"),
+        }),
+      ]);
+      expect(rejections).toEqual([]);
+    } finally {
+      vi.unstubAllGlobals();
+      process.off("unhandledRejection", onRejection);
+    }
+  });
+
   it("keeps answering from the copy, with no unhandled rejection, when the refresh is dropped", async () => {
     const { ks: server, verify } = await warmVerifier();
     const rejections: unknown[] = [];
