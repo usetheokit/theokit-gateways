@@ -8,6 +8,8 @@ export default defineConfig({
     // because the gain above this point was already noise when measured.
     maxWorkers: Math.max(2, cpus().length - 4),
     include: ["tests/**/*.test.ts"],
+    // RSA key pairs for the test key server, generated once instead of inside each test.
+    globalSetup: ["tests/global-setup/signing-key-pool.ts"],
     environment: "node",
   },
 });

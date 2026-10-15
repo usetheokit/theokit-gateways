@@ -537,3 +537,281 @@ describe("WhatsAppCloudBackend.sendTemplate — the method the contract cannot r
     expect(body.to, "the template went to a different number").toBe("5511999999999");
   });
 });
+
+describe("WhatsAppCloudBackend with an empty app secret", () => {
+  it("refuses an inbound webhook with ConfigurationError instead of accepting an empty-key signature", async () => {
+    const b = new WhatsAppCloudBackend({
+      accessToken: "t",
+      phoneNumberId: "PNID",
+      appSecret: "",
+      fetch: makeFetchOk(),
+    });
+    const forged = `sha256=${crypto.createHmac("sha256", "").update(TEXT_ENVELOPE).digest("hex")}`;
+
+    await expect(b.handleWebhookPayload(TEXT_ENVELOPE, forged)).rejects.toMatchObject({
+      name: "ConfigurationError",
+      code: "missing_option",
+    });
+  });
+});
+
+describe("WhatsAppCloudBackend webhook entrypoint, used without WhatsAppAdapter", () => {
+  // Meta signs every number of one app with one secret, and an app-level webhook URL receives
+  // every subscribed number. A route built on the backend alone must not hand number B's customer
+  // messages to the handler of a backend constructed for number A (B-421, review finding #75).
+  const envelopeFor = (phoneNumberId: string | undefined): string => {
+    const envelope = JSON.parse(TEXT_ENVELOPE);
+    const metadata = envelope.entry[0].changes[0].value.metadata;
+    if (phoneNumberId === undefined) delete metadata.phone_number_id;
+    else metadata.phone_number_id = phoneNumberId;
+    return JSON.stringify(envelope);
+  };
+
+  it("drops a signed message addressed to another phone number id of the same app", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const b = makeBackend();
+    const handler = vi.fn(async () => {});
+    b.onInbound(handler);
+    const body = envelopeFor("109900001111");
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect(ok).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+    expect(stderr.mock.calls.map((c) => String(c[0])).join("")).toContain(
+      "a phone number id ending in 1111",
+    );
+    stderr.mockRestore();
+  });
+
+  // The same envelope carries a second event kind. A status receipt names the recipient's phone
+  // number, so one number's receipts reaching another number's handler hands one tenant's customer
+  // numbers to another tenant (B-421 review finding #31, B-432).
+  const receiptEnvelopeFor = (phoneNumberId: string | undefined): string =>
+    JSON.stringify({
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: "e",
+          changes: [
+            {
+              field: "messages",
+              value: {
+                messaging_product: "whatsapp",
+                metadata:
+                  phoneNumberId === undefined
+                    ? { display_phone_number: "x" }
+                    : { display_phone_number: "x", phone_number_id: phoneNumberId },
+                statuses: [
+                  {
+                    id: "wamid.s",
+                    status: "delivered",
+                    timestamp: "1700",
+                    recipient_id: "5588000",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+  const backendFor111 = (): WhatsAppCloudBackend =>
+    new WhatsAppCloudBackend({
+      accessToken: "t",
+      phoneNumberId: "111",
+      appSecret: APP_SECRET,
+      fetch: makeFetchOk(),
+    });
+
+  it("drops a signed status receipt addressed to another phone number id of the same app", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const b = backendFor111();
+    const statusHandler = vi.fn(async () => {});
+    b.onStatusReceipt(statusHandler);
+    const body = receiptEnvelopeFor("222");
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect(ok).toBe(true);
+    expect(statusHandler).not.toHaveBeenCalled();
+    expect(stderr.mock.calls.map((c) => String(c[0])).join("")).toContain(
+      "a phone number id ending in 222:",
+    );
+    stderr.mockRestore();
+  });
+
+  it("drops a signed status receipt that names no phone number id", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const b = backendFor111();
+    const statusHandler = vi.fn(async () => {});
+    b.onStatusReceipt(statusHandler);
+    const body = receiptEnvelopeFor(undefined);
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect(ok).toBe(true);
+    expect(statusHandler).not.toHaveBeenCalled();
+    stderr.mockRestore();
+  });
+
+  it("hands a signed status receipt addressed to its own number to the status handler", async () => {
+    const b = backendFor111();
+    const statusHandler = vi.fn(async () => {});
+    b.onStatusReceipt(statusHandler);
+    const body = receiptEnvelopeFor("111");
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect(ok).toBe(true);
+    expect(statusHandler).toHaveBeenCalledTimes(1);
+    expect((statusHandler.mock.calls[0] as unknown[])[0]).toMatchObject({
+      wamid: "wamid.s",
+      recipient: "5588000",
+      phoneNumberId: "111",
+    });
+  });
+
+  it("drops a signed message that names no phone number id", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const b = makeBackend();
+    const handler = vi.fn(async () => {});
+    b.onInbound(handler);
+    const body = envelopeFor(undefined);
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect(ok).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+    stderr.mockRestore();
+  });
+});
+
+/**
+ * Code-review finding #23: a signed batch with a message for this number answered `true` when no
+ * inbound handler was subscribed, a route wired before `onInbound` or still live after
+ * `disconnect()`. The route answered 200, Meta did not redeliver, and the messages were lost with
+ * nothing logged.
+ */
+describe("WhatsAppCloudBackend webhook entrypoint with no inbound handler subscribed", () => {
+  const STATUS_ONLY = JSON.stringify({
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: "e",
+        changes: [
+          {
+            field: "messages",
+            value: {
+              messaging_product: "whatsapp",
+              metadata: { display_phone_number: "x", phone_number_id: "PNID" },
+              statuses: [
+                { id: "wamid.s", status: "read", timestamp: "1700", recipient_id: "5511" },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  function stderrLines(): { lines: () => string[] } {
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    return { lines: () => spy.mock.calls.map((c) => String(c[0])) };
+  }
+
+  it("answers false and says so on stderr for a message to its number before onInbound", async () => {
+    const stderr = stderrLines();
+    const b = makeBackend();
+
+    const ok = await b.handleWebhookPayload(TEXT_ENVELOPE, signedHeader(TEXT_ENVELOPE));
+
+    expect(ok).toBe(false);
+    expect(stderr.lines()).toEqual([expect.stringContaining("no inbound handler is subscribed")]);
+    vi.restoreAllMocks();
+  });
+
+  it("answers false for a message to its number after disconnect cleared the handler", async () => {
+    stderrLines();
+    const b = makeBackend();
+    const handler = vi.fn(async () => {});
+    b.onInbound(handler);
+    await b.disconnect();
+
+    const ok = await b.handleWebhookPayload(TEXT_ENVELOPE, signedHeader(TEXT_ENVELOPE));
+
+    expect(ok).toBe(false);
+    expect(handler).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * Code-review LCR0111/LCR0602: the handler was checked once before the batch and re-read per
+   * message, so one removed while the batch was being dispatched (a shutdown calling
+   * `disconnect()`, or the unsubscribe `onInbound` returned) skipped the rest with nothing logged,
+   * and the method still answered `true`.
+   */
+  function threeMessageBatch(): string {
+    const envelope = JSON.parse(TEXT_ENVELOPE);
+    const [first] = envelope.entry[0].changes[0].value.messages;
+    envelope.entry[0].changes[0].value.messages = ["wamid.1", "wamid.2", "wamid.3"].map((id) => ({
+      ...first,
+      id,
+    }));
+    return JSON.stringify(envelope);
+  }
+
+  it("delivers the whole batch when disconnect runs inside the handler of its first message", async () => {
+    stderrLines();
+    const b = makeBackend();
+    const seen: string[] = [];
+    b.onInbound(async (event) => {
+      seen.push(event.wamid);
+      if (seen.length === 1) await b.disconnect();
+    });
+    const body = threeMessageBatch();
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect({ ok, seen }).toEqual({ ok: true, seen: ["wamid.1", "wamid.2", "wamid.3"] });
+    vi.restoreAllMocks();
+  });
+
+  it("delivers the whole batch when the handler unsubscribes itself on its first message", async () => {
+    stderrLines();
+    const b = makeBackend();
+    const seen: string[] = [];
+    const off = b.onInbound(async (event) => {
+      seen.push(event.wamid);
+      off();
+    });
+    const body = threeMessageBatch();
+
+    const ok = await b.handleWebhookPayload(body, signedHeader(body));
+
+    expect({ ok, seen }).toEqual({ ok: true, seen: ["wamid.1", "wamid.2", "wamid.3"] });
+    vi.restoreAllMocks();
+  });
+
+  it("answers true for a status-only body, whose receipts are discarded with no handler", async () => {
+    const stderr = stderrLines();
+    const b = makeBackend();
+
+    const ok = await b.handleWebhookPayload(STATUS_ONLY, signedHeader(STATUS_ONLY));
+
+    expect(ok).toBe(true);
+    expect(stderr.lines()).toEqual([]);
+    vi.restoreAllMocks();
+  });
+
+  it("answers true for a message addressed only to another number", async () => {
+    stderrLines();
+    const b = makeBackend();
+    const envelope = JSON.parse(TEXT_ENVELOPE);
+    envelope.entry[0].changes[0].value.metadata.phone_number_id = "109900001111";
+    const body = JSON.stringify(envelope);
+
+    expect(await b.handleWebhookPayload(body, signedHeader(body))).toBe(true);
+    vi.restoreAllMocks();
+  });
+});

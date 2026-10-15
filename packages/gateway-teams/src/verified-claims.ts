@@ -1,0 +1,360 @@
+/**
+ * The decisions `teamsActivityVerifier` makes without the SDK: option validation, reading the
+ * bearer token, parsing the body, decoding the verified token's claims, and the four checks that
+ * run after the SDK accepted the token (ADR-0003).
+ *
+ * Pure on purpose: no I/O and no SDK import, so the package's mutation run covers every security
+ * decision here, and the orchestration in `activity-verifier.ts` stays outside it.
+ *
+ * @internal
+ */
+
+import { Buffer } from "node:buffer";
+
+/** A claim check's refusal reason. */
+export type ClaimRefusal =
+  | "audience_mismatch"
+  | "serviceurl_mismatch"
+  | "channel_mismatch"
+  | "tenant_mismatch"
+  | "tenant_unverified";
+
+/** What the claim checks compare against. */
+export interface ExpectedClaims {
+  readonly clientId: string;
+  readonly tenantId?: string | undefined;
+  /** The cloud's Entra login endpoint, used to recognise a tenant-issued token. */
+  readonly loginEndpoint: string;
+  /** The `serviceUrl` of the activity body the token arrived with. */
+  readonly serviceUrl: string;
+  /**
+   * The `channelId` of the activity body the token arrived with, unchecked. Only
+   * {@link TEAMS_CHANNEL_ID} is accepted.
+   */
+  readonly channelId: unknown;
+}
+
+/**
+ * The `channelId` Teams sets on every activity. A connector token is issued for the bot, not for
+ * one channel, so the same token shape arrives from the bot's Web Chat and Direct Line channels,
+ * where the client sets `from` and `channelData`.
+ */
+export const TEAMS_CHANNEL_ID = "msteams";
+
+/** Multi-tenant authority names: none of them names a tenant, so none can restrict one. */
+const MULTI_TENANT_NAMES = ["common", "organizations", "consumers"];
+
+/**
+ * A tenant id, the shape Microsoft issues every `tid` claim in. Entra also accepts a verified
+ * domain wherever an authority takes a tenant, but a domain can never equal a `tid`.
+ */
+const TENANT_ID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The issuer prefix Entra v1 tokens carry, which no cloud setting changes. */
+const STS_ISSUER_PREFIX = "https://sts.windows.net/";
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The suffix the verifier and the SDK replace with `/keys` to find the Bot Framework key set. A
+ * metadata URL ending any other way would be fetched as the key set itself, and every request
+ * would be refused as a retryable `key_set_unavailable` for as long as the configuration stood.
+ */
+const OPENID_METADATA_SUFFIX = "/openidconfiguration";
+
+/** Hosts whose traffic never leaves the machine, so plain `http:` exposes nothing on a network. */
+const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+
+/**
+ * Whether `value` is an `https:` URL, or an `http:` one on a loopback host. The verifier fetches
+ * its signing keys from these endpoints, and over plain `http:` anyone on the network path could
+ * substitute the key set.
+ */
+function isTransportSafeUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol === "https:") return true;
+  return url.protocol === "http:" && LOOPBACK_HOSTS.includes(url.hostname);
+}
+
+function assertCloud(cloud: unknown): void {
+  if (cloud === undefined) return;
+  const fields = ["loginEndpoint", "tokenIssuer", "openIdMetadataUrl"] as const;
+  const record = isPlainObject(cloud) ? cloud : {};
+  for (const field of fields) {
+    const value = record[field];
+    if (!isNonEmptyString(value)) {
+      throw new TypeError(`teamsActivityVerifier: cloud.${field} must be a non-empty string`);
+    }
+    if (!isTransportSafeUrl(value)) {
+      throw new TypeError(
+        `teamsActivityVerifier: cloud.${field} must be an https: URL (http: is accepted only on localhost, 127.0.0.1 or [::1]): the verifier reads its signing keys from the cloud's endpoints`,
+      );
+    }
+  }
+  if ((record.loginEndpoint as string).endsWith("/")) {
+    throw new TypeError(
+      "teamsActivityVerifier: cloud.loginEndpoint must not end in a slash: the tenant key-set URL and the issuer check append /{tenant} to it, as the Teams SDK does",
+    );
+  }
+  if (!(record.openIdMetadataUrl as string).endsWith(OPENID_METADATA_SUFFIX)) {
+    throw new TypeError(
+      `teamsActivityVerifier: cloud.openIdMetadataUrl must end in ${OPENID_METADATA_SUFFIX} (no trailing slash or query): the Bot Framework key-set URL is derived by replacing that suffix with /keys, as the Teams SDK does`,
+    );
+  }
+}
+
+/**
+ * Refuse, at construction, options no request could ever be verified against.
+ *
+ * @throws TypeError naming the field and, for a multi-tenant or non-GUID `tenantId`, the value; for a `cloud`
+ * endpoint that is not an `https:` URL (or `http:` on a loopback host); for a
+ * `cloud.loginEndpoint` ending in a slash; and for a `cloud.openIdMetadataUrl` that does not end in
+ * {@link OPENID_METADATA_SUFFIX}.
+ */
+export function assertVerifierOptions(options: {
+  readonly clientId: unknown;
+  readonly tenantId?: unknown;
+  readonly cloud?: unknown;
+}): void {
+  if (!isNonEmptyString(options.clientId)) {
+    throw new TypeError("teamsActivityVerifier: clientId must be a non-empty string");
+  }
+  const { tenantId } = options;
+  if (tenantId !== undefined) {
+    if (!isNonEmptyString(tenantId)) {
+      throw new TypeError(
+        "teamsActivityVerifier: tenantId, when given, must be a non-empty string",
+      );
+    }
+    if (MULTI_TENANT_NAMES.includes(tenantId.toLowerCase())) {
+      throw new TypeError(
+        `teamsActivityVerifier: tenantId "${tenantId}" names no tenant; pass the tenant's id, or omit tenantId`,
+      );
+    }
+    if (!TENANT_ID_SHAPE.test(tenantId)) {
+      throw new TypeError(
+        `teamsActivityVerifier: tenantId "${tenantId}" is not a tenant id: every token's tid claim is the tenant's GUID, so a domain or any other name would refuse every request; pass the Directory (tenant) ID from Entra`,
+      );
+    }
+  }
+  assertCloud(options.cloud);
+}
+
+/** The scheme prefix the SDK strips from an `Authorization` header. */
+const BEARER = "Bearer ";
+
+/**
+ * The token in an `Authorization` header, read as the SDK reads it: everything after `Bearer `,
+ * or the whole header when that prefix is absent. `undefined` when there is nothing to read,
+ * including a bare `Bearer`, which is what Fetch leaves of `Bearer ` once it trims the value.
+ */
+export function readBearerToken(header: string | null): string | undefined {
+  if (header === null || header === BEARER.trimEnd()) return undefined;
+  const token = header.startsWith(BEARER) ? header.slice(BEARER.length) : header;
+  return token.length > 0 ? token : undefined;
+}
+
+/** An activity body that carries the one field the claim checks need. */
+export type ParsedBody =
+  | { readonly ok: true; readonly activity: Record<string, unknown>; readonly serviceUrl: string }
+  | { readonly ok: false; readonly reason: "malformed_body" };
+
+/** Parse the request body as an activity: a JSON object with a non-empty string `serviceUrl`. */
+export function parseActivityBody(text: string): ParsedBody {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return { ok: false, reason: "malformed_body" };
+  }
+  if (!isPlainObject(value) || !isNonEmptyString(value.serviceUrl)) {
+    return { ok: false, reason: "malformed_body" };
+  }
+  return { ok: true, activity: value, serviceUrl: value.serviceUrl };
+}
+
+/**
+ * The payload of a token the SDK has already verified, or `undefined` when it is not a JSON
+ * object. No signature work happens here: the SDK checked this exact string first.
+ */
+export function decodeVerifiedClaims(rawToken: string): Record<string, unknown> | undefined {
+  return decodeSegment(rawToken, 1);
+}
+
+/**
+ * The `kid` of a token's JOSE header, read WITHOUT verifying anything: the sender chose it. Used
+ * only to find the published key the signature must verify under, never as evidence about it.
+ */
+export function readTokenKeyId(rawToken: string): string | undefined {
+  const kid = decodeSegment(rawToken, 0)?.kid;
+  return typeof kid === "string" && kid.length > 0 ? kid : undefined;
+}
+
+/**
+ * The `alg` of a token's JOSE header, read WITHOUT verifying anything. The verifier checks a
+ * signature itself only when this is `RS256`, the one algorithm the Teams SDK accepts.
+ */
+export function readTokenAlgorithm(rawToken: string): string | undefined {
+  const alg = decodeSegment(rawToken, 0)?.alg;
+  return typeof alg === "string" ? alg : undefined;
+}
+
+/** One base64url JSON object segment of a three-segment JWT, or `undefined`. */
+function decodeSegment(rawToken: string, index: 0 | 1): Record<string, unknown> | undefined {
+  const segments = rawToken.split(".");
+  if (segments.length !== 3) return undefined;
+  try {
+    const decoded: unknown = JSON.parse(
+      Buffer.from(segments[index] as string, "base64url").toString("utf8"),
+    );
+    return isPlainObject(decoded) ? decoded : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeServiceUrl(url: string): string {
+  return url.replace(/\/$/, "").toLowerCase();
+}
+
+/** The audiences the SDK accepts. `includes` compares strictly, so an array `aud` never matches. */
+function audienceMatches(aud: unknown, clientId: string): boolean {
+  const accepted: readonly unknown[] = [clientId, `api://botid-${clientId}`, `api://${clientId}`];
+  return accepted.includes(aud);
+}
+
+/** The clock tolerance, in seconds, the SDK's JWT validator allows on `exp` and `nbf`. */
+const SDK_CLOCK_TOLERANCE_SECONDS = 300;
+
+/**
+ * Whether the SDK's JWT check would refuse a token on its audience, expiry or not-before claim,
+ * judged as the SDK's JWT verifier judges them with the options the SDK passes it on both of its
+ * paths: an `aud` (or any element of an `aud` array) among the three accepted forms, and `exp`
+ * and `nbf` numbers within 300 seconds of `nowSeconds`. The SDK reads the key set before it checks
+ * any of them, so a token this returns true for is refused before the SDK is asked
+ * (loop-code-review LCR0103). An `aud` array that names this app passes here, as it does in the
+ * SDK, and is refused afterwards by {@link checkVerifiedClaims}.
+ */
+export function sdkRefusesTokenClaims(
+  rawToken: string,
+  clientId: string,
+  nowSeconds: number,
+): boolean {
+  const claims = decodeSegment(rawToken, 1);
+  // A payload that does not decode is refused by the SDK's JWT verifier before it asks for a key.
+  if (claims === undefined) return false;
+  const audiences: readonly unknown[] = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (!audiences.some((aud) => audienceMatches(aud, clientId))) return true;
+  const { exp, nbf } = claims;
+  if (
+    exp !== undefined &&
+    (typeof exp !== "number" || nowSeconds >= exp + SDK_CLOCK_TOLERANCE_SECONDS)
+  ) {
+    return true;
+  }
+  return (
+    nbf !== undefined && (typeof nbf !== "number" || nbf > nowSeconds + SDK_CLOCK_TOLERANCE_SECONDS)
+  );
+}
+
+function serviceUrlMatches(claim: unknown, expected: string): boolean {
+  return typeof claim === "string" && normalizeServiceUrl(claim) === normalizeServiceUrl(expected);
+}
+
+/**
+ * Whether an issuer is an Entra one: under the login endpoint's path, or Entra v1's. The endpoint
+ * is compared with its trailing slash, so an issuer on a host that merely starts with the
+ * endpoint's host name (`https://login.microsoftonline.com.example/...`) is not taken for it.
+ */
+function isTenantIssued(iss: unknown, loginEndpoint: string): boolean {
+  return (
+    typeof iss === "string" &&
+    (iss.startsWith(`${loginEndpoint}/`) || iss.startsWith(STS_ISSUER_PREFIX))
+  );
+}
+
+function checkTenant(
+  claims: Record<string, unknown>,
+  expected: Pick<ExpectedClaims, "tenantId" | "loginEndpoint">,
+): ClaimRefusal | undefined {
+  if (expected.tenantId === undefined) {
+    return isTenantIssued(claims.iss, expected.loginEndpoint) ? "tenant_unverified" : undefined;
+  }
+  if (typeof claims.tid !== "string") return "tenant_unverified";
+  return claims.tid.toLowerCase() === expected.tenantId.toLowerCase()
+    ? undefined
+    : "tenant_mismatch";
+}
+
+/**
+ * Whether a token's UNVERIFIED `iss` is an Entra issuer: the tokens SDK 2.1.x checks against the
+ * key set of the tenant their unverified `tid` names, rather than against the Bot Framework one.
+ * Read without verifying anything; used only to choose the key set the verifier checks the
+ * signature against, and whether the SDK may be asked.
+ */
+export function isTenantIssuedToken(rawToken: string, loginEndpoint: string): boolean {
+  return isTenantIssued(decodeSegment(rawToken, 1)?.iss, loginEndpoint);
+}
+
+/**
+ * The tenant refusal a tenant-issued token would get after the SDK accepted it, read from its
+ * UNVERIFIED claims. An accepted token's verified claims are these same claims, so a token this
+ * returns a reason for can never be accepted: refusing it before the SDK changes only which
+ * reason a token wrong in several ways is reported by.
+ */
+export function tenantRefusalBeforeVerification(
+  rawToken: string,
+  expected: Pick<ExpectedClaims, "tenantId" | "loginEndpoint">,
+): ClaimRefusal | undefined {
+  const claims = decodeSegment(rawToken, 1);
+  if (claims === undefined || !isTenantIssued(claims.iss, expected.loginEndpoint)) return undefined;
+  return checkTenant(claims, expected);
+}
+
+/**
+ * Check the claims of a token the SDK accepted, and the activity's channel, in a fixed order:
+ * `aud`, then `serviceurl`, then the activity's `channelId`, then the tenant. The first refusal
+ * wins, so a request wrong in several ways is reported by its most fundamental mismatch.
+ */
+export function checkVerifiedClaims(
+  claims: Record<string, unknown>,
+  expected: ExpectedClaims,
+): { readonly ok: true } | { readonly ok: false; readonly reason: ClaimRefusal } {
+  if (!audienceMatches(claims.aud, expected.clientId)) {
+    return { ok: false, reason: "audience_mismatch" };
+  }
+  if (!serviceUrlMatches(claims.serviceurl, expected.serviceUrl)) {
+    return { ok: false, reason: "serviceurl_mismatch" };
+  }
+  if (expected.channelId !== TEAMS_CHANNEL_ID) {
+    return { ok: false, reason: "channel_mismatch" };
+  }
+  const tenantRefusal = checkTenant(claims, expected);
+  return tenantRefusal === undefined ? { ok: true } : { ok: false, reason: tenantRefusal };
+}
+
+/**
+ * Whether a Bot Framework signing key may sign an activity on `channelId`: its `endorsements` list
+ * that channel. The Bot Framework publishes one key set for every channel, and the activity's
+ * `channelId` is written by whoever signed the token, so the endorsement is what binds the token to
+ * the channel. A key with no `endorsements` is endorsed for nothing. A `channelId` that is not a
+ * string names no channel to endorse; {@link checkVerifiedClaims} refuses it as `channel_mismatch`.
+ */
+export function keyEndorsesChannel(
+  endorsements: readonly string[] | undefined,
+  channelId: unknown,
+): boolean {
+  if (typeof channelId !== "string") return true;
+  return endorsements?.includes(channelId) === true;
+}

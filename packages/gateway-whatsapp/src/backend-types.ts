@@ -82,6 +82,14 @@ export interface WhatsAppStatusReceipt {
   readonly recipient: string;
   /** Receipt timestamp. */
   readonly timestamp: number;
+  /**
+   * Cloud only: the `phone_number_id` the receipt was addressed to, from the webhook's
+   * `metadata`. One Meta app signs every number's webhooks with one secret, so a route serving
+   * several numbers needs this to keep one number's receipts, and the recipient numbers they name,
+   * away from another number's handler. Absent on the web and Baileys backends, which serve one
+   * account each, and on a Cloud envelope that names no number.
+   */
+  readonly phoneNumberId?: string;
 }
 
 /**
@@ -161,6 +169,18 @@ export interface WhatsAppCredentialCheck {
  */
 export interface WhatsAppBackend {
   readonly kind: "cloud" | "web" | "baileys";
+  /**
+   * The Meta Cloud phone number id this backend answers for. Absent on the web and Baileys
+   * backends, which hold one account's own socket and have no such id.
+   *
+   * Meta signs the webhooks of every number of one app with one secret, so a valid signature does
+   * not say which number an envelope was for. A `WhatsAppAdapter` reads this field, not the
+   * backend's class, to drop a message addressed to another number: a wrapped backend, a test
+   * double, or one built from the package's other module format keeps the check by declaring it.
+   * `WhatsAppAdapter.toDeliverableEvents` refuses to run on a backend that does not, rather
+   * than deliver every number's messages.
+   */
+  readonly phoneNumberId?: string;
   /**
    * Make the backend usable, and report whether it is.
    *
