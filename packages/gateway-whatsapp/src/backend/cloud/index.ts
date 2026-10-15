@@ -22,8 +22,9 @@ import type {
   WhatsAppSendResult,
   WhatsAppStatusReceipt,
 } from "../../backend-types.js";
+import { isForAnotherNumber } from "../../inbound-rules.js";
 import { WhatsAppCloudClient } from "./client.js";
-import type { MetaTemplateComponent } from "./types.js";
+import type { MetaTemplateComponent, MetaWebhookEnvelope } from "./types.js";
 import {
   normalizeInboundMessages,
   normalizeStatusReceipts,
@@ -74,6 +75,14 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
    */
   private generation = 0;
   private readonly appSecret: string;
+  /**
+   * The Meta phone number id this backend sends as and answers for. Declared through
+   * `WhatsAppBackend.phoneNumberId`, so an adapter holding this backend can refuse a signed message
+   * addressed to another number of the same app.
+   */
+  readonly phoneNumberId: string;
+  /** Foreign phone number id endings already named on stderr, so each is reported once. */
+  private readonly reportedForeignNumbers = new Set<string>();
   private inboundHandler?: (event: WhatsAppInboundEvent) => Promise<void>;
   private statusHandler?: (receipt: WhatsAppStatusReceipt) => Promise<void>;
 
@@ -85,6 +94,7 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
       ...(opts.fetch !== undefined ? { fetch: opts.fetch } : {}),
     });
     this.appSecret = opts.appSecret;
+    this.phoneNumberId = opts.phoneNumberId;
   }
 
   // Cloud has no persistent connection — webhook is push, send is HTTP.
@@ -222,8 +232,24 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
    * Webhook entrypoint. The user calls this from inside their POST /webhook
    * route after `verifyWebhookSubscription` on GET.
    *
-   * @returns `true` if signature valid + dispatched (or empty payload).
-   *          `false` if signature invalid (route should return 401).
+   * Only messages addressed to this backend's `phoneNumberId` reach the inbound handler, and only
+   * status receipts addressed to it reach the status handler. Meta signs every number of one app
+   * with one secret and an app-level webhook URL receives every subscribed number, so a valid
+   * signature does not say which number a message or receipt was for; one for another number, or
+   * naming none, is dropped and its id written to stderr once (`isForAnotherNumber`, the rule
+   * `WhatsAppAdapter` applies too).
+   *
+   * @returns `true` if the signature is valid and the body was dispatched (or held nothing to
+   *          dispatch). `false` if the signature is invalid, if the signed body is not JSON or
+   *          has a shape {@link parseWebhookPayload} refuses, or if it holds a message for this
+   *          number while no inbound handler is subscribed (before `onInbound`, or after
+   *          `disconnect()`): the whole body is refused, never a part of it dropped, and one line
+   *          on stderr says which. Answer `false` with a non-2xx (401 for a bad signature) so the
+   *          drop is seen and Meta redelivers. Status receipts with no status handler subscribed
+   *          are discarded on purpose: subscribing to receipts is optional, and refusing them
+   *          would make Meta redeliver every receipt to a route that never wants one.
+   * @throws {ConfigurationError} `missing_option` when this backend's `appSecret` is empty or
+   *         whitespace only: a signature under an empty key proves nothing.
    */
   async handleWebhookPayload(
     rawBody: Buffer | string,
@@ -235,16 +261,55 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
     const json = this.parseBody(rawBody);
     if (json === undefined) return false;
     const envelope = parseWebhookPayload(json);
-    if (envelope === null) return true; // valid signature, unrecognized shape — nothing to dispatch
-    for (const event of normalizeInboundMessages(envelope)) {
-      if (this.inboundHandler === undefined) continue;
-      await this.dispatchContained(() => this.inboundHandler?.(event), "handler");
+    if (envelope === null) {
+      // Answering true would let the route say 200 and Meta never redeliver the batch.
+      process.stderr.write(
+        "[whatsapp-cloud] signed webhook body has a shape the parser refuses (no object, no entry array, or a malformed entry, change or list); refused whole, nothing dispatched\n",
+      );
+      return false;
     }
+    const messages = normalizeInboundMessages(envelope).filter(
+      (event) => !isForAnotherNumber(event, this.phoneNumberId, this.reportedForeignNumbers),
+    );
+    const inboundHandler = this.inboundHandler;
+    if (messages.length > 0 && inboundHandler === undefined) {
+      // Answering true would let the route say 200 and Meta never redeliver these messages.
+      process.stderr.write(
+        `[whatsapp-cloud] signed webhook body holds ${messages.length} message(s) for this number and no inbound handler is subscribed; refused whole, nothing dispatched\n`,
+      );
+      return false;
+    }
+    // The handler that accepted the batch receives all of it. Re-reading it per message let a
+    // `disconnect()` or unsubscribe inside the first message's handler skip the rest while this
+    // still answered true; refusing mid-batch instead would make Meta redeliver the messages
+    // already handled.
+    if (inboundHandler !== undefined) await this.dispatchInbound(messages, inboundHandler);
+    await this.dispatchStatusReceipts(envelope);
+    return true;
+  }
+
+  /**
+   * Hand each status receipt addressed to this backend's number to the status handler.
+   *
+   * Same rule as messages: a receipt names the recipient's phone number, so one number's receipts
+   * reaching another number's handler hands one tenant's customer numbers to another tenant.
+   */
+  private async dispatchStatusReceipts(envelope: MetaWebhookEnvelope): Promise<void> {
     for (const receipt of normalizeStatusReceipts(envelope)) {
       if (this.statusHandler === undefined) continue;
+      if (isForAnotherNumber(receipt, this.phoneNumberId, this.reportedForeignNumbers)) continue;
       await this.dispatchContained(() => this.statusHandler?.(receipt), "status handler");
     }
-    return true;
+  }
+
+  /** Hand each message, already scoped to this backend's number, to the inbound handler. */
+  private async dispatchInbound(
+    messages: readonly WhatsAppInboundEvent[],
+    handler: (event: WhatsAppInboundEvent) => Promise<void>,
+  ): Promise<void> {
+    for (const event of messages) {
+      await this.dispatchContained(() => handler(event), "handler");
+    }
   }
 
   /**

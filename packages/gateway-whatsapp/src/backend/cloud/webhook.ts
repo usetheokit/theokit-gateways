@@ -12,12 +12,44 @@
  * @public
  */
 
-import * as crypto from "node:crypto";
-
 import type { WhatsAppInboundEvent, WhatsAppStatusReceipt } from "../../backend-types.js";
 import type { MetaIncomingMessage, MetaStatusUpdate, MetaWebhookEnvelope } from "./types.js";
 
+/**
+ * The Meta message types a log line may name. Anything else, including a type a forged envelope
+ * made up, is named "an unknown type".
+ */
+const KNOWN_NON_TEXT_TYPES: ReadonlySet<string> = new Set([
+  "audio",
+  "button",
+  "contacts",
+  "document",
+  "image",
+  "interactive",
+  "location",
+  "order",
+  "reaction",
+  "request_welcome",
+  "sticker",
+  "system",
+  "unsupported",
+  "video",
+]);
+
+/**
+ * Labels already written to stderr. Keyed by `nonTextTypeLabel`, not by the raw type, so it holds
+ * at most one entry per known type plus one for "an unknown type".
+ */
 const warnedNonTextTypes = new Set<string>();
+
+/**
+ * A non-text message type as the log names it. `msg.type` comes from the envelope, and
+ * `toDeliverableEvents` does not verify the signature, so the raw value is text anyone wrote: it
+ * could carry a newline that forges a log line. Only a type from a fixed list is named.
+ */
+function nonTextTypeLabel(type: unknown): string {
+  return typeof type === "string" && KNOWN_NON_TEXT_TYPES.has(type) ? type : "an unknown type";
+}
 
 /**
  * Verify Meta's GET `/webhook?hub.mode=subscribe&hub.challenge=...&hub.verify_token=...`
@@ -39,37 +71,104 @@ export function verifyWebhookSubscription(
   return challenge;
 }
 
-/**
- * Verify the `X-Hub-Signature-256` HMAC-SHA256 against the app secret (D312).
- *
- * EC-3 absorbed: length-guard BEFORE `timingSafeEqual` so a malformed header
- * (e.g. `sha256=ab`) returns `false` instead of throwing `RangeError` (DoS).
- *
- * @returns `true` iff the signature matches.
- */
-export function verifyWebhookSignature(
-  rawBody: Buffer | string,
-  signatureHeader: string | undefined,
-  appSecret: string,
-): boolean {
-  if (signatureHeader === undefined) return false;
-  if (!signatureHeader.startsWith("sha256=")) return false;
-  const receivedHex = signatureHeader.slice(7);
-  if (!/^[0-9a-f]+$/i.test(receivedHex)) return false;
-  const received = Buffer.from(receivedHex, "hex");
-  const body = typeof rawBody === "string" ? Buffer.from(rawBody, "utf8") : rawBody;
-  const expected = crypto.createHmac("sha256", appSecret).update(body).digest();
-  // EC-3: length guard before timingSafeEqual.
-  if (received.length !== expected.length) return false;
-  return crypto.timingSafeEqual(received, expected);
+// The signature check lives in its own module so mutation testing can measure it without the
+// normalizers below (see tests/MUTATION.md); it is re-exported so the import path is unchanged.
+export { verifyWebhookSignature } from "./signature.js";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
 }
 
-/** Parse the raw JSON payload into a typed envelope. Returns `null` if shape is unrecognized. */
+/** Absent, or an array whose every item is an object: what the normalizers iterate. */
+function isOptionalRecordArray(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every(isRecord));
+}
+
+/**
+ * `metadata`: absent, or an object whose `phone_number_id` is absent or a string. The inbound rules
+ * compare and redact that id with string methods, so a number or `null` there would throw past the
+ * boundary.
+ */
+function isWellFormedMetadata(metadata: unknown): boolean {
+  if (metadata === undefined || metadata === null) return true;
+  if (!isRecord(metadata)) return false;
+  return metadata.phone_number_id === undefined || typeof metadata.phone_number_id === "string";
+}
+
+/**
+ * A text message's fields the normalizer and the inbound rules read: `id` and `from` are strings,
+ * and `text` is absent or carries a string `body`. Other types are dropped before any field is read.
+ */
+function isReadableMessage(message: Record<string, unknown>): boolean {
+  if (message.type !== "text") return true;
+  if (typeof message.id !== "string" || typeof message.from !== "string") return false;
+  const text = message.text;
+  return text === undefined || (isRecord(text) && typeof text.body === "string");
+}
+
+/**
+ * A contact the normalizer copies into a message: a string `wa_id`, and a `profile` that is absent
+ * or carries a `name` that is absent or a string. That name becomes `sender.displayName`.
+ */
+function isReadableContact(contact: Record<string, unknown>): boolean {
+  if (typeof contact.wa_id !== "string") return false;
+  const profile = contact.profile;
+  if (profile === undefined) return true;
+  return isRecord(profile) && (profile.name === undefined || typeof profile.name === "string");
+}
+
+/** A status the normalizer turns into a receipt: string `id`, `status` and `recipient_id`. */
+function isReadableStatus(status: Record<string, unknown>): boolean {
+  return (
+    typeof status.id === "string" &&
+    typeof status.status === "string" &&
+    typeof status.recipient_id === "string"
+  );
+}
+
+/** Absent, or a list of objects that each pass `isReadable`. */
+function isOptionalReadableList(
+  list: unknown,
+  isReadable: (item: Record<string, unknown>) => boolean,
+): boolean {
+  if (!isOptionalRecordArray(list)) return false;
+  return list === undefined || (list as Record<string, unknown>[]).every(isReadable);
+}
+
+/** A change's `value`: absent, or an object whose lists hold items the normalizers can read. */
+function isWellFormedValue(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (!isRecord(value)) return false;
+  return (
+    isWellFormedMetadata(value.metadata) &&
+    isOptionalReadableList(value.contacts, isReadableContact) &&
+    isOptionalReadableList(value.messages, isReadableMessage) &&
+    isOptionalReadableList(value.statuses, isReadableStatus)
+  );
+}
+
+function isWellFormedEntry(entry: unknown): boolean {
+  if (!isRecord(entry) || !Array.isArray(entry.changes)) return false;
+  return entry.changes.every((change) => isRecord(change) && isWellFormedValue(change.value));
+}
+
+/**
+ * Parse the raw JSON payload into a typed envelope, or `null` when its shape is not one the
+ * normalizers can read: no `object`, an `entry` that is not an array, or any entry, change or
+ * listed contact, message or status that is not an object (an entry with no `changes` array, a
+ * `null` change, `messages: 5`). The whole body is refused rather than its bad entries skipped, so
+ * nothing in a batch is dropped without the route seeing it. A body is also refused when a field the
+ * inbound rules read with string methods is not a string: a `metadata.phone_number_id` that is not
+ * absent or a string, a text message whose `id`, `from` or `text.body` is not a string, a contact
+ * whose `wa_id` or `profile.name` is not a string, or a status whose `id`, `status` or
+ * `recipient_id` is not a string. Past a non-null result neither normalizer throws, and every
+ * string field of an event or receipt holds a string. Timestamps are not checked here.
+ */
 export function parseWebhookPayload(json: unknown): MetaWebhookEnvelope | null {
-  if (json === null || typeof json !== "object") return null;
-  const env = json as MetaWebhookEnvelope;
-  if (env.object === undefined || !Array.isArray(env.entry)) return null;
-  return env;
+  if (!isRecord(json)) return null;
+  if (json.object === undefined || !Array.isArray(json.entry)) return null;
+  if (!json.entry.every(isWellFormedEntry)) return null;
+  return json as unknown as MetaWebhookEnvelope;
 }
 
 /**
@@ -121,10 +220,11 @@ function normalizeOneMessage(
 ): WhatsAppInboundEvent | null {
   // EC-4: text-only in v1.
   if (msg.type !== "text") {
-    if (!warnedNonTextTypes.has(msg.type)) {
-      warnedNonTextTypes.add(msg.type);
+    const label = nonTextTypeLabel(msg.type);
+    if (!warnedNonTextTypes.has(label)) {
+      warnedNonTextTypes.add(label);
       process.stderr.write(
-        `[whatsapp] ignoring ${msg.type} message — v1 text-only (will be supported in v0.2+).\n`,
+        `[whatsapp] ignoring ${label} message — v1 text-only (will be supported in v0.2+).\n`,
       );
     }
     return null;
@@ -154,22 +254,26 @@ export function normalizeStatusReceipts(envelope: MetaWebhookEnvelope): WhatsApp
   const out: WhatsAppStatusReceipt[] = [];
   for (const entry of envelope.entry) {
     for (const change of entry.changes) {
-      const statuses = change.value?.statuses ?? [];
-      for (const s of statuses) {
-        out.push(metaStatusToReceipt(s));
+      const phoneNumberId = change.value?.metadata?.phone_number_id;
+      for (const s of change.value?.statuses ?? []) {
+        out.push(metaStatusToReceipt(s, phoneNumberId));
       }
     }
   }
   return out;
 }
 
-function metaStatusToReceipt(s: MetaStatusUpdate): WhatsAppStatusReceipt {
-  return {
+function metaStatusToReceipt(
+  s: MetaStatusUpdate,
+  phoneNumberId: string | undefined,
+): WhatsAppStatusReceipt {
+  const receipt = {
     wamid: s.id,
     status: s.status,
     recipient: s.recipient_id,
     timestamp: Number(s.timestamp) * 1000 || Date.now(),
   };
+  return phoneNumberId === undefined ? receipt : { ...receipt, phoneNumberId };
 }
 
 /** @internal — test seam to reset the one-shot warn de-dup. */

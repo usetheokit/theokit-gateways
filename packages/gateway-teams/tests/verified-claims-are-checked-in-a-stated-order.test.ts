@@ -1,0 +1,393 @@
+/**
+ * The pure decisions behind `teamsActivityVerifier` (plan T2.1, ADR-0003): option validation,
+ * bearer extraction, body parsing, claim decoding and the three claim checks in the order
+ * `aud` → `serviceurl` → tenant. No key server and no SDK: these run on plain values.
+ */
+
+import { describe, expect, it } from "vitest";
+
+import {
+  assertVerifierOptions,
+  checkVerifiedClaims,
+  decodeVerifiedClaims,
+  isTenantIssuedToken,
+  keyEndorsesChannel,
+  parseActivityBody,
+  readBearerToken,
+  readTokenKeyId,
+  tenantRefusalBeforeVerification,
+} from "../src/verified-claims.js";
+import {
+  ENTRA_LOGIN,
+  issuerFor,
+  ONE_VIOLATION_FIXTURES,
+  OTHER_TENANT,
+  TENANT,
+} from "./helpers/claim-fixtures.js";
+import { CLIENT_ID, SERVICE_URL } from "./helpers/key-server.js";
+
+const BF_ISSUER = "https://api.botframework.com";
+
+const validClaims = { iss: BF_ISSUER, aud: CLIENT_ID, serviceurl: SERVICE_URL };
+
+const expectedClaims = {
+  clientId: CLIENT_ID,
+  loginEndpoint: ENTRA_LOGIN,
+  serviceUrl: SERVICE_URL,
+  channelId: "msteams",
+};
+
+function expectedFor(tenantId: string | undefined) {
+  return tenantId === undefined ? expectedClaims : { ...expectedClaims, tenantId };
+}
+
+describe("checkVerifiedClaims", () => {
+  it("checks aud before serviceurl", () => {
+    const r = checkVerifiedClaims(
+      { ...validClaims, aud: "x", serviceurl: "https://evil.example/" },
+      expectedClaims,
+    );
+    expect(r).toEqual({ ok: false, reason: "audience_mismatch" });
+  });
+
+  it("checks serviceurl before tid", () => {
+    const r = checkVerifiedClaims(
+      { ...validClaims, serviceurl: "https://evil.example/", tid: OTHER_TENANT },
+      { ...expectedClaims, tenantId: TENANT },
+    );
+    expect(r).toEqual({ ok: false, reason: "serviceurl_mismatch" });
+  });
+
+  it("each one-violation fixture fails exactly its one check and passes once corrected", () => {
+    for (const f of ONE_VIOLATION_FIXTURES) {
+      const claims = issuerFor(f.claims, BF_ISSUER);
+      expect(checkVerifiedClaims(claims, expectedFor(f.tenantId)), f.name).toEqual({
+        ok: false,
+        reason: f.reason,
+      });
+      const fixedClaims = { ...claims, ...f.fix.claims };
+      const fixedTenant = f.fix.tenantId ?? f.tenantId;
+      expect(checkVerifiedClaims(fixedClaims, expectedFor(fixedTenant)), f.name).toEqual({
+        ok: true,
+      });
+    }
+  });
+
+  it("refuses an activity whose channelId is absent, another channel or not a string as channel_mismatch", () => {
+    for (const channelId of [undefined, "directline", "webchat", "emulator", "MSTEAMS", 42]) {
+      expect(
+        checkVerifiedClaims(validClaims, { ...expectedClaims, channelId }),
+        String(channelId),
+      ).toEqual({ ok: false, reason: "channel_mismatch" });
+    }
+  });
+
+  it("checks serviceurl before channelId", () => {
+    const r = checkVerifiedClaims(
+      { ...validClaims, serviceurl: "https://evil.example/" },
+      { ...expectedClaims, channelId: "directline" },
+    );
+    expect(r).toEqual({ ok: false, reason: "serviceurl_mismatch" });
+  });
+
+  it("checks channelId before tid", () => {
+    const r = checkVerifiedClaims(
+      { ...validClaims, tid: OTHER_TENANT },
+      { ...expectedClaims, channelId: "directline", tenantId: TENANT },
+    );
+    expect(r).toEqual({ ok: false, reason: "channel_mismatch" });
+  });
+
+  it("compares serviceurl ignoring one trailing slash and letter case", () => {
+    const r = checkVerifiedClaims(
+      { ...validClaims, serviceurl: "HTTPS://SMBA.trafficmanager.net/amer" },
+      expectedClaims,
+    );
+    expect(r).toEqual({ ok: true });
+  });
+
+  it("accepts the three audiences the SDK accepts and refuses an array", () => {
+    for (const aud of [CLIENT_ID, `api://botid-${CLIENT_ID}`, `api://${CLIENT_ID}`]) {
+      expect(checkVerifiedClaims({ ...validClaims, aud }, expectedClaims), aud).toEqual({
+        ok: true,
+      });
+    }
+    expect(checkVerifiedClaims({ ...validClaims, aud: ["x", CLIENT_ID] }, expectedClaims)).toEqual({
+      ok: false,
+      reason: "audience_mismatch",
+    });
+    expect(
+      checkVerifiedClaims({ ...validClaims, aud: `api://other-${CLIENT_ID}` }, expectedClaims),
+    ).toEqual({
+      ok: false,
+      reason: "audience_mismatch",
+    });
+  });
+
+  it("with a tenant configured, a missing or non-string tid is tenant_unverified and an upper-case equal tid is accepted", () => {
+    const withTenant = { ...expectedClaims, tenantId: TENANT };
+    expect(checkVerifiedClaims({ ...validClaims, tid: 42 }, withTenant)).toEqual({
+      ok: false,
+      reason: "tenant_unverified",
+    });
+    expect(checkVerifiedClaims(validClaims, withTenant)).toEqual({
+      ok: false,
+      reason: "tenant_unverified",
+    });
+    const lettered = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    expect(
+      checkVerifiedClaims(
+        { ...validClaims, tid: lettered.toUpperCase() },
+        { ...expectedClaims, tenantId: lettered },
+      ),
+    ).toEqual({ ok: true });
+    expect(
+      checkVerifiedClaims(
+        { ...validClaims, tid: lettered },
+        { ...expectedClaims, tenantId: lettered.toUpperCase() },
+      ),
+    ).toEqual({ ok: true });
+  });
+
+  it("with no tenant configured, an sts.windows.net or loginEndpoint issuer is tenant_unverified", () => {
+    expect(
+      checkVerifiedClaims({ ...validClaims, iss: "https://sts.windows.net/x/" }, expectedClaims),
+    ).toEqual({
+      ok: false,
+      reason: "tenant_unverified",
+    });
+    expect(
+      checkVerifiedClaims({ ...validClaims, iss: `${ENTRA_LOGIN}/x/v2.0` }, expectedClaims),
+    ).toEqual({
+      ok: false,
+      reason: "tenant_unverified",
+    });
+    const sovereign = { ...expectedClaims, loginEndpoint: "https://login.sovereign.test" };
+    expect(
+      checkVerifiedClaims(
+        { ...validClaims, iss: "https://login.sovereign.test/x/v2.0" },
+        sovereign,
+      ),
+    ).toEqual({ ok: false, reason: "tenant_unverified" });
+    expect(checkVerifiedClaims(validClaims, expectedClaims)).toEqual({ ok: true });
+    expect(checkVerifiedClaims({ ...validClaims, iss: 42 }, expectedClaims)).toEqual({ ok: true });
+  });
+});
+
+describe("parseActivityBody", () => {
+  it("refuses a body that is not a JSON object or has no non-empty string serviceUrl", () => {
+    for (const text of ["[]", "null", "{", "{}", '{"serviceUrl":""}', '{"serviceUrl":1}', '"x"']) {
+      expect(parseActivityBody(text), text).toEqual({ ok: false, reason: "malformed_body" });
+    }
+    const activity = { type: "message", serviceUrl: SERVICE_URL };
+    expect(parseActivityBody(JSON.stringify(activity))).toEqual({
+      ok: true,
+      activity,
+      serviceUrl: SERVICE_URL,
+    });
+  });
+});
+
+describe("readBearerToken", () => {
+  it("reads the bearer token as the SDK does", () => {
+    expect(readBearerToken("Bearer a.b.c")).toBe("a.b.c");
+    expect(readBearerToken("a.b.c")).toBe("a.b.c");
+    expect(readBearerToken("Bearer ")).toBeUndefined();
+    expect(readBearerToken("Bearer")).toBeUndefined();
+    expect(readBearerToken("")).toBeUndefined();
+    expect(readBearerToken(null)).toBeUndefined();
+  });
+});
+
+describe("decodeVerifiedClaims", () => {
+  it("decodes a payload only when it is a JSON object", () => {
+    const payload = Buffer.from(JSON.stringify({ aud: CLIENT_ID })).toString("base64url");
+    expect(decodeVerifiedClaims(`a.${payload}.c`)).toEqual({ aud: CLIENT_ID });
+    expect(decodeVerifiedClaims("a.W10.c")).toBeUndefined();
+    expect(decodeVerifiedClaims("a.MQ.c")).toBeUndefined();
+    expect(decodeVerifiedClaims("a.bnVsbA.c")).toBeUndefined();
+    expect(decodeVerifiedClaims("a.!!!.c")).toBeUndefined();
+    expect(decodeVerifiedClaims("a.b")).toBeUndefined();
+    expect(decodeVerifiedClaims(`a.${payload}.c.d`)).toBeUndefined();
+  });
+});
+
+describe("readTokenKeyId", () => {
+  const header = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+
+  it("reads a non-empty string kid from a three-segment token's header", () => {
+    expect(readTokenKeyId(`${header({ alg: "RS256", kid: "k1" })}.e30.c`)).toBe("k1");
+  });
+
+  it.each([
+    ["a header with no kid", `${header({ alg: "RS256" })}.e30.c`],
+    ["a numeric kid", `${header({ kid: 7 })}.e30.c`],
+    ["an empty kid", `${header({ kid: "" })}.e30.c`],
+    ["a header that is not JSON", "!!!.e30.c"],
+    ["a header that is a JSON array", `${header(["k1"])}.e30.c`],
+    ["two segments", `${header({ kid: "k1" })}.e30`],
+    ["four segments", `${header({ kid: "k1" })}.e30.c.d`],
+  ])("reads no kid from %s", (_, token) => {
+    expect(readTokenKeyId(token)).toBeUndefined();
+  });
+});
+
+describe("tenantRefusalBeforeVerification", () => {
+  const token = (payload: unknown) =>
+    `e30.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.c`;
+  const configured = { tenantId: TENANT, loginEndpoint: ENTRA_LOGIN };
+
+  it.each([
+    [
+      "an Entra v2 token for another tenant",
+      { iss: `${ENTRA_LOGIN}/x/v2.0`, tid: OTHER_TENANT },
+      configured,
+      "tenant_mismatch",
+    ],
+    [
+      "an Entra v1 token for another tenant",
+      { iss: "https://sts.windows.net/x/", tid: OTHER_TENANT },
+      configured,
+      "tenant_mismatch",
+    ],
+    [
+      "an Entra token with no tid",
+      { iss: `${ENTRA_LOGIN}/x/v2.0` },
+      configured,
+      "tenant_unverified",
+    ],
+    [
+      "an Entra token with no tenant configured",
+      { iss: `${ENTRA_LOGIN}/x/v2.0`, tid: TENANT },
+      { loginEndpoint: ENTRA_LOGIN },
+      "tenant_unverified",
+    ],
+    [
+      "an Entra token for the configured tenant, in another case",
+      { iss: `${ENTRA_LOGIN}/x/v2.0`, tid: TENANT.toUpperCase() },
+      configured,
+      undefined,
+    ],
+    [
+      "a Bot Framework token for another tenant",
+      { iss: BF_ISSUER, tid: OTHER_TENANT },
+      configured,
+      undefined,
+    ],
+    ["a payload that is not a JSON object", ["iss"], configured, undefined],
+    [
+      "a token whose issuer only starts with the login endpoint's host name",
+      { iss: `${ENTRA_LOGIN}.attacker.example/x/v2.0`, tid: OTHER_TENANT },
+      configured,
+      undefined,
+    ],
+  ])("answers %s with %s", (_, payload, expected, reason) => {
+    expect(tenantRefusalBeforeVerification(token(payload), expected)).toBe(reason);
+  });
+});
+
+describe("isTenantIssuedToken", () => {
+  const token = (iss: string) =>
+    `e30.${Buffer.from(JSON.stringify({ iss })).toString("base64url")}.c`;
+
+  it.each([
+    ["an issuer under the login endpoint", `${ENTRA_LOGIN}/x/v2.0`, true],
+    ["an Entra v1 issuer", "https://sts.windows.net/x/", true],
+    [
+      "the login endpoint's host name with a longer host",
+      `${ENTRA_LOGIN}.attacker.example/x/v2.0`,
+      false,
+    ],
+    ["the login endpoint followed by no path", ENTRA_LOGIN, false],
+    ["the Bot Framework issuer", BF_ISSUER, false],
+  ])("answers %s with %s", (_, iss, tenantIssued) => {
+    expect(isTenantIssuedToken(token(iss), ENTRA_LOGIN)).toBe(tenantIssued);
+  });
+});
+
+describe("assertVerifierOptions", () => {
+  it("refuses options that name no tenant or no client", () => {
+    const cloud = {
+      loginEndpoint: ENTRA_LOGIN,
+      tokenIssuer: BF_ISSUER,
+      openIdMetadataUrl: "https://login.botframework.com/v1/.well-known/openidconfiguration",
+    };
+    expect(() => assertVerifierOptions({ clientId: CLIENT_ID, tenantId: "Common" })).toThrow(
+      /tenantId "Common" names no tenant/,
+    );
+    for (const tenantId of ["organizations", "CONSUMERS"]) {
+      expect(() => assertVerifierOptions({ clientId: CLIENT_ID, tenantId }), tenantId).toThrow(
+        new RegExp(`tenantId "${tenantId}" names no tenant`),
+      );
+    }
+    expect(() => assertVerifierOptions({ clientId: CLIENT_ID, tenantId: "" })).toThrow(
+      /tenantId, when given, must be a non-empty string/,
+    );
+    expect(() => assertVerifierOptions({ clientId: "" })).toThrow(/clientId/);
+    expect(() => assertVerifierOptions({ clientId: 7 })).toThrow(/clientId/);
+    expect(() =>
+      assertVerifierOptions({ clientId: CLIENT_ID, cloud: { ...cloud, tokenIssuer: undefined } }),
+    ).toThrow(/cloud\.tokenIssuer/);
+    expect(() =>
+      assertVerifierOptions({ clientId: CLIENT_ID, cloud: { ...cloud, loginEndpoint: "" } }),
+    ).toThrow(/cloud\.loginEndpoint/);
+    expect(() =>
+      assertVerifierOptions({
+        clientId: CLIENT_ID,
+        cloud: { ...cloud, loginEndpoint: `${ENTRA_LOGIN}/` },
+      }),
+    ).toThrow(/cloud\.loginEndpoint must not end in a slash/);
+    expect(() =>
+      assertVerifierOptions({ clientId: CLIENT_ID, cloud: { ...cloud, openIdMetadataUrl: 1 } }),
+    ).toThrow(/cloud\.openIdMetadataUrl/);
+    expect(() => assertVerifierOptions({ clientId: CLIENT_ID, cloud: null })).toThrow(
+      /cloud\.loginEndpoint/,
+    );
+    expect(() =>
+      assertVerifierOptions({ clientId: CLIENT_ID, tenantId: TENANT, cloud }),
+    ).not.toThrow();
+    expect(() => assertVerifierOptions({ clientId: CLIENT_ID })).not.toThrow();
+  });
+
+  it("refuses a tenantId that is a domain, since no tid claim can equal it", () => {
+    for (const tenantId of [
+      "contoso.onmicrosoft.com",
+      "contoso.com",
+      "tenant-1",
+      `x${TENANT}`,
+      `${TENANT}x`,
+    ]) {
+      expect(() => assertVerifierOptions({ clientId: CLIENT_ID, tenantId }), tenantId).toThrow(
+        new RegExp(`tenantId "${tenantId}" is not a tenant id`),
+      );
+    }
+  });
+
+  it("accepts a tenant id written in upper case", () => {
+    expect(() =>
+      assertVerifierOptions({ clientId: CLIENT_ID, tenantId: TENANT.toUpperCase() }),
+    ).not.toThrow();
+  });
+});
+
+describe("keyEndorsesChannel", () => {
+  it("admits a key whose endorsements list the activity's channel", () => {
+    expect(keyEndorsesChannel(["webchat", "msteams"], "msteams")).toBe(true);
+  });
+
+  it("refuses a key endorsed only for other channels", () => {
+    expect(keyEndorsesChannel(["conversationconductorivr"], "msteams")).toBe(false);
+  });
+
+  it("refuses a key with no endorsements", () => {
+    expect(keyEndorsesChannel(undefined, "msteams")).toBe(false);
+  });
+
+  it("refuses a key with an empty endorsements list", () => {
+    expect(keyEndorsesChannel([], "msteams")).toBe(false);
+  });
+
+  it("leaves an activity that names no channel to the channel check", () => {
+    expect(keyEndorsesChannel(undefined, undefined)).toBe(true);
+  });
+});

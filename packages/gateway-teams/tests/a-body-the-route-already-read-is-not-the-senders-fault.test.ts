@@ -1,0 +1,109 @@
+/**
+ * A request whose body the route (or a framework before it) already read or locked is a fault on
+ * the server side, not a malformed activity from the sender, and not a validator that failed to
+ * load: the validator is never reached. It is refused as `body_already_read`, which the README
+ * answers with a 500 and a logged message: a retry cannot succeed until the route is fixed, so a
+ * 503 would only make the Bot Framework retry forever. The message tells the operator to pass an
+ * unread request. A sender's stream that fails while the verifier reads it stays
+ * `malformed_body`, and so does a POST with no body at all.
+ */
+
+import { afterEach, describe, expect, it } from "vitest";
+import { acceptingValidatorModule, activityRequest } from "./helpers/claim-fixtures.js";
+import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { verifierUnderTest } from "./helpers/verifier-under-test.js";
+
+const BODY_ALREADY_READ =
+  "the request body was already read or is locked by another reader, so the verifier could not read the activity: this is the route's fault, not the sender's; pass the verifier an unread request, for example request.clone()";
+
+describe("a request body the verifier cannot read", () => {
+  let ks: KeyServer | undefined;
+
+  afterEach(async () => {
+    await ks?.close();
+    ks = undefined;
+  });
+
+  it("refuses a body the route already read as body_already_read, before any key or SDK work", async () => {
+    ks = await startKeyServer();
+    const { module, calls } = acceptingValidatorModule();
+    const verify = verifierUnderTest({
+      clientId: CLIENT_ID,
+      cloud: ks.cloud,
+      validatorModule: module,
+    });
+    const req = activityRequest(ks.signToken({}));
+    await req.text();
+
+    expect(await verify(req)).toEqual({
+      ok: false,
+      reason: "body_already_read",
+      message: BODY_ALREADY_READ,
+    });
+    expect([calls.ctor.length, calls.check, ks.hits()]).toEqual([0, 0, 0]);
+  });
+
+  it("refuses a body another reader holds locked as body_already_read", async () => {
+    ks = await startKeyServer();
+    const { module, calls } = acceptingValidatorModule();
+    const verify = verifierUnderTest({
+      clientId: CLIENT_ID,
+      cloud: ks.cloud,
+      validatorModule: module,
+    });
+    const req = activityRequest(ks.signToken({}));
+    req.body?.getReader();
+
+    expect(await verify(req)).toEqual({
+      ok: false,
+      reason: "body_already_read",
+      message: BODY_ALREADY_READ,
+    });
+    expect([calls.check, ks.hits()]).toEqual([0, 0]);
+  });
+
+  it("refuses a sender's body that fails part-way through the read as malformed_body", async () => {
+    ks = await startKeyServer();
+    const { module, calls } = acceptingValidatorModule();
+    const verify = verifierUnderTest({
+      clientId: CLIENT_ID,
+      cloud: ks.cloud,
+      validatorModule: module,
+    });
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"type":"message","serviceUrl":'));
+      },
+      pull(controller) {
+        controller.error(new Error("connection reset by the sender"));
+      },
+    });
+    const req = new Request("https://bot.test/api/messages", {
+      method: "POST",
+      headers: { authorization: `Bearer ${ks.signToken({})}`, "content-type": "application/json" },
+      body: stream,
+      duplex: "half",
+    } as RequestInit);
+
+    expect(await verify(req)).toMatchObject({ ok: false, reason: "malformed_body" });
+    expect([calls.check, ks.hits()]).toEqual([0, 0]);
+  });
+
+  it("refuses a POST that carries no body as malformed_body instead of throwing", async () => {
+    ks = await startKeyServer();
+    const { module, calls } = acceptingValidatorModule();
+    const verify = verifierUnderTest({
+      clientId: CLIENT_ID,
+      cloud: ks.cloud,
+      validatorModule: module,
+    });
+    const req = new Request("https://bot.test/api/messages", {
+      method: "POST",
+      headers: { authorization: `Bearer ${ks.signToken({})}` },
+    });
+    expect(req.body).toBeNull();
+
+    await expect(verify(req)).resolves.toMatchObject({ ok: false, reason: "malformed_body" });
+    expect([calls.check, ks.hits()]).toEqual([0, 0]);
+  });
+});

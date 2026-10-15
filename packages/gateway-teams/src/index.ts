@@ -8,6 +8,12 @@
 
 // Re-export for consumer ergonomics.
 export type { TeamsMessageEvent } from "@theokit/gateway";
+export type {
+  TeamsActivityVerifierOptions,
+  TeamsActivityVerifyResult,
+  TeamsCloudEndpoints,
+} from "./activity-verifier.js";
+export { teamsActivityVerifier } from "./activity-verifier.js";
 export { TeamsAdapter } from "./adapter.js";
 
 export { mapTeamsError } from "./errors.js";

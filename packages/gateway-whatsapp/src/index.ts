@@ -35,7 +35,7 @@ export {
   WhatsAppCloudBackend,
   type WhatsAppCloudBackendOptions,
 } from "./backend/cloud/index.js";
-export type { MetaTemplateComponent } from "./backend/cloud/types.js";
+export type { MetaTemplateComponent, MetaWebhookEnvelope } from "./backend/cloud/types.js";
 // Webhook helpers (caller wires into their HTTP route).
 export {
   normalizeInboundMessages,

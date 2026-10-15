@@ -14,6 +14,7 @@ import {
   verifyWebhookSignature,
   verifyWebhookSubscription,
 } from "../src/backend/cloud/webhook.js";
+import { ConfigurationError } from "../src/errors.js";
 
 const APP_SECRET = "test-app-secret";
 
@@ -91,6 +92,37 @@ describe("verifyWebhookSignature", () => {
 
   it("test_verify_signature_non_hex_chars", () => {
     expect(verifyWebhookSignature("body", "sha256=not-hex!!", APP_SECRET)).toBe(false);
+  });
+
+  it("refuses the correct digest under a prefix other than sha256=", () => {
+    const digest = signedHeader("body").slice("sha256=".length);
+
+    expect(verifyWebhookSignature("body", `sha999=${digest}`, APP_SECRET)).toBe(false);
+  });
+
+  it("refuses the correct digest followed by non-hex characters", () => {
+    // Buffer.from(hex, "hex") stops at the first non-hex character, so without the hex check the
+    // trailing junk is dropped and the digest underneath would match.
+    expect(verifyWebhookSignature("body", `${signedHeader("body")}zz`, APP_SECRET)).toBe(false);
+  });
+
+  it("accepts the correct digest written in upper case", () => {
+    expect(
+      verifyWebhookSignature(
+        "body",
+        signedHeader("body").toUpperCase().replace("SHA256=", "sha256="),
+        APP_SECRET,
+      ),
+    ).toBe(true);
+  });
+
+  it("verifies a non-ASCII string body against the digest of its UTF-8 bytes", () => {
+    const body = '{"text":"日本語 ☕ über"}';
+
+    expect(verifyWebhookSignature(body, signedHeader(body), APP_SECRET)).toBe(true);
+    expect(verifyWebhookSignature(Buffer.from(body, "utf8"), signedHeader(body), APP_SECRET)).toBe(
+      true,
+    );
   });
 
   it("accepts Buffer rawBody", () => {
@@ -224,9 +256,63 @@ describe("parseWebhookPayload + normalize (T2.2)", () => {
     expect(receipts[1]!.status).toBe("read");
   });
 
+  it("carries the phone number id each status receipt was addressed to", () => {
+    const env = parseWebhookPayload({
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: "e",
+          changes: [
+            {
+              field: "messages",
+              value: {
+                messaging_product: "whatsapp",
+                metadata: { display_phone_number: "1", phone_number_id: "111" },
+                statuses: [{ id: "wamid.a", status: "sent", timestamp: "1", recipient_id: "5511" }],
+              },
+            },
+            {
+              field: "messages",
+              value: {
+                messaging_product: "whatsapp",
+                metadata: { display_phone_number: "2", phone_number_id: "222" },
+                statuses: [{ id: "wamid.b", status: "read", timestamp: "2", recipient_id: "5522" }],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const receipts = normalizeStatusReceipts(env!);
+    expect(receipts.map((r) => [r.wamid, r.phoneNumberId])).toEqual([
+      ["wamid.a", "111"],
+      ["wamid.b", "222"],
+    ]);
+  });
+
   it("returns null on unrecognized shape", () => {
     expect(parseWebhookPayload(null)).toBeNull();
     expect(parseWebhookPayload({ random: "junk" })).toBeNull();
     expect(parseWebhookPayload("string")).toBeNull();
   });
+});
+
+describe("verifyWebhookSignature with an empty app secret", () => {
+  // An HMAC under an empty key is computable by anyone, so a match proves nothing about Meta.
+  it.each([
+    ["empty", ""],
+    ["whitespace only", "  \t"],
+  ])(
+    "throws ConfigurationError missing_option when the secret is %s, even on a matching signature",
+    (_, secret) => {
+      const body = '{"a":1}';
+      const forged = signedHeader(body, secret);
+
+      const call = () => verifyWebhookSignature(body, forged, secret);
+
+      expect(call).toThrow(ConfigurationError);
+      expect(call).toThrow(expect.objectContaining({ code: "missing_option" }));
+      expect(call).toThrow(/appSecret .*must not be empty/);
+    },
+  );
 });
