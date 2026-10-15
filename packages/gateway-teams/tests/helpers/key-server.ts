@@ -4,17 +4,27 @@
  * The SDK validator derives its key URL from the cloud's `openIdMetadataUrl` by replacing a
  * trailing `/openidconfiguration` with `/keys`, and `jwks-rsa` fetches an `http:` URL with
  * `node:http`. So a cloud whose metadata URL points at this server makes the real validator check
- * real RS256 signatures against a key nobody outside this process holds. Keys are generated per
- * server, at run time, so no key material is ever committed.
+ * real RS256 signatures against a key nobody outside this process holds. Keys are generated at run
+ * time, once per run by `tests/global-setup/signing-key-pool.ts`, and each one is handed to at most
+ * one server in a test file, so no key material is ever committed and no two kids share a key.
  *
  * The test cloud's `loginEndpoint` is this server too, and it answers
  * `/{tenant}/discovery/v2.0/keys` with the same published keys: the URL SDK 2.1.x and the verifier
  * derive for a configured tenant's key set. Requests to it are counted apart from `/keys`.
  */
 
-import { createHmac, generateKeyPairSync, type KeyObject, randomUUID, sign } from "node:crypto";
+import {
+  createHmac,
+  createPrivateKey,
+  createPublicKey,
+  generateKeyPairSync,
+  type KeyObject,
+  randomUUID,
+  sign,
+} from "node:crypto";
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { inject } from "vitest";
 
 /** The bot's app id every test configures. Kept here so every helper reads one test identity. */
 export const CLIENT_ID = "00000000-0000-0000-0000-0000000000a1";
@@ -176,12 +186,29 @@ function forgeWith(
 /** The channels every Bot Framework key this server publishes is endorsed for by default. */
 const TEAMS_ENDORSEMENTS: readonly string[] = ["msteams"];
 
+/** How many pairs of the run's pool this test file has taken. Module state, so one per file. */
+let poolTaken = 0;
+
 /**
- * A fresh RS256 key pair and its public JWK, under a random `kid`, endorsed for `endorsements`
- * (no `endorsements` field for `null`, as an Entra tenant key has none).
+ * An RSA-2048 key pair no other caller in this test file has received: the next one from the pool
+ * the global setup generated, or a newly generated one once the pool is spent.
+ */
+export function unusedKeyPair(): { publicKey: KeyObject; privateKey: KeyObject } {
+  const pooled = inject("signingKeyPool")[poolTaken];
+  if (pooled === undefined) return generateKeyPairSync("rsa", { modulusLength: 2048 });
+  poolTaken += 1;
+  return {
+    publicKey: createPublicKey(pooled.publicKey),
+    privateKey: createPrivateKey(pooled.privateKey),
+  };
+}
+
+/**
+ * An RS256 key pair no other kid uses, and its public JWK, under a random `kid`, endorsed for
+ * `endorsements` (no `endorsements` field for `null`, as an Entra tenant key has none).
  */
 function newSigningKey(endorsements: readonly string[] | null = TEAMS_ENDORSEMENTS) {
-  const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const { publicKey, privateKey } = unusedKeyPair();
   const kid = randomUUID();
   const jwk = {
     ...publicKey.export({ format: "jwk" }),
@@ -345,7 +372,7 @@ export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeySe
       return signWith(key.privateKey, key.kid, buildClaims(cloud, claims, 600));
     },
     otherKeySign: (claims) => {
-      unpublished ??= generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
+      unpublished ??= unusedKeyPair().privateKey;
       return signWith(unpublished, current.kid, buildClaims(cloud, claims, 600));
     },
     rotate: () => {

@@ -4,13 +4,11 @@
  * read itself, and never reaches a key client that would fetch the set again for it (B-420).
  */
 
-import { generateKeyPairSync } from "node:crypto";
-
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest } from "./helpers/claim-fixtures.js";
-import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { CLIENT_ID, type KeyServer, startKeyServer, unusedKeyPair } from "./helpers/key-server.js";
 
 describe("a forged token naming a published key", () => {
   let ks: KeyServer | undefined;
@@ -27,7 +25,7 @@ describe("a forged token naming a published key", () => {
     ks = await startKeyServer({ extraKeys: 7 });
     const verify = teamsActivityVerifier({ clientId: CLIENT_ID, cloud: ks.cloud });
     const kids = ks.publishedKids();
-    const stray = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
+    const stray = unusedKeyPair().privateKey;
 
     const results = [];
     for (let i = 0; i < 30; i += 1) {
