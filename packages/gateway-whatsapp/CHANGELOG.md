@@ -1,5 +1,134 @@
 # Changelog
 
+## 0.5.0
+
+### Minor Changes
+
+- 72cc72d: Add `WhatsAppAdapter.toDeliverableEvents(envelope)` and `WhatsAppAdapter.toDeliverableEvent(inbound)`,
+  and export the `MetaWebhookEnvelope` type from the package entry.
+
+  An application that hosts its own WhatsApp Cloud webhook route could parse Meta's envelope, but had
+  no public way to turn it into the event `deliver()` accepts with the adapter's sender allowlist and
+  group-mention rule applied: the conversion was private and the rules ran only inside `onInbound`. A
+  route that copied the private conversion would have admitted every sender the operator refused.
+  `toDeliverableEvents` returns the accepted events of an envelope in order, and `onInbound` now
+  decides through `toDeliverableEvent`, so both paths apply one rule set and write the same refusal
+  line. Neither method calls the backend or the network, and neither verifies the webhook signature;
+  the route still does that first. The README's "How inbound arrives" shows the route end to end.
+
+  Two behaviours change on every inbound path, `onInbound` included. An adapter built with
+  `fromCloud` drops a message addressed to another `phone_number_id`, naming that id on stderr once,
+  because one Meta app signs every number's webhooks with the same secret. The allowlist refusal line
+  names the sender by the last four digits of the number only (`a sender ending in 8888`), where it
+  used to print the whole number. `toDeliverableEvents` throws `ConfigurationError`
+  (`missing_phone_number_id`) when the adapter's backend declares no `phoneNumberId`, so a backend
+  that wraps `WhatsAppCloudBackend` must expose the field instead of silently receiving every
+  number's messages.
+
+  No existing export changes.
+
+- 5b14d8d: `WhatsAppStatusReceipt` gains an optional `phoneNumberId`: the `phone_number_id` a Cloud receipt was
+  addressed to, read from the webhook's `metadata`. `normalizeStatusReceipts` fills it; the web and
+  Baileys backends leave it absent.
+
+  `WhatsAppCloudBackend.handleWebhookPayload` now applies the own-number rule to status receipts as
+  well as to messages. Before, a receipt addressed to another number of the same Meta app, or naming
+  no number, still reached `onStatusReceipt`, and a receipt names the recipient's phone number, so in
+  a multi-number app one number's handler received another number's customer numbers. Such a receipt
+  is now dropped and its number id written to stderr once, as a message already was.
+
+  The README's Cloud route skips any receipt whose `phoneNumberId` is not the route's own number.
+  Additive: no existing field changes.
+
+### Patch Changes
+
+- 7eae6a1: `WhatsAppAdapter` now delivers every message of a signed Cloud batch to the inbound handler that
+  was subscribed when the batch arrived. The backend already did this, but the adapter looked up its
+  current handler again for each message, so a `disconnect()` or an unsubscribe inside the handler of
+  the first message dropped the rest of the batch while the webhook still answered 200, and Meta did
+  not redeliver the dropped messages. A batch that arrives after the unsubscribe still reaches no one.
+- a748c4e: `WhatsAppAdapter.onStatusReceipt` drops a status receipt addressed to another phone number id when
+  the adapter's backend declares its `phoneNumberId`, as the adapter already did for messages, and
+  names that id once on stderr by its last four digits. Before, a custom backend that declared its
+  number had its messages scoped and its receipts forwarded whole, so one number's receipt handler
+  saw the customer numbers of another number on the same Meta app. A backend that declares no number
+  forwards every receipt, as before.
+- fc65200: `WhatsAppBackend` gains an optional `phoneNumberId`, the Meta Cloud phone number id the backend
+  answers for. `WhatsAppAdapter` now reads that field to decide whether a message is addressed to
+  another number of the same Meta app, instead of checking whether the backend is an instance of
+  `WhatsAppCloudBackend`. Before, a wrapped Cloud backend, a test double, or a `WhatsAppCloudBackend`
+  loaded from the package's other module format (ESM beside CJS) lost the check without a word, and
+  another number's messages reached the agent. A custom backend that declares `phoneNumberId` now
+  gets the same check; one that declares none behaves as before.
+- 646e0ae: An adapter constructed with `new WhatsAppAdapter(new WhatsAppCloudBackend(...))` now drops a
+  message addressed to another `phone_number_id`, as an adapter built with `fromCloud` already did.
+  Before, the check depended on which construction path built the adapter, so the same Cloud backend
+  admitted another number's messages when the adapter was constructed directly.
+  `WhatsAppCloudBackend.handleWebhookPayload` applies the same rule, so a route built on the backend
+  alone, with no adapter, no longer hands its inbound handler a message addressed to another number
+  of the same Meta app or naming no number.
+  `WhatsAppCloudBackend` exposes the number it answers for as `phoneNumberId`.
+- a145874: `WhatsAppCloudBackend.handleWebhookPayload` delivers every message of a signed batch to the inbound
+  handler that was subscribed when the batch arrived. Before, the handler was looked up again for each
+  message, so a `disconnect()` or an unsubscribe inside the handler of the first message skipped the
+  rest of the batch with nothing on stderr, and the method still answered `true`: the route answered
+  200 and Meta did not redeliver the skipped messages.
+- 0c09b14: `WhatsAppCloudBackend.handleWebhookPayload` answers `false` for a signed body that holds a message
+  for the backend's number while no inbound handler is subscribed (before `onInbound`, or after
+  `disconnect()` cleared it), dispatches nothing and writes one line to stderr naming the count.
+  Before, it answered `true`, so a route answered 200, Meta did not redeliver, and the messages were
+  lost with nothing logged. Status receipts with no status handler are still discarded, and a body
+  whose messages are all for another number still answers `true`.
+- 9778690: `parseWebhookPayload` returns `null` for a Cloud webhook body with a contact whose `wa_id` or
+  `profile.name` is not a string, or a status whose `id`, `status` or `recipient_id` is not a string.
+  Before, a contact name of `42` reached the agent as `sender.displayName` 42, and a status with a
+  numeric `id` became a receipt whose `wamid` was a number, though both fields are typed as strings.
+  `WhatsAppCloudBackend.handleWebhookPayload` answers `false` for such a body and dispatches nothing,
+  as it already does for the other shapes the parser refuses.
+- 3a249c3: `verifyWebhookSignature` now throws `ConfigurationError` with code `missing_option` when the app
+  secret is empty or whitespace only, instead of checking the signature against it. Anyone can
+  compute an HMAC under an empty key, so a webhook route built on an outbound-only adapter
+  (`appSecret: ""`) accepted forged envelopes, and a forged envelope can name any allowed sender.
+  `WhatsAppCloudBackend.handleWebhookPayload` goes through the same check and now rejects in that
+  case. `fromCloud` still accepts an empty `appSecret` for an adapter that only sends. The README
+  route now says the secret must be non-empty.
+- 08157ca: The stderr line written when a message addressed to another `phone_number_id` is dropped now names
+  that id by its last four digits, the way the allowlist refusal already names a sender, and names a
+  message with no id as `no phone number id`. Before, the line carried the id exactly as the
+  envelope gave it, so a route that hands `toDeliverableEvents` an unverified body could write a
+  forged line through it, and every distinct id was kept in memory for the life of the adapter. The
+  set of ids already reported now holds at most one entry per four-digit ending. A log query that
+  matched `phone number id "<id>"` needs to match `phone number id ending in <last four digits>`.
+- bc1357c: The stderr line written when a Cloud message that is not text is ignored now names its type only
+  when the type is one Meta documents (`image`, `audio`, `sticker` and the rest); any other value is
+  named `an unknown type`. Before, the line carried `type` exactly as the envelope gave it, so a route
+  that hands `toDeliverableEvents` an unverified body could write a forged line through it, and every
+  distinct type was kept in memory for the life of the process. The set of types already reported now
+  holds at most one entry per known type plus one for `an unknown type`.
+- a9f33b1: `WhatsAppAdapter.toDeliverableEvent(inbound)` throws `ConfigurationError` (`missing_phone_number_id`)
+  for a Cloud message when the adapter's backend declares no `phoneNumberId`, as
+  `toDeliverableEvents(envelope)` already did. Before, the single-message method skipped the number
+  check on such an adapter, so a route building events one message at a time over a backend that
+  wraps `WhatsAppCloudBackend` delivered every number's messages to one agent. WhatsApp Web and
+  Baileys messages still convert, and the `onInbound` path is unchanged (see docs/adr/0006).
+- 79df9c2: `parseWebhookPayload` checks the nested shape of a Cloud webhook body and returns `null` when an
+  entry has no `changes` array, an entry or change is `null`, or a `messages`, `statuses` or
+  `contacts` list is not a list of objects. Before, such a body passed the check and then
+  `normalizeInboundMessages`, `normalizeStatusReceipts`, `toDeliverableEvents` and
+  `WhatsAppCloudBackend.handleWebhookPayload` threw a `TypeError`.
+
+  It also returns `null` when a field the inbound rules read is not a string: a
+  `metadata.phone_number_id` that is not absent or a string, or a text message whose `id`, `from` or
+  `text.body` is not a string. Before, a numeric or `null` `phone_number_id` made
+  `toDeliverableEvents` and `handleWebhookPayload` throw a `TypeError`, a numeric `from` threw under
+  `allowedSenders`, and a numeric `text.body` was delivered as a number.
+
+  `WhatsAppCloudBackend.handleWebhookPayload` answers `false` for a signed body `parseWebhookPayload`
+  refuses (no `object`, no `entry` array, or a malformed entry, change or list), as it does for a
+  signed body that is not JSON, dispatches nothing and writes one line to stderr. Before, it answered
+  `true` for a body with no `object` or no `entry` array, so a route built on it answered 200 and
+  Meta never redelivered the batch.
+
 ## 0.4.1
 
 ### Patch Changes
