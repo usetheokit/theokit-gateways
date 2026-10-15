@@ -103,8 +103,8 @@ export type ResolvedToken = { readonly appId: string; readonly serviceUrl: strin
 /**
  * The constructed validator and whether it can accept a tenant-issued (Entra) token: only 2.1.x's
  * `InboundActivityTokenValidator` reads the tenant's key set. 2.0.x's `ServiceTokenValidator` looks
- * such a token's `kid` up in the Bot Framework key set, which `jwks-rsa` re-downloads on every miss,
- * and then refuses it.
+ * such a token's `kid` up in the Bot Framework key set, which the SDK's key client re-downloads on
+ * every miss, and then refuses it.
  */
 export type Loaded =
   | { readonly validator: TokenValidatorLike; readonly acceptsTenantIssued: boolean }

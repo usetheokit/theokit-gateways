@@ -239,12 +239,12 @@ const SDK_CLOCK_TOLERANCE_SECONDS = 300;
 
 /**
  * Whether the SDK's JWT check would refuse a token on its audience, expiry or not-before claim,
- * judged as `jsonwebtoken` judges them with the options the SDK passes it on both of its paths: an
- * `aud` (or any element of an `aud` array) among the three accepted forms, and `exp` and `nbf`
- * numbers within 300 seconds of `nowSeconds`. The SDK reads the key set before it checks any of
- * them, so a token this returns true for is refused before the SDK is asked (loop-code-review
- * LCR0103). An `aud` array that names this app passes here, as it does in the SDK, and is refused
- * afterwards by {@link checkVerifiedClaims}.
+ * judged as the SDK's JWT verifier judges them with the options the SDK passes it on both of its
+ * paths: an `aud` (or any element of an `aud` array) among the three accepted forms, and `exp`
+ * and `nbf` numbers within 300 seconds of `nowSeconds`. The SDK reads the key set before it checks
+ * any of them, so a token this returns true for is refused before the SDK is asked
+ * (loop-code-review LCR0103). An `aud` array that names this app passes here, as it does in the
+ * SDK, and is refused afterwards by {@link checkVerifiedClaims}.
  */
 export function sdkRefusesTokenClaims(
   rawToken: string,
@@ -252,7 +252,7 @@ export function sdkRefusesTokenClaims(
   nowSeconds: number,
 ): boolean {
   const claims = decodeSegment(rawToken, 1);
-  // A payload that does not decode is refused by `jsonwebtoken` before it asks for a key.
+  // A payload that does not decode is refused by the SDK's JWT verifier before it asks for a key.
   if (claims === undefined) return false;
   const audiences: readonly unknown[] = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   if (!audiences.some((aud) => audienceMatches(aud, clientId))) return true;
