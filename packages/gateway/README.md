@@ -31,12 +31,67 @@ to read ten packages to learn which — so the classes are stated here.
 
 **What none of them does is convert markdown to a platform's dialect.** `format` states the
 caller's INTENT and lets the transport act on it; translating `**bold**` into WhatsApp's
-`*bold*` is a presentation concern and is tracked separately.
+`*bold*` is a presentation concern, and `channelRendering` (below) is where it happens.
 
 Measured 2026-08-30: before this, two of ten read the field. An agent answered
 `**Bom Sucesso (MG)**` and LINE and WhatsApp delivered literal asterisks, which is what a
 declared-and-ignored field costs at the far end.
 
+
+## Sending an agent's reply
+
+`@theokit/presenter`'s `ChatPresenter` turns one agent turn into one chat message: it keeps the
+answer's text, drops the model's reasoning and the tool events, and emits once, on `finish`.
+`channelRendering(platform)` gives it the two things it needs to know about the destination, as
+`{ translate, format }`.
+
+```typescript
+import { channelRendering, type MessageEvent } from "@theokit/gateway";
+import { type AgentOutputEvent, ChatPresenter } from "@theokit/presenter";
+import type { TelegramAdapter } from "@theokit/gateway-telegram";
+
+async function reply(
+  adapter: TelegramAdapter,
+  event: MessageEvent,
+  turn: AsyncIterable<AgentOutputEvent>,
+): Promise<void> {
+  const presenter = new ChatPresenter({
+    channel: event.channel,
+    ...channelRendering(event.platform),
+  });
+  for await (const output of turn) {
+    for (const message of presenter.present(output)) await adapter.sendMessage(message);
+  }
+}
+```
+
+A hand-written loop that concatenates every event carrying `text` sends the reasoning too: one
+reply reached a phone as `"TheOi! 👋"`, `"The"` being the start of the model's thinking. Build one
+presenter per turn; it keeps state between `present()` calls.
+
+| Platform | `translate` | `format` |
+|---|---|---|
+| whatsapp | `**b**` to `*b*`, `*i*` or `_i_` to `_i_`, `~~s~~` to `~s~`, `` `c` `` to ` ```c``` ` | `plain` |
+| slack | `**b**` to `*b*`, `*i*` or `_i_` to `_i_`, `~~s~~` to `~s~`, `` `c` `` kept | `markdown` |
+| discord, mattermost, teams | unchanged | `markdown` |
+| telegram, matrix, email, line, sms | the markers removed, their content kept | `plain` |
+
+- Only the four inline markers are translated: bold, italic, strikethrough and inline code.
+  Headings, links, lists and block quotes reach every platform unchanged.
+- **Fenced code blocks are not handled yet, and they come out wrong.** The inline-code rule
+  rewrites a fence's backticks: a three-backtick fence becomes one backtick on the plain
+  platforms and seven on whatsapp. Do not send a fenced block to a platform that does not render
+  markdown.
+- Telegram gets plain text on purpose. Its adapter maps `markdown` to legacy Markdown, which
+  refuses a reply with an unpaired `_` or `*`, and the send fails with no retry.
+- These renderings are inferred from each platform's documented syntax and from what each adapter
+  does with `format`; none was observed on a real client.
+- The presenter never splits. Each adapter's `sendMessage` splits a long message at its own
+  platform's limit, as it always has.
+- `channelRendering` throws a `RangeError` for a platform it does not know, rather than letting
+  the presenter fall back to markdown.
+- `@theokit/presenter` is your dependency, not this package's: `@theokit/gateway` does not depend
+  on it.
 
 ## Architecture (5 pieces)
 

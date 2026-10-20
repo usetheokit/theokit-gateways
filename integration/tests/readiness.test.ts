@@ -248,6 +248,13 @@ describe("live-test readiness", () => {
         "dependency. Covered by packages/gateway/tests/text/dialect.test.ts, seven cases over the " +
         "four markers and the three dialects; the proof that a real phone receives the result " +
         "belongs to whoever wires the presenter",
+      channelRendering:
+        "a data table of pure functions, no I/O. Like toDialect, no adapter calls it: it is handed " +
+        "to @theokit/presenter's ChatPresenter by the consumer's composition root, and no live " +
+        "suite here can drive that without making this repository depend on the presenter. " +
+        "Covered by packages/gateway/tests/text/channel-rendering.test.ts over all ten platforms, " +
+        "and by packages/gateway/tests/presentation/chat-presenter-composition.test.ts, which " +
+        "drives the released ChatPresenter into an adapter's sendMessage offline",
       defaultStrategy: "pure function: event -> agent id string. No transport can disagree with it",
       SessionRouter: "delegates to a strategy function; nothing crosses a network",
       BasePlatformAdapter:
