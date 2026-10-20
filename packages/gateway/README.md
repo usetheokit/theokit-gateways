@@ -75,6 +75,63 @@ const runner = new GatewayRunner({
 await runner.start();
 ```
 
+## Wiring channels from descriptors
+
+Each platform package that has one exports a descriptor: a static object listing the channel's
+config fields (`required`, `secret`), how to build its adapter (`create`), and, for a channel that
+receives webhooks, how to verify and ingest a request (`webhook`). `createChannels` builds every
+channel from its descriptor without connecting anything, and `connectFailure: "isolate"` keeps the
+channels that connect when another one cannot.
+
+```typescript
+import { createChannels, GatewayRunner } from "@theokit/gateway";
+import { lineChannel } from "@theokit/gateway-line";
+import { telegramChannel } from "@theokit/gateway-telegram";
+
+const { adapters, rejected } = createChannels([
+  { descriptor: telegramChannel, config: { token: process.env.TELEGRAM_BOT_TOKEN } },
+  {
+    descriptor: lineChannel,
+    config: {
+      channelSecret: process.env.LINE_CHANNEL_SECRET,
+      channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+    },
+  },
+]);
+for (const { platform, error } of rejected) console.error(`${platform}: ${error.message}`);
+
+const runner = new GatewayRunner({
+  adapters,
+  connectFailure: "isolate",
+  handler: async (event, ctx) => {
+    await ctx.reply(`got: ${event.text}`);
+  },
+});
+
+const { connected, failed } = await runner.start();
+if (connected.length === 0) throw new Error("no channel connected");
+for (const { platform, reason } of failed) console.error(`${platform} did not connect: ${reason}`);
+```
+
+- `createChannels` rejects an entry whose required field is absent, `null` or `""` with a
+  `GatewayConfigurationError` coded `missing_required_config` that names the keys, and reports a
+  configuration error thrown by `create` the same way. Any other error propagates. It performs no
+  network call.
+- `connectFailure` defaults to `"rollback"`: one failed connect disconnects the adapters that did
+  connect and rejects `start()`, as before. Under `"isolate"`, `start()` resolves even when every
+  adapter failed, so check `connected` before you rely on the runner.
+- `start()` resolves a `StartResult` (`{ connected, failed }`) under both values. Code that awaits
+  it and ignores the value is unaffected; a type or subclass that declares
+  `start(): Promise<void>` needs to change.
+- Give a runner one channel per platform. It routes replies and `stop()` by platform, so with two
+  channels of one platform the later one sends the earlier one's replies, and the earlier one is
+  connected but never disconnected.
+- Under `"isolate"`, and under `"rollback"` until the first failure, `start()` waits for every
+  connect, so a connect that never settles blocks it.
+- A webhook channel's request reaches your HTTP route; route it by platform to the descriptor's
+  `webhook.verify(adapter, { rawBody, headers })`, then parse the body and pass it to
+  `webhook.ingest(adapter, payload)`, which answers `"delivered"` or `"malformed"`.
+
 ## Receiving from a TheoKit app
 
 Three repositories share this path. `theokit` owns the HTTP route and the signature check —
