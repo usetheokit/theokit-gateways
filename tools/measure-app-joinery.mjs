@@ -13,9 +13,16 @@
  * prose inside one never counts as code.
  *
  * Usage: node tools/measure-app-joinery.mjs <app-root>
+ *        node tools/measure-app-joinery.mjs --compare <before-file> <after-file>
+ *
+ * `--compare` measures two single files under the same metric, plus the per-platform branch sites
+ * `lib/platform-branches.mjs` counts in each (B-018). Its delta is labelled a lower bound: the two
+ * files are fixtures written for the measurement, not an app.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+
+import { countPlatformBranches } from "./lib/platform-branches.mjs";
 
 /** Files that exist in the consuming app only because the framework does not own the seam. */
 const FILES = [
@@ -60,6 +67,52 @@ function codeLines(text) {
   }
   return n;
 }
+
+const DELTA_LABEL = "lower bound: two fixtures written for this measurement, not an app";
+
+/** Stop with exit 2 and a message on stderr: the measurement did not happen. Never returns. */
+function exitUnmeasured(message) {
+  process.stderr.write(`${message}\n`);
+  process.exit(2);
+}
+
+/** One file's code lines and branch sites, or a refusal naming the file. */
+function measureFile(file) {
+  let text;
+  try {
+    if (!statSync(file).isFile()) exitUnmeasured(`not a file: ${file}`);
+    text = readFileSync(file, "utf8");
+  } catch (err) {
+    exitUnmeasured(`cannot read ${file}: ${err.message}`);
+  }
+  try {
+    const { count, sites } = countPlatformBranches(text, { fileName: file });
+    return { file, code_lines: codeLines(text), branches: count, sites };
+  } catch (err) {
+    exitUnmeasured(err.message);
+  }
+}
+
+function compare([beforeFile, afterFile, ...extra]) {
+  if (beforeFile === undefined || afterFile === undefined || extra.length > 0) {
+    exitUnmeasured(
+      "usage: node tools/measure-app-joinery.mjs --compare <before-file> <after-file>",
+    );
+  }
+  const before = measureFile(beforeFile);
+  const after = measureFile(afterFile);
+  const report = {
+    metric: "lines neither blank nor comment-only; branches per lib/platform-branches.mjs",
+    before,
+    after,
+    delta: after.code_lines - before.code_lines,
+    delta_label: DELTA_LABEL,
+  };
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  process.exit(0);
+}
+
+if (process.argv[2] === "--compare") compare(process.argv.slice(3));
 
 const root = process.argv[2];
 if (root === undefined) {
