@@ -6,9 +6,11 @@
  * adapter matching `event.platform` (EC-G).
  *
  * **Lifecycle:**
- * - `start()` connects all adapters in parallel via `Promise.all`. Partial
- *   failure rolls back: connected adapters get `disconnect()`, then the
- *   aggregate error rethrows.
+ * - `start()` connects all adapters in parallel and resolves a `StartResult`.
+ *   By default (`connectFailure: "rollback"`) partial failure rolls back:
+ *   connected adapters get `disconnect()`, then the error rethrows. Under
+ *   `connectFailure: "isolate"` the adapters that connected keep running and
+ *   the rest are reported in `StartResult.failed`.
  * - `stop()` drains in-flight handlers up to `drainTimeoutMs` (default 10s)
  *   BEFORE disconnecting (EC-E). Idempotent, and terminal: a stopped runner
  *   cannot be restarted, and `start()` on one throws `GatewayLifecycleError`.
@@ -61,10 +63,51 @@ export interface GatewayRunnerOptions {
    * @public
    */
   readonly commandPrefixes?: ReadonlyArray<string>;
+  /**
+   * What `start()` does when an adapter fails to connect. `"rollback"` (the default) disconnects
+   * the adapters that did connect and rethrows: all or nothing. `"isolate"` keeps the adapters that
+   * connected, wires inbound only for them, and reports the others in the resolved
+   * `StartResult.failed`, so one channel that cannot connect does not stop the healthy ones.
+   *
+   * @public
+   */
+  readonly connectFailure?: ConnectFailure;
+}
+
+/**
+ * How `GatewayRunner.start()` treats an adapter that fails to connect: `"rollback"` (all or
+ * nothing, the default) or `"isolate"` (keep the ones that connected).
+ *
+ * @public
+ */
+export type ConnectFailure = "rollback" | "isolate";
+
+/**
+ * What `GatewayRunner.start()` connected. Under `"rollback"` `failed` is always empty, because a
+ * failure rejects instead; under `"isolate"` it names each adapter that did not connect and why,
+ * with any credential in the reason redacted.
+ *
+ * @public
+ */
+export interface StartResult {
+  readonly connected: ReadonlyArray<PlatformName>;
+  readonly failed: ReadonlyArray<{ readonly platform: PlatformName; readonly reason: string }>;
 }
 
 const DEFAULT_DRAIN_MS = 10_000;
 const DEFAULT_COMMAND_PREFIXES: ReadonlyArray<string> = ["/"];
+
+interface ConnectOutcome {
+  readonly connected: BasePlatformAdapter[];
+  readonly failed: StartResult["failed"][number][];
+}
+
+function connectFailureReason(outcome: PromiseSettledResult<boolean>): string {
+  if (outcome.status === "fulfilled") return "connect returned false";
+  const message = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
+  // A connect error can echo the credential it was given.
+  return redactSecrets(message);
+}
 
 /**
  * Holds the registered adapters and dispatches inbound events through
@@ -80,7 +123,7 @@ export class GatewayRunner {
   private readonly unsubs: Array<() => void> = [];
   /** Slash command registry: name → handler (word-boundary match, EC-A). */
   private readonly commands = new Map<string, GatewayHandler>();
-  private connected = false;
+  private startResult: StartResult | undefined;
   private stopped = false;
 
   constructor(private readonly opts: GatewayRunnerOptions) {
@@ -99,12 +142,17 @@ export class GatewayRunner {
   }
 
   /**
-   * Connect all adapters and wire inbound dispatch.
+   * Connect the adapters and wire inbound dispatch for the ones that connected.
+   *
+   * Resolves with what connected. A second call after the first resolved returns the same result
+   * without connecting again.
    *
    * @throws {GatewayLifecycleError} `runner_stopped` — the runner was already
    * stopped. A stopped runner is spent; construct a new one.
+   * @throws {Error} under the default `connectFailure: "rollback"`, the first connect failure, after the
+   * adapters that did connect were disconnected.
    */
-  async start(): Promise<void> {
+  async start(): Promise<StartResult> {
     if (this.stopped) {
       // Silently reconnecting here is what produced the unstoppable runner:
       // `stop()` cleared `connected` but never `stopped`, so a second start()
@@ -116,7 +164,21 @@ export class GatewayRunner {
           "GatewayRunner.start(): this runner has already been stopped and cannot be restarted. Construct a new GatewayRunner instead.",
       });
     }
-    if (this.connected) return;
+    if (this.startResult !== undefined) return this.startResult;
+    const result =
+      (this.opts.connectFailure ?? "rollback") === "isolate"
+        ? await this.connectIsolated()
+        : await this.connectAllOrRollback();
+    this.wireInbound(result.connected);
+    this.startResult = {
+      connected: result.connected.map((a) => a.platform),
+      failed: result.failed,
+    };
+    return this.startResult;
+  }
+
+  /** All or nothing: one failure disconnects the adapters already open, then rethrows. */
+  private async connectAllOrRollback(): Promise<ConnectOutcome> {
     const connected: BasePlatformAdapter[] = [];
     try {
       await Promise.all(
@@ -131,8 +193,29 @@ export class GatewayRunner {
       await Promise.all(connected.map((a) => a.disconnect().catch(() => undefined)));
       throw err;
     }
+    return { connected: [...this.opts.adapters], failed: [] };
+  }
 
-    for (const a of this.opts.adapters) {
+  /**
+   * Connect every adapter and keep the ones that connected. The `async` wrapper turns a
+   * synchronous throw inside `connect()` into a rejection `allSettled` sees; a bare
+   * `a => a.connect()` would let it escape `map` and reject `start()` itself.
+   */
+  private async connectIsolated(): Promise<ConnectOutcome> {
+    const adapters = this.opts.adapters;
+    const settled = await Promise.allSettled(adapters.map(async (a) => a.connect()));
+    const connected: BasePlatformAdapter[] = [];
+    const failed: StartResult["failed"][number][] = [];
+    settled.forEach((outcome, i) => {
+      const adapter = adapters[i] as BasePlatformAdapter;
+      if (outcome.status === "fulfilled" && outcome.value) connected.push(adapter);
+      else failed.push({ platform: adapter.platform, reason: connectFailureReason(outcome) });
+    });
+    return { connected, failed };
+  }
+
+  private wireInbound(adapters: ReadonlyArray<BasePlatformAdapter>): void {
+    for (const a of adapters) {
       // Fire-and-forget: grammy / discord.js await this callback. If we
       // awaited dispatch synchronously, the platform's event loop would
       // serialize all inbound messages behind whichever handler is
@@ -148,7 +231,6 @@ export class GatewayRunner {
       });
       this.unsubs.push(unsub);
     }
-    this.connected = true;
   }
 
   /**
@@ -192,7 +274,6 @@ export class GatewayRunner {
     await Promise.all(
       [...this.adaptersByPlatform.values()].map((a) => a.disconnect().catch(() => undefined)),
     );
-    this.connected = false;
   }
 
   /**
