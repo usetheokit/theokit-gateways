@@ -273,6 +273,10 @@ describe("live-test readiness", () => {
         "constructed by GatewayRunner rather than by a consumer; its three fire points are each driven by tests/gateway-e2e.test.ts",
       GatewayConfigurationError:
         "raised from bad options at construction, before any transport exists to test against",
+      createChannels:
+        "pure construction, no I/O: it checks required config fields and calls each descriptor's " +
+        "create, and connecting is the runner's job afterwards. A live run would add nothing a " +
+        "unit cannot see. Covered by packages/gateway/tests/channel/channel-descriptor.test.ts",
     };
 
     const { readdir, readFile } = await import("node:fs/promises");

@@ -6,6 +6,20 @@ export {
   type OutboundMessage,
   type SendResult,
 } from "./adapter/base.js";
+// Channels described as data (B-018)
+export type {
+  ChannelConfigField,
+  ChannelDescriptor,
+  ChannelWebhook,
+  IngestResult,
+  WebhookRequest,
+} from "./channel/channel-descriptor.js";
+export {
+  type ChannelEntry,
+  type ChannelRejection,
+  type CreateChannelsResult,
+  createChannels,
+} from "./channel/create-channels.js";
 // Delivery
 export {
   type DeliveryRequest,
