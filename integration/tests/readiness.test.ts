@@ -276,7 +276,9 @@ describe("live-test readiness", () => {
       createChannels:
         "pure construction, no I/O: it checks required config fields and calls each descriptor's " +
         "create, and connecting is the runner's job afterwards. A live run would add nothing a " +
-        "unit cannot see. Covered by packages/gateway/tests/channel/channel-descriptor.test.ts",
+        "unit cannot see. Covered by packages/gateway/tests/channel/channel-descriptor.test.ts, " +
+        "and driven offline end to end through src/channel-wiring/descriptor-wired.ts by " +
+        "tests/unit/channel-wiring.test.ts",
     };
 
     const { readdir, readFile } = await import("node:fs/promises");
