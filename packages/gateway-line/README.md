@@ -63,6 +63,60 @@ await server.start();
 
 For local dev: `ngrok http 3000` and use the https URL.
 
+## Channel descriptor
+
+`lineChannel` describes this channel as data, for `createChannels` in `@theokit/gateway`: a
+`webhook` channel whose config has a required, secret `channelSecret` and `channelAccessToken`
+and an optional `botUserId` and `requireMention`. Its `webhook` part is how an app with its own
+HTTP route verifies and ingests a request, in process:
+
+```ts
+import { createChannels, GatewayRunner } from "@theokit/gateway";
+import { LineAdapter, lineChannel } from "@theokit/gateway-line";
+
+const { adapters, rejected } = createChannels([
+  {
+    descriptor: lineChannel,
+    config: {
+      channelSecret: process.env.LINE_CHANNEL_SECRET,
+      channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+    },
+  },
+]);
+const [line] = adapters;
+if (!(line instanceof LineAdapter)) throw new Error(`LINE refused: ${rejected[0]?.error.message}`);
+
+// Ingest dispatches to the handler the runner subscribes, and a reply needs a connected adapter.
+const runner = new GatewayRunner({
+  adapters,
+  handler: async (event, ctx) => {
+    await ctx.reply(`Echo: ${event.text}`);
+  },
+});
+await runner.start();
+
+// Inside your route, with the raw body as text and the request headers:
+async function onLineWebhook(rawBody: string, headers: Record<string, string | undefined>) {
+  if (!lineChannel.webhook.verify(line, { rawBody, headers })) return 401;
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return 400;
+  }
+  return (await lineChannel.webhook.ingest(line, payload)) === "delivered" ? 200 : 400;
+}
+```
+
+- `webhook.verify` reads the `x-line-signature` header in any case and checks it against the raw
+  body with the adapter's channel secret.
+- `webhook.ingest` answers `"malformed"` for a payload with no `events` array, or with an event
+  that is not an object, and dispatches nothing. Otherwise it dispatches through
+  `dispatchWebhookBody`, which caches each event's reply token, so the handler's `ctx.reply` uses
+  the reply API. A follow or other non-text event is skipped and still answers `"delivered"`.
+- `lineChannel.create` refuses a field of the wrong type with `ConfigurationError` coded
+  `invalid_config`, the key in `detail`; the adapter still refuses an empty secret or token.
+
 ## Reply token vs Push (D407)
 
 LINE distinguishes two outbound APIs:

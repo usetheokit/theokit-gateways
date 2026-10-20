@@ -41,6 +41,27 @@ const runner = new GatewayRunner({
 await runner.start();
 ```
 
+## Channel descriptor
+
+`telegramChannel` describes this channel as data, for `createChannels` in `@theokit/gateway`:
+a `socket` channel (long polling, no webhook route) whose config has a required, secret `token`
+and an optional `allowedUsers`.
+
+```typescript
+import { createChannels } from "@theokit/gateway";
+import { telegramChannel } from "@theokit/gateway-telegram";
+
+const { adapters, rejected } = createChannels([
+  { descriptor: telegramChannel, config: { token: process.env.TELEGRAM_BOT_TOKEN } },
+]);
+```
+
+Through `createChannels`, an absent or empty token is caught before `create` runs, as a core
+`GatewayConfigurationError` coded `missing_required_config`. `telegramChannel.create` itself
+refuses a token that is not a string or is empty, and an `allowedUsers` that is not an array of
+strings, with this package's `ConfigurationError` (also a `GatewayConfigurationError`), so
+`createChannels` lists that channel in `rejected` too.
+
 ## Helpers
 
 - `shouldRespondInChat(ctx, policy)` — group-chat policy (DM = always reply, group = only on `@mention` or reply-to-bot or slash command). Register as a `pre_inbound` hook.
