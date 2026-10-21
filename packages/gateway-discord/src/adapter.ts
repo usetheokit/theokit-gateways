@@ -13,7 +13,14 @@
 
 import type { DiscordMessageEvent, MessageEvent as GatewayMessageEvent } from "@theokit/gateway";
 import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "@theokit/gateway";
-import { Client, DiscordAPIError, Events, GatewayIntentBits, type Message } from "discord.js";
+import {
+  Client,
+  DiscordAPIError,
+  Events,
+  GatewayIntentBits,
+  type Message,
+  Routes,
+} from "discord.js";
 
 import { splitForDiscord } from "./split.js";
 
@@ -155,6 +162,37 @@ export class DiscordAdapter extends BasePlatformAdapter {
     return { ok: true, ...(lastId !== undefined ? { messageId: lastId } : {}) };
   }
 
+  /** Discord edits a sent message's text with one REST call. */
+  override readonly supportsEdit = true;
+
+  /**
+   * Replace the text of a message this bot sent, with one `PATCH /channels/{id}/messages/{id}`.
+   *
+   * That PATCH is the request `channel.messages.edit` makes. It is sent through `client.rest`
+   * without fetching the channel first, so a success is one request whatever the channel cache
+   * holds; an unknown channel is answered by Discord itself (`discord_10003`). The text is split
+   * and escaped exactly as `sendMessage` would send it, and a text that needs more than one
+   * message is refused as `edit_too_long` with no request.
+   */
+  override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    if (out.text.length === 0) {
+      return { ok: false, error: { code: "empty_text", message: "text is empty" } };
+    }
+    if (messageId.length === 0) {
+      return { ok: false, error: { code: "invalid_message_id", message: "message id is empty" } };
+    }
+    const parts = splitForDiscord(out.text);
+    if (parts.length !== 1) return editPartsRefusal(parts.length);
+    try {
+      await this.client.rest.patch(Routes.channelMessage(out.channel.id, messageId), {
+        body: { content: bodyFor(out.format, parts[0] as string) },
+      });
+    } catch (err) {
+      return mapSendError(err);
+    }
+    return { ok: true, messageId };
+  }
+
   override onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
     // EC-H: replace previous handler.
     this.handler = handler;
@@ -247,6 +285,26 @@ function normalizeEvent(msg: Message): DiscordMessageEvent {
       raw: msg,
     },
   };
+}
+
+/**
+ * The refusal for a text that is not exactly one Discord message.
+ *
+ * More than one part is `edit_too_long`. No parts cannot happen today, since `splitForDiscord`
+ * returns at least one part for any non-empty text and empty text is refused earlier; the arm
+ * keeps a later splitter that returns `[]` from editing with `undefined`.
+ */
+function editPartsRefusal(partCount: number): SendResult {
+  if (partCount > 1) {
+    return {
+      ok: false,
+      error: {
+        code: "edit_too_long",
+        message: `text needs ${partCount} Discord messages; an edit replaces one`,
+      },
+    };
+  }
+  return { ok: false, error: { code: "empty_text", message: "text reduced to zero parts" } };
 }
 
 function mapSendError(err: unknown): SendResult {
