@@ -210,6 +210,40 @@ export class SlackAdapter extends BasePlatformAdapter {
     return { ok: true, ...(lastId !== undefined ? { messageId: lastId } : {}) };
   }
 
+  /** Slack edits a sent message's text through `chat.update`. */
+  override readonly supportsEdit = true;
+
+  /**
+   * Replace the text of a message this app sent, through `chat.update` with its `ts`.
+   *
+   * Applies `sendMessage`'s checks (`empty_text`, then `not_connected`), refuses an empty id, and
+   * refuses a text `splitForSlack` would cut in two as `edit_too_long`, all with no request.
+   * `chat.update` takes no `mrkdwn` argument, so the text is sent as it is for every format.
+   */
+  override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    if (out.text.length === 0) {
+      return { ok: false, error: { code: "empty_text", message: "text is empty" } };
+    }
+    if (this.app === undefined || !this.connected) {
+      return { ok: false, error: { code: "not_connected", message: "adapter not connected" } };
+    }
+    if (messageId.length === 0) {
+      return { ok: false, error: { code: "invalid_message_id", message: "message id is empty" } };
+    }
+    const parts = splitForSlack(out.text);
+    if (parts.length !== 1) return editPartsRefusal(parts.length);
+    try {
+      await this.app.client.chat.update({
+        channel: out.channel.id,
+        ts: messageId,
+        text: parts[0] as string,
+      });
+    } catch (err) {
+      return mapSlackError(err);
+    }
+    return { ok: true, messageId };
+  }
+
   override onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
     // D276 / EC-H: second call replaces previous.
     this.handler = handler;
@@ -244,4 +278,24 @@ export class SlackAdapter extends BasePlatformAdapter {
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
     return this.runHandler(this.handler, event);
   }
+}
+
+/**
+ * The refusal for a text that is not exactly one Slack message.
+ *
+ * More than one part is `edit_too_long`. No parts cannot happen today, since `splitForSlack`
+ * returns at least one part for any non-empty text and empty text is refused earlier; the arm
+ * keeps a later splitter that returns `[]` from editing with `undefined`.
+ */
+function editPartsRefusal(partCount: number): SendResult {
+  if (partCount > 1) {
+    return {
+      ok: false,
+      error: {
+        code: "edit_too_long",
+        message: `text needs ${partCount} Slack messages; an edit replaces one`,
+      },
+    };
+  }
+  return { ok: false, error: { code: "empty_text", message: "text reduced to zero parts" } };
 }
