@@ -25,6 +25,7 @@
 import type { BasePlatformAdapter } from "@theokit/gateway";
 import { DiscordAdapter } from "@theokit/gateway-discord";
 import { EmailAdapter } from "@theokit/gateway-email";
+import { GoogleChatAdapter } from "@theokit/gateway-google-chat";
 import { IMessageAdapter } from "@theokit/gateway-imessage";
 import { LineAdapter } from "@theokit/gateway-line";
 import { MatrixAdapter } from "@theokit/gateway-matrix";
@@ -53,6 +54,15 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
         smtpHost: "smtp.invalid",
         address: "nobody@invalid",
         password: "not-a-real-password",
+      }),
+  },
+  {
+    platform: "google_chat",
+    make: () =>
+      new GoogleChatAdapter({
+        serviceAccountEmail: "nobody@not-a-project.iam.gserviceaccount.com",
+        privateKey: "not-a-real-key",
+        audience: "https://chat.invalid/google-chat",
       }),
   },
   {

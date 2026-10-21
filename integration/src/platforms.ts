@@ -259,6 +259,41 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       'Needs signal-cli on PATH (the GraalVM native build, or the JVM build with a Java 25 runtime) holding the account\'s keys in its data directory. The suite skips with "signal-cli not on PATH" when the binary is missing.',
   },
   {
+    id: "google-chat",
+    label: "Google Chat",
+    pkg: "@theokit/gateway-google-chat",
+    transport: "webhook",
+    credentials: [
+      {
+        name: "GOOGLE_CHAT_SERVICE_ACCOUNT_EMAIL",
+        what: "The Chat app's service account, <name>@<project>.iam.gserviceaccount.com",
+        where: "Google Cloud console → IAM & Admin → Service Accounts",
+      },
+      {
+        name: "GOOGLE_CHAT_PRIVATE_KEY",
+        what: "The private_key field of that service account's JSON key; a \\n written as two characters is read as a line break",
+        where:
+          "Google Cloud console → IAM & Admin → Service Accounts → the account → Keys → Add key → JSON",
+      },
+      {
+        name: "GOOGLE_CHAT_AUDIENCE",
+        what: "The HTTP endpoint URL configured for the Chat app, which every inbound token names as its audience",
+        where:
+          "Google Cloud console → Google Chat API → Configuration → Connection settings → HTTP endpoint URL",
+      },
+    ],
+    target: [
+      {
+        name: "GOOGLE_CHAT_SPACE",
+        what: "A space name, spaces/<id>, where the app is a member and someone answers the test message",
+        where:
+          "The space's URL in chat.google.com ends in its id; or the space.name of any inbound event",
+      },
+    ],
+    caveat:
+      "Needs a Chat app configured with an HTTP endpoint, in a Google Workspace organisation. Inbound needs INTEGRATION_PUBLIC_URL, a public HTTPS tunnel to this machine, and the app's endpoint URL must equal GOOGLE_CHAT_AUDIENCE.",
+  },
+  {
     id: "imessage",
     label: "iMessage",
     pkg: "@theokit/gateway-imessage",
