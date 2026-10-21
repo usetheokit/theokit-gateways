@@ -31,7 +31,7 @@
  */
 
 /** A dialect is what each of the four markers becomes. `undefined` means "drop the marker". */
-interface Dialect {
+export interface Dialect {
   readonly bold?: string;
   readonly italic?: string;
   readonly strike?: string;
@@ -44,15 +44,19 @@ interface Dialect {
  * Only platforms whose dialect was actually established appear. The ones absent — telegram,
  * discord, slack, mattermost, matrix, teams, email — either parse markdown natively or take a
  * transport flag their adapter already sets, so rewriting their text would corrupt it.
+ *
+ * `channelRendering` reuses the whatsapp, line and sms rows rather than spelling them again. Like
+ * `Dialect` and `rewriteMarkers`, it is exported for that module only: the package entry does not
+ * re-export it, so no consumer can reach it.
  */
-const DIALECTS: Readonly<Record<string, Dialect>> = {
+export const DIALECTS = {
   // WhatsApp emphasis is inline and single-character: *bold*, _italic_, ~strike~, ```mono```.
   whatsapp: { bold: "*", italic: "_", strike: "~", code: "```" },
   // LINE text messages carry no rich text at all — decoration is emoji-only. Markers are dropped.
   line: {},
   // SMS is plain text by definition of the medium.
   sms: {},
-};
+} as const satisfies Readonly<Record<string, Dialect>>;
 
 /**
  * Every marker in ONE pattern, matched in a single pass.
@@ -96,9 +100,22 @@ const GROUP_MARKERS = [
  * @public
  */
 export function toDialect(text: string, platform: string): string {
-  const dialect = DIALECTS[platform];
+  const dialect = (DIALECTS as Readonly<Record<string, Dialect>>)[platform];
   if (dialect === undefined) return text;
+  return rewriteMarkers(text, dialect);
+}
 
+/**
+ * Rewrite the four inline markers of `text` into `dialect`, in one pass over `PATTERN`.
+ *
+ * Shared by `toDialect` and `channelRendering`, so the one regex whose ordering is load-bearing
+ * exists once: a second copy is where the bold-becomes-italic defect above would come back.
+ *
+ * @param text - markdown as the model produced it
+ * @param dialect - what each marker becomes; an absent marker is dropped and its content kept
+ * @returns the rewritten text
+ */
+export function rewriteMarkers(text: string, dialect: Dialect): string {
   return text.replace(PATTERN, (matched, ...args) => {
     const groups = args.at(-1) as Record<string, string | undefined> | undefined;
     if (groups === undefined) return matched;

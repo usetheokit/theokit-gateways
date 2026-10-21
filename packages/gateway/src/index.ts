@@ -51,6 +51,7 @@ export {
   SessionRouter,
 } from "./session/router.js";
 // Text
+export { type ChannelRendering, channelRendering } from "./text/channel-rendering.js";
 export {
   type ChunkByGraphemeOptions,
   type ChunkTextOptions,
