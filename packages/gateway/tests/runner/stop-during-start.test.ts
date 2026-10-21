@@ -165,3 +165,73 @@ describe("GatewayRunner.stop() called while start() is still connecting", () => 
     expect(telegram.connected).toBe(false);
   });
 });
+
+/** A `connect` that throws before it returns a promise, as a non-async implementation can. */
+class SyncThrowingAdapter extends MockAdapter {
+  override connect(): Promise<boolean> {
+    this.connectCount += 1;
+    throw new Error("sync connect failure");
+  }
+}
+
+/** A `connect` that rejects with no reason at all. */
+class UndefinedRejectingAdapter extends MockAdapter {
+  override connect(): Promise<boolean> {
+    this.connectCount += 1;
+    return Promise.reject(undefined);
+  }
+}
+
+describe("GatewayRunner.start() under rollback when one adapter fails", () => {
+  it("leaves_no_adapter_connected_when_one_connects_after_the_rollback_rejected", async () => {
+    const telegram = new HeldConnectAdapter("telegram");
+    const discord = new HeldConnectAdapter("discord");
+    const runner = new GatewayRunner({ adapters: [telegram, discord], handler: async () => {} });
+
+    // The catch sits on the start() call, so the rejection is never unhandled.
+    const started = runner.start().catch((err: unknown) => err);
+    await waitFor(
+      () => telegram.pendingConnects > 0 && discord.pendingConnects > 0,
+      "both connects to be entered",
+    );
+    await runner.stop();
+    discord.connectResult = false;
+    discord.release();
+    // One macrotask is an event-loop barrier: every pending microtask runs first, so a rollback
+    // that does not wait for the other connect has already rejected by now. Nothing asserts on time.
+    await new Promise((r) => setTimeout(r, 0));
+    telegram.connectResult = true;
+    telegram.release();
+    const error = await started;
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("discord");
+    expect(telegram.connected, "telegram connected after the rollback and stayed live").toBe(false);
+  });
+
+  it("rolls_back_when_a_connect_throws_synchronously", async () => {
+    const telegram = new MockAdapter("telegram");
+    const runner = new GatewayRunner({
+      adapters: [telegram, new SyncThrowingAdapter("discord")],
+      handler: async () => {},
+    });
+
+    await expect(runner.start()).rejects.toThrow("sync connect failure");
+    expect(telegram.connected, "the adapter that did connect was left open").toBe(false);
+  });
+
+  it("rolls_back_when_a_connect_rejects_with_undefined", async () => {
+    const telegram = new MockAdapter("telegram");
+    const runner = new GatewayRunner({
+      adapters: [telegram, new UndefinedRejectingAdapter("discord")],
+      handler: async () => {},
+    });
+
+    const outcome = await runner.start().then(
+      () => "resolved",
+      (reason: unknown) => ({ rejectedWith: reason }),
+    );
+    expect(outcome).toHaveProperty("rejectedWith", undefined);
+    expect(telegram.connected, "the adapter that did connect was left open").toBe(false);
+  });
+});

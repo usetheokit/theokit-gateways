@@ -204,23 +204,40 @@ export class GatewayRunner {
     return this.startResult;
   }
 
-  /** All or nothing: one failure disconnects the adapters already open, then rethrows. */
+  /**
+   * All or nothing: when any connect fails, disconnect the adapters that did connect, then rethrow
+   * the first failure. Every connect settles before the rollback: rolling back while one is still
+   * pending left that adapter live once it connected.
+   */
   private async connectAllOrRollback(): Promise<ConnectOutcome> {
-    const connected: BasePlatformAdapter[] = [];
-    try {
-      await Promise.all(
-        this.opts.adapters.map(async (a) => {
-          const ok = await a.connect();
-          if (ok) connected.push(a);
-          else throw new Error(`adapter "${a.platform}" connect returned false`);
-        }),
-      );
-    } catch (err) {
-      // Roll back partial connections.
+    const adapters = this.opts.adapters;
+    // In the order they occur. Its length decides, never a value's truthiness, so a connect that
+    // rejects with `undefined` still rolls back.
+    const failures: unknown[] = [];
+    const settled = await Promise.allSettled(
+      adapters.map(async (a) => {
+        let ok: boolean;
+        try {
+          // Inside the `try`, a `connect()` that throws before returning a promise lands here too.
+          ok = await a.connect();
+        } catch (err) {
+          failures.push(err);
+          throw err;
+        }
+        if (!ok) {
+          const refusal = new Error(`adapter "${a.platform}" connect returned false`);
+          failures.push(refusal);
+          throw refusal;
+        }
+      }),
+    );
+    if (failures.length > 0) {
+      // "fulfilled" means connected: a refusal and a throw both reject their wrapper.
+      const connected = adapters.filter((_, i) => settled[i]?.status === "fulfilled");
       await Promise.all(connected.map((a) => a.disconnect().catch(() => undefined)));
-      throw err;
+      throw failures[0];
     }
-    return { connected: [...this.opts.adapters], failed: [] };
+    return { connected: [...adapters], failed: [] };
   }
 
   /**
