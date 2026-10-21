@@ -55,6 +55,9 @@ importers:
       '@theokit/gateway-imessage':
         specifier: workspace:*
         version: link:../packages/gateway-imessage
+      '@theokit/gateway-irc':
+        specifier: workspace:*
+        version: link:../packages/gateway-irc
       '@theokit/gateway-line':
         specifier: workspace:*
         version: link:../packages/gateway-line

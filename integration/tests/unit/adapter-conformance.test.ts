@@ -27,6 +27,7 @@ import { DiscordAdapter } from "@theokit/gateway-discord";
 import { EmailAdapter } from "@theokit/gateway-email";
 import { GoogleChatAdapter } from "@theokit/gateway-google-chat";
 import { IMessageAdapter } from "@theokit/gateway-imessage";
+import { IrcAdapter } from "@theokit/gateway-irc";
 import { LineAdapter } from "@theokit/gateway-line";
 import { MatrixAdapter } from "@theokit/gateway-matrix";
 import { MattermostAdapter } from "@theokit/gateway-mattermost";
@@ -68,6 +69,10 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
   {
     platform: "imessage",
     make: () => new IMessageAdapter({ cliPath: "imsg-not-installed" }),
+  },
+  {
+    platform: "irc",
+    make: () => new IrcAdapter({ host: "irc.invalid", nick: "nobody", channels: ["#nowhere"] }),
   },
   {
     platform: "line",

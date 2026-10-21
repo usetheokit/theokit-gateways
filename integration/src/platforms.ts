@@ -317,6 +317,29 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       'Needs macOS: imsg does not send or receive on Linux. The suite skips with "not macOS" anywhere else, and someone on the peer device must answer the test message.',
   },
   {
+    id: "irc",
+    label: "IRC",
+    pkg: "@theokit/gateway-irc",
+    transport: "connection",
+    credentials: [
+      {
+        name: "IRC_NICK",
+        what: "The nick the adapter registers, unregistered and at most 16 characters; the peer client takes it plus `pr`",
+        where:
+          "Choose one no one on the network holds; Libera.Chat needs no account for an unregistered nick",
+      },
+    ],
+    target: [
+      {
+        name: "IRC_HOST",
+        what: "The network the live suite may write to, over TLS on port 6697; the suite only posts into a channel it creates for the run",
+        where: "irc.libera.chat, or any network that accepts unregistered nicks over TLS",
+      },
+    ],
+    caveat:
+      "The suite joins a fresh #theokit-it-<8 hex> channel, so it writes nowhere anyone reads. A network that requires SASL for new connections, or blocks this host, refuses registration.",
+  },
+  {
     id: "line",
     label: "LINE",
     pkg: "@theokit/gateway-line",
