@@ -39,6 +39,7 @@ export const PLATFORM_NAMES = Object.freeze([
   "line",
   "teams",
   "signal",
+  "imessage",
 ]);
 
 /** Methods only one platform's adapter has; calling one is a branch on that platform. */

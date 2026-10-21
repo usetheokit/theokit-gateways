@@ -23,6 +23,7 @@ const PLATFORM_NAMES = [
   "line",
   "teams",
   "signal",
+  "imessage",
 ] as const;
 
 const SRC = new URL("../../src/", import.meta.url).pathname;

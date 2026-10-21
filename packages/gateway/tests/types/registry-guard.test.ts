@@ -77,7 +77,8 @@ type FirstParty =
   | "mattermost"
   | "line"
   | "matrix"
-  | "signal";
+  | "signal"
+  | "imessage";
 
 describe("PlatformEventRegistry — what may join the union", () => {
   it("is exactly the first-party platforms, no more and no fewer", () => {

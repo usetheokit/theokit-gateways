@@ -26,6 +26,7 @@ const ALL_PLATFORMS = [
   "line",
   "matrix",
   "signal",
+  "imessage",
 ] as const satisfies readonly PlatformName[];
 
 // `PlatformName` is a derived type with no runtime list, so the list above is checked against it
@@ -36,7 +37,7 @@ const listIsComplete: [MissingFromList] extends [never] ? true : false = true;
 
 const SINGLE_CHARACTER: readonly PlatformName[] = ["whatsapp", "slack"];
 const MARKDOWN_AS_IS: readonly PlatformName[] = ["discord", "mattermost", "teams", "signal"];
-const PLAIN: readonly PlatformName[] = ["telegram", "matrix", "email", "line", "sms"];
+const PLAIN: readonly PlatformName[] = ["telegram", "matrix", "email", "line", "sms", "imessage"];
 
 describe("channelRendering", () => {
   it("covers every platform", () => {
@@ -65,7 +66,7 @@ describe("channelRendering", () => {
     }
   });
 
-  it("removes the markers for telegram, matrix, email, line and sms", () => {
+  it("removes the markers for every plain platform", () => {
     for (const platform of PLAIN) {
       const rendering = channelRendering(platform);
       expect(rendering.translate("**b** _e_ ~~s~~ `c`"), platform).toBe("b e s c");

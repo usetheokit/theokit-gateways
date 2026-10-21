@@ -276,6 +276,23 @@ export interface SignalMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** iMessage-specific event variant (B-355), received from `imsg rpc` on a signed-in Mac. */
+export interface IMessageMessageEvent extends BaseMessageEvent {
+  readonly platform: "imessage";
+  readonly imessage: {
+    /** `imsg`'s numeric chat id; the send target for a reply. */
+    readonly chatId: number;
+    /** Messages' own message GUID. */
+    readonly guid: string;
+    /** `imsg`'s `is_group` for the chat; agrees with `channel.type === "group"`. */
+    readonly isGroup: boolean;
+    /** Participant handles (phone numbers or emails) as `imsg` reports them for the chat. */
+    readonly participants: readonly string[];
+    /** Raw `imsg` notification payload — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /**
  * The open registry every platform's inbound event is filed under.
  *
@@ -310,6 +327,7 @@ export interface PlatformEventRegistry {
   line: LineMessageEvent;
   matrix: MatrixMessageEvent;
   signal: SignalMessageEvent;
+  imessage: IMessageMessageEvent;
 }
 
 /**
