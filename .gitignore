@@ -42,3 +42,7 @@ reports/
 # SIGKILL, where no handler runs. A gate that dirties the tree it checks teaches people to stop
 # reading `git status` (B-016).
 .doc-probes/
+
+# Personal working files, never versioned
+BACKLOG.md
+.BACKLOG.md.lock
