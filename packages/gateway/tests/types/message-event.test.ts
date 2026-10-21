@@ -157,6 +157,8 @@ describe("MessageEvent (T1.1)", () => {
           return `ln:${e.line.messageId}`;
         case "matrix":
           return `mx:${e.matrix.eventId}`;
+        case "signal":
+          return `sg:${e.signal.timestamp}`;
         default: {
           const _exhaustive: never = e;
           throw new Error(`unhandled platform: ${JSON.stringify(_exhaustive)}`);
