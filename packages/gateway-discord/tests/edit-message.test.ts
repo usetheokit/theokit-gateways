@@ -119,6 +119,24 @@ describe("DiscordAdapter.editMessage", () => {
     expect(patch).toHaveBeenCalledTimes(0);
   });
 
+  // The edit refuses exactly the texts a send delivers as more than one message, and its refusal
+  // names how many, so a caller falling back to sendMessage knows what the send will do.
+  it("names the message count a send of the escaped text needs when it refuses the edit", async () => {
+    const result = await adapter.editMessage("m1", out("*a".repeat(995), "plain"));
+
+    expect(result.error?.message).toBe("text needs 3 Discord messages; an edit replaces one");
+  });
+
+  // One character past the cap once escaped: 1000 `*` escape to exactly 2000, the trailing `a`
+  // makes 2001.
+  it("refuses a plain text whose escaped body is 2001 characters with no request", async () => {
+    const result = await adapter.editMessage("m1", out(`${"*".repeat(1000)}a`, "plain"));
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("edit_too_long");
+    expect(patch).toHaveBeenCalledTimes(0);
+  });
+
   it("edits a plain text whose escaped body is exactly 2000 characters", async () => {
     const result = await adapter.editMessage("m1", out("*".repeat(1000), "plain"));
 
