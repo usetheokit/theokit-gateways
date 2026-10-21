@@ -149,10 +149,20 @@ export class GatewayRunner {
    * Resolves with what connected. A second call after the first resolved returns the same result
    * without connecting again.
    *
+   * Overlapping calls share one start; a start overtaken by stop resolves with no adapter connected.
+   * A call made before `stop()` while another is still connecting connects nothing and settles
+   * with it; a call made after `stop()` throws `runner_stopped`. When `stop()` runs before the
+   * connect settles, the adapters that connected are disconnected, no inbound dispatch is wired,
+   * and the start resolves `{ connected: [], failed }`, keeping the `"isolate"` failures. Under
+   * `"rollback"`, a connect that fails still rejects the start.
+   *
+   * Under `connectFailure: "rollback"`, every connect settles before the rollback, so a failing
+   * start rejects only once its slowest connect settles, as a successful one resolves only then.
+   *
    * @throws {GatewayLifecycleError} `runner_stopped` — the runner was already
    * stopped. A stopped runner is spent; construct a new one.
-   * @throws {Error} under the default `connectFailure: "rollback"`, the first connect failure, after the
-   * adapters that did connect were disconnected.
+   * @throws {Error} under the default `connectFailure: "rollback"`, the first connect failure, after
+   * every connect settled and the adapters that did connect were disconnected.
    */
   async start(): Promise<StartResult> {
     if (this.stopped) {
@@ -280,6 +290,9 @@ export class GatewayRunner {
   /**
    * Stop the runner. Drains in-flight handlers up to `drainTimeoutMs`,
    * then disconnects adapters. Idempotent (EC-E).
+   *
+   * An adapter still connecting under an in-flight start is released when that start settles;
+   * `stop()` does not wait for it.
    */
   async stop(): Promise<void> {
     if (this.stopped) return;
