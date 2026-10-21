@@ -13,7 +13,7 @@
 
 import { chunkText } from "@theokit/gateway";
 
-const DISCORD_MAX_MESSAGE = 2000;
+export const DISCORD_MAX_MESSAGE = 2000;
 const SAFE_DISCORD_CHUNK = 1900;
 
 export function splitForDiscord(text: string): string[] {
