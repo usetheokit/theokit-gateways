@@ -30,6 +30,7 @@
     "@theokit/gateway-line": "workspace:*",
     "@theokit/gateway-matrix": "workspace:*",
     "@theokit/gateway-mattermost": "workspace:*",
+    "@theokit/gateway-signal": "workspace:*",
     "@theokit/gateway-slack": "workspace:*",
     "@theokit/gateway-sms": "workspace:*",
     "@theokit/gateway-teams": "workspace:*",
