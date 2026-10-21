@@ -52,51 +52,40 @@ const ACMECHAT_EVENT: AcmeChatMessageEvent = {
   acmechat: { senderUuid: "uuid-abc", raw: {} },
 };
 
+/** One router per platform, each receiving only that platform's variant. */
+type Routes = {
+  readonly [P in PlatformName]: (event: Extract<MessageEvent, { platform: P }>) => string;
+};
+
 /**
  * Routes any event to a short id, narrowing per platform.
  *
- * The `never` default is the assertion that carries this file: it holds only while every member of
- * the union — the first-party platforms AND the foreign one registered above — has a case.
+ * The mapped `Routes` type is the assertion that carries this file: the table compiles only while
+ * every member of the union — the first-party platforms AND the foreign one registered above — has
+ * an entry, and only with the fields that member declares.
  */
-function route(event: MessageEvent): string {
-  switch (event.platform) {
-    case "telegram":
-      return `tg:${event.telegram.chatId}`;
-    case "discord":
-      return `dc:${event.discord.channelId}`;
-    case "slack":
-      return `sl:${event.slack.channelId}`;
-    case "whatsapp":
-      return `wa:${event.whatsapp.wamid}`;
-    case "teams":
-      return `tm:${event.teams.conversationId}`;
-    case "email":
-      return `em:${event.email.messageId}`;
-    case "sms":
-      return `sm:${event.sms.messageId}`;
-    case "mattermost":
-      return `mm:${event.mattermost.postId}`;
-    case "line":
-      return `ln:${event.line.messageId}`;
-    case "matrix":
-      return `mx:${event.matrix.eventId}`;
-    case "signal":
-      return `sg:${event.signal.timestamp}`;
-    case "imessage":
-      return `im:${event.imessage.guid}`;
-    case "google_chat":
-      return `gc:${event.google_chat.messageName}`;
-    case "irc":
-      return `irc:${event.irc.nick}`;
-    case "nextcloud_talk":
-      return `nextcloud_talk:${event.nextcloud_talk.roomToken}`;
-    case "acmechat":
-      return `ac:${event.acmechat.senderUuid}`;
-    default: {
-      const unhandled: never = event;
-      throw new Error(`unhandled platform: ${JSON.stringify(unhandled)}`);
-    }
-  }
+const ROUTES: Routes = {
+  telegram: (event) => `tg:${event.telegram.chatId}`,
+  discord: (event) => `dc:${event.discord.channelId}`,
+  slack: (event) => `sl:${event.slack.channelId}`,
+  whatsapp: (event) => `wa:${event.whatsapp.wamid}`,
+  teams: (event) => `tm:${event.teams.conversationId}`,
+  email: (event) => `em:${event.email.messageId}`,
+  sms: (event) => `sm:${event.sms.messageId}`,
+  mattermost: (event) => `mm:${event.mattermost.postId}`,
+  line: (event) => `ln:${event.line.messageId}`,
+  matrix: (event) => `mx:${event.matrix.eventId}`,
+  signal: (event) => `sg:${event.signal.timestamp}`,
+  imessage: (event) => `im:${event.imessage.guid}`,
+  google_chat: (event) => `gc:${event.google_chat.messageName}`,
+  irc: (event) => `irc:${event.irc.nick}`,
+  nextcloud_talk: (event) => `nextcloud_talk:${event.nextcloud_talk.roomToken}`,
+  acmechat: (event) => `ac:${event.acmechat.senderUuid}`,
+};
+
+function route<E extends MessageEvent>(event: E): string {
+  const handler = ROUTES[event.platform] as (event: E) => string;
+  return handler(event);
 }
 
 describe("a gateway authored outside this repository", () => {

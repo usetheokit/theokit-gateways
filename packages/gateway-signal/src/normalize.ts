@@ -36,27 +36,45 @@ export function signalEnvelopeToMessageEvent(
   envelope: SignalEnvelope,
   receivedAt: number,
 ): SignalMessageEvent | undefined {
-  const text = envelope.dataMessage?.message;
-  if (typeof text !== "string" || text === "") return undefined;
+  const text = messageText(envelope);
+  if (text === undefined) return undefined;
   const number = envelope.sourceNumber ?? envelope.source;
   const senderId = envelope.sourceUuid ?? number;
   if (senderId === undefined) return undefined;
-  const timestamp = envelope.timestamp ?? envelope.dataMessage?.timestamp ?? receivedAt;
+  const timestamp = sentAt(envelope, receivedAt);
   const groupId = envelope.dataMessage?.groupInfo?.groupId;
   return {
     id: `${senderId}:${timestamp}`,
     platform: "signal",
-    sender: envelope.sourceName
-      ? { id: senderId, displayName: envelope.sourceName }
-      : { id: senderId },
-    channel:
-      groupId === undefined
-        ? { id: number ?? senderId, type: "dm" }
-        : { id: `${GROUP_PREFIX}${groupId}`, type: "group" },
+    sender: senderOf(senderId, envelope.sourceName),
+    channel: channelOf(groupId, number ?? senderId),
     text,
     receivedAt,
     signal: signalFields(envelope, timestamp, number, groupId),
   };
+}
+
+/** The message text, or `undefined` for an envelope with none (receipt, typing, reaction, sync). */
+function messageText(envelope: SignalEnvelope): string | undefined {
+  const text = envelope.dataMessage?.message;
+  return typeof text === "string" && text !== "" ? text : undefined;
+}
+
+/** When the sender sent it: the envelope's timestamp, the data message's, else `receivedAt`. */
+function sentAt(envelope: SignalEnvelope, receivedAt: number): number {
+  return envelope.timestamp ?? envelope.dataMessage?.timestamp ?? receivedAt;
+}
+
+/** The sender, with a display name only when the envelope carried a non-empty one. */
+function senderOf(senderId: string, sourceName: string | undefined): SignalMessageEvent["sender"] {
+  return sourceName ? { id: senderId, displayName: sourceName } : { id: senderId };
+}
+
+/** A group channel when the envelope names a group, else a dm addressed to `dmId`. */
+function channelOf(groupId: string | undefined, dmId: string): SignalMessageEvent["channel"] {
+  return groupId === undefined
+    ? { id: dmId, type: "dm" }
+    : { id: `${GROUP_PREFIX}${groupId}`, type: "group" };
 }
 
 /** The `signal` block, with each optional field present only when the envelope carried it. */
