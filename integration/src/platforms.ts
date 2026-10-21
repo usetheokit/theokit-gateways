@@ -235,6 +235,30 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       "to its own mail loops forever by email, and that loop outlives the process.",
   },
   {
+    id: "signal",
+    label: "Signal",
+    pkg: "@theokit/gateway-signal",
+    transport: "connection",
+    credentials: [
+      {
+        name: "SIGNAL_ACCOUNT",
+        what: "The bot's Signal number in E.164 form, registered or linked to signal-cli",
+        where:
+          "`signal-cli -a <number> register` then `verify <code>`, or `signal-cli link` and scan the QR code from a phone's Signal app (Settings → Linked devices)",
+      },
+    ],
+    target: [
+      {
+        name: "SIGNAL_PEER",
+        what: "E.164 number of a second, throwaway Signal account the test messages and answers from",
+        where:
+          "Register it in the same signal-cli data directory as SIGNAL_ACCOUNT (`signal-cli -a <peer> register`); the suite drives both accounts, one signal-cli process each",
+      },
+    ],
+    caveat:
+      'Needs signal-cli on PATH (the GraalVM native build, or the JVM build with a Java 25 runtime) holding the account\'s keys in its data directory. The suite skips with "signal-cli not on PATH" when the binary is missing.',
+  },
+  {
     id: "line",
     label: "LINE",
     pkg: "@theokit/gateway-line",

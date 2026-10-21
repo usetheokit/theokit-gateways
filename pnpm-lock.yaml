@@ -58,6 +58,9 @@ importers:
       '@theokit/gateway-mattermost':
         specifier: workspace:*
         version: link:../packages/gateway-mattermost
+      '@theokit/gateway-signal':
+        specifier: workspace:*
+        version: link:../packages/gateway-signal
       '@theokit/gateway-slack':
         specifier: workspace:*
         version: link:../packages/gateway-slack

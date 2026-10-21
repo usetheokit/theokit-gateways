@@ -1,7 +1,7 @@
 /**
- * One contract, ten adapters — asserted by behaviour, against all of them at once.
+ * One contract, every adapter — asserted by behaviour, against all of them at once.
  *
- * `packages/gateway/tests/lint/adapter-contract.test.ts` already holds the ten to a set of
+ * `packages/gateway/tests/lint/adapter-contract.test.ts` already holds every adapter to a set of
  * invariants, and it does it by reading source text. That was the right tool for what it catches
  * — a guard deleted, a rejection floated — and it is the wrong tool for what this catches, because
  * a regex can only ever assert that a shape is present. It cannot run the thing.
@@ -28,6 +28,7 @@ import { EmailAdapter } from "@theokit/gateway-email";
 import { LineAdapter } from "@theokit/gateway-line";
 import { MatrixAdapter } from "@theokit/gateway-matrix";
 import { MattermostAdapter } from "@theokit/gateway-mattermost";
+import { SignalAdapter } from "@theokit/gateway-signal";
 import { SlackAdapter } from "@theokit/gateway-slack";
 import { SMSAdapter } from "@theokit/gateway-sms";
 import { TeamsAdapter } from "@theokit/gateway-teams";
@@ -71,6 +72,11 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
     platform: "mattermost",
     make: () =>
       new MattermostAdapter({ baseUrl: "https://mm.invalid", accessToken: "not-a-real-token" }),
+  },
+  {
+    platform: "signal",
+    make: () =>
+      new SignalAdapter({ account: "+15550000000", signalCliPath: "signal-cli-not-installed" }),
   },
   {
     platform: "slack",
