@@ -3,10 +3,9 @@
 // A site is a place where the file names one platform: it constructs or calls something imported
 // from a platform package, calls a method only one platform's adapter has, compares against a
 // platform name, tests `instanceof` a platform class, reaches a relative module (an import, a
-// re-export, `import()` or `require` — this tool cannot see into it, so it fails closed and counts
-// it; a type-only import carries no runtime code and is not counted), or tests membership in /
-// indexes a table keyed by a platform name. The kinds and their order are NFR-004's; a node
-// matching two takes the first.
+// re-export, `import()` or `require`, type-only ones included — this tool cannot see into it, so
+// it fails closed and counts it), or tests membership in / indexes a table keyed by a platform
+// name. The kinds and their order are NFR-004's; a node matching two takes the first.
 //
 // It parses with the TypeScript compiler, because a text match missed every spelling the alignment
 // refusals listed. What it does NOT see, by the brief's own statement: a property access named
@@ -116,12 +115,6 @@ function moduleDeclarationsOf(sourceFile) {
   );
 }
 
-/** A declaration that brings in types only: it cannot carry a runtime branch. */
-function isTypeOnly(statement) {
-  if (ts.isExportDeclaration(statement)) return statement.isTypeOnly;
-  return statement.importClause?.isTypeOnly === true;
-}
-
 /** Is this specifier a platform package, `@theokit/gateway-<platform>`? */
 function isPlatformPackage(specifier) {
   const match = PLATFORM_PACKAGE.exec(specifier);
@@ -149,7 +142,7 @@ function collectImports(sourceFile, scope, siteAt) {
   for (const statement of moduleDeclarationsOf(sourceFile)) {
     const specifier = statement.moduleSpecifier.text;
     if (isRelative(specifier)) {
-      if (!isTypeOnly(statement)) siteAt(statement, "relative_import");
+      siteAt(statement, "relative_import");
     } else if (
       ts.isImportDeclaration(statement) &&
       isPlatformPackage(specifier) &&

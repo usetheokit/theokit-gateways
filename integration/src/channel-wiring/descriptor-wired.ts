@@ -9,25 +9,43 @@
  * The list's annotation is also ADR D4's conformance check: the platform packages type their
  * descriptors locally, and this assignment to the core's `ChannelDescriptor` is where the two must
  * agree or the integration typecheck fails.
+ *
+ * The file declares its own contract types rather than importing them from `hand-wired.ts`: the
+ * detector counts every relative import as a site it cannot see into (D3), and an app wired from
+ * descriptors has no "before" file to import from. The shared suite passes both fixtures through
+ * one `ChannelWiring` type, so the typecheck fails if the two contracts drift apart.
  */
 
 import {
   type BasePlatformAdapter,
   type ChannelDescriptor,
+  type ChannelRejection,
   createChannels,
+  type GatewayHandler,
   GatewayRunner,
+  type IngestResult,
   type PlatformName,
+  type WebhookRequest,
 } from "@theokit/gateway";
 import { lineChannel } from "@theokit/gateway-line";
 import { telegramChannel } from "@theokit/gateway-telegram";
 
-import type {
-  ChannelWiring,
-  ChannelWiringConfig,
-  ChannelWiringOptions,
-  WebhookOutcome,
-  WebhookRoute,
-} from "./hand-wired.js";
+/** Each channel's configuration, keyed by its descriptor's platform. */
+type ChannelWiringConfig = Partial<Record<PlatformName, Readonly<Record<string, unknown>>>>;
+
+type ChannelWiringOptions = { readonly handler: GatewayHandler };
+
+/** What `ingestWebhook` did with one request. */
+type WebhookOutcome = IngestResult | "unauthorized" | "unknown_channel";
+
+type WebhookRoute = (request: WebhookRequest) => Promise<WebhookOutcome>;
+
+type ChannelWiring = {
+  readonly adapters: ReadonlyArray<BasePlatformAdapter>;
+  readonly rejected: ReadonlyArray<ChannelRejection>;
+  readonly runner: GatewayRunner;
+  ingestWebhook(platform: PlatformName, request: WebhookRequest): Promise<WebhookOutcome>;
+};
 
 const descriptors: ReadonlyArray<ChannelDescriptor<BasePlatformAdapter>> = [
   telegramChannel,
@@ -60,12 +78,8 @@ export function wireChannels(
   config: ChannelWiringConfig,
   { handler }: ChannelWiringOptions,
 ): ChannelWiring {
-  const configByPlatform: Partial<Record<PlatformName, Readonly<Record<string, unknown>>>> = config;
   const { adapters, rejected } = createChannels(
-    descriptors.map((descriptor) => ({
-      descriptor,
-      config: configByPlatform[descriptor.platform],
-    })),
+    descriptors.map((descriptor) => ({ descriptor, config: config[descriptor.platform] })),
   );
   const routes = new Map<PlatformName, WebhookRoute>();
   for (const adapter of adapters) {
