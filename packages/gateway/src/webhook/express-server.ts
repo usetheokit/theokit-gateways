@@ -15,7 +15,7 @@
  *
  * The core had no HTTP concern, and `express` is a peer dependency of exactly the two packages that
  * duplicate this — so the obvious objection to putting it here is that it would impose express on
- * all ten adapters.
+ * every adapter.
  *
  * It does not, because nothing here imports express. Every shape below is structural: a request is
  * whatever has `readableEnded` and `on`, a listener is whatever has `listen` and `close`. The
