@@ -38,7 +38,8 @@ export interface SendResult {
  * Abstract base for all platform adapters.
  *
  * Subclasses implement `connect`, `disconnect`, `sendMessage`, `onInbound`.
- * Lifecycle defaults (`startTyping`, `stopTyping`) noop unless overridden.
+ * Lifecycle defaults (`startTyping`, `stopTyping`) noop unless overridden; `editMessage` refuses
+ * with `edit_unsupported` unless overridden.
  *
  * **Contract:**
  * - `connect()` is idempotent. Calling twice returns true the second time.
@@ -48,6 +49,10 @@ export interface SendResult {
  * - `onInbound(handler)` returns an unsubscribe function. EC-H: calling
  *   `onInbound` twice replaces the previous handler — does NOT stack.
  * - `sendMessage` with empty text returns `{ ok: false, code: "empty_text" }`.
+ * - `supportsEdit` says whether `editMessage` can replace a sent message's text. It is `false`
+ *   unless the adapter overrides it, and it MUST NOT change with `connect()`.
+ * - `editMessage` returns a `SendResult` and never throws on platform errors. The default refuses
+ *   with `edit_unsupported` and makes no platform call.
  *
  * @public
  */
@@ -120,6 +125,37 @@ export abstract class BasePlatformAdapter {
       return "handler_threw";
     }
     return "ok";
+  }
+
+  /**
+   * Whether {@link editMessage} can replace the text of a message this adapter sent.
+   *
+   * Read it before starting a preview: on `false`, send the final text instead. An adapter sets
+   * it at construction and MUST NOT change it with `connect()`. Annotated as `boolean` so that an
+   * edit-capable adapter can override it with `true`.
+   */
+  readonly supportsEdit: boolean = false;
+
+  /**
+   * Replace the text of a message this adapter sent, keeping its id.
+   *
+   * Returns `{ ok: true, messageId }` on success and a `SendResult` error otherwise; it never
+   * throws on platform errors. An edit-capable adapter applies, with no request, the same local
+   * checks its `sendMessage` applies (such as `empty_text`, and `not_connected` where the send
+   * checks the connection), plus `invalid_message_id`, and `edit_too_long` where the adapter
+   * splits text: an edit that would need more than one platform message is refused, never split.
+   *
+   * Default: refuses with `edit_unsupported`, makes no platform call, and checks nothing else
+   * first, so capability is answered before input.
+   */
+  async editMessage(_messageId: string, _out: OutboundMessage): Promise<SendResult> {
+    return {
+      ok: false,
+      error: {
+        code: "edit_unsupported",
+        message: `${this.platform} adapter cannot edit a sent message`,
+      },
+    };
   }
 
   /** Lifecycle: emit a typing indicator. Default: noop. */
