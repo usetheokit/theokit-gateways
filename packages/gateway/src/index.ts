@@ -80,6 +80,7 @@ export type {
   BaseMessageEvent,
   DiscordMessageEvent,
   EmailMessageEvent,
+  IMessageMessageEvent,
   LineMessageEvent,
   MatrixMessageEvent,
   MattermostMessageEvent,

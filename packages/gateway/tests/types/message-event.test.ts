@@ -159,6 +159,8 @@ describe("MessageEvent (T1.1)", () => {
           return `mx:${e.matrix.eventId}`;
         case "signal":
           return `sg:${e.signal.timestamp}`;
+        case "imessage":
+          return `im:${e.imessage.guid}`;
         default: {
           const _exhaustive: never = e;
           throw new Error(`unhandled platform: ${JSON.stringify(_exhaustive)}`);

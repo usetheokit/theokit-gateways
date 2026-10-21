@@ -82,6 +82,8 @@ function route(event: MessageEvent): string {
       return `mx:${event.matrix.eventId}`;
     case "signal":
       return `sg:${event.signal.timestamp}`;
+    case "imessage":
+      return `im:${event.imessage.guid}`;
     case "acmechat":
       return `ac:${event.acmechat.senderUuid}`;
     default: {
@@ -127,9 +129,10 @@ describe("a gateway authored outside this repository", () => {
       "line",
       "matrix",
       "signal",
+      "imessage",
       "acmechat",
     ];
 
-    expect(names).toHaveLength(12);
+    expect(names).toHaveLength(13);
   });
 });
