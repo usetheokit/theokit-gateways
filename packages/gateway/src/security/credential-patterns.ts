@@ -119,6 +119,10 @@ export const CREDENTIAL_SHAPES: {
       why: "32 lowercase hex, the same shape as the Twilio auth token above and as every md5 and dashless UUID. Masking it would eat the correlation ids in a log.",
     },
     {
+      field: "gateway-nextcloud-talk `secret`",
+      why: "a Talk bot secret is a string of 40 to 128 characters the administrator chose for `occ talk:bot:install`, with no prefix or format to recognise. It never travels: both sides send only an HMAC made with it, and the adapter never logs it.",
+    },
+    {
       field: "gateway-irc `password` and `saslPassword`",
       why: "a server password and a NickServ password are passphrases the operator chose, with no format to recognise. The SDK's `key=value` rule masks them as fields wherever they appear as `password=...`; the SASL payload on the wire is their base64, which the adapter never logs.",
     },
