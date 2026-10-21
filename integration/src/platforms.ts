@@ -259,6 +259,29 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       'Needs signal-cli on PATH (the GraalVM native build, or the JVM build with a Java 25 runtime) holding the account\'s keys in its data directory. The suite skips with "signal-cli not on PATH" when the binary is missing.',
   },
   {
+    id: "imessage",
+    label: "iMessage",
+    pkg: "@theokit/gateway-imessage",
+    transport: "connection",
+    credentials: [
+      {
+        name: "IMESSAGE_CLI_PATH",
+        what: "Path to the imsg binary on a Mac signed in to Messages, or to a script that runs `imsg rpc` on that Mac over ssh",
+        where:
+          "Install imsg (github.com/openclaw/imsg) on macOS 14 or newer, sign in to Messages, and give the terminal Full Disk Access (System Settings → Privacy & Security)",
+      },
+    ],
+    target: [
+      {
+        name: "IMESSAGE_PEER_CHAT_ID",
+        what: "imsg's numeric chat id of a conversation with a second person or device, who answers the test's message",
+        where: "`imsg chats` on the Mac lists each chat with its id",
+      },
+    ],
+    caveat:
+      'Needs macOS: imsg does not send or receive on Linux. The suite skips with "not macOS" anywhere else, and someone on the peer device must answer the test message.',
+  },
+  {
     id: "line",
     label: "LINE",
     pkg: "@theokit/gateway-line",
