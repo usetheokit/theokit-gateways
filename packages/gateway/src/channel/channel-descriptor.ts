@@ -32,8 +32,14 @@ export interface WebhookRequest {
   readonly headers: Readonly<Record<string, string | undefined>>;
 }
 
-/** What `ingest` did with a verified payload. */
-export type IngestResult = "delivered" | "malformed";
+/**
+ * What `ingest` did with a verified payload: `"delivered"` dispatched it, `"malformed"` refused it
+ * without dispatching, and `"no_handler"` dispatched nothing because the payload holds a message
+ * for the handler and none is subscribed (before the runner starts, after it stops, or for an
+ * adapter whose connect failed under `connectFailure: "isolate"`). Answer only `"delivered"` with
+ * a success status, so the platform redelivers the rest.
+ */
+export type IngestResult = "delivered" | "malformed" | "no_handler";
 
 /**
  * The webhook half of a channel: verify a request, then hand its payload to the adapter.

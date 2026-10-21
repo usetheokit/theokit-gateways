@@ -32,7 +32,12 @@ export type ChannelWiringConfig = {
 export type ChannelWiringOptions = { readonly handler: GatewayHandler };
 
 /** What `ingestWebhook` did with one request. */
-export type WebhookOutcome = "delivered" | "malformed" | "unauthorized" | "unknown_channel";
+export type WebhookOutcome =
+  | "delivered"
+  | "malformed"
+  | "no_handler"
+  | "unauthorized"
+  | "unknown_channel";
 
 /** The handling of one platform's webhook requests. */
 export type WebhookRoute = (request: WebhookRequest) => Promise<WebhookOutcome>;
@@ -110,8 +115,8 @@ export function wireChannels(
       }
       const envelope = parseEnvelope(request.rawBody);
       if (envelope === undefined) return "malformed";
-      await line.dispatchWebhookBody(envelope);
-      return "delivered";
+      const dispatched = await line.dispatchWebhookBody(envelope);
+      return dispatched === "no_handler" ? "no_handler" : "delivered";
     });
   }
 

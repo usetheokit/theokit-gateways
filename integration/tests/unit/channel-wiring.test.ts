@@ -300,6 +300,28 @@ describe.each([
     expect(result.failed.map((f) => f.platform)).toEqual(["line"]);
     expectBothStubsReached(observed);
   });
+
+  it("answers no_handler for a line webhook body after line failed to connect", async () => {
+    const { observed, handler, wiring } = setUp({ botInfoStatus: 401 });
+    const quiet = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    await wiring.runner.start().finally(() => quiet.mockRestore());
+
+    const outcome = await wiring.ingestWebhook("line", signedRequest(lineBody("lost?")));
+
+    expect(outcome).toBe("no_handler");
+    await wiring.runner.stop();
+    expect(handler).not.toHaveBeenCalled();
+    expect(observed.line.filter((r) => r.url === REPLY)).toHaveLength(0);
+  });
+
+  it("answers no_handler for a line webhook body that arrives before start", async () => {
+    const { handler, wiring } = setUp();
+
+    const outcome = await wiring.ingestWebhook("line", signedRequest(lineBody("too early")));
+
+    expect(outcome).toBe("no_handler");
+    expect(handler).not.toHaveBeenCalled();
+  });
 });
 
 function invalidLine() {

@@ -370,7 +370,94 @@ describe("LineAdapter.dispatchWebhookBody (inbound)", () => {
           },
         ]),
       ),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe("ok");
+  });
+
+  function textFrom(userId: string, text: string, replyToken = "r"): LineWebhookEvent {
+    return {
+      type: "message",
+      source: { type: "user", userId },
+      replyToken,
+      message: { type: "text", id: `m-${text}`, text },
+    };
+  }
+
+  it("reports no_handler for a text event with no handler subscribed, caching no reply token", async () => {
+    const adapter = new LineAdapter({ channelSecret: "s", channelAccessToken: "t" });
+    const client = makeMockClient();
+    installMockClient(adapter, client);
+
+    const outcome = await adapter.dispatchWebhookBody(
+      makeEnv([textFrom("U-alice", "hi", "rtok-unheard")]),
+    );
+
+    expect(outcome).toBe("no_handler");
+    await adapter.sendMessage({ channel: { id: "U-alice", type: "dm" }, text: "later" });
+    expect(client.replyCalls).toHaveLength(0);
+    expect(client.pushCalls).toHaveLength(1);
+  });
+
+  it("reports no_handler once the handler unsubscribed", async () => {
+    const adapter = new LineAdapter({ channelSecret: "s", channelAccessToken: "t" });
+    installMockClient(adapter, makeMockClient());
+    const handler = vi.fn(async () => undefined);
+    const unsubscribe = adapter.onInbound(handler);
+    unsubscribe();
+
+    expect(await adapter.dispatchWebhookBody(makeEnv([textFrom("U-a", "hi")]))).toBe("no_handler");
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("reports ok with no handler subscribed for a batch with nothing to deliver", async () => {
+    const adapter = new LineAdapter({ channelSecret: "s", channelAccessToken: "t" });
+    installMockClient(adapter, makeMockClient());
+
+    expect(await adapter.dispatchWebhookBody(makeEnv([]))).toBe("ok");
+    expect(
+      await adapter.dispatchWebhookBody(
+        makeEnv([{ type: "follow", source: { type: "user", userId: "U-a" } }]),
+      ),
+    ).toBe("ok");
+  });
+
+  it("reports ok with no handler subscribed for a group message the mention guard drops", async () => {
+    const adapter = new LineAdapter({
+      channelSecret: "s",
+      channelAccessToken: "t",
+      botUserId: "U-bot",
+      requireMention: true,
+    });
+    installMockClient(adapter, makeMockClient());
+
+    const outcome = await adapter.dispatchWebhookBody(
+      makeEnv([
+        {
+          type: "message",
+          source: { type: "group", groupId: "G-1", userId: "U-a" },
+          replyToken: "r",
+          message: { type: "text", id: "m-1", text: "no mention here" },
+        },
+      ]),
+    );
+
+    expect(outcome).toBe("ok");
+  });
+
+  it("delivers the whole batch to the handler it started with when that handler unsubscribes", async () => {
+    const adapter = new LineAdapter({ channelSecret: "s", channelAccessToken: "t" });
+    installMockClient(adapter, makeMockClient());
+    const received: string[] = [];
+    const unsubscribe = adapter.onInbound(async (ev) => {
+      received.push(ev.text);
+      unsubscribe();
+    });
+
+    const outcome = await adapter.dispatchWebhookBody(
+      makeEnv([textFrom("U-a", "first"), textFrom("U-b", "second")]),
+    );
+
+    expect(outcome).toBe("ok");
+    expect(received).toEqual(["first", "second"]);
   });
 });
 
