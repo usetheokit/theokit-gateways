@@ -35,6 +35,25 @@ export function privmsgToMessageEvent(
   receivedAt: number,
   counter: number,
 ): IrcMessageEvent | undefined {
+  const message = visiblePrivmsg(line, ownNick);
+  if (message === undefined) return undefined;
+  const { target, nick, content } = message;
+  return {
+    id: line.tags.msgid ?? `${nick}:${receivedAt}:${counter}`,
+    platform: "irc",
+    sender: { id: nick, displayName: nick },
+    channel: isChannelTarget(target) ? { id: target, type: "group" } : { id: nick, type: "dm" },
+    text: content.text,
+    receivedAt,
+    irc: { target, nick, action: content.action, tags: line.tags, raw },
+  };
+}
+
+/** The target, sender and text of a `PRIVMSG` someone should see, or `undefined` (see above). */
+function visiblePrivmsg(
+  line: IrcLine,
+  ownNick: string,
+): { target: string; nick: string; content: { text: string; action: boolean } } | undefined {
   if (line.command !== "PRIVMSG") return undefined;
   const [target, body] = line.params;
   const nick = nickOf(line.prefix);
@@ -42,16 +61,12 @@ export function privmsgToMessageEvent(
   if (ircLower(nick) === ircLower(ownNick)) return undefined;
   const content = ctcpContent(body);
   if (content === undefined || content.text === "") return undefined;
-  const isChannel = target.startsWith("#") || target.startsWith("&");
-  return {
-    id: line.tags.msgid ?? `${nick}:${receivedAt}:${counter}`,
-    platform: "irc",
-    sender: { id: nick, displayName: nick },
-    channel: isChannel ? { id: target, type: "group" } : { id: nick, type: "dm" },
-    text: content.text,
-    receivedAt,
-    irc: { target, nick, action: content.action, tags: line.tags, raw },
-  };
+  return { target, nick, content };
+}
+
+/** Whether a `PRIVMSG` target names a channel (`#` or `&`) rather than the adapter's nick. */
+function isChannelTarget(target: string): boolean {
+  return target.startsWith("#") || target.startsWith("&");
 }
 
 /** The visible text of a body: an `ACTION` without its framing, `undefined` for other CTCP. */
