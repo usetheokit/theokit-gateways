@@ -108,6 +108,26 @@ describe("DiscordAdapter.editMessage", () => {
     expect(patch).toHaveBeenCalledTimes(1);
   });
 
+  // The splitter measures the caller's text, but a `plain` text is escaped after the split and
+  // every `*` becomes `\*`. 995 copies of `*a` are 1990 characters (one part) and 2985 escaped,
+  // which Discord would refuse with 50035 after the request instead of the edit_too_long E3 promises.
+  it("refuses a plain text whose escaped body passes 2000 characters with no request", async () => {
+    const result = await adapter.editMessage("m1", out("*a".repeat(995), "plain"));
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("edit_too_long");
+    expect(patch).toHaveBeenCalledTimes(0);
+  });
+
+  it("edits a plain text whose escaped body is exactly 2000 characters", async () => {
+    const result = await adapter.editMessage("m1", out("*".repeat(1000), "plain"));
+
+    expect(result).toEqual({ ok: true, messageId: "m1" });
+    expect(patch).toHaveBeenCalledWith(Routes.channelMessage("c1", "m1"), {
+      body: { content: "\\*".repeat(1000) },
+    });
+  });
+
   it.each([
     [10008, 404, "discord_10008"],
     [10003, 404, "discord_10003"],

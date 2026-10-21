@@ -22,7 +22,7 @@ import {
   Routes,
 } from "discord.js";
 
-import { splitForDiscord } from "./split.js";
+import { DISCORD_MAX_MESSAGE, splitForDiscord } from "./split.js";
 
 export interface DiscordAdapterOptions {
   /**
@@ -171,8 +171,9 @@ export class DiscordAdapter extends BasePlatformAdapter {
    * That PATCH is the request `channel.messages.edit` makes. It is sent through `client.rest`
    * without fetching the channel first, so a success is one request whatever the channel cache
    * holds; an unknown channel is answered by Discord itself (`discord_10003`). The text is split
-   * and escaped exactly as `sendMessage` would send it, and a text that needs more than one
-   * message is refused as `edit_too_long` with no request.
+   * and escaped exactly as `sendMessage` would send it. A text that needs more than one message,
+   * or whose escaped body is longer than one message, is refused as `edit_too_long` with no
+   * request.
    */
   override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
@@ -183,9 +184,13 @@ export class DiscordAdapter extends BasePlatformAdapter {
     }
     const parts = splitForDiscord(out.text);
     if (parts.length !== 1) return editPartsRefusal(parts.length);
+    // The splitter measured the caller's text; escaping a `plain` text can lengthen it past the
+    // cap, which Discord answers with 50035 only after the request.
+    const content = bodyFor(out.format, parts[0] as string);
+    if (content.length > DISCORD_MAX_MESSAGE) return escapedTooLongRefusal(content.length);
     try {
       await this.client.rest.patch(Routes.channelMessage(out.channel.id, messageId), {
-        body: { content: bodyFor(out.format, parts[0] as string) },
+        body: { content },
       });
     } catch (err) {
       return mapSendError(err);
@@ -305,6 +310,17 @@ function editPartsRefusal(partCount: number): SendResult {
     };
   }
   return { ok: false, error: { code: "empty_text", message: "text reduced to zero parts" } };
+}
+
+/** The refusal for one part whose escaped body is longer than one Discord message. */
+function escapedTooLongRefusal(length: number): SendResult {
+  return {
+    ok: false,
+    error: {
+      code: "edit_too_long",
+      message: `escaped text is ${length} characters; a Discord message holds ${DISCORD_MAX_MESSAGE}`,
+    },
+  };
 }
 
 function mapSendError(err: unknown): SendResult {
