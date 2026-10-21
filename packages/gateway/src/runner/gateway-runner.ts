@@ -188,6 +188,14 @@ export class GatewayRunner {
       (this.opts.connectFailure ?? "rollback") === "isolate"
         ? await this.connectIsolated()
         : await this.connectAllOrRollback();
+    if (this.stopped) {
+      // stop() ran while the connect was pending: it disconnected these adapters before their
+      // connect settled, and a later stop() returns at its guard. Wiring them would leave a live
+      // adapter on a stopped runner.
+      await Promise.all(result.connected.map((a) => a.disconnect().catch(() => undefined)));
+      this.startResult = { connected: [], failed: result.failed };
+      return this.startResult;
+    }
     this.wireInbound(result.connected);
     this.startResult = {
       connected: result.connected.map((a) => a.platform),
