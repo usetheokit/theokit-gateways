@@ -20,6 +20,7 @@ import {
   GatewayRunner,
   type PlatformName,
 } from "@theokit/gateway";
+import { IMessageAdapter, type ChildLike as IMessageChild } from "@theokit/gateway-imessage";
 import { type ChildLike, SignalAdapter } from "@theokit/gateway-signal";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -27,6 +28,8 @@ import { afterEach, describe, expect, it } from "vitest";
 interface Member {
   readonly key: PlatformName;
   readonly adapter: BasePlatformAdapter;
+  /** A channel id this platform accepts for a reply written straight to the adapter. */
+  readonly peerChannelId: string;
   /** Feed one inbound text message to the adapter, as the platform would. */
   inject(text: string): Promise<void>;
   /** The texts the transport was asked to send, in order. */
@@ -90,7 +93,84 @@ function signalMember(): Member {
   return {
     key: "signal",
     adapter,
+    peerChannelId: "+5511988887777",
     inject: async (text) => child.receive(text),
+    sent: () => child.sends,
+    close: async () => adapter.disconnect(),
+  };
+}
+
+/** The one chat the scripted imsg knows: inbound rows come from it and replies go to it. */
+const IMSG_CHAT_ID = 7;
+
+/** An `imsg rpc` child that answers `watch.subscribe` and every `send`, and can push a `message`. */
+class ScriptedImsg extends EventEmitter implements IMessageChild {
+  readonly stdin = new PassThrough();
+  readonly stdout = new PassThrough();
+  readonly stderr = new PassThrough();
+  readonly sends: string[] = [];
+  private buffered = "";
+  private rowId = 0;
+
+  constructor() {
+    super();
+    this.stdin.on("data", (chunk: Buffer) => {
+      this.buffered += chunk.toString("utf8");
+      for (let at = this.buffered.indexOf("\n"); at !== -1; at = this.buffered.indexOf("\n")) {
+        this.onRequest(this.buffered.slice(0, at));
+        this.buffered = this.buffered.slice(at + 1);
+      }
+    });
+    // imsg ends when its stdin closes, which is how the adapter's disconnect() asks it to.
+    this.stdin.on("finish", () => this.kill());
+  }
+
+  message(text: string): void {
+    this.rowId += 1;
+    const message = {
+      id: this.rowId,
+      chat_id: IMSG_CHAT_ID,
+      guid: `guid-${this.rowId}`,
+      sender: "+5511988887777",
+      is_from_me: false,
+      text,
+      is_group: false,
+      participants: ["+5511988887777"],
+    };
+    this.line({ jsonrpc: "2.0", method: "message", params: { subscription: 1, message } });
+  }
+
+  kill(): boolean {
+    queueMicrotask(() => {
+      this.stdout.end();
+      this.emit("close", null, "SIGTERM");
+    });
+    return true;
+  }
+
+  private onRequest(raw: string): void {
+    const request = JSON.parse(raw) as { id: number; method: string; params: { text?: string } };
+    if (request.method === "send") this.sends.push(request.params.text ?? "");
+    const result =
+      request.method === "send"
+        ? { ok: true, guid: `sent-${this.sends.length}` }
+        : { subscription: 1 };
+    this.line({ jsonrpc: "2.0", id: request.id, result });
+  }
+
+  private line(message: unknown): void {
+    this.stdout.write(`${JSON.stringify(message)}\n`);
+  }
+}
+
+function imessageMember(): Member {
+  const child = new ScriptedImsg();
+  const adapter = new IMessageAdapter({ spawn: () => child });
+  return {
+    key: "imessage",
+    adapter,
+    peerChannelId: String(IMSG_CHAT_ID),
+    inject: async (text) => child.message(text),
     sent: () => child.sends,
     close: async () => adapter.disconnect(),
   };
@@ -98,6 +178,7 @@ function signalMember(): Member {
 
 const MEMBERS: ReadonlyArray<{ readonly key: PlatformName; readonly make: () => Member }> = [
   { key: "signal", make: signalMember },
+  { key: "imessage", make: imessageMember },
 ];
 
 /** Poll until `check` holds; fails naming what never happened. */
@@ -181,7 +262,7 @@ describe("GatewayRunner drives the new adapters", () => {
       await runner.start();
 
       const result = await member.adapter.sendMessage({
-        channel: { id: "+5511988887777", type: "dm" },
+        channel: { id: member.peerChannelId, type: "dm" },
         text: "written around the runner",
       });
 

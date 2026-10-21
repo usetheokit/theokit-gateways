@@ -25,6 +25,7 @@
 import type { BasePlatformAdapter } from "@theokit/gateway";
 import { DiscordAdapter } from "@theokit/gateway-discord";
 import { EmailAdapter } from "@theokit/gateway-email";
+import { IMessageAdapter } from "@theokit/gateway-imessage";
 import { LineAdapter } from "@theokit/gateway-line";
 import { MatrixAdapter } from "@theokit/gateway-matrix";
 import { MattermostAdapter } from "@theokit/gateway-mattermost";
@@ -53,6 +54,10 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
         address: "nobody@invalid",
         password: "not-a-real-password",
       }),
+  },
+  {
+    platform: "imessage",
+    make: () => new IMessageAdapter({ cliPath: "imsg-not-installed" }),
   },
   {
     platform: "line",
