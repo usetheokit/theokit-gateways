@@ -8,10 +8,10 @@
  * The probe below declares neither member, so every assertion reads the base default and not a
  * value the probe supplied.
  *
- * The second block reads the ten adapters' sources and holds which of them can edit. The core
- * cannot import its own dependents, and a test in each of the four non-edit packages would call a
- * base member that core 0.9.0, the floor of their peer range, does not have; a source scan holds
- * the six-of-ten split without either cost. It proves the declarations are present, not that the
+ * The second block reads the fifteen adapters' sources and holds which of them can edit. The core
+ * cannot import its own dependents, and a test in each of the nine non-edit packages would call a
+ * base member that the floor of their core peer range may not have; a source scan holds the
+ * six-of-fifteen split without either cost. It proves the declarations are present, not that the
  * edits work: each edit-capable package's `tests/edit-message.test.ts` proves that.
  *
  * @internal
@@ -99,7 +99,7 @@ describe("BasePlatformAdapter edit default", () => {
 
 const PACKAGES_DIR = join(__dirname, "..", "..", "..");
 
-/** The six adapters whose platform has an edit call; the other four inherit the refusal. */
+/** The six adapters whose platform has an edit call; the other nine inherit the refusal. */
 const EDIT_CAPABLE: ReadonlySet<string> = new Set([
   "gateway-discord",
   "gateway-matrix",
@@ -131,8 +131,24 @@ const DECLARES_SUPPORTS_EDIT = /^\s+override readonly supportsEdit = true;/m;
 const OVERRIDES_EDIT_MESSAGE = /^\s+override async editMessage\(/m;
 
 describe("which adapters can edit", () => {
-  it("reads the ten adapter sources", async () => {
-    expect((await adapterSources()).map(({ pkg }) => pkg)).toHaveLength(10);
+  it("reads the fifteen adapter sources", async () => {
+    expect((await adapterSources()).map(({ pkg }) => pkg)).toEqual([
+      "gateway-discord",
+      "gateway-email",
+      "gateway-google-chat",
+      "gateway-imessage",
+      "gateway-irc",
+      "gateway-line",
+      "gateway-matrix",
+      "gateway-mattermost",
+      "gateway-nextcloud-talk",
+      "gateway-signal",
+      "gateway-slack",
+      "gateway-sms",
+      "gateway-teams",
+      "gateway-telegram",
+      "gateway-whatsapp",
+    ]);
   });
 
   it("has exactly the six edit-capable adapters declare supportsEdit and override editMessage", async () => {
@@ -146,9 +162,9 @@ describe("which adapters can edit", () => {
     expect(overriding).toEqual([...EDIT_CAPABLE].sort());
   });
 
-  it("has the other four adapters name neither member", async () => {
+  it("has the other nine adapters name neither member", async () => {
     // The two regexes above match one spelling each, so a getter or an annotated field in a
-    // non-edit adapter would slip past them; any mention of either name in those four is caught.
+    // non-edit adapter would slip past them; any mention of either name in those nine is caught.
     const offenders = (await adapterSources())
       .filter(
         ({ pkg, source }) =>
@@ -159,8 +175,8 @@ describe("which adapters can edit", () => {
   });
 
   it("has no adapter call super.editMessage", async () => {
-    // Core 0.9.0, the floor of every adapter's peer range, has no base editMessage, so a super call
-    // would be a TypeError there; each adapter answers its own refusals (plan D3).
+    // Core 0.9.0, the lowest floor among the adapters' peer ranges, has no base editMessage, so a
+    // super call would be a TypeError there; each adapter answers its own refusals (plan D3).
     const offenders = (await adapterSources())
       .filter(({ source }) => source.includes("super.editMessage"))
       .map(({ pkg }) => pkg);
