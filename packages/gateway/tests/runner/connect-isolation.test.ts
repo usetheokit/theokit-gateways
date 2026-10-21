@@ -227,7 +227,9 @@ describe("GatewayRunner connectFailure", () => {
         return result;
       });
     second.settle(true);
-    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    // A macrotask runs only once every queued microtask has: a start() that resolved on the first
+    // settled connect would have resolved by now, however many promise hops its chain takes.
+    await new Promise((resolve) => setImmediate(resolve));
     expect(settled, "start() resolved before every connect settled").toBe(false);
     first.settle(true);
 
