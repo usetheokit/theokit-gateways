@@ -293,6 +293,23 @@ export interface IMessageMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** Google Chat-specific event variant (B-356), posted to the Chat app's HTTPS endpoint. */
+export interface GoogleChatMessageEvent extends BaseMessageEvent {
+  readonly platform: "google_chat";
+  readonly google_chat: {
+    /** The message's resource name, `spaces/<space>/messages/<message>`. */
+    readonly messageName: string;
+    /** The space's resource name, `spaces/<space>`; the send target for a reply. */
+    readonly spaceName: string;
+    /** The space's `spaceType` (`SPACE`, `GROUP_CHAT` or `DIRECT_MESSAGE`), when Chat sent one. */
+    readonly spaceType?: string;
+    /** The thread's resource name, when the message is in a thread. */
+    readonly threadName?: string;
+    /** Raw Chat event — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /**
  * The open registry every platform's inbound event is filed under.
  *
@@ -328,6 +345,7 @@ export interface PlatformEventRegistry {
   matrix: MatrixMessageEvent;
   signal: SignalMessageEvent;
   imessage: IMessageMessageEvent;
+  google_chat: GoogleChatMessageEvent;
 }
 
 /**

@@ -48,6 +48,25 @@ describe("countPlatformBranches", () => {
     expect(count(`${TELEGRAM_IMPORT}\nconst a = new TelegramAdapter({ token });`)).toBe(1);
   });
 
+  it("counts an import from a hyphenated platform package", () => {
+    const source = [
+      'import { GoogleChatAdapter } from "@theokit/gateway-google-chat";',
+      "new GoogleChatAdapter(options);",
+    ].join("\n");
+    expect(count(source)).toBe(1);
+    const fromSubpath = [
+      'import { verifyGoogleChatToken } from "@theokit/gateway-google-chat/verify";',
+      "verifyGoogleChatToken(header);",
+    ].join("\n");
+    expect(count(fromSubpath)).toBe(1);
+  });
+
+  it("does not count a hyphenated package that names no platform", () => {
+    // The suffix maps to a key only when it names one: no hyphenated name is a platform by shape.
+    expect(count('import { X } from "@theokit/gateway-acme-chat";\nnew X(o);')).toBe(0);
+    expect(count('import { X } from "@theokit/gateway-google_chat";\nnew X(o);')).toBe(0);
+  });
+
   it("counts a translator or verifier called from a platform package", () => {
     expect(count(`${LINE_IMPORT}\nverifyLineSignature(secret, body, header);`)).toBe(1);
     expect(count(`${LINE_IMPORT}\nconst e = lineEventToMessageEvent(raw);`)).toBe(1);
@@ -190,6 +209,6 @@ describe("countPlatformBranches", () => {
 
   it("keeps its platform list equal to PlatformName", () => {
     expect([...PLATFORM_NAMES].sort()).toEqual(platformNameUnion());
-    expect(PLATFORM_NAMES).toHaveLength(12);
+    expect(PLATFORM_NAMES).toHaveLength(13);
   });
 });

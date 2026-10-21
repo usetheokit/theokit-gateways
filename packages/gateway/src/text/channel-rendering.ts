@@ -59,6 +59,8 @@ const translateWith =
  * - line, sms: no rich text at all; the existing `toDialect` rows drop the markers.
  * - imessage: markers dropped and `plain`. `imsg` sends the text as typed, and Messages shows a
  *   marker character as itself.
+ * - google_chat: markers dropped and `plain`. Chat's own markup is close to, but not, markdown, and
+ *   how it renders a reply is unmeasured until a live run (plan Q3).
  * - telegram: markers dropped and `plain`. Its adapter maps `markdown` to legacy Markdown, which
  *   refuses a reply with an unpaired `_` or `*` and loses it with no retry; losing emphasis is the
  *   cheaper failure (plan ADR D3).
@@ -78,6 +80,7 @@ const RENDERINGS: Readonly<Record<PlatformName, ChannelRendering>> = {
   matrix: { format: "plain", translate: translateWith(STRIP) },
   email: { format: "plain", translate: translateWith(STRIP) },
   imessage: { format: "plain", translate: translateWith(STRIP) },
+  google_chat: { format: "plain", translate: translateWith(STRIP) },
 };
 
 /**
