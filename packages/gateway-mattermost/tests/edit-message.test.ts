@@ -87,6 +87,26 @@ describe("MattermostAdapter.editMessage", () => {
     expect(patchPost).toHaveBeenCalledTimes(1);
   });
 
+  // The splitter measures the caller's text, but a `plain` text is escaped after the split and
+  // every `*` becomes `\*`. 8000 copies of `*a` are 16000 characters (one part) and 24000
+  // escaped, which the server would refuse with a 400 after the request.
+  it("refuses a plain text whose escaped body passes the post cap with no request", async () => {
+    const result = await connectedAdapter().editMessage("post-1", out("*a".repeat(8000), "plain"));
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("edit_too_long");
+    expect(patchPost).toHaveBeenCalledTimes(0);
+  });
+
+  it("edits a plain text whose escaped body is exactly the 16383-character post cap", async () => {
+    const text = `${"*".repeat(8191)}a`;
+
+    const result = await connectedAdapter().editMessage("post-1", out(text, "plain"));
+
+    expect(result).toEqual({ ok: true, messageId: "post-1" });
+    expect(patchPost).toHaveBeenCalledWith({ id: "post-1", message: `${"\\*".repeat(8191)}a` });
+  });
+
   it.each([
     [404, "send_failed"],
     [429, "rate_limit"],

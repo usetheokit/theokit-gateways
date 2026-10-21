@@ -22,7 +22,7 @@ import {
 import { ConfigurationError } from "./errors.js";
 import { shouldRespond } from "./filters.js";
 import { mapChannelType, normalizeMattermostType, postToMessageEvent } from "./normalize.js";
-import { splitForMattermost } from "./split.js";
+import { MATTERMOST_MAX_POST, splitForMattermost } from "./split.js";
 import type { MattermostAdapterOptions, MattermostPost } from "./types.js";
 
 export class MattermostAdapter extends BasePlatformAdapter {
@@ -125,7 +125,8 @@ export class MattermostAdapter extends BasePlatformAdapter {
    *
    * Applies `sendMessage`'s checks (`empty_text`, then `not_connected`), refuses an empty id, and
    * refuses a text `splitForMattermost` would cut in two as `edit_too_long`, all with no request.
-   * A `plain` text is escaped as `sendMessage` escapes it.
+   * A `plain` text is escaped as `sendMessage` escapes it, and an escaped body longer than one
+   * post is refused as `edit_too_long` too, with no request.
    */
   override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
@@ -143,11 +144,12 @@ export class MattermostAdapter extends BasePlatformAdapter {
     const parts = splitForMattermost(out.text);
     if (parts.length !== 1) return editPartsRefusal(parts.length);
     const raw = parts[0] as string;
+    // The splitter measured the caller's text; escaping a `plain` text can lengthen it past the
+    // cap, which the server answers with a 400 only after the request.
+    const message = out.format === "plain" ? escapeMarkdown(raw) : raw;
+    if (message.length > MATTERMOST_MAX_POST) return escapedTooLongRefusal(message.length);
     try {
-      await this.handle.client.patchPost({
-        id: messageId,
-        message: out.format === "plain" ? escapeMarkdown(raw) : raw,
-      });
+      await this.handle.client.patchPost({ id: messageId, message });
     } catch (err) {
       return mapMattermostError(err);
     }
@@ -280,6 +282,17 @@ function editPartsRefusal(partCount: number): SendResult {
     };
   }
   return { ok: false, error: { code: "empty_text", message: "text reduced to zero parts" } };
+}
+
+/** The refusal for one part whose escaped body is longer than one Mattermost post. */
+function escapedTooLongRefusal(length: number): SendResult {
+  return {
+    ok: false,
+    error: {
+      code: "edit_too_long",
+      message: `escaped text is ${length} characters; a Mattermost post holds ${MATTERMOST_MAX_POST}`,
+    },
+  };
 }
 
 function mapMattermostError(err: unknown): SendResult {

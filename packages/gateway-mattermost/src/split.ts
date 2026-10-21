@@ -23,7 +23,7 @@
 import { chunkText } from "@theokit/gateway";
 
 /** Mattermost's default `MaxPostSize`, in runes. */
-const MATTERMOST_MAX_POST = 16_383;
+export const MATTERMOST_MAX_POST = 16_383;
 
 /**
  * Cut inside a smaller window than the cap.
