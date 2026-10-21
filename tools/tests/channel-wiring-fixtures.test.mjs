@@ -13,7 +13,7 @@ import { countPlatformBranches } from "../lib/platform-branches.mjs";
 
 function sitesOf(fixture) {
   const file = fileURLToPath(
-    new URL(`../../integration/src/channel-wiring/${fixture}`, import.meta.url),
+    new URL(`../../integration/tests/unit/fixtures/channel-wiring/${fixture}`, import.meta.url),
   );
   return countPlatformBranches(readFileSync(file, "utf8"), { fileName: file }).sites;
 }
