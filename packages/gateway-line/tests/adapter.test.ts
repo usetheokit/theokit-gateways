@@ -397,6 +397,24 @@ describe("LineAdapter.dispatchWebhookBody (inbound)", () => {
     expect(client.pushCalls).toHaveLength(1);
   });
 
+  it("reports no_handler for a batch mixing a follow event and a text message when no handler is subscribed", async () => {
+    const adapter = new LineAdapter({ channelSecret: "s", channelAccessToken: "t" });
+    const client = makeMockClient();
+    installMockClient(adapter, client);
+
+    const outcome = await adapter.dispatchWebhookBody(
+      makeEnv([
+        { type: "follow", source: { type: "user", userId: "U-a" } },
+        textFrom("U-a", "hi", "rtok-mixed"),
+      ]),
+    );
+
+    expect(outcome).toBe("no_handler");
+    await adapter.sendMessage({ channel: { id: "U-a", type: "dm" }, text: "later" });
+    expect(client.replyCalls).toHaveLength(0);
+    expect(client.pushCalls).toHaveLength(1);
+  });
+
   it("reports no_handler once the handler unsubscribed", async () => {
     const adapter = new LineAdapter({ channelSecret: "s", channelAccessToken: "t" });
     installMockClient(adapter, makeMockClient());
