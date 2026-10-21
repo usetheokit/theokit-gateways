@@ -98,6 +98,26 @@ describe("MattermostAdapter.editMessage", () => {
     expect(patchPost).toHaveBeenCalledTimes(0);
   });
 
+  // The edit refuses exactly the texts a send delivers as more than one post, and its refusal
+  // names how many, so a caller falling back to sendMessage knows what the send will do.
+  it("names the post count a send of the escaped text needs when it refuses the edit", async () => {
+    const result = await connectedAdapter().editMessage("post-1", out("*a".repeat(8000), "plain"));
+
+    expect(result.error?.message).toBe("text needs 2 Mattermost posts; an edit replaces one");
+  });
+
+  // One character past the cap once escaped: 8191 `*` and `a` escape to exactly 16383, the
+  // trailing `b` makes 16384.
+  it("refuses a plain text whose escaped body is 16384 characters with no request", async () => {
+    const text = `${"*".repeat(8191)}ab`;
+
+    const result = await connectedAdapter().editMessage("post-1", out(text, "plain"));
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("edit_too_long");
+    expect(patchPost).toHaveBeenCalledTimes(0);
+  });
+
   it("edits a plain text whose escaped body is exactly the 16383-character post cap", async () => {
     const text = `${"*".repeat(8191)}a`;
 

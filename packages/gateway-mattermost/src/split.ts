@@ -34,12 +34,27 @@ export const MATTERMOST_MAX_POST = 16_383;
  */
 const SAFE_CHUNK = 16_000;
 
+const BOUNDARIES = {
+  boundaries: ["\n\n", "\n", " "],
+  lastResort: "last-boundary",
+  stripLeading: /^\s+/,
+} as const;
+
 export function splitForMattermost(text: string): string[] {
+  return chunkText(text, { limit: MATTERMOST_MAX_POST, safeLimit: SAFE_CHUNK, ...BOUNDARIES });
+}
+
+/**
+ * Split a text that is escaped after the split, at half the cap.
+ *
+ * Escaping adds at most one backslash per character, so a part of at most 8191 characters fits
+ * one post once escaped. The adapter calls this only for a part whose escaped body passed the cap,
+ * so the parts of an ordinary text are the ones `splitForMattermost` returns.
+ */
+export function splitForEscapedMattermost(text: string): string[] {
   return chunkText(text, {
-    limit: MATTERMOST_MAX_POST,
-    safeLimit: SAFE_CHUNK,
-    boundaries: ["\n\n", "\n", " "],
-    lastResort: "last-boundary",
-    stripLeading: /^\s+/,
+    limit: Math.floor(MATTERMOST_MAX_POST / 2),
+    safeLimit: SAFE_CHUNK / 2,
+    ...BOUNDARIES,
   });
 }
