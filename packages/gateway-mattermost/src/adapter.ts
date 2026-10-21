@@ -22,7 +22,7 @@ import {
 import { ConfigurationError } from "./errors.js";
 import { shouldRespond } from "./filters.js";
 import { mapChannelType, normalizeMattermostType, postToMessageEvent } from "./normalize.js";
-import { MATTERMOST_MAX_POST, splitForMattermost } from "./split.js";
+import { MATTERMOST_MAX_POST, splitForEscapedMattermost, splitForMattermost } from "./split.js";
 import type { MattermostAdapterOptions, MattermostPost } from "./types.js";
 
 export class MattermostAdapter extends BasePlatformAdapter {
@@ -95,16 +95,10 @@ export class MattermostAdapter extends BasePlatformAdapter {
       // among the ten adapters, so anything past Mattermost's 16383-rune cap came
       // back HTTP 400 and the user saw nothing at all.
       let lastId: string | undefined;
-      // Mattermost parses markdown natively, so `markdown` needs no flag; `plain` is the
-      // case that needs work, because raw text would be parsed anyway.
-      // Split first, escape per chunk — the same ordering Discord needs, for the same reason:
-      // a cut between a backslash and its character produces a stray backslash in one message
-      // and a bare marker in the next.
-      for (const raw of splitForMattermost(out.text)) {
-        const chunk = out.format === "plain" ? escapeMarkdown(raw) : raw;
+      for (const message of renderPosts(out)) {
         const post = await this.handle.client.createPost({
           channel_id: out.channel.id,
-          message: chunk,
+          message,
           ...(out.channel.type === "thread" && out.channel.topicId !== undefined
             ? { root_id: out.channel.topicId }
             : {}),
@@ -124,9 +118,8 @@ export class MattermostAdapter extends BasePlatformAdapter {
    * Replace the text of a post this bot sent, through `patchPost({ id, message })`.
    *
    * Applies `sendMessage`'s checks (`empty_text`, then `not_connected`), refuses an empty id, and
-   * refuses a text `splitForMattermost` would cut in two as `edit_too_long`, all with no request.
-   * A `plain` text is escaped as `sendMessage` escapes it, and an escaped body longer than one
-   * post is refused as `edit_too_long` too, with no request.
+   * refuses as `edit_too_long` a text the shared `renderPosts` turns into more than one post, all
+   * with no request, so an edit is refused for exactly the texts a send delivers as several posts.
    */
   override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
@@ -141,13 +134,9 @@ export class MattermostAdapter extends BasePlatformAdapter {
     if (messageId.length === 0) {
       return { ok: false, error: { code: "invalid_message_id", message: "message id is empty" } };
     }
-    const parts = splitForMattermost(out.text);
-    if (parts.length !== 1) return editPartsRefusal(parts.length);
-    const raw = parts[0] as string;
-    // The splitter measured the caller's text; escaping a `plain` text can lengthen it past the
-    // cap, which the server answers with a 400 only after the request.
-    const message = out.format === "plain" ? escapeMarkdown(raw) : raw;
-    if (message.length > MATTERMOST_MAX_POST) return escapedTooLongRefusal(message.length);
+    const posts = renderPosts(out);
+    if (posts.length !== 1) return editPartsRefusal(posts.length);
+    const message = posts[0] as string;
     try {
       await this.handle.client.patchPost({ id: messageId, message });
     } catch (err) {
@@ -284,15 +273,24 @@ function editPartsRefusal(partCount: number): SendResult {
   return { ok: false, error: { code: "empty_text", message: "text reduced to zero parts" } };
 }
 
-/** The refusal for one part whose escaped body is longer than one Mattermost post. */
-function escapedTooLongRefusal(length: number): SendResult {
-  return {
-    ok: false,
-    error: {
-      code: "edit_too_long",
-      message: `escaped text is ${length} characters; a Mattermost post holds ${MATTERMOST_MAX_POST}`,
-    },
-  };
+/**
+ * The post bodies a text goes out as, each within `MATTERMOST_MAX_POST`.
+ *
+ * Mattermost parses markdown natively, so `markdown` needs no flag; `plain` is the case that needs
+ * work, because raw text would be parsed anyway. Split first, escape per part, the ordering Discord
+ * needs for the same reason: a cut between a backslash and its character produces a stray
+ * backslash in one post and a bare marker in the next. The splitter measures the caller's text,
+ * and escaping can double a part, so a part whose escaped body passes the cap is split again at
+ * half the cap, which every escaped body fits. `sendMessage` and `editMessage` both send what this
+ * returns.
+ */
+function renderPosts(out: OutboundMessage): string[] {
+  if (out.format !== "plain") return splitForMattermost(out.text);
+  return splitForMattermost(out.text).flatMap((part) => {
+    const escaped = escapeMarkdown(part);
+    if (escaped.length <= MATTERMOST_MAX_POST) return [escaped];
+    return splitForEscapedMattermost(part).map(escapeMarkdown);
+  });
 }
 
 function mapMattermostError(err: unknown): SendResult {
