@@ -16,6 +16,7 @@ import { AliasCache } from "./alias.js";
 import { loadMatrixSdk, type MatrixSdkClient } from "./client.js";
 import { ConfigurationError } from "./errors.js";
 import { matrixEventToMessageEvent } from "./normalize.js";
+import { replaceContent } from "./replace-content.js";
 import { subscribeToTimeline, type TimelineSubscription } from "./sync.js";
 import type { MatrixAdapterOptions, MatrixEventLike, MatrixRoomLike } from "./types.js";
 
@@ -165,6 +166,65 @@ export class MatrixAdapter extends BasePlatformAdapter {
     } catch (err) {
       return mapMatrixError(err);
     }
+  }
+
+  /**
+   * Matrix edits through an `m.replace` event, so the capability holds from construction: it does
+   * not depend on a connection or on which client is injected later.
+   */
+  override readonly supportsEdit = true;
+
+  /**
+   * Replace a message this bot sent with an `m.replace` event, and return the ORIGINAL event id.
+   *
+   * Returning the original id lets a second edit target the same message: clients apply the
+   * newest replacement of the original, not a replacement of a replacement. There is no length
+   * check, since Matrix has no splitter. An injected client without `sendMessage` cannot carry
+   * the relation and answers `edit_unsupported`. The room resolves through the same alias cache
+   * as `sendMessage`, so a `#alias` this adapter never resolved costs one lookup before the event.
+   * Unlike `sendMessage`, a refused markup is not retried as plain text: one request, one answer.
+   */
+  override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    if (out.text.length === 0) {
+      return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
+    }
+    const client = this.client;
+    if (client === undefined) {
+      return {
+        ok: false,
+        error: { code: "not_connected", message: "MatrixAdapter.connect() not called" },
+      };
+    }
+    if (messageId.length === 0) {
+      return { ok: false, error: { code: "invalid_message_id", message: "message id is empty" } };
+    }
+    if (client.sendMessage === undefined) {
+      return {
+        ok: false,
+        error: {
+          code: "edit_unsupported",
+          message: "matrix client has no sendMessage, so it cannot send an m.replace event",
+        },
+      };
+    }
+    try {
+      const roomId = await this.aliasCache.resolve(client, out.channel.id);
+      if (this.isEncrypted(roomId)) {
+        this.warnEncryptedOnce(roomId);
+        return {
+          ok: false,
+          error: {
+            code: "encrypted_room_unsupported",
+            message: `Matrix room ${roomId} is encrypted; E2EE deferred to v0.2`,
+          },
+        };
+      }
+      this.warnFormatUnsupported(out.format);
+      await client.sendMessage(roomId, replaceContent(messageId, out));
+    } catch (err) {
+      return mapMatrixError(err);
+    }
+    return { ok: true, messageId };
   }
 
   /**
