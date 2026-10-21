@@ -1,6 +1,7 @@
 // Public API for @theokit/gateway-line (ADRs D405-D412).
 
 export { LineAdapter } from "./adapter.js";
+export { lineChannel } from "./channel.js";
 export { ConfigurationError, SDKNotInstalledError } from "./errors.js";
 export { lineEventToMessageEvent, mapSourceType } from "./normalize.js";
 export { ReplyTokenCache } from "./reply-cache.js";
