@@ -19,6 +19,8 @@ interface Client4Like {
     message: string;
     root_id?: string;
   }): Promise<MattermostPost>;
+  /** Replace the fields a patch names on an existing post; the adapter's edit sends `message`. */
+  patchPost(patch: { id: string; message: string }): Promise<MattermostPost>;
 }
 
 interface WebSocketClientLike {
