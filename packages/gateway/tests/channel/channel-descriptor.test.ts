@@ -66,6 +66,20 @@ describe("createChannels", () => {
     expect(rejection?.error.message).toContain("token");
   });
 
+  it("rejects an entry whose required field is null without calling create", () => {
+    const build = vi.fn(() => new MockAdapter("telegram"));
+
+    const result = createChannels([
+      { descriptor: socketDescriptor("telegram", build), config: { token: null } },
+    ]);
+
+    expect(result.adapters).toEqual([]);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
+    expect(result.rejected[0]?.error.message).toContain("token");
+    expect(build).not.toHaveBeenCalled();
+  });
+
   it("treats a required field holding 0 or false as present", () => {
     const result = createChannels([
       {
