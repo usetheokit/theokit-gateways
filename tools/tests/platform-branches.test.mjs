@@ -209,6 +209,6 @@ describe("countPlatformBranches", () => {
 
   it("keeps its platform list equal to PlatformName", () => {
     expect([...PLATFORM_NAMES].sort()).toEqual(platformNameUnion());
-    expect(PLATFORM_NAMES).toHaveLength(13);
+    expect(PLATFORM_NAMES).toHaveLength(14);
   });
 });

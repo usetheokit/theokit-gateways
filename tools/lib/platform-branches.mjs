@@ -41,6 +41,7 @@ export const PLATFORM_NAMES = Object.freeze([
   "signal",
   "imessage",
   "google_chat",
+  "irc",
 ]);
 
 /** Methods only one platform's adapter has; calling one is a branch on that platform. */
