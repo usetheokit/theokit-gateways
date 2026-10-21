@@ -8,9 +8,11 @@
  * observes the runner, not the transport.
  *
  * Every transport here is scripted in this file and handed to the adapter through its own public
- * seam, so nothing spawns a process, opens a remote socket or calls a real endpoint.
+ * seam, so nothing spawns a process, opens a remote socket or calls a real endpoint. The Google Chat
+ * adapter binds its webhook listener on a port the system picks, and nothing dials it.
  */
 
+import { generateKeyPairSync, sign } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 
@@ -20,6 +22,7 @@ import {
   GatewayRunner,
   type PlatformName,
 } from "@theokit/gateway";
+import { GoogleChatAdapter } from "@theokit/gateway-google-chat";
 import { IMessageAdapter, type ChildLike as IMessageChild } from "@theokit/gateway-imessage";
 import { type ChildLike, SignalAdapter } from "@theokit/gateway-signal";
 import { afterEach, describe, expect, it } from "vitest";
@@ -176,9 +179,93 @@ function imessageMember(): Member {
   };
 }
 
+/** The Chat app's endpoint URL, which every inbound token must name as its audience. */
+const CHAT_AUDIENCE = "https://bot.example.com/google-chat";
+const CHAT_SPACE = "spaces/AAAA-test";
+const GOOGLE_KID = "google-key-1";
+// Made once for the file: an RSA key takes tens of milliseconds to generate.
+const googleSigner = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const chatAppKey = generateKeyPairSync("rsa", { modulusLength: 2048 });
+
+/** An ID token as Chat sends it, signed by the scripted Google's key. */
+function chatIdToken(): string {
+  const b64 = (value: string | Buffer): string => Buffer.from(value).toString("base64url");
+  const nowS = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT", kid: GOOGLE_KID };
+  const claims = {
+    iss: "https://accounts.google.com",
+    aud: CHAT_AUDIENCE,
+    email: "chat@system.gserviceaccount.com",
+    email_verified: true,
+    iat: nowS - 10,
+    exp: nowS + 3600,
+  };
+  const signed = `${b64(JSON.stringify(header))}.${b64(JSON.stringify(claims))}`;
+  return `${signed}.${b64(sign("RSA-SHA256", Buffer.from(signed), googleSigner.privateKey))}`;
+}
+
+/** Google's key set, its token endpoint and the Chat API, answered in process. */
+function scriptedGoogle(): {
+  fetch: (url: string, init?: RequestInit) => Promise<Response>;
+  sends: string[];
+} {
+  const sends: string[] = [];
+  const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+    if (url === "https://www.googleapis.com/oauth2/v3/certs") {
+      const jwk = googleSigner.publicKey.export({ format: "jwk" }) as Record<string, unknown>;
+      return Response.json(
+        { keys: [{ ...jwk, kid: GOOGLE_KID, alg: "RS256", use: "sig" }] },
+        { headers: { "cache-control": "public, max-age=3600" } },
+      );
+    }
+    if (url === "https://oauth2.googleapis.com/token") {
+      return Response.json({ access_token: "token-1", expires_in: 3600, token_type: "Bearer" });
+    }
+    if (url === `https://chat.googleapis.com/v1/${CHAT_SPACE}/messages`) {
+      sends.push((JSON.parse(String(init?.body)) as { text: string }).text);
+      return Response.json({ name: `${CHAT_SPACE}/messages/OUT${sends.length}` });
+    }
+    throw new Error(`unexpected fetch to ${url}`);
+  };
+  return { fetch, sends };
+}
+
+function googleChatMember(): Member {
+  const google = scriptedGoogle();
+  const adapter = new GoogleChatAdapter({
+    serviceAccountEmail: "theo-bot@theo-dev.iam.gserviceaccount.com",
+    privateKey: chatAppKey.privateKey.export({ type: "pkcs8", format: "pem" }) as string,
+    audience: CHAT_AUDIENCE,
+    // Port 0: the operating system picks a free one. The case posts through handleRequest, the
+    // seam the route calls, so it never needs to know which.
+    port: 0,
+    fetch: google.fetch,
+  });
+  let messageNumber = 0;
+  return {
+    key: "google_chat",
+    adapter,
+    peerChannelId: CHAT_SPACE,
+    inject: async (text) => {
+      messageNumber += 1;
+      const event = {
+        type: "MESSAGE",
+        space: { name: CHAT_SPACE, spaceType: "DIRECT_MESSAGE" },
+        user: { name: "users/1234", displayName: "Peer" },
+        message: { name: `${CHAT_SPACE}/messages/IN${messageNumber}`, text },
+      };
+      const answer = await adapter.handleRequest(`Bearer ${chatIdToken()}`, JSON.stringify(event));
+      if (answer.status !== 200) throw new Error(`the adapter answered ${answer.status}`);
+    },
+    sent: () => google.sends,
+    close: async () => adapter.disconnect(),
+  };
+}
+
 const MEMBERS: ReadonlyArray<{ readonly key: PlatformName; readonly make: () => Member }> = [
   { key: "signal", make: signalMember },
   { key: "imessage", make: imessageMember },
+  { key: "google_chat", make: googleChatMember },
 ];
 
 /** Poll until `check` holds; fails naming what never happened. */
