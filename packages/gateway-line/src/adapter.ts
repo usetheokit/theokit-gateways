@@ -166,17 +166,35 @@ export class LineAdapter extends BasePlatformAdapter {
   }
 
   /**
-   * Webhook entrypoint — called by `createWebhookServer` AFTER signature
-   * validation. Iterates LINE's batch envelope and dispatches each event.
+   * Webhook entrypoint — called AFTER signature validation. Iterates LINE's batch envelope and
+   * dispatches each event.
+   *
+   * Answers `"no_handler"`, dispatching nothing and caching no reply token, when the batch holds an
+   * event the handler would receive (a text message that passes the mention guard) and no handler
+   * is subscribed: before `onInbound`, after `disconnect()`, or for an adapter a runner never wired
+   * because its connect failed. A webhook route must not acknowledge that answer, or LINE does not
+   * redeliver and the message is lost. A batch with nothing to deliver (an empty `events`, LINE's
+   * console verification, or only follow and media events) answers `"ok"` either way. The handler is
+   * read once per batch, so one that unsubscribes while handling an event still gets the rest.
    */
-  async dispatchWebhookBody(envelope: LineWebhookEnvelope): Promise<void> {
-    for (const ev of envelope.events) {
-      await this.dispatchSingleEvent(ev);
+  async dispatchWebhookBody(envelope: LineWebhookEnvelope): Promise<"ok" | "no_handler"> {
+    const handler = this.inboundHandler;
+    const events = envelope.events.map((ev) => ({ ev, normalized: lineEventToMessageEvent(ev) }));
+    const deliverable = events.some(
+      ({ normalized }) => normalized !== undefined && this.passesMentionGuard(normalized),
+    );
+    if (handler === undefined && deliverable) return "no_handler";
+    for (const { ev, normalized } of events) {
+      await this.dispatchSingleEvent(ev, normalized, handler);
     }
+    return "ok";
   }
 
-  private async dispatchSingleEvent(ev: LineWebhookEvent): Promise<void> {
-    const normalized = lineEventToMessageEvent(ev);
+  private async dispatchSingleEvent(
+    ev: LineWebhookEvent,
+    normalized: GatewayMessageEvent | undefined,
+    handler: ((event: GatewayMessageEvent) => Promise<void>) | undefined,
+  ): Promise<void> {
     if (normalized === undefined) return; // EC-4: silently skip non-message / non-text
     // Cache the reply token (one-shot, 60s TTL) keyed by SENDER userId (replies go to whoever spoke).
     if (ev.replyToken !== undefined && normalized.sender.id.length > 0) {
@@ -184,9 +202,9 @@ export class LineAdapter extends BasePlatformAdapter {
     }
     // Mention guard (D409).
     if (!this.passesMentionGuard(normalized)) return;
-    if (this.inboundHandler === undefined) return;
+    if (handler === undefined) return;
     try {
-      await this.inboundHandler(normalized);
+      await handler(normalized);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[gateway-line] handler threw: ${msg}\n`);

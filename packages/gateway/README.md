@@ -31,12 +31,67 @@ to read ten packages to learn which — so the classes are stated here.
 
 **What none of them does is convert markdown to a platform's dialect.** `format` states the
 caller's INTENT and lets the transport act on it; translating `**bold**` into WhatsApp's
-`*bold*` is a presentation concern and is tracked separately.
+`*bold*` is a presentation concern, and `channelRendering` (below) is where it happens.
 
 Measured 2026-08-30: before this, two of ten read the field. An agent answered
 `**Bom Sucesso (MG)**` and LINE and WhatsApp delivered literal asterisks, which is what a
 declared-and-ignored field costs at the far end.
 
+
+## Sending an agent's reply
+
+`@theokit/presenter`'s `ChatPresenter` turns one agent turn into one chat message: it keeps the
+answer's text, drops the model's reasoning and the tool events, and emits once, on `finish`.
+`channelRendering(platform)` gives it the two things it needs to know about the destination, as
+`{ translate, format }`.
+
+```typescript
+import { channelRendering, type MessageEvent } from "@theokit/gateway";
+import { type AgentOutputEvent, ChatPresenter } from "@theokit/presenter";
+import type { TelegramAdapter } from "@theokit/gateway-telegram";
+
+async function reply(
+  adapter: TelegramAdapter,
+  event: MessageEvent,
+  turn: AsyncIterable<AgentOutputEvent>,
+): Promise<void> {
+  const presenter = new ChatPresenter({
+    channel: event.channel,
+    ...channelRendering(event.platform),
+  });
+  for await (const output of turn) {
+    for (const message of presenter.present(output)) await adapter.sendMessage(message);
+  }
+}
+```
+
+A hand-written loop that concatenates every event carrying `text` sends the reasoning too: one
+reply reached a phone as `"TheOi! 👋"`, `"The"` being the start of the model's thinking. Build one
+presenter per turn; it keeps state between `present()` calls.
+
+| Platform | `translate` | `format` |
+|---|---|---|
+| whatsapp | `**b**` to `*b*`, `*i*` or `_i_` to `_i_`, `~~s~~` to `~s~`, `` `c` `` to ` ```c``` ` | `plain` |
+| slack | `**b**` to `*b*`, `*i*` or `_i_` to `_i_`, `~~s~~` to `~s~`, `` `c` `` kept | `markdown` |
+| discord, mattermost, teams | unchanged | `markdown` |
+| telegram, matrix, email, line, sms | the markers removed, their content kept | `plain` |
+
+- Only the four inline markers are translated: bold, italic, strikethrough and inline code.
+  Headings, links, lists and block quotes reach every platform unchanged.
+- **Fenced code blocks are not handled yet, and they come out wrong.** The inline-code rule
+  rewrites a fence's backticks: a three-backtick fence becomes one backtick on the plain
+  platforms and seven on whatsapp. Do not send a fenced block to a platform that does not render
+  markdown.
+- Telegram gets plain text on purpose. Its adapter maps `markdown` to legacy Markdown, which
+  refuses a reply with an unpaired `_` or `*`, and the send fails with no retry.
+- These renderings are inferred from each platform's documented syntax and from what each adapter
+  does with `format`; none was observed on a real client.
+- The presenter never splits. Each adapter's `sendMessage` splits a long message at its own
+  platform's limit, as it always has.
+- `channelRendering` throws a `RangeError` for a platform it does not know, rather than letting
+  the presenter fall back to markdown.
+- `@theokit/presenter` is your dependency, not this package's: `@theokit/gateway` does not depend
+  on it.
 
 ## Architecture (5 pieces)
 
@@ -74,6 +129,68 @@ const runner = new GatewayRunner({
 
 await runner.start();
 ```
+
+## Wiring channels from descriptors
+
+Each platform package that has one exports a descriptor: a static object listing the channel's
+config fields (`required`, `secret`), how to build its adapter (`create`), and, for a channel that
+receives webhooks, how to verify and ingest a request (`webhook`). `createChannels` builds every
+channel from its descriptor without connecting anything, and `connectFailure: "isolate"` keeps the
+channels that connect when another one cannot.
+
+```typescript
+import { createChannels, GatewayRunner } from "@theokit/gateway";
+import { lineChannel } from "@theokit/gateway-line";
+import { telegramChannel } from "@theokit/gateway-telegram";
+
+const { adapters, rejected } = createChannels([
+  { descriptor: telegramChannel, config: { token: process.env.TELEGRAM_BOT_TOKEN } },
+  {
+    descriptor: lineChannel,
+    config: {
+      channelSecret: process.env.LINE_CHANNEL_SECRET,
+      channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+    },
+  },
+]);
+for (const { platform, error } of rejected) console.error(`${platform}: ${error.message}`);
+
+const runner = new GatewayRunner({
+  adapters,
+  connectFailure: "isolate",
+  handler: async (event, ctx) => {
+    await ctx.reply(`got: ${event.text}`);
+  },
+});
+
+const { connected, failed } = await runner.start();
+if (connected.length === 0) throw new Error("no channel connected");
+for (const { platform, reason } of failed) console.error(`${platform} did not connect: ${reason}`);
+```
+
+- `createChannels` rejects an entry whose required field is absent, `null` or `""` with a
+  `GatewayConfigurationError` coded `missing_required_config` that names the keys, and reports a
+  configuration error thrown by `create` the same way. Any other error propagates. It performs no
+  network call.
+- `connectFailure` defaults to `"rollback"`: one failed connect disconnects the adapters that did
+  connect and rejects `start()`, as before. Under `"isolate"`, `start()` resolves even when every
+  adapter failed, so check `connected` before you rely on the runner.
+- `start()` resolves a `StartResult` (`{ connected, failed }`) under both values. Code that awaits
+  it and ignores the value is unaffected; a type or subclass that declares
+  `start(): Promise<void>` needs to change.
+- Give a runner one channel per platform. It routes replies and `stop()` by platform, so with two
+  channels of one platform the later one sends the earlier one's replies, and the earlier one is
+  connected but never disconnected.
+- Under `"isolate"`, and under `"rollback"` until the first failure, `start()` waits for every
+  connect, so a connect that never settles blocks it.
+- A webhook channel's request reaches your HTTP route; route it by platform to the descriptor's
+  `webhook.verify(adapter, { rawBody, headers })`, then parse the body and pass it to
+  `webhook.ingest(adapter, payload)`, which answers `"delivered"`, `"malformed"` or
+  `"no_handler"`. Answer the platform with a success status only for `"delivered"`.
+  `"no_handler"` means the payload held a message and no handler was subscribed: a request that
+  arrives before `start()` resolves, after `stop()`, or for a channel `start()` reported in
+  `failed` under `"isolate"`. Acknowledging it loses the message, since the platform does not
+  redeliver an acknowledged request.
 
 ## Receiving from a TheoKit app
 

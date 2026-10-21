@@ -109,6 +109,9 @@ importers:
       '@stryker-mutator/vitest-runner':
         specifier: '10'
         version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@26.4.0))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.27.7)(tsx@4.23.12)))
+      '@theokit/presenter':
+        specifier: ^0.10.0
+        version: 0.10.0(@theokit/sdk@5.9.0(@opentelemetry/api@1.9.1)(@types/ws@8.18.1)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(zod@4.4.3)
       '@theokit/sdk':
         specifier: ^5.9.0
         version: 5.9.0(@opentelemetry/api@1.9.1)(@types/ws@8.18.1)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))
@@ -2088,6 +2091,13 @@ packages:
         optional: true
       react-dom:
         optional: true
+
+  '@theokit/presenter@0.10.0':
+    resolution: {integrity: sha512-isnmEsYpYhNnHfN9Jv5nulZLSISFFynoHtChArrpqJ2KYdGioQ0SJS/MnsvD4Ycl774voP0JvYj+FvJi2mtPyg==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/sdk': ^5.3.0
+      zod: ^4.0.0
 
   '@theokit/presenter@0.8.0':
     resolution: {integrity: sha512-L3MSD/X4oZ4XJAZfLCSuO83SPH47jId/gtIIpx51Swgx8lpYJrZBEREbIGuUeMUhYVs6EYofxi1fcs+xNMmYgw==}
@@ -6752,6 +6762,11 @@ snapshots:
     optionalDependencies:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
+
+  '@theokit/presenter@0.10.0(@theokit/sdk@5.9.0(@opentelemetry/api@1.9.1)(@types/ws@8.18.1)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(zod@4.4.3)':
+    dependencies:
+      '@theokit/sdk': 5.9.0(@opentelemetry/api@1.9.1)(@types/ws@8.18.1)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))
+      zod: 4.4.3
 
   '@theokit/presenter@0.8.0(@theokit/sdk@4.62.0(@opentelemetry/api@1.9.1)(@types/ws@8.18.1)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(zod@4.4.3)':
     dependencies:

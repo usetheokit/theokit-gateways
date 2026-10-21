@@ -6,6 +6,20 @@ export {
   type OutboundMessage,
   type SendResult,
 } from "./adapter/base.js";
+// Channels described as data (B-018)
+export type {
+  ChannelConfigField,
+  ChannelDescriptor,
+  ChannelWebhook,
+  IngestResult,
+  WebhookRequest,
+} from "./channel/channel-descriptor.js";
+export {
+  type ChannelEntry,
+  type ChannelRejection,
+  type CreateChannelsResult,
+  createChannels,
+} from "./channel/create-channels.js";
 // Delivery
 export {
   type DeliveryRequest,
@@ -33,10 +47,12 @@ export type {
 } from "./hooks/types.js";
 // Runner
 export {
+  type ConnectFailure,
   type GatewayContext,
   type GatewayHandler,
   GatewayRunner,
   type GatewayRunnerOptions,
+  type StartResult,
 } from "./runner/gateway-runner.js";
 export type { CoveredShape, UncoveredShape } from "./security/credential-patterns.js";
 export {
@@ -51,6 +67,7 @@ export {
   SessionRouter,
 } from "./session/router.js";
 // Text
+export { type ChannelRendering, channelRendering } from "./text/channel-rendering.js";
 export {
   type ChunkByGraphemeOptions,
   type ChunkTextOptions,
