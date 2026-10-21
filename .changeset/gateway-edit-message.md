@@ -32,8 +32,10 @@ On Discord an unknown channel is answered by the platform, as `discord_10003`. O
 `#alias` the adapter never resolved costs one lookup before the edit. Teams and Matrix do not
 retry a refused markup as plain text on an edit, as they do on a send.
 
-The six adapters declare `editMessage` and `supportsEdit` with `override`, so typechecking these
-adapters' sources against `@theokit/gateway` 0.9.0, the floor of their peer range, reports TS4113:
-that core has neither member. The published declarations carry no `override`, so a consumer on
-0.9.0 typechecks, and at run time the members work there, since no adapter calls the base
-`editMessage`.
+The six adapters keep `>=0.9.0` as their peer range on `@theokit/gateway` in this release. At run
+time they work against any core in that range, since no adapter calls the base `editMessage`. Their
+sources declare both members with `override`, so building them against a core older than this one
+reports TS4113. The floor rises to this core in the next release, once it is on npm
+(`docs/adr/0008-edit-capable-adapters-raise-their-core-floor-after-the-core-ships.md`). A
+consumer's own typecheck reads the published declarations, which carry no `override`, and passes
+on an older core.
