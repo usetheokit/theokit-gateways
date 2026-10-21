@@ -170,8 +170,10 @@ describe("countPlatformBranches", () => {
     expect(kinds('const m = require("./helper.js");')).toEqual(["relative_import"]);
   });
 
-  it("does not count a type-only relative import, which carries no runtime code", () => {
-    expect(count('import type { T } from "./types.js";\nlet x: T;')).toBe(0);
+  it("counts a type-only relative import as unscannable, like any relative import", () => {
+    expect(kinds('import type { T } from "./types.js";\nlet x: T;')).toEqual(["relative_import"]);
+    expect(kinds('import { type T } from "./types.js";\nlet x: T;')).toEqual(["relative_import"]);
+    expect(kinds('export type { T } from "./types.js";')).toEqual(["relative_import"]);
   });
 
   it("labels each site with its NFR-004 kind", () => {
