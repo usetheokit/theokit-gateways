@@ -87,6 +87,7 @@ export type {
   MatrixMessageEvent,
   MattermostMessageEvent,
   MessageEvent,
+  NextcloudTalkMessageEvent,
   PlatformEventRegistry,
   PlatformName,
   SignalMessageEvent,

@@ -165,6 +165,8 @@ describe("MessageEvent (T1.1)", () => {
           return `gc:${e.google_chat.messageName}`;
         case "irc":
           return `irc:${e.irc.nick}`;
+        case "nextcloud_talk":
+          return `nextcloud_talk:${e.nextcloud_talk.roomToken}`;
         default: {
           const _exhaustive: never = e;
           throw new Error(`unhandled platform: ${JSON.stringify(_exhaustive)}`);

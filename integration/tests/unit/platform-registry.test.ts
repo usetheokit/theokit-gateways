@@ -88,6 +88,8 @@ function route(event: MessageEvent): string {
       return `gc:${event.google_chat.messageName}`;
     case "irc":
       return `irc:${event.irc.nick}`;
+    case "nextcloud_talk":
+      return `nextcloud_talk:${event.nextcloud_talk.roomToken}`;
     case "acmechat":
       return `ac:${event.acmechat.senderUuid}`;
     default: {
@@ -136,9 +138,10 @@ describe("a gateway authored outside this repository", () => {
       "imessage",
       "google_chat",
       "irc",
+      "nextcloud_talk",
       "acmechat",
     ];
 
-    expect(names).toHaveLength(15);
+    expect(names).toHaveLength(16);
   });
 });
