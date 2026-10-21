@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+// Loaded at collection, outside any test's budget: the first verified request used to pay the SDK middleware's first import inside its own 5 s (B-545).
+import "@microsoft/teams.apps/dist/middleware/index.js";
 
 describe("a forged or unsigned activity", () => {
   let ks: KeyServer | undefined;

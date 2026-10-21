@@ -13,6 +13,8 @@ import { teamsActivityVerifier } from "../src/index.js";
 import { acceptingValidatorModule, activityRequest, TENANT } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
 import { verifierUnderTest } from "./helpers/verifier-under-test.js";
+// Loaded at collection, outside any test's budget: the first verified request used to pay the SDK middleware's first import inside its own 5 s (B-545).
+import "@microsoft/teams.apps/dist/middleware/index.js";
 
 const TEAMS_ACTIVITY = { type: "message", serviceUrl: SERVICE_URL, channelId: "msteams" };
 
