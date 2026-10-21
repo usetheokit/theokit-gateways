@@ -104,7 +104,9 @@ async function onLineWebhook(rawBody: string, headers: Record<string, string | u
   } catch {
     return 400;
   }
-  return (await lineChannel.webhook.ingest(line, payload)) === "delivered" ? 200 : 400;
+  const outcome = await lineChannel.webhook.ingest(line, payload);
+  if (outcome === "delivered") return 200;
+  return outcome === "no_handler" ? 503 : 400;
 }
 ```
 
@@ -113,7 +115,14 @@ async function onLineWebhook(rawBody: string, headers: Record<string, string | u
 - `webhook.ingest` answers `"malformed"` for a payload with no `events` array, or with an event
   that is not an object, and dispatches nothing. Otherwise it dispatches through
   `dispatchWebhookBody`, which caches each event's reply token, so the handler's `ctx.reply` uses
-  the reply API. A follow or other non-text event is skipped and still answers `"delivered"`.
+  the reply API. A follow or other non-text event is skipped and still answers `"delivered"`, and
+  so does an empty `events` array (the console's webhook verification).
+- `webhook.ingest` answers `"no_handler"`, and dispatches nothing, when the payload holds a text
+  message for the handler and no handler is subscribed: before `runner.start()` resolves, after
+  `runner.stop()`, or when LINE's connect failed under `connectFailure: "isolate"`. Do not answer
+  it with 200: LINE redelivers only a request that was not acknowledged, and only when webhook
+  redelivery is turned on for the channel. `createWebhookServer` answers 200 before it dispatches,
+  so it acknowledges such a request; route through `lineChannel.webhook` when that matters.
 - `lineChannel.create` refuses a field of the wrong type with `ConfigurationError` coded
   `invalid_config`, the key in `detail`; the adapter still refuses an empty secret or token.
 

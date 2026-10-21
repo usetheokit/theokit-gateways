@@ -124,6 +124,10 @@ const CONFIG: ReadonlyArray<ConfigField> = [
  * event that is not an object, dispatching nothing; otherwise it dispatches through
  * `LineAdapter.dispatchWebhookBody`, which caches each event's reply token so the handler's reply
  * uses the reply API. A follow or other non-text event is skipped and still reports `"delivered"`.
+ * It reports `"no_handler"`, dispatching nothing, when the payload holds a text message for the
+ * handler and none is subscribed (before the runner started, after it stopped, or when this
+ * adapter's connect failed under `connectFailure: "isolate"`). Only `"delivered"` should be
+ * answered with 200: LINE redelivers a request answered otherwise.
  * `create` refuses a field of the wrong type, and the adapter refuses an empty secret or token,
  * both with this package's `ConfigurationError`.
  *
@@ -147,10 +151,13 @@ export const lineChannel = {
       const signature = headerValue(request.headers, SIGNATURE_HEADER);
       return verifyLineSignature(adapter.getChannelSecret(), request.rawBody, signature);
     },
-    async ingest(adapter: LineAdapter, payload: unknown): Promise<"delivered" | "malformed"> {
+    async ingest(
+      adapter: LineAdapter,
+      payload: unknown,
+    ): Promise<"delivered" | "malformed" | "no_handler"> {
       if (!isEnvelope(payload)) return "malformed";
-      await adapter.dispatchWebhookBody(payload);
-      return "delivered";
+      const outcome = await adapter.dispatchWebhookBody(payload);
+      return outcome === "no_handler" ? "no_handler" : "delivered";
     },
   },
 };

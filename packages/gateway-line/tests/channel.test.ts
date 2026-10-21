@@ -167,6 +167,20 @@ describe("lineChannel.webhook.ingest", () => {
     expect(await lineChannel.webhook.ingest(adapter, { events: [follow] })).toBe("delivered");
     expect(handler).not.toHaveBeenCalled();
   });
+
+  it("reports no_handler for a text message when no handler is subscribed", async () => {
+    const adapter = lineChannel.create(CONFIG);
+
+    expect(await lineChannel.webhook.ingest(adapter, { events: [textEvent("unheard")] })).toBe(
+      "no_handler",
+    );
+  });
+
+  it("reports delivered for an empty events array when no handler is subscribed", async () => {
+    const adapter = lineChannel.create(CONFIG);
+
+    expect(await lineChannel.webhook.ingest(adapter, { events: [] })).toBe("delivered");
+  });
 });
 
 describe("lineChannel", () => {

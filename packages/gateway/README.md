@@ -185,7 +185,12 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
   connect, so a connect that never settles blocks it.
 - A webhook channel's request reaches your HTTP route; route it by platform to the descriptor's
   `webhook.verify(adapter, { rawBody, headers })`, then parse the body and pass it to
-  `webhook.ingest(adapter, payload)`, which answers `"delivered"` or `"malformed"`.
+  `webhook.ingest(adapter, payload)`, which answers `"delivered"`, `"malformed"` or
+  `"no_handler"`. Answer the platform with a success status only for `"delivered"`.
+  `"no_handler"` means the payload held a message and no handler was subscribed: a request that
+  arrives before `start()` resolves, after `stop()`, or for a channel `start()` reported in
+  `failed` under `"isolate"`. Acknowledging it loses the message, since the platform does not
+  redeliver an acknowledged request.
 
 ## Receiving from a TheoKit app
 
