@@ -62,6 +62,7 @@ const CREDENTIAL_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
   // imsg reads the Messages database and sends as the signed-in account; the adapter holds no secret.
   ["gateway-imessage", []],
   ["gateway-google-chat", ["privateKey"]],
+  ["gateway-irc", ["password", "saslPassword"]],
   ["gateway-sms", ["authToken", "apiSecret", "signatureSecret"]],
   ["gateway-teams", ["clientSecret"]],
   ["gateway-telegram", ["token"]],
@@ -373,8 +374,8 @@ describe("cross-adapter contract", () => {
         if (!guarded) offenders.push(`${path}: ${found[0].slice(0, 24)}…`);
       }
     }
-    // Counted, not guessed: 20 implementations across the thirteen adapters and WhatsApp's three
-    // backends. A looser scan finds 22 — the extra two are the `WhatsAppBackend` interface's own
+    // Counted, not guessed: 21 implementations across the fourteen adapters and WhatsApp's three
+    // backends. A looser scan finds 23 — the extra two are the `WhatsAppBackend` interface's own
     // declarations, which end in `;` and correctly have no body to guard.
     //
     // The floor exists because the first version of this regex used `[^)]*` and matched ZERO:
@@ -384,7 +385,7 @@ describe("cross-adapter contract", () => {
     // comment used to carry — that adding an adapter makes someone look here — was false:
     // an eighteenth declaration slid past in silence. Exact is the friction, in both
     // directions, and updating one number is the whole cost of adding an adapter.
-    expect(declarations).toBe(20);
+    expect(declarations).toBe(21);
     expect(offenders).toEqual([]);
   });
 
@@ -472,11 +473,11 @@ describe("cross-adapter contract", () => {
         if (!works) offenders.push(`${path}: connect() invokes nothing`);
       }
     }
-    // Exact, and counted rather than guessed: 19 connect bodies across the thirteen adapters and
+    // Exact, and counted rather than guessed: 20 connect bodies across the fourteen adapters and
     // WhatsApp's three backends. A floor only fires when the count DROPS, which catches the regex
     // breaking but not a new adapter slipping in unchecked — and this file has already shipped
     // both failure modes.
-    expect(bodies).toBe(19);
+    expect(bodies).toBe(20);
     expect(offenders).toEqual([]);
   });
 
@@ -577,7 +578,7 @@ describe("cross-adapter contract", () => {
     // reads the field, or the gate read nothing. Without this assertion a rename of `src/` or a
     // path change would turn the gate green by making it blind — the vacuous pass the credential
     // gate in this file documents having survived once already.
-    expect(examined, "packages examined — a gate that reads nothing reports no offenders").toBe(13);
+    expect(examined, "packages examined — a gate that reads nothing reports no offenders").toBe(14);
 
     expect(ignoring, "adapters that never read the `format` their own contract declares").toEqual(
       [],
