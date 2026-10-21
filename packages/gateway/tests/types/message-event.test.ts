@@ -161,6 +161,8 @@ describe("MessageEvent (T1.1)", () => {
           return `sg:${e.signal.timestamp}`;
         case "imessage":
           return `im:${e.imessage.guid}`;
+        case "google_chat":
+          return `gc:${e.google_chat.messageName}`;
         default: {
           const _exhaustive: never = e;
           throw new Error(`unhandled platform: ${JSON.stringify(_exhaustive)}`);

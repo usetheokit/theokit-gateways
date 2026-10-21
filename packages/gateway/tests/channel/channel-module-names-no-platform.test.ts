@@ -24,6 +24,8 @@ const PLATFORM_NAMES = [
   "teams",
   "signal",
   "imessage",
+  "google_chat",
+  "google-chat",
 ] as const;
 
 const SRC = new URL("../../src/", import.meta.url).pathname;
