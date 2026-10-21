@@ -49,10 +49,15 @@ export interface SendResult {
  * - `onInbound(handler)` returns an unsubscribe function. EC-H: calling
  *   `onInbound` twice replaces the previous handler — does NOT stack.
  * - `sendMessage` with empty text returns `{ ok: false, code: "empty_text" }`.
- * - `supportsEdit` says whether `editMessage` can replace a sent message's text. It is `false`
- *   unless the adapter overrides it, and it MUST NOT change with `connect()`.
+ * - `supportsEdit` says whether the adapter has an edit call. It is `false` unless the adapter
+ *   overrides it, and it MUST NOT change with `connect()`. `true` does not promise that every
+ *   edit is accepted: an adapter whose injected client lacks the edit call (Matrix) still answers
+ *   `edit_unsupported`, which a caller handles like any other refusal.
  * - `editMessage` returns a `SendResult` and never throws on platform errors. The default refuses
  *   with `edit_unsupported` and makes no platform call.
+ * - Edits are not ordered by the adapter. Two edits of one message id in flight at once reach the
+ *   platform in either order, so a caller awaits each edit before the next, or keeps one in flight
+ *   and coalesces to the latest text.
  *
  * @public
  */
