@@ -13,7 +13,7 @@
  * adapter dials a scripted server on a local port.
  */
 
-import { generateKeyPairSync, sign } from "node:crypto";
+import { createHmac, generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { createServer, type Server, type Socket } from "node:net";
 import { PassThrough } from "node:stream";
@@ -27,6 +27,7 @@ import {
 import { GoogleChatAdapter } from "@theokit/gateway-google-chat";
 import { IMessageAdapter, type ChildLike as IMessageChild } from "@theokit/gateway-imessage";
 import { IrcAdapter } from "@theokit/gateway-irc";
+import { NextcloudTalkAdapter } from "@theokit/gateway-nextcloud-talk";
 import { type ChildLike, SignalAdapter } from "@theokit/gateway-signal";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -357,6 +358,77 @@ async function ircMember(): Promise<Member> {
   };
 }
 
+const TALK_URL = "https://cloud.example.com";
+const TALK_ROOM = "uau7bvcd";
+const TALK_SECRET = "a-bot-secret-of-forty-or-more-characters-0123456789";
+
+/** Hex HMAC-SHA256 of `random + payload`: how Talk signs a webhook and checks a bot's message. */
+function talkSignature(random: string, payload: string): string {
+  return createHmac("sha256", TALK_SECRET)
+    .update(random + payload)
+    .digest("hex");
+}
+
+function nextcloudTalkMember(): Member {
+  const sends: string[] = [];
+  // A Nextcloud server that has bots and stores every bot message whose signature checks out.
+  const fetchFn = async (input: string, init?: RequestInit): Promise<Response> => {
+    if (input === `${TALK_URL}/ocs/v2.php/cloud/capabilities?format=json`) {
+      return Response.json({
+        ocs: { data: { capabilities: { spreed: { features: ["chat-v2", "bots-v1"] } } } },
+      });
+    }
+    if (input === `${TALK_URL}/ocs/v2.php/apps/spreed/api/v1/bot/${TALK_ROOM}/message`) {
+      const headers = new Headers(init?.headers);
+      const { message } = JSON.parse(String(init?.body)) as { message: string };
+      const random = headers.get("x-nextcloud-talk-bot-random") ?? "";
+      if (headers.get("x-nextcloud-talk-bot-signature") !== talkSignature(random, message)) {
+        return new Response("{}", { status: 401 });
+      }
+      sends.push(message);
+      return new Response("{}", { status: 201 });
+    }
+    throw new Error(`unexpected fetch to ${input}`);
+  };
+  const adapter = new NextcloudTalkAdapter({
+    baseUrl: TALK_URL,
+    secret: TALK_SECRET,
+    // Port 0: the operating system picks a free one. The case posts through handleRequest, the
+    // seam the route calls, so it never needs to know which.
+    port: 0,
+    fetch: fetchFn,
+  });
+  let messageNumber = 0;
+  return {
+    key: "nextcloud_talk",
+    adapter,
+    peerChannelId: TALK_ROOM,
+    inject: async (text) => {
+      messageNumber += 1;
+      const rawBody = JSON.stringify({
+        type: "Create",
+        actor: { type: "Person", id: "users/peer", name: "Peer" },
+        object: {
+          type: "Note",
+          id: String(messageNumber),
+          name: "message",
+          content: JSON.stringify({ message: text, parameters: [] }),
+          mediaType: "text/markdown",
+        },
+        target: { type: "Collection", id: TALK_ROOM, name: "theokit" },
+      });
+      const random = randomBytes(32).toString("hex");
+      const answer = await adapter.handleRequest(
+        { random, signature: talkSignature(random, rawBody) },
+        rawBody,
+      );
+      if (answer.status !== 200) throw new Error(`the adapter answered ${answer.status}`);
+    },
+    sent: () => sends,
+    close: async () => adapter.disconnect(),
+  };
+}
+
 const MEMBERS: ReadonlyArray<{
   readonly key: PlatformName;
   readonly make: () => Member | Promise<Member>;
@@ -365,6 +437,7 @@ const MEMBERS: ReadonlyArray<{
   { key: "imessage", make: imessageMember },
   { key: "google_chat", make: googleChatMember },
   { key: "irc", make: ircMember },
+  { key: "nextcloud_talk", make: nextcloudTalkMember },
 ];
 
 /** Poll until `check` holds; fails naming what never happened. */

@@ -340,6 +340,47 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       "The suite joins a fresh #theokit-it-<8 hex> channel, so it writes nowhere anyone reads. A network that requires SASL for new connections, or blocks this host, refuses registration.",
   },
   {
+    id: "nextcloud-talk",
+    reachableVia: "NEXTCLOUD_TALK_URL",
+    label: "Nextcloud Talk",
+    pkg: "@theokit/gateway-nextcloud-talk",
+    transport: "webhook",
+    credentials: [
+      {
+        name: "NEXTCLOUD_TALK_URL",
+        what: "Nextcloud server base URL — provisioned, not created by hand",
+        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      },
+      {
+        name: "NEXTCLOUD_TALK_BOT_SECRET",
+        what: "The bot secret, generated per run and never printed — provisioned",
+        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      },
+      {
+        name: "NEXTCLOUD_TALK_WEBHOOK_PORT",
+        what: "The host port the bot's webhook points at, where the suite's adapter listens — provisioned",
+        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      },
+      {
+        name: "NEXTCLOUD_TALK_USER_PASSWORD",
+        what: "The admin password the suite writes in the conversation with — provisioned",
+        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      },
+    ],
+    target: [
+      {
+        name: "NEXTCLOUD_TALK_ROOM",
+        what: "Conversation token the bot is attached to — provisioned",
+        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      },
+    ],
+    caveat:
+      "Talk is self-hosted, so a server booted in Docker for the run IS the platform, as for Matrix " +
+      "and Mattermost. The bot's webhook reaches the suite at host.docker.internal, so no public " +
+      "URL is needed; the first boot installs Talk from apps.nextcloud.com. It does NOT cover a " +
+      "hosted Nextcloud behind a proxy, or Talk's federation.",
+  },
+  {
     id: "line",
     label: "LINE",
     pkg: "@theokit/gateway-line",

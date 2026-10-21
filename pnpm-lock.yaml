@@ -67,6 +67,9 @@ importers:
       '@theokit/gateway-mattermost':
         specifier: workspace:*
         version: link:../packages/gateway-mattermost
+      '@theokit/gateway-nextcloud-talk':
+        specifier: workspace:*
+        version: link:../packages/gateway-nextcloud-talk
       '@theokit/gateway-signal':
         specifier: workspace:*
         version: link:../packages/gateway-signal
