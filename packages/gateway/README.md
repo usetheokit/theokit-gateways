@@ -125,7 +125,7 @@ request:
 | Code | When |
 |---|---|
 | `edit_unsupported` | the adapter cannot edit (the four above), or a Matrix client injected without `sendMessage` |
-| `edit_too_long` | the text would need more than one platform message; an edit replaces one message and is never split. Matrix has no length check |
+| `edit_too_long` | the text would need more than one platform message, counted after a `plain` text is escaped as a send escapes it; an edit replaces one message and is never split. Matrix has no length check |
 | `invalid_message_id` | the id is empty, or on Telegram not a positive integer |
 | `empty_text` | the text is empty, or on Teams only whitespace |
 | `not_connected` | the adapter is not connected, where its `sendMessage` checks that too (all but Telegram and Discord) |
@@ -137,6 +137,16 @@ within one message, and edit only a message this adapter sent: on Matrix an edit
 `m.replace` event, and clients apply it only to an event from the same sender. An edit whose
 markup the platform refuses is not retried as plain text. When an edit is refused, the sample
 sends the final text as a new message, so the preview stays above it.
+
+`supportsEdit` says that the adapter has an edit call, not that every edit is accepted. Treat
+`edit_unsupported` from an adapter that reports `true` as "stop previewing", like any other
+refusal. Where an adapter checks the connection, `not_connected` is answered before
+`invalid_message_id`.
+
+The adapters do not order edits. Two edits of the same message that are in flight at once can
+reach the platform in either order, and the one that lands last stays on screen; on Matrix each
+edit is a separate event and clients show the newest. Await each edit before sending the next,
+or keep one in flight and send only the latest text when it settles.
 
 ## Architecture (5 pieces)
 
