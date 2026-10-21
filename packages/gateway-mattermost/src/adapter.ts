@@ -117,6 +117,43 @@ export class MattermostAdapter extends BasePlatformAdapter {
     }
   }
 
+  /** Mattermost edits a sent post's text through `Client4.patchPost`. */
+  override readonly supportsEdit = true;
+
+  /**
+   * Replace the text of a post this bot sent, through `patchPost({ id, message })`.
+   *
+   * Applies `sendMessage`'s checks (`empty_text`, then `not_connected`), refuses an empty id, and
+   * refuses a text `splitForMattermost` would cut in two as `edit_too_long`, all with no request.
+   * A `plain` text is escaped as `sendMessage` escapes it.
+   */
+  override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    if (out.text.length === 0) {
+      return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
+    }
+    if (this.handle === undefined) {
+      return {
+        ok: false,
+        error: { code: "not_connected", message: "MattermostAdapter.connect() not called" },
+      };
+    }
+    if (messageId.length === 0) {
+      return { ok: false, error: { code: "invalid_message_id", message: "message id is empty" } };
+    }
+    const parts = splitForMattermost(out.text);
+    if (parts.length !== 1) return editPartsRefusal(parts.length);
+    const raw = parts[0] as string;
+    try {
+      await this.handle.client.patchPost({
+        id: messageId,
+        message: out.format === "plain" ? escapeMarkdown(raw) : raw,
+      });
+    } catch (err) {
+      return mapMattermostError(err);
+    }
+    return { ok: true, messageId };
+  }
+
   onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
     // EC-H: replace, not stack.
     this.inboundHandler = handler;
@@ -223,6 +260,26 @@ export function parsePostFromWS(msg: WSMessage): MattermostPost | undefined {
 interface MattermostRestError {
   status_code?: number;
   message?: string;
+}
+
+/**
+ * The refusal for a text that is not exactly one Mattermost post.
+ *
+ * More than one part is `edit_too_long`. No parts cannot happen today, since
+ * `splitForMattermost` returns at least one part for any non-empty text and empty text is refused
+ * earlier; the arm keeps a later splitter that returns `[]` from editing with `undefined`.
+ */
+function editPartsRefusal(partCount: number): SendResult {
+  if (partCount > 1) {
+    return {
+      ok: false,
+      error: {
+        code: "edit_too_long",
+        message: `text needs ${partCount} Mattermost posts; an edit replaces one`,
+      },
+    };
+  }
+  return { ok: false, error: { code: "empty_text", message: "text reduced to zero parts" } };
 }
 
 function mapMattermostError(err: unknown): SendResult {
