@@ -29,6 +29,7 @@
     "@theokit/gateway-email": "workspace:*",
     "@theokit/gateway-google-chat": "workspace:*",
     "@theokit/gateway-imessage": "workspace:*",
+    "@theokit/gateway-irc": "workspace:*",
     "@theokit/gateway-line": "workspace:*",
     "@theokit/gateway-matrix": "workspace:*",
     "@theokit/gateway-mattermost": "workspace:*",

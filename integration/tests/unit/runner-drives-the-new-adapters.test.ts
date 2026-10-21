@@ -9,11 +9,13 @@
  *
  * Every transport here is scripted in this file and handed to the adapter through its own public
  * seam, so nothing spawns a process, opens a remote socket or calls a real endpoint. The Google Chat
- * adapter binds its webhook listener on a port the system picks, and nothing dials it.
+ * adapter binds its webhook listener on a port the system picks, and nothing dials it; the IRC
+ * adapter dials a scripted server on a local port.
  */
 
 import { generateKeyPairSync, sign } from "node:crypto";
 import { EventEmitter } from "node:events";
+import { createServer, type Server, type Socket } from "node:net";
 import { PassThrough } from "node:stream";
 
 import {
@@ -24,6 +26,7 @@ import {
 } from "@theokit/gateway";
 import { GoogleChatAdapter } from "@theokit/gateway-google-chat";
 import { IMessageAdapter, type ChildLike as IMessageChild } from "@theokit/gateway-imessage";
+import { IrcAdapter } from "@theokit/gateway-irc";
 import { type ChildLike, SignalAdapter } from "@theokit/gateway-signal";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -39,6 +42,11 @@ interface Member {
   sent(): readonly string[];
   /** Release anything the transport holds open. */
   close(): Promise<void>;
+  /**
+   * Resolve once everything the adapter has written so far has reached the transport. Members
+   * whose transport records synchronously have nothing to wait for.
+   */
+  flush?(): Promise<void>;
 }
 
 /** A signal-cli child that answers `listGroups` and every `send`, and can push a `receive`. */
@@ -262,10 +270,101 @@ function googleChatMember(): Member {
   };
 }
 
-const MEMBERS: ReadonlyArray<{ readonly key: PlatformName; readonly make: () => Member }> = [
+/**
+ * An IRC server on a local port: it welcomes any nick, confirms every JOIN, records each PRIVMSG
+ * body and can push a PRIVMSG from another nick.
+ */
+class ScriptedIrcServer {
+  readonly sends: string[] = [];
+  private readonly server: Server = createServer((socket) => this.accept(socket));
+  private client: Socket | undefined;
+  private nick = "";
+  private barriers = 0;
+  private readonly pongs: string[] = [];
+
+  async listen(): Promise<number> {
+    await new Promise<void>((resolve) => this.server.listen(0, "127.0.0.1", () => resolve()));
+    const address = this.server.address();
+    if (address === null || typeof address === "string") throw new Error("not listening");
+    return address.port;
+  }
+
+  /**
+   * A PING the adapter must answer. Its PONG comes back on the same socket after every line the
+   * adapter wrote before it, so once it arrives no earlier PRIVMSG is still in flight.
+   */
+  async barrier(): Promise<void> {
+    this.barriers += 1;
+    const token = `barrier-${this.barriers}`;
+    this.client?.write(`PING :${token}\r\n`);
+    await until(() => this.pongs.includes(token), `PONG ${token}`);
+  }
+
+  privmsg(text: string): void {
+    this.client?.write(`:peer!p@peer.host PRIVMSG #theokit :${text}\r\n`);
+  }
+
+  async close(): Promise<void> {
+    this.client?.destroy();
+    await new Promise<void>((resolve) => this.server.close(() => resolve()));
+  }
+
+  private accept(socket: Socket): void {
+    this.client = socket;
+    let buffered = "";
+    socket.setEncoding("utf8");
+    socket.on("error", () => undefined);
+    socket.on("data", (chunk: string) => {
+      buffered += chunk;
+      for (let at = buffered.indexOf("\r\n"); at !== -1; at = buffered.indexOf("\r\n")) {
+        this.onLine(socket, buffered.slice(0, at));
+        buffered = buffered.slice(at + 2);
+      }
+    });
+  }
+
+  private onLine(socket: Socket, line: string): void {
+    const [command = "", ...rest] = line.split(" ");
+    if (command === "NICK") this.nick = rest[0] ?? "";
+    if (command === "USER") socket.write(`:irc.test 001 ${this.nick} :Welcome\r\n`);
+    if (command === "JOIN") socket.write(`:irc.test 366 ${this.nick} ${rest[0]} :End\r\n`);
+    if (command === "PRIVMSG") this.sends.push(line.slice(line.indexOf(" :") + 2));
+    if (command === "PONG") this.pongs.push(line.slice(line.indexOf(":") + 1));
+  }
+}
+
+async function ircMember(): Promise<Member> {
+  const server = new ScriptedIrcServer();
+  const port = await server.listen();
+  const adapter = new IrcAdapter({
+    host: "127.0.0.1",
+    port,
+    tls: false,
+    nick: "theobot",
+    channels: ["#theokit"],
+  });
+  return {
+    key: "irc",
+    adapter,
+    peerChannelId: "#theokit",
+    inject: async (text) => server.privmsg(text),
+    sent: () => server.sends,
+    flush: () => server.barrier(),
+    close: async () => {
+      await adapter.disconnect();
+      await server.close();
+    },
+  };
+}
+
+const MEMBERS: ReadonlyArray<{
+  readonly key: PlatformName;
+  readonly make: () => Member | Promise<Member>;
+}> = [
   { key: "signal", make: signalMember },
   { key: "imessage", make: imessageMember },
   { key: "google_chat", make: googleChatMember },
+  { key: "irc", make: ircMember },
 ];
 
 /** Poll until `check` holds; fails naming what never happened. */
@@ -301,7 +400,7 @@ describe("GatewayRunner drives the new adapters", () => {
   it.each(MEMBERS)(
     "one inbound gives one send and one post_outbound for $key",
     async ({ key, make }) => {
-      const member = make();
+      const member = await make();
       const { hook, platforms } = countingHook();
       let markHandled: () => void = () => undefined;
       const handled = new Promise<void>((resolve) => {
@@ -326,6 +425,7 @@ describe("GatewayRunner drives the new adapters", () => {
       // second send or a second hook call would already be recorded below.
       await handled;
       await until(() => platforms.length >= 1, `post_outbound for ${key}`);
+      await member.flush?.();
 
       expect(member.sent()).toEqual(["hello back"]);
       expect(platforms).toEqual([key]);
@@ -335,7 +435,7 @@ describe("GatewayRunner drives the new adapters", () => {
   it.each(MEMBERS)(
     "a reply written around the runner leaves post_outbound at zero ($key)",
     async ({ make }) => {
-      const member = make();
+      const member = await make();
       const { hook, platforms } = countingHook();
       const runner = new GatewayRunner({
         adapters: [member.adapter],
@@ -354,6 +454,7 @@ describe("GatewayRunner drives the new adapters", () => {
       });
 
       expect(result.ok).toBe(true);
+      await member.flush?.();
       expect(member.sent()).toEqual(["written around the runner"]);
       expect(platforms).toEqual([]);
     },
