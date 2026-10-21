@@ -37,7 +37,7 @@ export interface WebhookRequest {
  * without dispatching, and `"no_handler"` dispatched nothing because the payload holds a message
  * for the handler and none is subscribed (before the runner starts, after it stops, or for an
  * adapter whose connect failed under `connectFailure: "isolate"`). Answer only `"delivered"` with
- * a success status, so the platform redelivers the rest.
+ * a success status, so a platform that redelivers can send the rest again.
  */
 export type IngestResult = "delivered" | "malformed" | "no_handler";
 

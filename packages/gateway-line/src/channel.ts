@@ -127,7 +127,8 @@ const CONFIG: ReadonlyArray<ConfigField> = [
  * It reports `"no_handler"`, dispatching nothing, when the payload holds a text message for the
  * handler and none is subscribed (before the runner started, after it stopped, or when this
  * adapter's connect failed under `connectFailure: "isolate"`). Only `"delivered"` should be
- * answered with 200: LINE redelivers a request answered otherwise.
+ * answered with 200: with webhook redelivery turned on, LINE redelivers a request answered
+ * otherwise.
  * `create` refuses a field of the wrong type, and the adapter refuses an empty secret or token,
  * both with this package's `ConfigurationError`.
  *
