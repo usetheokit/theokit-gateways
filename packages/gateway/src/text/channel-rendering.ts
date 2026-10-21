@@ -61,6 +61,8 @@ const translateWith =
  *   marker character as itself.
  * - google_chat: markers dropped and `plain`. Chat's own markup is close to, but not, markdown, and
  *   how it renders a reply is unmeasured until a live run (plan Q3).
+ * - nextcloud_talk: `markdown`, passed through. Talk renders the markdown a bot sends (the Q6
+ *   probe's inbound bodies carry `mediaType: "text/markdown"`).
  * - irc: markers dropped and `plain`. IRC has no markdown; its own formatting is control bytes,
  *   and a marker character reaches the channel as itself.
  * - telegram: markers dropped and `plain`. Its adapter maps `markdown` to legacy Markdown, which
@@ -84,6 +86,7 @@ const RENDERINGS: Readonly<Record<PlatformName, ChannelRendering>> = {
   imessage: { format: "plain", translate: translateWith(STRIP) },
   google_chat: { format: "plain", translate: translateWith(STRIP) },
   irc: { format: "plain", translate: translateWith(STRIP) },
+  nextcloud_talk: { format: "markdown", translate: identity },
 };
 
 /**

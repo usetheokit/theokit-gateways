@@ -328,6 +328,26 @@ export interface IrcMessageEvent extends BaseMessageEvent {
 }
 
 /**
+ * Nextcloud Talk event variant (B-358), read from a bot webhook `Create` activity that carried a
+ * signature the adapter verified.
+ */
+export interface NextcloudTalkMessageEvent extends BaseMessageEvent {
+  readonly platform: "nextcloud_talk";
+  readonly nextcloud_talk: {
+    /** The conversation's token, the `target.id` of the activity; a reply goes to it. */
+    readonly roomToken: string;
+    /** Talk's id for the message, the activity's `object.id`. */
+    readonly messageId: string;
+    /** Who wrote it, as Talk names actors: `users/<id>`, `guests/<id>`, `bots/<id>`… */
+    readonly actorId: string;
+    /** The id of the message this one answers, when it is a reply. */
+    readonly replyToId?: string;
+    /** The parsed webhook body — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
+/**
  * The open registry every platform's inbound event is filed under.
  *
  * **This is an `interface` on purpose, and it must stay one.** An interface can be extended from
@@ -364,6 +384,7 @@ export interface PlatformEventRegistry {
   imessage: IMessageMessageEvent;
   google_chat: GoogleChatMessageEvent;
   irc: IrcMessageEvent;
+  nextcloud_talk: NextcloudTalkMessageEvent;
 }
 
 /**

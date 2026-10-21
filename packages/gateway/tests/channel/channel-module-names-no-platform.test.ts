@@ -27,6 +27,8 @@ const PLATFORM_NAMES = [
   "google_chat",
   "google-chat",
   "irc",
+  "nextcloud_talk",
+  "nextcloud-talk",
 ] as const;
 
 const SRC = new URL("../../src/", import.meta.url).pathname;

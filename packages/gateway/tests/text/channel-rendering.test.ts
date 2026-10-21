@@ -29,6 +29,7 @@ const ALL_PLATFORMS = [
   "imessage",
   "google_chat",
   "irc",
+  "nextcloud_talk",
 ] as const satisfies readonly PlatformName[];
 
 // `PlatformName` is a derived type with no runtime list, so the list above is checked against it
@@ -38,7 +39,13 @@ type MissingFromList = Exclude<PlatformName, (typeof ALL_PLATFORMS)[number]>;
 const listIsComplete: [MissingFromList] extends [never] ? true : false = true;
 
 const SINGLE_CHARACTER: readonly PlatformName[] = ["whatsapp", "slack"];
-const MARKDOWN_AS_IS: readonly PlatformName[] = ["discord", "mattermost", "teams", "signal"];
+const MARKDOWN_AS_IS: readonly PlatformName[] = [
+  "discord",
+  "mattermost",
+  "teams",
+  "signal",
+  "nextcloud_talk",
+];
 const PLAIN: readonly PlatformName[] = [
   "telegram",
   "matrix",
