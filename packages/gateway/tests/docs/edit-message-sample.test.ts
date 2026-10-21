@@ -16,13 +16,16 @@ import { describe, expect, it } from "vitest";
 import type { BasePlatformAdapter, OutboundMessage, SendResult } from "../../src/adapter/base.js";
 import { MockAdapter } from "../adapter/mock-adapter.js";
 
-/** An adapter that says it can edit and whose edit the platform refuses. */
+/**
+ * An adapter that says it can edit and whose edit is refused.
+ *
+ * The refusal is the base default's `edit_unsupported`, the code Matrix answers when its injected
+ * client has no `sendMessage`: a flag of `true` does not promise that every edit is accepted. The
+ * sample treats every refusal alike, so this also stands for a platform refusing the edit, and it
+ * keeps the test running the core's own edit code rather than a refusal written here.
+ */
 class RefusingEditAdapter extends MockAdapter {
   override readonly supportsEdit = true;
-
-  override async editMessage(_messageId: string, _out: OutboundMessage): Promise<SendResult> {
-    return { ok: false, error: { code: "telegram_400", message: "message to edit not found" } };
-  }
 }
 
 // readme-sample:start
