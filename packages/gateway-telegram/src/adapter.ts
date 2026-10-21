@@ -141,6 +141,54 @@ export class TelegramAdapter extends BasePlatformAdapter {
     return { ok: true, ...(lastId !== undefined ? { messageId: lastId } : {}) };
   }
 
+  /** Telegram edits a sent message's text through `editMessageText`. */
+  override readonly supportsEdit = true;
+
+  /**
+   * Replace the text of a message this bot sent, through `editMessageText`.
+   *
+   * Refuses, with no request, empty text, a message id that is not a safe positive integer, and
+   * a non-numeric channel, in that order; the first and last are `sendMessage`'s own checks. A text `splitForTelegram` would cut in
+   * two is refused as `edit_too_long`: an edit replaces one message. Telegram's "message is not
+   * modified" refusal is answered as a success, because the message already shows the text; a
+   * caller that treated it as a failure would send the same text again as a second message.
+   */
+  override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    if (out.text.length === 0) {
+      return { ok: false, error: { code: "empty_text", message: "text is empty" } };
+    }
+    const id = parseMessageId(messageId);
+    if (id === undefined) {
+      return {
+        ok: false,
+        error: {
+          code: "invalid_message_id",
+          message: `message id "${messageId}" is not a positive integer`,
+        },
+      };
+    }
+    const chatIdNum = Number(out.channel.id);
+    if (Number.isNaN(chatIdNum)) {
+      return {
+        ok: false,
+        error: { code: "invalid_channel", message: `channel.id "${out.channel.id}" not numeric` },
+      };
+    }
+    const parts = splitForTelegram(out.text);
+    if (parts.length !== 1) return editPartsRefusal(parts.length);
+    try {
+      await this.bot.api.editMessageText(
+        chatIdNum,
+        id,
+        parts[0] as string,
+        parseModeOptions(out.format),
+      );
+    } catch (err) {
+      if (!isNotModified(err)) return mapSendError(err);
+    }
+    return { ok: true, messageId };
+  }
+
   override onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
     // EC-H: replace previous handler (do not stack).
     this.handler = handler;
@@ -233,6 +281,51 @@ function mapFormat(
   if (format === "markdown") return "Markdown";
   if (format === "html") return "HTML";
   return undefined;
+}
+
+/** The `parse_mode` option for a declared format, or no option. */
+function parseModeOptions(format: OutboundMessage["format"]): { parse_mode?: "Markdown" | "HTML" } {
+  const parseMode = mapFormat(format);
+  return parseMode !== undefined ? { parse_mode: parseMode } : {};
+}
+
+/**
+ * The numeric id `editMessageText` takes, or `undefined` for one Telegram cannot have issued.
+ *
+ * Digits only, then a safe positive integer: `Number()` alone accepts `" 42"` and `"0x10"`, turns
+ * `"abc"` into `NaN`, and rounds a digit string above 2^53 - 1 to a different id.
+ */
+function parseMessageId(messageId: string): number | undefined {
+  if (!/^\d+$/.test(messageId)) return undefined;
+  const id = Number(messageId);
+  return Number.isSafeInteger(id) && id > 0 ? id : undefined;
+}
+
+/** Did Telegram refuse the edit because the message already shows this text? */
+function isNotModified(err: unknown): boolean {
+  return (
+    err instanceof GrammyError && err.description.toLowerCase().includes("message is not modified")
+  );
+}
+
+/**
+ * The refusal for a text that is not exactly one Telegram message.
+ *
+ * More than one part is `edit_too_long`. No parts cannot happen today, since `splitForTelegram`
+ * returns `[text]` for any text up to 4096 characters and empty text is refused earlier; the arm
+ * keeps a later splitter that returns `[]` from editing with `undefined`.
+ */
+function editPartsRefusal(partCount: number): SendResult {
+  if (partCount > 1) {
+    return {
+      ok: false,
+      error: {
+        code: "edit_too_long",
+        message: `text needs ${partCount} Telegram messages; an edit replaces one`,
+      },
+    };
+  }
+  return { ok: false, error: { code: "empty_text", message: "text reduced to zero parts" } };
 }
 
 function mapSendError(err: unknown): SendResult {
