@@ -54,6 +54,8 @@ const translateWith =
  *   carries no formatting flag on a text message.
  * - slack: the same emphasis, declared `markdown` so the adapter sets `mrkdwn`.
  * - discord, mattermost, teams: markdown is what they render, so the text passes through.
+ * - signal: `markdown`, passed through; its adapter turns the markers into Signal's `textStyle`
+ *   ranges, so the text it sends carries no marker characters.
  * - line, sms: no rich text at all; the existing `toDialect` rows drop the markers.
  * - telegram: markers dropped and `plain`. Its adapter maps `markdown` to legacy Markdown, which
  *   refuses a reply with an unpaired `_` or `*` and loses it with no retry; losing emphasis is the
@@ -67,6 +69,7 @@ const RENDERINGS: Readonly<Record<PlatformName, ChannelRendering>> = {
   discord: { format: "markdown", translate: identity },
   mattermost: { format: "markdown", translate: identity },
   teams: { format: "markdown", translate: identity },
+  signal: { format: "markdown", translate: identity },
   line: { format: "plain", translate: translateWith(DIALECTS.line) },
   sms: { format: "plain", translate: translateWith(DIALECTS.sms) },
   telegram: { format: "plain", translate: translateWith(STRIP) },
@@ -83,7 +86,7 @@ const RENDERINGS: Readonly<Record<PlatformName, ChannelRendering>> = {
  *
  * @param platform - the destination, typically `event.platform` of the inbound message
  * @returns the `{ translate, format }` pair for that platform
- * @throws RangeError when `platform` is not one of the ten this package knows. Answering with
+ * @throws RangeError when `platform` is not one of the platforms this package knows. Answering with
  *   nothing would let the presenter fall back to identity and `markdown`, which is the defect this
  *   function exists to remove.
  * @public

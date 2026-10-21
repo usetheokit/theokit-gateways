@@ -65,7 +65,7 @@ type EventOf<P extends string, Extra = Record<never, never>> = Omit<
   readonly platform: P;
 } & Extra;
 
-/** The ten platforms this package ships. Adding an eleventh must break the assertion below. */
+/** The platforms this package ships. Adding another must break the assertion below. */
 type FirstParty =
   | "telegram"
   | "discord"
@@ -76,12 +76,13 @@ type FirstParty =
   | "sms"
   | "mattermost"
   | "line"
-  | "matrix";
+  | "matrix"
+  | "signal";
 
 describe("PlatformEventRegistry — what may join the union", () => {
-  it("is exactly the ten first-party platforms, no more and no fewer", () => {
+  it("is exactly the first-party platforms, no more and no fewer", () => {
     // Deliberately `Exact` rather than a length check over a literal array. A length check is a
-    // runtime tautology: adding an eleventh platform to the registry leaves it green, because the
+    // runtime tautology: adding a platform to the registry leaves it green, because the
     // array is written by hand and never consulted the type. This fails on an addition AND on a
     // removal.
     const exhaustive: Exact<PlatformName, FirstParty> = true;
@@ -99,10 +100,10 @@ describe("PlatformEventRegistry — what may join the union", () => {
   });
 
   it("rejects a platform name nobody registered", () => {
-    // @ts-expect-error — "signal" is in no registry entry
-    const unregistered: PlatformName = "signal";
+    // @ts-expect-error — "acmechat" is in no registry entry
+    const unregistered: PlatformName = "acmechat";
 
-    expect(unregistered).toBe("signal");
+    expect(unregistered).toBe("acmechat");
   });
 
   it("excludes an `any` entry instead of collapsing the union", () => {
@@ -132,7 +133,7 @@ describe("PlatformEventRegistry — what may join the union", () => {
   it("excludes an entry whose discriminator is not a literal", () => {
     // Registering the base event itself: its `platform` is not a single literal, so admitting it
     // would poison narrowing for every first-party case.
-    type NotLiteral = Registered<"signal", BaseMessageEvent>;
+    type NotLiteral = Registered<"acmechat", BaseMessageEvent>;
 
     const excluded: Exact<NotLiteral, never> = true;
 
@@ -140,7 +141,7 @@ describe("PlatformEventRegistry — what may join the union", () => {
   });
 
   it("excludes an entry whose discriminator disagrees with its key", () => {
-    type Mismatched = Registered<"signal", EventOf<"signl">>;
+    type Mismatched = Registered<"acmechat", EventOf<"acmechet">>;
 
     const excluded: Exact<Mismatched, never> = true;
 
@@ -188,8 +189,8 @@ describe("PlatformEventRegistry — what may join the union", () => {
     // The positive control. Without it, a guard that returned `never` for everything would satisfy
     // every exclusion above — which is exactly how the previous version of this file passed while
     // blessing an entry that breaks narrowing.
-    type WellFormed = EventOf<"signal", { readonly signal: { readonly uuid: string } }>;
-    const admitted: Exact<Registered<"signal", WellFormed>, WellFormed> = true;
+    type WellFormed = EventOf<"acmechat", { readonly acmechat: { readonly uuid: string } }>;
+    const admitted: Exact<Registered<"acmechat", WellFormed>, WellFormed> = true;
 
     expect(admitted).toBe(true);
   });

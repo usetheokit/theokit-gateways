@@ -23,7 +23,7 @@ import { createRequire } from "node:module";
 const ts = createRequire(import.meta.url)("typescript");
 
 /**
- * The ten values of `PlatformName` in `packages/gateway/src/types/message-event.ts`. A tool cannot
+ * The values of `PlatformName` in `packages/gateway/src/types/message-event.ts`. A tool cannot
  * import a TypeScript type, so the list is written here and a test reads the union with the type
  * checker and asserts the two are equal.
  */
@@ -38,6 +38,7 @@ export const PLATFORM_NAMES = Object.freeze([
   "sms",
   "line",
   "teams",
+  "signal",
 ]);
 
 /** Methods only one platform's adapter has; calling one is a branch on that platform. */

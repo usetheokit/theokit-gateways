@@ -25,6 +25,7 @@ const ALL_PLATFORMS = [
   "mattermost",
   "line",
   "matrix",
+  "signal",
 ] as const satisfies readonly PlatformName[];
 
 // `PlatformName` is a derived type with no runtime list, so the list above is checked against it
@@ -34,11 +35,11 @@ type MissingFromList = Exclude<PlatformName, (typeof ALL_PLATFORMS)[number]>;
 const listIsComplete: [MissingFromList] extends [never] ? true : false = true;
 
 const SINGLE_CHARACTER: readonly PlatformName[] = ["whatsapp", "slack"];
-const MARKDOWN_AS_IS: readonly PlatformName[] = ["discord", "mattermost", "teams"];
+const MARKDOWN_AS_IS: readonly PlatformName[] = ["discord", "mattermost", "teams", "signal"];
 const PLAIN: readonly PlatformName[] = ["telegram", "matrix", "email", "line", "sms"];
 
 describe("channelRendering", () => {
-  it("covers all ten platforms", () => {
+  it("covers every platform", () => {
     expect(listIsComplete).toBe(true);
     for (const platform of ALL_PLATFORMS) {
       const rendering = channelRendering(platform);

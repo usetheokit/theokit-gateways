@@ -86,6 +86,7 @@ export type {
   MessageEvent,
   PlatformEventRegistry,
   PlatformName,
+  SignalMessageEvent,
   SlackMessageEvent,
   SMSMessageEvent,
   TeamsMessageEvent,

@@ -2,7 +2,7 @@
  * The core never branches on a platform name (NFR-004; alignment AC-010).
  *
  * `createChannels` and the descriptor type live under `src/channel/`, and neither those files nor
- * the runner may hold a string or template literal equal to one of the ten platform names. A
+ * the runner may hold a string or template literal equal to one of the platform names. A
  * literal check is enough in the core: it never imports a descriptor, so every comparison against
  * a platform would need the name written as a literal.
  */
@@ -22,6 +22,7 @@ const PLATFORM_NAMES = [
   "sms",
   "line",
   "teams",
+  "signal",
 ] as const;
 
 const SRC = new URL("../../src/", import.meta.url).pathname;

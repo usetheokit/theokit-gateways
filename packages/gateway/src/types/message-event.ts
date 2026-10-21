@@ -259,6 +259,23 @@ export interface MatrixMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** Signal-specific event variant (B-354), received from `signal-cli jsonRpc`. */
+export interface SignalMessageEvent extends BaseMessageEvent {
+  readonly platform: "signal";
+  readonly signal: {
+    /** Envelope timestamp (ms since epoch); Signal's own message id. */
+    readonly timestamp: number;
+    /** Sender's phone number, when signal-cli knows it. */
+    readonly sourceNumber?: string;
+    /** Sender's account UUID, when signal-cli knows it. */
+    readonly sourceUuid?: string;
+    /** Group id, present only for a group message. */
+    readonly groupId?: string;
+    /** Raw signal-cli envelope — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /**
  * The open registry every platform's inbound event is filed under.
  *
@@ -274,7 +291,7 @@ export interface MatrixMessageEvent extends BaseMessageEvent {
  * ```typescript
  * declare module "@theokit/gateway" {
  *   interface PlatformEventRegistry {
- *     signal: SignalMessageEvent;
+ *     acmechat: AcmeChatMessageEvent;
  *   }
  * }
  * ```
@@ -292,6 +309,7 @@ export interface PlatformEventRegistry {
   mattermost: MattermostMessageEvent;
   line: LineMessageEvent;
   matrix: MatrixMessageEvent;
+  signal: SignalMessageEvent;
 }
 
 /**
@@ -324,7 +342,7 @@ type LiteralKey<K> = string extends K ? never : K;
  * `TS2339: Property 'telegram' does not exist on type 'never'`.
  *
  * It also fixes a second measured defect for free. Mapping over `keyof` directly is HOMOMORPHIC, so
- * an OPTIONAL entry (`signal?: Event`, a shape an author writes by accident) kept its modifier and
+ * an OPTIONAL entry (`acmechat?: Event`, a shape an author writes by accident) kept its modifier and
  * injected `undefined` into the union — `TS18048: 'e' is possibly 'undefined'` on a plain `switch`.
  * Mapping over a computed key set is not homomorphic and drops the modifier. A `-?` was written
  * here first as an explicit belt; the gate showed it could not be made to matter while this type is
@@ -354,11 +372,11 @@ type LiteralKeysOf<R> = keyof {
  * earlier version of this docblock said it was — measured false twice over. Filtering the VALUE
  * alone left two shapes that break every consumer rather than only their author:
  * `{ [key: string]: … }` made `keyof` yield `string | number`, so the union and the platform name
- * both collapsed to `never`; and `signal?: …` kept its optional modifier through a homomorphic
+ * both collapsed to `never`; and `acmechat?: …` kept its optional modifier through a homomorphic
  * mapping and injected `undefined` into the union. Both are handled above — the first by
  * {@link LiteralKeysOf}, the second by the `-?` on the mapping. What remains true, and is the
  * honest version of the original claim:
- * a `Record<PlatformName, T>` written against the ten still fails to compile, because the rejected
+ * a `Record<PlatformName, T>` written against the first-party platforms still fails to compile, because the rejected
  * key is gone from `PlatformName` while the consumer's literal map is not. What the exclusion buys
  * is that the failure is a missing-key error at the consumer's own map rather than a silent loss
  * of narrowing everywhere.
