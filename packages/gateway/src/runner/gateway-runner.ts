@@ -124,6 +124,8 @@ export class GatewayRunner {
   /** Slash command registry: name → handler (word-boundary match, EC-A). */
   private readonly commands = new Map<string, GatewayHandler>();
   private startResult: StartResult | undefined;
+  /** The start that has not settled yet, shared by every overlapping `start()` call. */
+  private startInFlight: Promise<StartResult> | undefined;
   private stopped = false;
 
   constructor(private readonly opts: GatewayRunnerOptions) {
@@ -165,6 +167,23 @@ export class GatewayRunner {
       });
     }
     if (this.startResult !== undefined) return this.startResult;
+    if (this.startInFlight === undefined) {
+      // Recorded in the same synchronous section that calls `connect()`, before anything awaits: a
+      // guard on `startResult` alone, written after the connect, let an overlapping call connect
+      // every adapter a second time.
+      const pending = this.runStart();
+      this.startInFlight = pending;
+      // A rejected start is not memoised, so a later call connects again. The identity check is
+      // defensive: this handler is the first reaction on `pending`, so no newer record can exist
+      // yet. The returned promise still carries the rejection to every caller.
+      pending.catch(() => {
+        if (this.startInFlight === pending) this.startInFlight = undefined;
+      });
+    }
+    return this.startInFlight;
+  }
+
+  private async runStart(): Promise<StartResult> {
     const result =
       (this.opts.connectFailure ?? "rollback") === "isolate"
         ? await this.connectIsolated()
