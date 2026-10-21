@@ -159,8 +159,29 @@ describe("MatrixAdapter.editMessage", () => {
 
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe(code);
+    expect(fake.sendMessage).toHaveBeenCalledTimes(1);
     await adapter.disconnect();
   });
+
+  // D1: the send path retries an html body the homeserver refuses as malformed as plain text.
+  // On the edit path that retry would post the raw text as a NEW message instead of editing.
+  it.each(["M_BAD_JSON", "M_INVALID_PARAM"])(
+    "answers an html edit refused with %s after one request and no plain-text send (D1)",
+    async (errcode) => {
+      const { adapter, fake } = await connected();
+      fake.sendMessage?.mockRejectedValueOnce(
+        Object.assign(new Error("malformed"), { errcode, httpStatus: 400 }),
+      );
+
+      const result = await adapter.editMessage("$orig:server", out("<b>hi</b>", "html"));
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe("send_failed");
+      expect(fake.sendMessage).toHaveBeenCalledTimes(1);
+      expect(fake.sendTextMessage).toHaveBeenCalledTimes(0);
+      await adapter.disconnect();
+    },
+  );
 
   it("maps a failed alias lookup without throwing and sends nothing", async () => {
     const { adapter, fake } = await connected();
