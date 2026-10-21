@@ -28,6 +28,7 @@ const ALL_PLATFORMS = [
   "signal",
   "imessage",
   "google_chat",
+  "irc",
 ] as const satisfies readonly PlatformName[];
 
 // `PlatformName` is a derived type with no runtime list, so the list above is checked against it
@@ -46,6 +47,7 @@ const PLAIN: readonly PlatformName[] = [
   "sms",
   "imessage",
   "google_chat",
+  "irc",
 ];
 
 describe("channelRendering", () => {
@@ -93,9 +95,9 @@ describe("channelRendering", () => {
     // A JavaScript caller, or one holding a name from a newer adapter, can reach this. Returning
     // undefined would let ChatPresenter fall back to identity and markdown: the asterisk defect,
     // silently.
-    const call = (): unknown => channelRendering("irc" as PlatformName);
+    const call = (): unknown => channelRendering("acmechat" as PlatformName);
     expect(call).toThrow(RangeError);
-    expect(call).toThrow(/"irc"/);
+    expect(call).toThrow(/"acmechat"/);
     for (const platform of ALL_PLATFORMS) {
       expect(call).toThrow(new RegExp(`\\b${platform}\\b`));
     }

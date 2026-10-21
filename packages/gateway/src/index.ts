@@ -82,6 +82,7 @@ export type {
   EmailMessageEvent,
   GoogleChatMessageEvent,
   IMessageMessageEvent,
+  IrcMessageEvent,
   LineMessageEvent,
   MatrixMessageEvent,
   MattermostMessageEvent,

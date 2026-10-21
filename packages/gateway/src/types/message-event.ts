@@ -310,6 +310,23 @@ export interface GoogleChatMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** IRC-specific event variant (B-357), read from a PRIVMSG on the adapter's own connection. */
+export interface IrcMessageEvent extends BaseMessageEvent {
+  readonly platform: "irc";
+  readonly irc: {
+    /** Where the PRIVMSG was addressed: a channel, `#name`, or the adapter's own nick for a DM. */
+    readonly target: string;
+    /** The sender's nick, from the line's prefix. */
+    readonly nick: string;
+    /** True for a CTCP ACTION (`/me`); `text` then holds the action without its CTCP framing. */
+    readonly action: boolean;
+    /** The line's IRCv3 message tags, unescaped; empty when the server sent none. */
+    readonly tags: Readonly<Record<string, string>>;
+    /** The raw line as the server sent it, without CRLF — escape hatch. */
+    readonly raw: string;
+  };
+}
+
 /**
  * The open registry every platform's inbound event is filed under.
  *
@@ -346,6 +363,7 @@ export interface PlatformEventRegistry {
   signal: SignalMessageEvent;
   imessage: IMessageMessageEvent;
   google_chat: GoogleChatMessageEvent;
+  irc: IrcMessageEvent;
 }
 
 /**
