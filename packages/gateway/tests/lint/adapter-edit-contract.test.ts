@@ -8,9 +8,17 @@
  * The probe below declares neither member, so every assertion reads the base default and not a
  * value the probe supplied.
  *
+ * The second block reads the ten adapters' sources and holds which of them can edit. The core
+ * cannot import its own dependents, and a test in each of the four non-edit packages would call a
+ * base member that core 0.9.0, the floor of their peer range, does not have; a source scan holds
+ * the six-of-ten split without either cost. It proves the declarations are present, not that the
+ * edits work: each edit-capable package's `tests/edit-message.test.ts` proves that.
+ *
  * @internal
  */
 
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   BasePlatformAdapter,
@@ -86,5 +94,83 @@ describe("BasePlatformAdapter edit default", () => {
   it("answers capability before input, even with empty text and an empty id", async () => {
     const empty: OutboundMessage = { channel: { id: "", type: "dm" }, text: "" };
     await expect(new NonEditProbe().editMessage("", empty)).resolves.toEqual(UNSUPPORTED);
+  });
+});
+
+const PACKAGES_DIR = join(__dirname, "..", "..", "..");
+
+/** The six adapters whose platform has an edit call; the other four inherit the refusal. */
+const EDIT_CAPABLE: ReadonlySet<string> = new Set([
+  "gateway-discord",
+  "gateway-matrix",
+  "gateway-mattermost",
+  "gateway-slack",
+  "gateway-teams",
+  "gateway-telegram",
+]);
+
+/** Every `gateway-*` package's `src/adapter.ts`, sorted by package name. */
+async function adapterSources(): Promise<Array<{ pkg: string; source: string }>> {
+  const entries = await readdir(PACKAGES_DIR, { withFileTypes: true });
+  const out: Array<{ pkg: string; source: string }> = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith("gateway-")) continue;
+    const path = join(PACKAGES_DIR, entry.name, "src", "adapter.ts");
+    try {
+      out.push({ pkg: entry.name, source: await readFile(path, "utf8") });
+    } catch (err) {
+      // A gateway-* directory without src/adapter.ts is not an adapter package; any other
+      // failure to read one is a real error.
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
+  }
+  return out.sort((a, b) => a.pkg.localeCompare(b.pkg));
+}
+
+const DECLARES_SUPPORTS_EDIT = /^\s+override readonly supportsEdit = true;/m;
+const OVERRIDES_EDIT_MESSAGE = /^\s+override async editMessage\(/m;
+
+describe("which adapters can edit", () => {
+  it("reads the ten adapter sources", async () => {
+    expect((await adapterSources()).map(({ pkg }) => pkg)).toHaveLength(10);
+  });
+
+  it("has exactly the six edit-capable adapters declare supportsEdit and override editMessage", async () => {
+    const declaring: string[] = [];
+    const overriding: string[] = [];
+    for (const { pkg, source } of await adapterSources()) {
+      if (DECLARES_SUPPORTS_EDIT.test(source)) declaring.push(pkg);
+      if (OVERRIDES_EDIT_MESSAGE.test(source)) overriding.push(pkg);
+    }
+    expect(declaring).toEqual([...EDIT_CAPABLE].sort());
+    expect(overriding).toEqual([...EDIT_CAPABLE].sort());
+  });
+
+  it("has the other four adapters name neither member", async () => {
+    // The two regexes above match one spelling each, so a getter or an annotated field in a
+    // non-edit adapter would slip past them; any mention of either name in those four is caught.
+    const offenders = (await adapterSources())
+      .filter(
+        ({ pkg, source }) =>
+          !EDIT_CAPABLE.has(pkg) && /\b(supportsEdit|editMessage)\b/.test(source),
+      )
+      .map(({ pkg }) => pkg);
+    expect(offenders).toEqual([]);
+  });
+
+  it("has no adapter call super.editMessage", async () => {
+    // Core 0.9.0, the floor of every adapter's peer range, has no base editMessage, so a super call
+    // would be a TypeError there; each adapter answers its own refusals (plan D3).
+    const offenders = (await adapterSources())
+      .filter(({ source }) => source.includes("super.editMessage"))
+      .map(({ pkg }) => pkg);
+    expect(offenders).toEqual([]);
+  });
+
+  it("has Matrix's own refusal use the base default's code", async () => {
+    const matrix = (await adapterSources()).find(({ pkg }) => pkg === "gateway-matrix");
+    const base = await readFile(join(__dirname, "..", "..", "src", "adapter", "base.ts"), "utf8");
+    expect(base).toContain('code: "edit_unsupported"');
+    expect(matrix?.source).toContain('code: "edit_unsupported"');
   });
 });
