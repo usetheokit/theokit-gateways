@@ -378,6 +378,42 @@ describe("connect", () => {
     expect(await listening(port)).toBe(false);
   });
 
+  it("two overlapping connects share one capabilities read and one listener", async () => {
+    const talk = scriptedTalk();
+    const adapter = adapterFor(talk, { port: await freePort() });
+
+    const answers = await Promise.all([adapter.connect(), adapter.connect()]);
+
+    expect(answers).toEqual([true, true]);
+    expect(talk.capabilityReads).toBe(1);
+  });
+
+  it("a disconnect while the capabilities read is pending leaves no listener", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const talk = scriptedTalk();
+    let releaseRead: () => void = () => undefined;
+    const readHeld = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const port = await freePort();
+    const adapter = adapterFor(talk, {
+      port,
+      fetch: async (input, init) => {
+        if (input.includes("/cloud/capabilities")) await readHeld;
+        return talk.fetch(input, init);
+      },
+    });
+
+    const connecting = adapter.connect();
+    await new Promise((resolve) => setImmediate(resolve));
+    await adapter.disconnect();
+    releaseRead();
+
+    expect(await connecting).toBe(false);
+    expect(talk.capabilityReads).toBe(1);
+    expect(await listening(port)).toBe(false);
+  });
+
   it("a second connect does not read the capabilities again", async () => {
     const talk = scriptedTalk();
     const adapter = await connected(talk);

@@ -20,7 +20,9 @@ verified email, and an unexpired `exp` with 60 s of skew. A request that fails a
 and reaches no handler. When Google's key set cannot be read the answer is 503, and no read starts
 within 60 s of the previous one. `connect()` exchanges a service-account assertion for an access
 token and only then starts the listener. It returns `false`, never a throw, when the key is
-unreadable, the exchange fails or no token arrives within `connectTimeoutMs`. Replies go through
+unreadable, the exchange fails or no token arrives within `connectTimeoutMs`. A `connect()` made
+while another is pending shares its answer, and a `disconnect()` made while one is pending wins:
+the connect answers `false` and leaves no listener. Replies go through
 `spaces.messages.create`; `channel.id` is the space name, `spaces/<id>`, and anything else is
 refused with `invalid_space`. Long messages are not split. The package has no runtime
 dependencies and requires `@theokit/gateway` 0.12.0 or later, the first version with the

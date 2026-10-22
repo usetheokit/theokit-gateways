@@ -71,6 +71,9 @@ export class NextcloudTalkAdapter extends BasePlatformAdapter implements Nextclo
   private server: WebhookServer | undefined;
   private handler: ((event: GatewayMessageEvent) => Promise<void>) | undefined;
   private connected = false;
+  private connecting: Promise<boolean> | undefined;
+  /** Bumped by `disconnect()`, so a connect that was overtaken by one gives up its listener. */
+  private generation = 0;
   private warnedAboutHtml = false;
 
   /**
@@ -91,24 +94,16 @@ export class NextcloudTalkAdapter extends BasePlatformAdapter implements Nextclo
 
   async connect(): Promise<boolean> {
     if (this.connected) return true;
-    if (!(await this.serverHasBots())) return false;
-    try {
-      const server = await createWebhookServer({
-        adapter: this,
-        ...(this.opts.path === undefined ? {} : { path: this.opts.path }),
-        ...(this.opts.port === undefined ? {} : { port: this.opts.port }),
-      });
-      await server.start();
-      this.server = server;
-    } catch (err) {
-      process.stderr.write(`[${LABEL}] connect failed: listener did not start: ${message(err)}\n`);
-      return false;
-    }
-    this.connected = true;
-    return true;
+    // A second caller while the first is still connecting shares its answer instead of reading
+    // the capabilities again and starting a second listener on the same port.
+    this.connecting ??= this.openSession().finally(() => {
+      this.connecting = undefined;
+    });
+    return this.connecting;
   }
 
   async disconnect(): Promise<void> {
+    this.generation += 1;
     this.connected = false;
     const server = this.server;
     this.server = undefined;
@@ -256,6 +251,35 @@ export class NextcloudTalkAdapter extends BasePlatformAdapter implements Nextclo
   }
 
   /** Whether the server's capabilities name `bots-v1`, read within `connectTimeoutMs`. */
+  /**
+   * Check the server has bots, then start the listener. A `disconnect()` that lands while either
+   * is pending wins: the listener is stopped again and the answer is `false`.
+   */
+  private async openSession(): Promise<boolean> {
+    const generation = this.generation;
+    if (!(await this.serverHasBots())) return false;
+    if (generation !== this.generation) return overtaken();
+    let server: WebhookServer;
+    try {
+      server = await createWebhookServer({
+        adapter: this,
+        ...(this.opts.path === undefined ? {} : { path: this.opts.path }),
+        ...(this.opts.port === undefined ? {} : { port: this.opts.port }),
+      });
+      await server.start();
+    } catch (err) {
+      process.stderr.write(`[${LABEL}] connect failed: listener did not start: ${message(err)}\n`);
+      return false;
+    }
+    if (generation !== this.generation) {
+      await server.stop();
+      return overtaken();
+    }
+    this.server = server;
+    this.connected = true;
+    return true;
+  }
+
   private async serverHasBots(): Promise<boolean> {
     const controller = new AbortController();
     const timeoutMs = this.opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
@@ -338,6 +362,13 @@ function parseObject(rawBody: string): TalkWebhookBody | undefined {
   } catch {
     return undefined;
   }
+}
+
+function overtaken(): false {
+  process.stderr.write(
+    `[${LABEL}] connect failed: disconnect() was called before connect finished\n`,
+  );
+  return false;
 }
 
 function message(err: unknown): string {
