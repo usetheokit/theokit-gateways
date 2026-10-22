@@ -21,6 +21,17 @@ const BOUNDARIES = {
   stripLeading: /^\n+/,
 } as const;
 
+/**
+ * Split `text` into chunks Discord accepts as separate messages.
+ *
+ * Each chunk is at most {@link DISCORD_MAX_MESSAGE} characters. The cut prefers
+ * a blank line, then a newline, inside a 1900-character window, and falls back
+ * to the window edge when the text has neither.
+ *
+ * @param text - The full outbound reply.
+ * @returns The chunks in order; sending them one after another reproduces `text`
+ * minus the leading newlines stripped at each cut.
+ */
 export function splitForDiscord(text: string): string[] {
   return chunkText(text, {
     limit: DISCORD_MAX_MESSAGE,
