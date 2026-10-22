@@ -235,7 +235,9 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
   `start(): Promise<void>` needs to change.
 - A runner holds one channel per platform: it routes replies and `stop()` by platform.
   `createChannels` enforces this. The first entry built for a platform wins, and a later entry for
-  it is rejected with a `GatewayConfigurationError` coded `duplicate_channel` and never built. A
+  it is rejected with a `GatewayConfigurationError` coded `duplicate_channel` and never built. An
+  entry whose `create` returns an adapter reporting another platform than its descriptor is
+  rejected with the code `platform_mismatch`, and that adapter is dropped unconnected. A
   runner you build from adapters you constructed yourself is not checked, so give it one adapter
   per platform: with two of one platform the later one sends the earlier one's replies, and the
   earlier one is connected but never disconnected.
