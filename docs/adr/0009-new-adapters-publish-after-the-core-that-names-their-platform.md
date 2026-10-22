@@ -61,8 +61,23 @@ version that carries everything the packages use. It is installable from the mom
 ## Consequences
 
 - `/release` cuts the core minor without the five packages, then cuts them once 0.12.0 is on npm.
-  How the first cut holds them back is `/release`'s call; this record does not choose the
-  mechanism. A package left unpublished costs nothing, since no consumer has a version of it.
+  A package left unpublished costs nothing, since no consumer has a version of it.
+- How the first cut holds them back (decided 2026-10-22, answering review finding F-arch-11 of
+  round 2, which found the repository set up to publish all six together):
+  - Each package's changeset names only its package. What the core gains for that platform (the
+    key, the event type, the rendering row) is a core-only changeset, `platform-<package>.md`.
+    Changesets refuses a changeset that names an ignored package beside one it versions, so the
+    split is what lets the next step work.
+  - `.changeset/config.json` lists the five packages in `ignore`, so `changeset version` bumps the
+    core to 0.12.0 and leaves the five package changesets pending.
+  - Each of the five `package.json` files says `"private": true`. `changeset publish` publishes
+    every non-private package whose version is not on npm, ignored or not, so without it the first
+    cut would publish the five at `0.0.0`.
+- The second cut, once `npm view @theokit/gateway version` prints 0.12.0 or later: remove the five
+  names from `ignore`, remove `"private": true` from the five manifests, and run the release. Their
+  pending changesets then version each package to 0.1.0, and dep-check's install check resolves
+  the 0.12.0 floor from npm. Each package also needs its npm trusted-publisher entry before its
+  first publish, as every package in `release.yml` has.
 - Until the second cut, the README rows and `integration/` describe packages that exist in the
   repository and not yet on npm.
 - If the release runs both in one cut anyway, the install check on its pull request is the gate

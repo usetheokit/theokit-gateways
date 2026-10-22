@@ -1,6 +1,7 @@
 {
   "name": "@theokit/gateway-signal",
   "version": "0.0.0",
+  "private": true,
   "description": "Signal platform adapter for @theokit/gateway, driving signal-cli's JSON-RPC mode over stdio.",
   "license": "Apache-2.0",
   "repository": {
