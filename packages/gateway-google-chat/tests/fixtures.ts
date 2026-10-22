@@ -95,6 +95,8 @@ export interface ScriptedGoogle {
   tokenLifetimeS: number;
   /** The last token request's form fields. */
   lastTokenForm: URLSearchParams | undefined;
+  /** The signal the last token request carried. */
+  lastTokenSignal: AbortSignal | undefined;
   /** Answer sends with this status. */
   sendStatus: number;
 }
@@ -109,6 +111,7 @@ export function scriptedGoogle(): ScriptedGoogle {
     tokenHangs: false,
     tokenLifetimeS: 3600,
     lastTokenForm: undefined,
+    lastTokenSignal: undefined,
     sendStatus: 200,
     fetch: async (input, init) => {
       if (input === CERTS_URL) return keySetAnswer(google);
@@ -135,6 +138,7 @@ async function tokenAnswer(
 ): Promise<Response> {
   google.tokenExchanges += 1;
   google.lastTokenForm = new URLSearchParams(String(init?.body ?? ""));
+  google.lastTokenSignal = init?.signal ?? undefined;
   if (google.tokenHangs) return hangUntilAborted(init?.signal);
   if (google.tokenStatus !== 200) {
     return Response.json({ error: "invalid_grant" }, { status: google.tokenStatus });

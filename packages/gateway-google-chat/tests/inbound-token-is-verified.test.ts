@@ -54,6 +54,18 @@ describe("Google Chat inbound token", () => {
     expect(events.map((e) => e.text)).toEqual(["hello there"]);
   });
 
+  it("accepts a token whose issuer is accounts.google.com without a scheme", async () => {
+    const { adapter, events } = adapterWith(scriptedGoogle());
+
+    const answer = await post(
+      adapter,
+      `Bearer ${idToken(chatClaims({ iss: "accounts.google.com" }))}`,
+    );
+
+    expect(answer).toEqual({ status: 200, body: {} });
+    expect(events).toHaveLength(1);
+  });
+
   const refusals: ReadonlyArray<[string, () => string | undefined]> = [
     [
       "refuses a token for another audience",
