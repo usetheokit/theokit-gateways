@@ -126,9 +126,19 @@ export class IrcAdapter extends BasePlatformAdapter {
       };
     }
     // One synchronous write per message: two sends started together reach the server in call
-    // order, and never interleave their lines.
-    socket.write(chunks.map((chunk) => `PRIVMSG ${target} :${chunk}\r\n`).join(""));
-    return { ok: true };
+    // order, and never interleave their lines. The answer waits for the write's own callback, so
+    // a write the socket refuses (EPIPE on a half-closed connection) is reported, not counted as
+    // delivered.
+    const payload = chunks.map((chunk) => `PRIVMSG ${target} :${chunk}\r\n`).join("");
+    return new Promise<SendResult>((resolve) => {
+      socket.write(payload, (err?: Error | null) => {
+        resolve(
+          err
+            ? { ok: false, error: { code: "irc_write_error", message: err.message } }
+            : { ok: true },
+        );
+      });
+    });
   }
 
   onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {

@@ -1,3 +1,5 @@
+import { connect as connectTcp, type Socket } from "node:net";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { type IrcAdapter, splitForIrc } from "../src/index.js";
@@ -115,6 +117,35 @@ describe("IrcAdapter.sendMessage", () => {
     const order = server.linesOf("PRIVMSG").map((line) => line.slice("PRIVMSG #theokit :".length));
     const joined = order.join("");
     expect(joined).toBe(`A${long}B${long}`);
+  });
+
+  it("returns irc_write_error when the socket refuses the write", async () => {
+    const server = await FakeIrcServer.start();
+    let socket: Socket | undefined;
+    const adapter = server.adapter({
+      socketFactory: ({ host, port }) => (socket = connectTcp({ host, port })),
+    });
+    open.push({ server, adapter });
+    expect(await adapter.connect()).toBe(true);
+    if (socket === undefined) throw new Error("the socket factory was not called");
+    // A half-closed connection: the write is accepted, then fails with EPIPE in its callback.
+    vi.spyOn(socket, "write").mockImplementation((...args: unknown[]) => {
+      const callback = args.find((arg) => typeof arg === "function") as
+        | ((err?: Error | null) => void)
+        | undefined;
+      process.nextTick(() => callback?.(new Error("write EPIPE")));
+      return false;
+    });
+
+    const result = await adapter.sendMessage({
+      channel: { id: TARGET, type: "group" },
+      text: "lost on the wire",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: { code: "irc_write_error", message: "write EPIPE" },
+    });
   });
 
   it("returns empty_text before any state check", async () => {

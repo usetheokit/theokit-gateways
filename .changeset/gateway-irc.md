@@ -21,6 +21,8 @@ answered with `PONG`. A `PRIVMSG` from another nick becomes an `IrcMessageEvent`
 its text with `irc.action` true, other CTCP requests and the adapter's own messages are dropped.
 `sendMessage` sends one `PRIVMSG` per line and cuts a long line so each command fits 512 bytes
 with 100 bytes left for the relay prefix, never inside a UTF-8 character; `splitForIrc` is
-exported. A send returns no `messageId`, since baseline IRC has none. The package has no runtime
+exported. A send answers once the socket has taken the write, and returns `irc_write_error` when
+the socket refuses it (EPIPE on a half-closed connection). A send returns no `messageId`, since
+baseline IRC has none. The package has no runtime
 dependencies and requires `@theokit/gateway` 0.12.0 or later, the first version with the `irc`
 key.
