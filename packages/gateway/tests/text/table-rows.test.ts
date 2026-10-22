@@ -258,6 +258,10 @@ describe("table rows through translate (B-556)", () => {
     );
   });
 
+  it("rewrites a row whose only markers are backticks cell by cell", () => {
+    expect(translate("telegram")("| `a` | x `b | c` y |")).toBe("| a | x `b | c` y |");
+  });
+
   it("splits inline code at an unescaped pipe inside a cell, as GFM does (EC-1)", () => {
     const row = "| run `a|b` here |";
     for (const p of PLATFORMS) {

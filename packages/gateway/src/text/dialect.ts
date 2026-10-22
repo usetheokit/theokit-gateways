@@ -162,8 +162,11 @@ const ROW_START = /[^\S\r\n]*\|/y;
 /** A line ending as GFM reads one: `\r\n`, `\n`, or a lone `\r`. Captured, so a split keeps it. */
 const LINE_ENDING = /(\r\n|\r|\n)/;
 
-/** Any character a marker can start with. A row without one has nothing to rewrite. */
-const MARKER_CHARACTER = /[*_~`]/;
+/**
+ * Any character a marker can start with (`\x60` is the backtick). A row without one has nothing
+ * to rewrite.
+ */
+const MARKER_CHARACTER = /[*_~\x60]/;
 
 const PIPE = 0x7c;
 const BACKSLASH = 0x5c;
