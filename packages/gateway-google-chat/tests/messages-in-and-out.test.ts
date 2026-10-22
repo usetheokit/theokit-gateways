@@ -32,6 +32,15 @@ async function freePort(): Promise<number> {
 
 const open: GoogleChatAdapter[] = [];
 
+/** Wait until `condition` holds, polling every 5 ms, or fail naming what never happened. */
+async function until(condition: () => boolean, what: string, deadlineMs = 5_000): Promise<void> {
+  const started = Date.now();
+  while (!condition()) {
+    if (Date.now() - started > deadlineMs) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 async function connected(
   google: ScriptedGoogle,
   overrides: Partial<GoogleChatAdapterOptions> = {},
@@ -368,6 +377,65 @@ describe("connect", () => {
     await expect(
       fetch(`http://127.0.0.1:${port}/google-chat`, { method: "POST" }),
     ).rejects.toThrow();
+  });
+
+  it("two overlapping connects share one token exchange and one listener", async () => {
+    const google = scriptedGoogle();
+    const port = await freePort();
+    const adapter = new GoogleChatAdapter({
+      serviceAccountEmail: SERVICE_ACCOUNT,
+      privateKey: APP_PRIVATE_KEY_PEM,
+      audience: AUDIENCE,
+      port,
+      fetch: google.fetch,
+      now: () => NOW_MS,
+    });
+    open.push(adapter);
+
+    const answers = await Promise.all([adapter.connect(), adapter.connect()]);
+
+    expect(answers).toEqual([true, true]);
+    expect(google.tokenExchanges).toBe(1);
+  });
+
+  it("a disconnect while the token exchange is pending leaves no listener", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const google = scriptedGoogle();
+    let releaseToken: () => void = () => undefined;
+    const tokenHeld = new Promise<void>((resolve) => {
+      releaseToken = resolve;
+    });
+    let tokenAsked = false;
+    const port = await freePort();
+    const adapter = new GoogleChatAdapter({
+      serviceAccountEmail: SERVICE_ACCOUNT,
+      privateKey: APP_PRIVATE_KEY_PEM,
+      audience: AUDIENCE,
+      port,
+      now: () => NOW_MS,
+      fetch: async (input, init) => {
+        if (input === TOKEN_URL) {
+          tokenAsked = true;
+          await tokenHeld;
+        }
+        return google.fetch(input, init);
+      },
+    });
+    open.push(adapter);
+
+    const connecting = adapter.connect();
+    await until(() => tokenAsked, "the token request");
+    await adapter.disconnect();
+    releaseToken();
+
+    expect(await connecting).toBe(false);
+    await expect(
+      fetch(`http://127.0.0.1:${port}/google-chat`, { method: "POST" }),
+    ).rejects.toThrow();
+    expect(
+      (await adapter.sendMessage({ channel: { id: "spaces/AAA", type: "group" }, text: "hi" }))
+        .error?.code,
+    ).toBe("not_connected");
   });
 
   it("a second connect starts nothing new", async () => {

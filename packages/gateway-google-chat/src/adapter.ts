@@ -59,6 +59,9 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
   private server: WebhookServer | undefined;
   private handler: ((event: GatewayMessageEvent) => Promise<void>) | undefined;
   private connected = false;
+  private connecting: Promise<boolean> | undefined;
+  /** Bumped by `disconnect()`, so a connect that was overtaken by one gives up its listener. */
+  private generation = 0;
   private warnedAboutHtml = false;
 
   constructor(opts: GoogleChatAdapterOptions) {
@@ -71,27 +74,16 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
 
   async connect(): Promise<boolean> {
     if (this.connected) return true;
-    const tokens = this.tokenClient();
-    if (tokens === undefined) return false;
-    if (!(await this.firstToken(tokens))) return false;
-    try {
-      const server = await createWebhookServer({
-        adapter: this,
-        ...(this.opts.path === undefined ? {} : { path: this.opts.path }),
-        ...(this.opts.port === undefined ? {} : { port: this.opts.port }),
-      });
-      await server.start();
-      this.server = server;
-    } catch (err) {
-      process.stderr.write(`[${LABEL}] connect failed: listener did not start: ${message(err)}\n`);
-      return false;
-    }
-    this.tokens = tokens;
-    this.connected = true;
-    return true;
+    // A second caller while the first is still connecting shares its answer instead of starting
+    // a second token exchange and a second listener on the same port.
+    this.connecting ??= this.openSession().finally(() => {
+      this.connecting = undefined;
+    });
+    return this.connecting;
   }
 
   async disconnect(): Promise<void> {
+    this.generation += 1;
     this.connected = false;
     const server = this.server;
     this.server = undefined;
@@ -239,6 +231,38 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
     });
   }
 
+  /**
+   * Obtain the first token, then start the listener. A `disconnect()` that lands while either is
+   * pending wins: the listener is stopped again and the answer is `false`.
+   */
+  private async openSession(): Promise<boolean> {
+    const generation = this.generation;
+    const tokens = this.tokenClient();
+    if (tokens === undefined) return false;
+    if (!(await this.firstToken(tokens))) return false;
+    if (generation !== this.generation) return overtaken();
+    let server: WebhookServer;
+    try {
+      server = await createWebhookServer({
+        adapter: this,
+        ...(this.opts.path === undefined ? {} : { path: this.opts.path }),
+        ...(this.opts.port === undefined ? {} : { port: this.opts.port }),
+      });
+      await server.start();
+    } catch (err) {
+      process.stderr.write(`[${LABEL}] connect failed: listener did not start: ${message(err)}\n`);
+      return false;
+    }
+    if (generation !== this.generation) {
+      await server.stop();
+      return overtaken();
+    }
+    this.server = server;
+    this.tokens = tokens;
+    this.connected = true;
+    return true;
+  }
+
   /** Whether the first token arrives within `connectTimeoutMs`; the exchange is aborted if not. */
   private async firstToken(tokens: AccessTokenClient): Promise<boolean> {
     const controller = new AbortController();
@@ -264,6 +288,13 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
       clearTimeout(timer);
     }
   }
+}
+
+function overtaken(): false {
+  process.stderr.write(
+    `[${LABEL}] connect failed: disconnect() was called before connect finished\n`,
+  );
+  return false;
 }
 
 function message(err: unknown): string {
