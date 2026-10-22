@@ -40,6 +40,16 @@ const BOUNDARIES = {
   stripLeading: /^\s+/,
 } as const;
 
+/**
+ * Split `text` into posts that fit Mattermost's post cap.
+ *
+ * Each chunk is at most {@link MATTERMOST_MAX_POST} code points, cut inside a
+ * 16000-character window at a blank line, a newline or a space, in that order of
+ * preference.
+ *
+ * @param text - The full outbound reply.
+ * @returns The chunks in order, each with leading whitespace stripped at the cut.
+ */
 export function splitForMattermost(text: string): string[] {
   return chunkText(text, { limit: MATTERMOST_MAX_POST, safeLimit: SAFE_CHUNK, ...BOUNDARIES });
 }
