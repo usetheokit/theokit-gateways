@@ -8,7 +8,10 @@ same way. The package has no runtime dependencies; the webhook route uses the `e
 
 ## How inbound arrives
 
-**Webhook.** The adapter serves `POST /nextcloud-talk` (port 3000 by default). Talk must reach
+**Webhook.** The adapter serves `POST /nextcloud-talk` (port 3000 by default, or on your own
+Express app passed as `app`, which you then `listen` on). Every webhook adapter in this family
+defaults to 3000, so two of them in one process need distinct `port` values or one shared `app`.
+A body over 1 MiB is refused with 413 and `{"error":"request body too large"}`. Talk must reach
 that URL; a Talk server in Docker reaches the host as `host.docker.internal`, and Nextcloud
 refuses a bot URL on a private address until `allow_local_remote_servers` is set.
 
@@ -52,7 +55,10 @@ await runner.start();
 `connect()` reads `<baseUrl>/ocs/v2.php/cloud/capabilities`, requires Talk's `bots-v1` feature
 and starts the webhook listener. It returns `false`, never a throw, when the server cannot be
 read, lacks the feature, or does not answer within `connectTimeoutMs` (10 s by default; the
-pending read is aborted). The constructor throws when `secret` is not 40 to 128 characters, the
+pending read is aborted), or when the port is held by another listener. A `connect()` made while
+another is pending shares its answer; a `disconnect()` made while one is pending wins, that
+connect answers `false` and leaves no listener, and the next `connect()` starts a fresh session.
+The constructor throws when `secret` is not 40 to 128 characters, the
 range `occ talk:bot:install` accepts: an empty secret would let anyone sign a webhook.
 
 ## Inbound
