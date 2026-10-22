@@ -17,3 +17,8 @@ an adapter that connects after another refused is disconnected as well. The reje
 comes only once the slowest connect settles. With one adapter refusing and another whose connect
 hangs, `start()` used to reject at once and now stays pending, as a successful rollback start and
 an `"isolate"` start already did.
+
+When a rollback, or a start that `stop()` overtook, disconnects an adapter and that `disconnect()`
+fails, the runner now writes one line to stderr naming the platform, with any credential in the
+error redacted. The failure used to be discarded, so an adapter that might still hold its platform
+session left no trace. How `start()` resolves or rejects is unchanged.

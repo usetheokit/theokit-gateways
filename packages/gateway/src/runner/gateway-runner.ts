@@ -110,6 +110,29 @@ function connectFailureReason(outcome: PromiseSettledResult<boolean>): string {
 }
 
 /**
+ * Disconnect every adapter the runner is giving back. A disconnect that fails does not stop the
+ * others and does not change how the start settles, but it is reported: such an adapter may still
+ * hold its platform session, and a discarded failure left that state with no trace.
+ */
+async function releaseAdapters(
+  adapters: ReadonlyArray<BasePlatformAdapter>,
+  during: string,
+): Promise<void> {
+  await Promise.all(
+    adapters.map(async (a) => {
+      try {
+        await a.disconnect();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        process.stderr.write(
+          `[gateway] adapter "${a.platform}" disconnect failed while ${during}: ${redactSecrets(message)}\n`,
+        );
+      }
+    }),
+  );
+}
+
+/**
  * Holds the registered adapters and dispatches inbound events through
  * the hook chain to the user handler. Use the sugar `runner.command(...)`
  * for slash command dispatch with word-boundary matching (EC-A).
@@ -159,6 +182,10 @@ export class GatewayRunner {
    * Under `connectFailure: "rollback"`, every connect settles before the rollback, so a failing
    * start rejects only once its slowest connect settles, as a successful one resolves only then.
    *
+   * An adapter whose `disconnect()` fails while a start rolls back, or while a start that `stop()`
+   * overtook gives its adapters back, is named on stderr with the error redacted; how the start
+   * settles does not change.
+   *
    * @throws {GatewayLifecycleError} `runner_stopped` — the runner was already
    * stopped. A stopped runner is spent; construct a new one.
    * @throws {Error} under the default `connectFailure: "rollback"`, the first connect failure, after
@@ -202,7 +229,7 @@ export class GatewayRunner {
       // stop() ran while the connect was pending: it disconnected these adapters before their
       // connect settled, and a later stop() returns at its guard. Wiring them would leave a live
       // adapter on a stopped runner.
-      await Promise.all(result.connected.map((a) => a.disconnect().catch(() => undefined)));
+      await releaseAdapters(result.connected, "releasing a start that stop() overtook");
       this.startResult = { connected: [], failed: result.failed };
       return this.startResult;
     }
@@ -244,7 +271,7 @@ export class GatewayRunner {
     if (failures.length > 0) {
       // "fulfilled" means connected: a refusal and a throw both reject their wrapper.
       const connected = adapters.filter((_, i) => settled[i]?.status === "fulfilled");
-      await Promise.all(connected.map((a) => a.disconnect().catch(() => undefined)));
+      await releaseAdapters(connected, "rolling back a failed start");
       throw failures[0];
     }
     return { connected: [...adapters], failed: [] };

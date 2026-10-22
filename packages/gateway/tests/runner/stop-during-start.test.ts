@@ -2,7 +2,7 @@
  * A stop() that lands while start() is still connecting must leave nothing live behind.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GatewayRunner } from "../../src/runner/gateway-runner.js";
 import type { MessageEvent } from "../../src/types/message-event.js";
@@ -27,6 +27,36 @@ class HeldConnectAdapter extends MockAdapter {
     for (const r of this.releases.splice(0)) r();
   }
 }
+
+/** A HeldConnectAdapter whose disconnect() always rejects. */
+class DisconnectRejectingHeldAdapter extends HeldConnectAdapter {
+  override async disconnect(): Promise<void> {
+    this.disconnectCount += 1;
+    throw new Error("socket close failed");
+  }
+}
+
+/** A MockAdapter whose disconnect() always rejects. */
+class DisconnectRejectingAdapter extends MockAdapter {
+  override async disconnect(): Promise<void> {
+    this.disconnectCount += 1;
+    throw new Error("socket close failed");
+  }
+}
+
+/** Capture what the runner writes to stderr, without printing it. */
+function captureStderr(): string[] {
+  const lines: string[] = [];
+  vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+    lines.push(String(chunk));
+    return true;
+  });
+  return lines;
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 async function waitFor(condition: () => boolean, what: string): Promise<void> {
   const deadline = Date.now() + 2000;
@@ -142,6 +172,27 @@ describe("GatewayRunner.stop() called while start() is still connecting", () => 
     expect(a.connected).toBe(false);
   });
 
+  it("reports_a_disconnect_that_fails_while_releasing_an_overtaken_start", async () => {
+    const stderr = captureStderr();
+    const a = new DisconnectRejectingHeldAdapter("telegram");
+    const runner = new GatewayRunner({ adapters: [a], handler: async () => {} });
+
+    const started = runner.start();
+    await waitFor(() => a.pendingConnects > 0, "the connect() to be entered");
+    await runner.stop();
+    a.release();
+    const result = await started;
+
+    expect(result, "a failed disconnect turned the overtaken start into a rejection").toEqual({
+      connected: [],
+      failed: [],
+    });
+    const report = stderr.filter((line) => line.includes("disconnect failed"));
+    expect(report, "the failed disconnect left no trace").toHaveLength(1);
+    expect(report[0]).toContain('"telegram"');
+    expect(report[0]).toContain("socket close failed");
+  });
+
   it("keeps_the_failed_list_when_stop_overtakes_an_isolate_start", async () => {
     const telegram = new HeldConnectAdapter("telegram");
     const discord = new MockAdapter("discord");
@@ -207,6 +258,20 @@ describe("GatewayRunner.start() under rollback when one adapter fails", () => {
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toContain("discord");
     expect(telegram.connected, "telegram connected after the rollback and stayed live").toBe(false);
+  });
+
+  it("reports_a_disconnect_that_fails_during_the_rollback", async () => {
+    const stderr = captureStderr();
+    const telegram = new DisconnectRejectingAdapter("telegram");
+    const discord = new MockAdapter("discord");
+    discord.connectResult = false;
+    const runner = new GatewayRunner({ adapters: [telegram, discord], handler: async () => {} });
+
+    await expect(runner.start()).rejects.toThrow('adapter "discord" connect returned false');
+    const report = stderr.filter((line) => line.includes("disconnect failed"));
+    expect(report, "the failed disconnect left no trace").toHaveLength(1);
+    expect(report[0]).toContain('"telegram"');
+    expect(report[0]).toContain("socket close failed");
   });
 
   it("rolls_back_when_a_connect_throws_synchronously", async () => {
