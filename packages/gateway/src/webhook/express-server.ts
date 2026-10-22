@@ -39,11 +39,16 @@ export interface RawBodyRequest {
 /** What a started listener must be able to do. `http.Server` satisfies it. */
 export interface ListenerLike {
   close(cb?: (err?: Error) => void): unknown;
+  /** Where Express 4's `listen` reports a failure to bind; `http.Server` has it. */
+  once?(event: "error", listener: (err: Error) => void): unknown;
 }
 
-/** What can start a listener. Express's app satisfies it. */
+/**
+ * What can start a listener. Express's app satisfies it: Express 5 passes a failure to bind to the
+ * callback, Express 4 only emits it on the returned server.
+ */
 export interface ListenableApp {
-  listen(port: number, cb: () => void): ListenerLike;
+  listen(port: number, cb: (err?: Error) => void): ListenerLike;
 }
 
 /**
@@ -185,6 +190,9 @@ function answerTooLarge(res: JsonResponse, tag: string, maxBytes: number): void 
  *
  * `injected` is for the case where the caller owns the app: there is no listener to open or close,
  * and `start()`/`stop()` must still be callable and idempotent.
+ *
+ * `start()` rejects with the error the bind failed with (`EADDRINUSE` for a port another listener
+ * holds), under Express 4 and 5 alike, and a later `start()` tries again.
  */
 export function listenerLifecycle(opts: {
   readonly app: ListenableApp;
@@ -204,8 +212,19 @@ export function listenerLifecycle(opts: {
       // Cleared here rather than in stop(): a server that was stopped and is starting again is no
       // longer stopped, and leaving the flag latched made the NEXT stop() a no-op.
       stopped = false;
-      await new Promise<void>((resolve) => {
-        listener = opts.app.listen(opts.port, () => resolve());
+      // A port another process holds used to resolve this as started: Express 5 hands the bind
+      // error to the callback, which ignored it, and `connect()` answered true over no listener.
+      await new Promise<void>((resolve, reject) => {
+        const settle = (err?: Error): void => {
+          if (err === undefined) resolve();
+          else reject(err);
+        };
+        const current = opts.app.listen(opts.port, settle);
+        listener = current;
+        current.once?.("error", settle);
+      }).catch((err: unknown) => {
+        listener = undefined;
+        throw err;
       });
       started = true;
     },
