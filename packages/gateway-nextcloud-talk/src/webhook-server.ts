@@ -41,6 +41,13 @@ async function loadExpress(): Promise<() => Express> {
   );
 }
 
+/**
+ * The largest webhook body the route reads. A Talk message is at most 32000 code points, under
+ * 128 KiB as UTF-8 inside its JSON envelope; the route is public, so a body nobody signed is not
+ * held without a bound.
+ */
+const MAX_BODY_BYTES = 1024 * 1024;
+
 function headerOf(req: Request, name: string): string | undefined {
   const value = req.headers[name];
   return Array.isArray(value) ? value[0] : value;
@@ -55,7 +62,7 @@ export async function createWebhookServer(opts: WebhookServerOptions): Promise<W
   const app: Express = opts.app ?? createApp();
   app.post(
     opts.path ?? "/nextcloud-talk",
-    rawBodyCapture("gateway-nextcloud-talk"),
+    rawBodyCapture("gateway-nextcloud-talk", { maxBytes: MAX_BODY_BYTES }),
     (req, res, next) => {
       opts.adapter
         .handleRequest(

@@ -151,6 +151,18 @@ describe("the route on a real port", () => {
     return { "x-nextcloud-talk-random": random, "x-nextcloud-talk-signature": signature };
   }
 
+  it("answers 413 to a body over 1 MiB and calls no handler", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const { events, port } = await connected();
+    const rawBody = "x".repeat(1024 * 1024 + 1);
+
+    const answer = await post(port, rawBody, talkHeaders(rawBody));
+    await settle();
+
+    expect(answer.status).toBe(413);
+    expect(events).toHaveLength(0);
+  });
+
   it("verifies a body with non-ASCII text over the real socket", async () => {
     const { events, port } = await connected();
     const body = {

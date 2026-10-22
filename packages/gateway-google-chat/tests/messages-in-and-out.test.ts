@@ -1,3 +1,4 @@
+import { request } from "node:http";
 import { createServer } from "node:net";
 
 import type { MessageEvent } from "@theokit/gateway";
@@ -162,6 +163,59 @@ describe("inbound", () => {
     expect(refused.status).toBe(401);
     expect(accepted.status).toBe(200);
     expect(events).toHaveLength(1);
+  });
+});
+
+describe("the route refuses before it holds a body", () => {
+  it("answers 413 to a body over 1 MiB and calls no handler", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const port = await freePort();
+    const adapter = await connected(scriptedGoogle(), { port });
+    const events: MessageEvent[] = [];
+    adapter.onInbound(async (event) => {
+      events.push(event);
+    });
+
+    const answer = await fetch(`http://127.0.0.1:${port}/google-chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${idToken()}` },
+      body: "x".repeat(1024 * 1024 + 1),
+    });
+
+    expect(answer.status).toBe(413);
+    expect(events).toHaveLength(0);
+  });
+
+  it("answers 401 to a request with no bearer token without waiting for its body", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const port = await freePort();
+    await connected(scriptedGoogle(), { port });
+
+    // The headers promise a body that never comes: only a refusal made before reading answers.
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = request(
+        {
+          host: "127.0.0.1",
+          port,
+          path: "/google-chat",
+          method: "POST",
+          headers: { "content-type": "application/json", "content-length": "1000" },
+        },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+          req.destroy();
+        },
+      );
+      req.on("error", reject);
+      req.flushHeaders();
+      setTimeout(() => {
+        req.destroy();
+        reject(new Error("no answer within 2000 ms: the route waited for the body"));
+      }, 2_000).unref();
+    });
+
+    expect(status).toBe(401);
   });
 });
 

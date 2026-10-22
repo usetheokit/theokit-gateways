@@ -51,6 +51,25 @@ function handlerFactory(adapter: GoogleChatInbound) {
   };
 }
 
+/**
+ * The largest request body the route reads. Chat's interaction events are a few KiB; the route is
+ * public, so a body is never held without a bound.
+ */
+const MAX_BODY_BYTES = 1024 * 1024;
+
+/**
+ * Answer 401 before reading a body when the request carries no bearer token at all: the token
+ * check does not depend on the body, so nothing is gained by holding one first.
+ */
+function refuseWithoutBearer(req: Request, res: Response, next: () => void): void {
+  if (/^Bearer \S/.test(headerOf(req, "authorization") ?? "")) {
+    next();
+    return;
+  }
+  process.stderr.write("[gateway-google-chat] refused a request (401): no bearer token\n");
+  res.status(401).json({ error: "no bearer token" });
+}
+
 function headerOf(req: Request, name: string): string | undefined {
   const value = req.headers[name];
   return Array.isArray(value) ? value[0] : value;
@@ -65,8 +84,13 @@ export async function createWebhookServer(opts: WebhookServerOptions): Promise<W
   const createApp = await loadExpress();
   const app: Express = opts.app ?? createApp();
   const handler = handlerFactory(opts.adapter);
-  app.post(opts.path ?? "/google-chat", rawBodyCapture("gateway-google-chat"), (req, res, next) => {
-    handler(req, res).catch(next);
-  });
+  app.post(
+    opts.path ?? "/google-chat",
+    refuseWithoutBearer,
+    rawBodyCapture("gateway-google-chat", { maxBytes: MAX_BODY_BYTES }),
+    (req, res, next) => {
+      handler(req, res).catch(next);
+    },
+  );
   return listenerLifecycle({ app, port: opts.port ?? 3000, injected: opts.app !== undefined });
 }
