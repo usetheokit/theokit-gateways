@@ -21,7 +21,12 @@ const require = createRequire(import.meta.url);
 const SDK_MIDDLEWARE = require.resolve("@microsoft/teams.apps/dist/middleware/index.js");
 
 beforeAll(() => {
-  const file = expect.getState().testPath ?? "unknown file";
+  const file = expect.getState().testPath;
+  if (file === undefined) {
+    throw new Error(
+      "record-sdk-load.setup.ts: expect.getState().testPath is undefined in beforeAll, so this record cannot name its file",
+    );
+  }
   appendFileSync(
     recordFile,
     `${JSON.stringify({ file, loaded: SDK_MIDDLEWARE in require.cache, pid: process.pid })}\n`,

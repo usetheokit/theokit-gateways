@@ -4,11 +4,15 @@
  * 5 s budget. A hook is no better: `hookTimeout` budgets it the same way. These sixteen files must
  * therefore have the middleware loaded before their first hook runs, which is module scope.
  *
- * One nested vitest runs the sixteen files and two controls in the gateway-teams package, with a
+ * One nested vitest runs the sixteen files and three controls in the gateway-teams package, with a
  * setup file that records, before each file's own hooks, whether the middleware is in
  * `require.cache` and which worker ran the file. The controls prove the recorder can tell a
- * module-scope preload from an import inside a test, and the pids prove no worker carried another
- * file's import.
+ * module-scope preload from an import inside a test or inside the file's own `beforeAll`, and the
+ * pids prove no worker carried another file's import.
+ *
+ * The list of files is closed: a seventeenth gateway-teams test file that reaches the SDK through
+ * the verifier must preload the middleware at module scope AND be added to PRELOADED_FILES, or
+ * nothing here checks it.
  *
  * It lives here, not in gateway-teams, because the nested run needs a hook budget above anything a
  * gateway-teams test file may declare (B-545 forbids adding one there).
@@ -48,11 +52,14 @@ const PRELOADED_FILES = [
 ];
 const PRELOAD_CONTROL = `${FIXTURES}/preload.fixture.ts`;
 const NO_PRELOAD_CONTROL = `${FIXTURES}/no-preload.fixture.ts`;
-const ALL_FILES = [...PRELOADED_FILES, PRELOAD_CONTROL, NO_PRELOAD_CONTROL];
+const HOOK_PRELOAD_CONTROL = `${FIXTURES}/hook-preload.fixture.ts`;
+const ALL_FILES = [...PRELOADED_FILES, PRELOAD_CONTROL, NO_PRELOAD_CONTROL, HOOK_PRELOAD_CONTROL];
 
-// Eighteen real test files plus the package's globalSetup (an RSA key pool), started from inside a
-// worker that `pnpm -r run test` already shares with every other package's suite.
-const NESTED_RUN_BUDGET_MS = 300_000;
+// Nineteen files plus the package's globalSetup (an RSA key pool) on two workers. Measured
+// 2026-10-22 on 12 cores: 18.1 s and 24.5 s alone at load 10, 20.5 s inside `pnpm -r run test` at
+// load 19 to 22. The budget is five times the slowest of those, for a host at load 30 to 40, and
+// short enough that a hung nested run (globalSetup, a stuck fork) fails the suite in two minutes.
+const NESTED_RUN_BUDGET_MS = 120_000;
 
 const tempDir = mkdtempSync(join(tmpdir(), "gateway-teams-sdk-load-"));
 const recordFile = join(tempDir, "records.jsonl");
@@ -75,6 +82,10 @@ async function runNested() {
       watch: false,
       reporters: [],
       include: ["tests/**/*.test.ts", `${FIXTURES}/*.fixture.ts`],
+      // The package config forks cpus - 4 workers, and this run shares the machine with every other
+      // package suite under `pnpm -r run test`. Two are enough: each file still gets its own fork
+      // (vitest isolates per file), which is what no_worker_runs_two_files checks.
+      maxWorkers: 2,
       setupFiles: [`${FIXTURES}/record-sdk-load.setup.ts`],
     });
     try {
@@ -113,8 +124,11 @@ afterAll(() => {
 const loadedBeforeHooks = (file) => recordsByFile.get(file)?.[0]?.loaded;
 
 describe("the sixteen gateway-teams files that reach the Teams SDK", () => {
-  it("every_named_file_left_a_record", () => {
+  it("the_nested_run_collected_exactly_the_named_files", () => {
     expect([...collectedFiles].sort()).toEqual([...ALL_FILES].sort());
+  });
+
+  it("every_named_file_left_one_record", () => {
     const withoutRecord = ALL_FILES.filter((file) => recordsByFile.get(file)?.length !== 1);
     expect(withoutRecord, "files with no single record before their hooks").toEqual([]);
   });
@@ -123,7 +137,8 @@ describe("the sixteen gateway-teams files that reach the Teams SDK", () => {
     expect({
       preload: loadedBeforeHooks(PRELOAD_CONTROL),
       noPreload: loadedBeforeHooks(NO_PRELOAD_CONTROL),
-    }).toEqual({ preload: true, noPreload: false });
+      hookPreload: loadedBeforeHooks(HOOK_PRELOAD_CONTROL),
+    }).toEqual({ preload: true, noPreload: false, hookPreload: false });
   });
 
   it("the_negative_control_ran_and_saw_the_sdk_after_its_test", () => {
