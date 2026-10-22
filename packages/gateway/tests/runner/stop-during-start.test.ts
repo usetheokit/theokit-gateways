@@ -188,8 +188,30 @@ describe("GatewayRunner.stop() called while start() is still connecting", () => 
       failed: [],
     });
     const report = stderr.filter((line) => line.includes("disconnect failed"));
-    expect(report, "the failed disconnect left no trace").toHaveLength(1);
+    // Two give-backs fail: stop()'s own disconnect, then the release of the overtaken start.
+    expect(report, "a failed disconnect left no trace").toHaveLength(2);
+    expect(report.filter((line) => line.includes("while stopping the runner"))).toHaveLength(1);
+    expect(
+      report.filter((line) => line.includes("while releasing a start that stop() overtook")),
+    ).toHaveLength(1);
+    for (const line of report) {
+      expect(line).toContain('"telegram"');
+      expect(line).toContain("socket close failed");
+    }
+  });
+
+  it("reports_a_disconnect_that_fails_while_stopping", async () => {
+    const stderr = captureStderr();
+    const telegram = new DisconnectRejectingAdapter("telegram");
+    const runner = new GatewayRunner({ adapters: [telegram], handler: async () => {} });
+    await runner.start();
+
+    await expect(runner.stop(), "a failed disconnect made stop() reject").resolves.toBeUndefined();
+
+    const report = stderr.filter((line) => line.includes("disconnect failed"));
+    expect(report, "stop() discarded the failed disconnect").toHaveLength(1);
     expect(report[0]).toContain('"telegram"');
+    expect(report[0]).toContain("while stopping the runner");
     expect(report[0]).toContain("socket close failed");
   });
 
