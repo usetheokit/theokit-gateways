@@ -4,6 +4,8 @@
  * @public
  */
 
+import type { Express } from "express";
+
 /**
  * The part of `fetch` the adapter uses. The default is the global `fetch`; tests pass a scripted
  * one, so nothing reaches a server.
@@ -33,8 +35,18 @@ export interface NextcloudTalkAdapterOptions {
    *   `occ talk:bot:install <name> <secret> <webhook url>`; Talk never shows it again
    */
   readonly secret: string;
-  /** Port the webhook listener binds. Default 3000. */
+  /**
+   * Port the webhook listener binds. Default 3000, the default of every webhook adapter in this
+   * family, so two of them in one process need distinct ports or a shared `app`. A port another
+   * listener holds makes `connect()` answer `false`. Ignored when `app` is given.
+   */
   readonly port?: number;
+  /**
+   * Mount the webhook route on this Express app instead of creating one. The caller owns
+   * listening, and `connect()` opens no port. The route stays mounted after `disconnect()`, and a
+   * later `connect()` mounts it again; the first one still answers.
+   */
+  readonly app?: Express;
   /** Path of the webhook route. Default `/nextcloud-talk`. */
   readonly path?: string;
   /** How long `connect()` waits for the capabilities read. Default 10000 ms. */

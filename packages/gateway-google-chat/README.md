@@ -59,7 +59,16 @@ await runner.start();
 
 `connect()` obtains the first access token and then starts the listener. It returns `false`
 (never a throw) when the key is not a PEM private key, the token exchange fails, or no token
-arrives within `connectTimeoutMs` (10 s by default).
+arrives within `connectTimeoutMs` (10 s by default), or when the port is held by another
+listener. A `connect()` made while another is pending shares its answer. A `disconnect()` made
+while one is pending wins: that connect answers `false` and leaves no listener, and the next
+`connect()` starts a fresh session.
+
+The route listens on its own Express app, port 3000 by default. Every webhook adapter in this
+family defaults to 3000, so two of them in one process need distinct `port` values or one
+Express app passed to each as `app`; with `app` the adapter mounts its route there and you call
+`listen`. A request with no bearer token is refused with 401 before its body is read, and a body
+over 1 MiB with 413 and `{"error":"request body too large"}`.
 
 `audience` must be exactly the HTTP endpoint URL configured for the app in the Google Cloud
 console (Chat API → Configuration). A trailing slash on one side and not the other refuses every

@@ -254,6 +254,7 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
         adapter: this,
         ...(this.opts.path === undefined ? {} : { path: this.opts.path }),
         ...(this.opts.port === undefined ? {} : { port: this.opts.port }),
+        ...(this.opts.app === undefined ? {} : { app: this.opts.app }),
       });
       await server.start();
     } catch (err) {
