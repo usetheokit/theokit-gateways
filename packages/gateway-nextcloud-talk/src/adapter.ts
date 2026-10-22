@@ -9,7 +9,6 @@ import { randomBytes } from "node:crypto";
 
 import {
   BasePlatformAdapter,
-  channelRendering,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
   type SendResult,
@@ -216,9 +215,8 @@ export class NextcloudTalkAdapter extends BasePlatformAdapter implements Nextclo
     return { status: 200, body: {} };
   }
 
-  /** The text to send: markdown passes through, html goes as is with one warning. */
+  /** The text to send: markdown passes through, since Talk renders it; html goes as is with one warning. */
   private textFor(out: OutboundMessage): string {
-    if (out.format === "markdown") return channelRendering(this.platform).translate(out.text);
     if (out.format === "html" && !this.warnedAboutHtml) {
       this.warnedAboutHtml = true;
       process.stderr.write(
