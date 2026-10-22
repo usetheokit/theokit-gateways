@@ -295,6 +295,21 @@ describe("outbound", () => {
     expect(result.error?.code).toBe("disconnected");
   });
 
+  it("a send whose stdin fails with EPIPE after the write settles disconnected", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const { adapter, child } = await connected();
+
+    const sending = adapter.sendMessage({ channel: { id: "+1", type: "dm" }, text: "hi" });
+    await until(() => child.last("send") !== undefined, "send");
+    // The child closed its end of the pipe after the line was accepted: stdin emits EPIPE, which
+    // would end the host process if nothing listened for it.
+    child.stdin.destroy(new Error("write EPIPE"));
+
+    await expect(sending).resolves.toMatchObject({ ok: false, error: { code: "disconnected" } });
+    const after = await adapter.sendMessage({ channel: { id: "+1", type: "dm" }, text: "again" });
+    expect(after.error?.code).toBe("not_connected");
+  });
+
   it("settles every pending send on disconnect", async () => {
     const { adapter, child } = await connected();
 
