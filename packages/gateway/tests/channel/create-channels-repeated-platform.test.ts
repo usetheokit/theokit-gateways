@@ -112,4 +112,33 @@ describe("createChannels with a repeated platform", () => {
       "duplicate_channel",
     ]);
   });
+
+  it("rejects_an_adapter_whose_platform_differs_from_its_descriptor", () => {
+    // GatewayRunner keys adapters by the adapter's own platform, so a descriptor declaring
+    // telegram whose create returns a discord adapter would slip past a check on the
+    // descriptor and give the runner two discord adapters.
+    const mislabelled = new MockAdapter("discord");
+    const mislabelledCreate = vi.fn(() => mislabelled);
+    const telegramCreate = vi.fn(() => new MockAdapter("telegram"));
+    const discordCreate = vi.fn(() => new MockAdapter("discord"));
+
+    const result = createChannels([
+      { descriptor: telegramDescriptor(mislabelledCreate), config: { token: "a" } },
+      { descriptor: telegramDescriptor(telegramCreate), config: { token: "b" } },
+      { descriptor: descriptorFor("discord", discordCreate), config: { token: "c" } },
+    ]);
+
+    expect(result.adapters).not.toContain(mislabelled);
+    expect(result.adapters.map((adapter) => adapter.platform)).toEqual(["telegram", "discord"]);
+    expect(telegramCreate).toHaveBeenCalledTimes(1);
+    expect(discordCreate).toHaveBeenCalledTimes(1);
+    expect(result.rejected).toHaveLength(1);
+    const [rejection] = result.rejected;
+    expect(rejection?.platform).toBe("telegram");
+    expect(rejection?.error).toBeInstanceOf(GatewayConfigurationError);
+    expect(rejection?.error.code).toBe("platform_mismatch");
+    expect(rejection?.error.message).toContain("telegram");
+    expect(rejection?.error.message).toContain("discord");
+    expect(mislabelled.connectCount, "createChannels connected the refused adapter").toBe(0);
+  });
 });
