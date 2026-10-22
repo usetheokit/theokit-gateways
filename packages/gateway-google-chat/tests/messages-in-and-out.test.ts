@@ -443,6 +443,7 @@ describe("connect", () => {
 
     expect(result).toBe(false);
     expect(google.tokenExchanges).toBe(1);
+    expect(google.lastTokenSignal?.aborted).toBe(true);
     await expect(
       fetch(`http://127.0.0.1:${port}/google-chat`, { method: "POST" }),
     ).rejects.toThrow();
