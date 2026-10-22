@@ -117,31 +117,145 @@ export function toDialect(text: string, platform: string): string {
   return rewriteMarkers(text, dialect);
 }
 
+/** What the one `PATTERN` match whose named groups are `groups` becomes in `dialect`. */
+function markerFor(
+  matched: string,
+  groups: Record<string, string | undefined> | undefined,
+  dialect: Dialect,
+): string {
+  if (groups === undefined) return matched;
+
+  for (const [group, marker] of GROUP_MARKERS) {
+    const content = groups[group];
+    if (content === undefined) continue;
+    const wrap = dialect[marker];
+    return wrap === undefined ? content : `${wrap}${content}${wrap}`;
+  }
+
+  // PATTERN matched and named no group: unreachable while every alternative above carries one,
+  // and returning the match unchanged is the only answer that cannot corrupt text if it stops
+  // being true. The same reason the whole module passes an unknown platform through.
+  return matched;
+}
+
 /**
- * Rewrite the four inline markers of `text` into `dialect`, in one pass over `PATTERN`.
+ * A replace callback's answer for one match. `PATTERN` has named groups, so the callback's last
+ * argument is the groups object and the third from last is the match's offset.
+ */
+function rewriteMatch(matched: string, args: readonly unknown[], dialect: Dialect): string {
+  return markerFor(matched, args.at(-1) as Record<string, string | undefined> | undefined, dialect);
+}
+
+/** One replace over `text`: the single pass the module comment above requires. */
+function replaceMarkers(text: string, dialect: Dialect): string {
+  return text.replace(PATTERN, (matched, ...args) => rewriteMatch(matched, args, dialect));
+}
+
+/**
+ * A table row: optional blanks, then a pipe (GFM 0.29 § 4.10). GFM also accepts a row with no
+ * leading pipe under a delimiter row; reading those would mean reading the delimiter row, and no
+ * measurement here asked for it (B-556 plan, glossary and ADR D1). Sticky, so it is tested at a line
+ * start without slicing the line out; every caller sets `lastIndex` first.
+ */
+const ROW_START = /[^\S\r\n]*\|/y;
+
+/** A line ending as GFM reads one: `\r\n`, `\n`, or a lone `\r`. Captured, so a split keeps it. */
+const LINE_ENDING = /(\r\n|\r|\n)/;
+
+/** Any character a marker can start with. A row without one has nothing to rewrite. */
+const MARKER_CHARACTER = /[*_~`]/;
+
+const PIPE = 0x7c;
+const BACKSLASH = 0x5c;
+const LF = 0x0a;
+const CR = 0x0d;
+
+/**
+ * Answers "is the line holding `offset` a table row?" for offsets that only grow, as a replace
+ * callback's do. The cursor moves forward once over the text, so one long line full of matches is
+ * scanned once rather than once per match.
+ */
+function rowLocator(text: string): (offset: number) => boolean {
+  let lineStart = 0;
+  let scanned = 0;
+  return (offset) => {
+    for (; scanned < offset; scanned += 1) {
+      const code = text.charCodeAt(scanned);
+      if (code === LF || code === CR) lineStart = scanned + 1;
+    }
+    ROW_START.lastIndex = lineStart;
+    return ROW_START.test(text);
+  };
+}
+
+/**
+ * Rewrite each cell of a table row on its own, keeping every pipe. A pipe preceded by an odd run
+ * of backslashes is content (`\|`), as GFM reads it. Inline code holding an unescaped pipe is split
+ * there too, as GFM splits it, so its backticks no longer pair and are kept (B-556 EC-1).
+ */
+function rewriteTableRow(row: string, dialect: Dialect): string {
+  let out = "";
+  let from = 0;
+  let backslashes = 0;
+  for (let i = 0; i < row.length; i += 1) {
+    const code = row.charCodeAt(i);
+    if (code === BACKSLASH) {
+      backslashes += 1;
+      continue;
+    }
+    if (code === PIPE && backslashes % 2 === 0) {
+      out += `${replaceMarkers(row.slice(from, i), dialect)}|`;
+      from = i + 1;
+    }
+    backslashes = 0;
+  }
+  return out + replaceMarkers(row.slice(from), dialect);
+}
+
+/** A table row cell by cell; any other line, or a line ending, with the single pass. */
+function rewriteLine(line: string, dialect: Dialect): string {
+  ROW_START.lastIndex = 0;
+  if (!ROW_START.test(line)) return replaceMarkers(line, dialect);
+  return MARKER_CHARACTER.test(line) ? rewriteTableRow(line, dialect) : line;
+}
+
+/**
+ * The text line by line. Splitting a line from its neighbours changes nothing for a line that is
+ * not a row: `.` in `PATTERN` stops at `\n` and `\r`, so no match crosses a line, and each
+ * lookaround sees a line ending and a string edge alike.
+ */
+function rewriteByLine(text: string, dialect: Dialect): string {
+  return text
+    .split(LINE_ENDING)
+    .map((piece) => rewriteLine(piece, dialect))
+    .join("");
+}
+
+/**
+ * Rewrite the four inline markers of `text` into `dialect`.
  *
  * Shared by `toDialect` and `channelRendering`, so the one regex whose ordering is load-bearing
  * exists once: a second copy is where the bold-becomes-italic defect above would come back.
+ *
+ * A table row is rewritten cell by cell (B-556 FR-001): one pass over the whole text let `*a | b*`
+ * open in one cell and close in the next, and the platform then lost both markers. Today's single
+ * pass runs first and its result is kept unless one of its matches holds a pipe and sits on a
+ * table row; only then is the text rewritten line by line. Where no match crosses a row's pipe the
+ * two agree, because a match inside one cell is the match the replace finds in that cell alone,
+ * and the fast path keeps a plain table at the cost of today's pass (plan ADR D1).
  *
  * @param text - markdown as the model produced it
  * @param dialect - what each marker becomes; an absent marker is dropped and its content kept
  * @returns the rewritten text
  */
 export function rewriteMarkers(text: string, dialect: Dialect): string {
-  return text.replace(PATTERN, (matched, ...args) => {
-    const groups = args.at(-1) as Record<string, string | undefined> | undefined;
-    if (groups === undefined) return matched;
-
-    for (const [group, marker] of GROUP_MARKERS) {
-      const content = groups[group];
-      if (content === undefined) continue;
-      const wrap = dialect[marker];
-      return wrap === undefined ? content : `${wrap}${content}${wrap}`;
+  const onTableRow = rowLocator(text);
+  let crossesRowPipe = false;
+  const rewritten = text.replace(PATTERN, (matched, ...args) => {
+    if (!crossesRowPipe && matched.includes("|")) {
+      crossesRowPipe = onTableRow(args.at(-3) as number);
     }
-
-    // PATTERN matched and named no group: unreachable while every alternative above carries one,
-    // and returning the match unchanged is the only answer that cannot corrupt text if it stops
-    // being true. The same reason the whole module passes an unknown platform through.
-    return matched;
+    return rewriteMatch(matched, args, dialect);
   });
+  return crossesRowPipe ? rewriteByLine(text, dialect) : rewritten;
 }
