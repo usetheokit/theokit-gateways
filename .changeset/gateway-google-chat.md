@@ -17,7 +17,8 @@ path `/google-chat`; `express` is an optional peer). Every request's bearer toke
 before its body is read: an RS256 signature under a key from Google's published set, issuer
 `accounts.google.com`, an audience equal to the configured `audience`, the Chat service account's
 verified email, and an unexpired `exp` with 60 s of skew. A request that fails any check gets 401
-and reaches no handler. When Google's key set cannot be read the answer is 503, and no read starts
+and reaches no handler. A request with no bearer token gets 401 before its body is read, and a
+body over 1 MiB gets 413. When Google's key set cannot be read the answer is 503, and no read starts
 within 60 s of the previous one. `connect()` exchanges a service-account assertion for an access
 token and only then starts the listener. It returns `false`, never a throw, when the key is
 unreadable, the exchange fails or no token arrives within `connectTimeoutMs`. A `connect()` made

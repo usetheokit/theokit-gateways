@@ -16,7 +16,8 @@ collides with the first-party one (TS2717) and should drop it.
 `@theokit/gateway-nextcloud-talk` (first release) exports `NextcloudTalkAdapter`, which runs as a
 Talk bot. Its webhook route accepts a request only when `x-nextcloud-talk-signature` is the hex
 HMAC-SHA256 of `x-nextcloud-talk-random` followed by the raw body under the bot secret, compared
-in constant time, and answers 401 otherwise. A message a person wrote becomes a
+in constant time, and answers 401 otherwise. A body over 1 MiB is refused with 413 before it is
+held. A message a person wrote becomes a
 `NextcloudTalkMessageEvent`; a `Join` or a bot's message does not. `sendMessage` posts as the bot
 with its own signed random, returns the `referenceId` it sent as `messageId`, and sends a text
 over 32000 code points as consecutive messages. `connect()` requires the server's `bots-v1`

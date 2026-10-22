@@ -31,6 +31,7 @@
 export interface RawBodyRequest {
   readonly readableEnded?: boolean;
   readonly complete?: boolean;
+  readonly headers?: Readonly<Record<string, string | string[] | undefined>>;
   setEncoding(encoding: string): unknown;
   on(event: string, listener: (arg: never) => void): unknown;
 }
@@ -70,9 +71,16 @@ export async function loadPeer<T>(
  * Every provider signs the exact bytes, so a body that was parsed and re-serialised hashes
  * differently and fails verification for a correct request. The bytes are attached as `rawBody`.
  *
+ * With `maxBytes`, a body larger than that many bytes is refused before it is held: `next` gets
+ * an error carrying `status: 413`, which Express answers as 413, and the rest of the stream is
+ * read and dropped. A route that must stay public (a provider dials in) sets it, or any client
+ * can stream a body until the heap runs out.
+ *
  * @param tag the package name for the diagnostic, so a reader knows which router is complaining
+ * @param options `maxBytes`, the largest body accepted; no limit when absent
  */
-export function rawBodyCapture(tag: string) {
+export function rawBodyCapture(tag: string, options: RawBodyCaptureOptions = {}) {
+  const { maxBytes } = options;
   // `unknown` rather than `RawBodyRequest`, and that is a type-system requirement rather than
   // laziness: a handler parameter is CONTRAVARIANT, so for express to accept this middleware the
   // parameter must be a SUPERTYPE of express's own `Request`. Narrowed on the first line, where the
@@ -95,17 +103,53 @@ export function rawBodyCapture(tag: string) {
       next();
       return;
     }
+    if (maxBytes !== undefined && declaredLength(req) > maxBytes) {
+      next(bodyTooLarge(tag, maxBytes));
+      return;
+    }
     let buf = "";
+    let bytes = 0;
+    let refused = false;
     req.setEncoding("utf8");
     req.on("data", (chunk: string) => {
+      if (refused) return;
+      bytes += Buffer.byteLength(chunk);
+      if (maxBytes !== undefined && bytes > maxBytes) {
+        refused = true;
+        buf = "";
+        next(bodyTooLarge(tag, maxBytes));
+        return;
+      }
       buf += chunk;
     });
     req.on("end", () => {
+      if (refused) return;
       (req as unknown as { rawBody: string }).rawBody = buf;
       next();
     });
     req.on("error", (err: unknown) => next(err));
   };
+}
+
+/** Options for {@link rawBodyCapture}. */
+export interface RawBodyCaptureOptions {
+  /** The largest body accepted, in bytes. A larger one is refused with 413. No limit when absent. */
+  readonly maxBytes?: number;
+}
+
+/** The `content-length` the client declared, or 0 when it declared none or an unreadable one. */
+function declaredLength(req: RawBodyRequest): number {
+  const value = req.headers?.["content-length"];
+  const declared = Number(Array.isArray(value) ? value[0] : value);
+  return Number.isFinite(declared) ? declared : 0;
+}
+
+/** The error Express answers as 413: `status` is the field its final handler reads. */
+function bodyTooLarge(tag: string, maxBytes: number): Error & { status: number; expose: boolean } {
+  return Object.assign(new Error(`[${tag}] request body is larger than ${maxBytes} bytes`), {
+    status: 413,
+    expose: true,
+  });
 }
 
 /**

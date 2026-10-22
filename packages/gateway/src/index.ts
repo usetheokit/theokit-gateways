@@ -100,5 +100,10 @@ export type {
 
 // The shared half of an Express webhook server — see `webhook/express-server.ts` for why it lives
 // here and why it does not make express a dependency of the core (#89).
-export type { ListenableApp, ListenerLike, RawBodyRequest } from "./webhook/express-server.js";
+export type {
+  ListenableApp,
+  ListenerLike,
+  RawBodyCaptureOptions,
+  RawBodyRequest,
+} from "./webhook/express-server.js";
 export { listenerLifecycle, loadPeer, rawBodyCapture } from "./webhook/express-server.js";
