@@ -75,16 +75,23 @@ export class IrcAdapter extends BasePlatformAdapter {
     if (this.connected) return true;
     // A second caller while the first is registering shares its answer instead of opening a
     // second connection, which would hold the nick and deliver every message twice.
-    this.connecting ??= this.openSession().finally(() => {
-      this.connecting = undefined;
+    if (this.connecting !== undefined) return this.connecting;
+    const attempt = this.openSession().finally(() => {
+      // Only clear what is still ours: `disconnect()` clears the slot too, and a `connect()` made
+      // after it may already hold its own attempt there.
+      if (this.connecting === attempt) this.connecting = undefined;
     });
-    return this.connecting;
+    this.connecting = attempt;
+    return attempt;
   }
 
   async disconnect(): Promise<void> {
     const socket = this.socket;
     this.socket = undefined;
     this.connected = false;
+    // The overtaken attempt still answers `false` to its own callers; a `connect()` from here on
+    // opens a fresh connection instead of inheriting that answer.
+    this.connecting = undefined;
     if (socket === undefined || socket.destroyed) return;
     socket.end("QUIT :disconnecting\r\n");
     // A server that never closes its side would hold the socket open; give it a second.

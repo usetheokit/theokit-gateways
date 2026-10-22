@@ -23,7 +23,8 @@ with its own signed random, returns the `referenceId` it sent as `messageId`, an
 over 32000 code points as consecutive messages. `connect()` requires the server's `bots-v1`
 feature and returns `false`, never a throw, when the server cannot be read, lacks it, or passes
 `connectTimeoutMs`. A `connect()` made while another is pending shares its answer, and a
-`disconnect()` made while one is pending wins: the connect answers `false` and leaves no listener.
+`disconnect()` made while one is pending wins: the connect answers `false` and leaves no listener, and a `connect()` made after that
+`disconnect()` starts a fresh session instead of inheriting the `false`.
 The constructor throws on a secret outside 40 to 128 characters.
 `splitForTalk` and `TALK_MAX_LENGTH` (the splitter), `talkSignature` and `verifyTalkSignature`, and
 `talkBodyToMessageEvent` are exported. The package has no runtime dependencies (`express` is a

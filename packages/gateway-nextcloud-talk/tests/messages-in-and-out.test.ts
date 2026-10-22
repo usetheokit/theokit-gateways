@@ -395,17 +395,21 @@ describe("connect", () => {
     const readHeld = new Promise<void>((resolve) => {
       releaseRead = resolve;
     });
+    let readsAsked = 0;
     const port = await freePort();
     const adapter = adapterFor(talk, {
       port,
       fetch: async (input, init) => {
-        if (input.includes("/cloud/capabilities")) await readHeld;
+        if (input.includes("/cloud/capabilities")) {
+          readsAsked += 1;
+          await readHeld;
+        }
         return talk.fetch(input, init);
       },
     });
 
     const connecting = adapter.connect();
-    await new Promise((resolve) => setImmediate(resolve));
+    await vi.waitFor(() => expect(readsAsked).toBe(1));
     await adapter.disconnect();
     releaseRead();
 
