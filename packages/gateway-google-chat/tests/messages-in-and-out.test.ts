@@ -186,6 +186,21 @@ describe("the route refuses before it holds a body", () => {
     expect(events).toHaveLength(0);
   });
 
+  it("answers the 413 as JSON with no stack trace", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const port = await freePort();
+    await connected(scriptedGoogle(), { port });
+
+    const answer = await fetch(`http://127.0.0.1:${port}/google-chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${idToken()}` },
+      body: "x".repeat(1024 * 1024 + 1),
+    });
+
+    expect(answer.headers.get("content-type")).toMatch(/^application\/json/);
+    expect(await answer.text()).toBe('{"error":"request body too large"}');
+  });
+
   it("answers 401 to a request with no bearer token without waiting for its body", async () => {
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const port = await freePort();

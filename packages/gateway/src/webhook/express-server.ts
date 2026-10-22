@@ -71,21 +71,33 @@ export async function loadPeer<T>(
  * Every provider signs the exact bytes, so a body that was parsed and re-serialised hashes
  * differently and fails verification for a correct request. The bytes are attached as `rawBody`.
  *
- * With `maxBytes`, a body larger than that many bytes is refused before it is held: `next` gets
- * an error carrying `status: 413`, which Express answers as 413, and the rest of the stream is
- * read and dropped. A route that must stay public (a provider dials in) sets it, or any client
- * can stream a body until the heap runs out.
+ * With `maxBytes`, a body larger than that many bytes is refused before it is held. The rest of
+ * the stream is read and dropped, and once it ends the middleware answers 413 with the JSON body
+ * `{ "error": "request body too large" }` itself; `next` is not called. A route that must stay
+ * public (a provider dials in) sets it, or any client can stream a body until the heap runs out.
+ * The refusal is answered here rather than handed to `next` as an error because Express's final
+ * handler writes an error as an HTML page carrying its stack whenever `NODE_ENV` is not
+ * `production`, and these routes answer anyone.
+ *
+ * The middleware settles once: after a refusal, more data, the end of the stream or a stream
+ * error do nothing, and after a stream error the end of the stream does nothing.
  *
  * @param tag the package name for the diagnostic, so a reader knows which router is complaining
  * @param options `maxBytes`, the largest body accepted; no limit when absent
+ * @throws RangeError when `maxBytes` is not a finite number of zero or more
  */
 export function rawBodyCapture(tag: string, options: RawBodyCaptureOptions = {}) {
   const { maxBytes } = options;
+  if (maxBytes !== undefined && !(Number.isFinite(maxBytes) && maxBytes >= 0)) {
+    throw new RangeError(
+      `[${tag}] rawBodyCapture: maxBytes must be a finite number of zero or more, got ${maxBytes}`,
+    );
+  }
   // `unknown` rather than `RawBodyRequest`, and that is a type-system requirement rather than
   // laziness: a handler parameter is CONTRAVARIANT, so for express to accept this middleware the
   // parameter must be a SUPERTYPE of express's own `Request`. Narrowed on the first line, where the
   // shape this actually needs is stated once.
-  return (rawReq: unknown, _res: unknown, next: (err?: unknown) => void): void => {
+  return (rawReq: unknown, rawRes: unknown, next: (err?: unknown) => void): void => {
     const req = rawReq as RawBodyRequest;
     // Someone else already drained the stream — a global `express.json()` or `express.urlencoded()`
     // mounted ahead of this router is the usual cause. Without this branch `req.on("end")` never
@@ -103,31 +115,39 @@ export function rawBodyCapture(tag: string, options: RawBodyCaptureOptions = {})
       next();
       return;
     }
-    if (maxBytes !== undefined && declaredLength(req) > maxBytes) {
-      next(bodyTooLarge(tag, maxBytes));
-      return;
-    }
     let buf = "";
     let bytes = 0;
-    let refused = false;
+    // `refused` drops what is left of the body; `settled` keeps every path to one answer.
+    let refused = maxBytes !== undefined && declaredLength(req) > maxBytes;
+    let settled = false;
     req.setEncoding("utf8");
     req.on("data", (chunk: string) => {
-      if (refused) return;
+      if (refused || settled) return;
       bytes += Buffer.byteLength(chunk);
       if (maxBytes !== undefined && bytes > maxBytes) {
         refused = true;
         buf = "";
-        next(bodyTooLarge(tag, maxBytes));
         return;
       }
       buf += chunk;
     });
     req.on("end", () => {
-      if (refused) return;
+      if (settled) return;
+      settled = true;
+      if (refused) {
+        answerTooLarge(rawRes as JsonResponse, tag, maxBytes ?? 0);
+        return;
+      }
       (req as unknown as { rawBody: string }).rawBody = buf;
       next();
     });
-    req.on("error", (err: unknown) => next(err));
+    req.on("error", (err: unknown) => {
+      if (settled) return;
+      settled = true;
+      // A client that aborts a refused body has nobody left to answer.
+      if (refused) return;
+      next(err);
+    });
   };
 }
 
@@ -144,12 +164,15 @@ function declaredLength(req: RawBodyRequest): number {
   return Number.isFinite(declared) ? declared : 0;
 }
 
-/** The error Express answers as 413: `status` is the field its final handler reads. */
-function bodyTooLarge(tag: string, maxBytes: number): Error & { status: number; expose: boolean } {
-  return Object.assign(new Error(`[${tag}] request body is larger than ${maxBytes} bytes`), {
-    status: 413,
-    expose: true,
-  });
+/** What the refusal writes to. Express's `Response` satisfies it. */
+interface JsonResponse {
+  status(code: number): { json(body: unknown): unknown };
+}
+
+/** Answer 413 as JSON, and say on stderr which router refused and at what limit. */
+function answerTooLarge(res: JsonResponse, tag: string, maxBytes: number): void {
+  process.stderr.write(`[${tag}] refused a request (413): body larger than ${maxBytes} bytes\n`);
+  res.status(413).json({ error: "request body too large" });
 }
 
 /**

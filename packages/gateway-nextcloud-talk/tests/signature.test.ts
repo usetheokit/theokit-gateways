@@ -163,6 +163,17 @@ describe("the route on a real port", () => {
     expect(events).toHaveLength(0);
   });
 
+  it("answers the 413 as JSON with no stack trace", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const { port } = await connected();
+    const rawBody = "x".repeat(1024 * 1024 + 1);
+
+    const answer = await post(port, rawBody, talkHeaders(rawBody));
+
+    expect(answer.headers.get("content-type")).toMatch(/^application\/json/);
+    expect(await answer.text()).toBe('{"error":"request body too large"}');
+  });
+
   it("verifies a body with non-ASCII text over the real socket", async () => {
     const { events, port } = await connected();
     const body = {
