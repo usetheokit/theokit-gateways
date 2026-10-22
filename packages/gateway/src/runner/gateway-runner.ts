@@ -110,9 +110,10 @@ function connectFailureReason(outcome: PromiseSettledResult<boolean>): string {
 }
 
 /**
- * Disconnect every adapter the runner is giving back. A disconnect that fails does not stop the
- * others and does not change how the start settles, but it is reported: such an adapter may still
- * hold its platform session, and a discarded failure left that state with no trace.
+ * Disconnect every adapter the runner is giving back, from a rollback, an overtaken start or
+ * `stop()`. A disconnect that fails does not stop the others and does not change how the caller
+ * settles, but it is reported: such an adapter may still hold its platform session, and a
+ * discarded failure left that state with no trace.
  */
 async function releaseAdapters(
   adapters: ReadonlyArray<BasePlatformAdapter>,
@@ -316,7 +317,9 @@ export class GatewayRunner {
 
   /**
    * Stop the runner. Drains in-flight handlers up to `drainTimeoutMs`,
-   * then disconnects adapters. Idempotent (EC-E).
+   * then disconnects adapters. Idempotent (EC-E). A disconnect that fails does not make `stop()`
+   * reject and does not stop the other disconnects; it is written to stderr, redacted, naming the
+   * platform.
    *
    * An adapter still connecting under an in-flight start is released when that start settles;
    * `stop()` does not wait for it.
@@ -355,9 +358,7 @@ export class GatewayRunner {
       }
     }
 
-    await Promise.all(
-      [...this.adaptersByPlatform.values()].map((a) => a.disconnect().catch(() => undefined)),
-    );
+    await releaseAdapters([...this.adaptersByPlatform.values()], "stopping the runner");
   }
 
   /**
