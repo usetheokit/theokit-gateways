@@ -434,4 +434,25 @@ describe("MattermostAdapter — the format the caller declared", () => {
 
     expect(handle.posts[0]?.message).toBe("**bold**");
   });
+
+  it("sends a plain text whose escaped body passes the post cap as posts that each fit", async () => {
+    // 8000 copies of `*a` are 16000 characters, one part for the splitter, and 24000 once
+    // escaped. Sent as one post, the server refuses it with a 400 after the request. Split again
+    // inside the 8000-character half window, it goes out as two posts of 12000 characters.
+    const handle = makeMockHandle();
+    const adapter = new MattermostAdapter({ baseUrl: "https://mm.acme.com", accessToken: "tok" });
+    installMockHandle(adapter, handle);
+
+    const result = await adapter.sendMessage({
+      channel: { id: "chan-1", type: "group" },
+      text: "*a".repeat(8000),
+      format: "plain",
+    });
+
+    expect(result.ok).toBe(true);
+    const messages = handle.posts.map((post) => post.message);
+    expect(messages.length).toBe(2);
+    for (const message of messages) expect(message.length).toBeLessThanOrEqual(16_383);
+    expect(messages.join("")).toBe("\\*a".repeat(8000));
+  });
 });

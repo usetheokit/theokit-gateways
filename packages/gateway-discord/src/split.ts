@@ -13,15 +13,44 @@
 
 import { chunkText } from "@theokit/gateway";
 
-const DISCORD_MAX_MESSAGE = 2000;
+export const DISCORD_MAX_MESSAGE = 2000;
 const SAFE_DISCORD_CHUNK = 1900;
+const BOUNDARIES = {
+  boundaries: ["\n\n", "\n"],
+  lastResort: "window",
+  stripLeading: /^\n+/,
+} as const;
 
+/**
+ * Split `text` into chunks Discord accepts as separate messages.
+ *
+ * Each chunk is at most {@link DISCORD_MAX_MESSAGE} characters. The cut prefers
+ * a blank line, then a newline, inside a 1900-character window, and falls back
+ * to the window edge when the text has neither.
+ *
+ * @param text - The full outbound reply.
+ * @returns The chunks in order; sending them one after another reproduces `text`
+ * minus the leading newlines stripped at each cut.
+ */
 export function splitForDiscord(text: string): string[] {
   return chunkText(text, {
     limit: DISCORD_MAX_MESSAGE,
     safeLimit: SAFE_DISCORD_CHUNK,
-    boundaries: ["\n\n", "\n"],
-    lastResort: "window",
-    stripLeading: /^\n+/,
+    ...BOUNDARIES,
+  });
+}
+
+/**
+ * Split a text that is escaped after the split, at half the cap.
+ *
+ * Escaping adds at most one backslash per character, so a part of at most 1000 characters fits
+ * one message once escaped. The adapter calls this only for a part whose escaped body passed the
+ * cap, so the parts of an ordinary text are the ones `splitForDiscord` returns.
+ */
+export function splitForEscapedDiscord(text: string): string[] {
+  return chunkText(text, {
+    limit: DISCORD_MAX_MESSAGE / 2,
+    safeLimit: SAFE_DISCORD_CHUNK / 2,
+    ...BOUNDARIES,
   });
 }

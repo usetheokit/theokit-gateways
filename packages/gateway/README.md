@@ -93,6 +93,61 @@ presenter per turn; it keeps state between `present()` calls.
 - `@theokit/presenter` is your dependency, not this package's: `@theokit/gateway` does not depend
   on it.
 
+## Editing a sent message
+
+Six adapters can replace the text of a message they sent, keeping its id: Telegram, Discord,
+Slack, Mattermost, Matrix and Teams. E-mail, SMS, LINE and WhatsApp cannot, because their
+platforms have no edit call. A caller that wants a reply to appear as a preview and then become
+the final text reads `supportsEdit` before it starts, and falls back to `sendMessage` whenever an
+edit is refused. `BasePlatformAdapter`, `OutboundMessage` and `SendResult` come from
+`@theokit/gateway`.
+
+```typescript
+async function sendWithPreview(
+  adapter: BasePlatformAdapter,
+  out: OutboundMessage,
+  preview: string,
+): Promise<SendResult> {
+  // No edit call on this platform: send the final text once.
+  if (!adapter.supportsEdit) return adapter.sendMessage(out);
+  const sent = await adapter.sendMessage({ ...out, text: preview });
+  if (!sent.ok || sent.messageId === undefined) return adapter.sendMessage(out);
+  // The preview must fit one message; edit_too_long and every other refusal fall back to a send.
+  const edited = await adapter.editMessage(sent.messageId, out);
+  return edited.ok ? edited : adapter.sendMessage(out);
+}
+```
+
+`supportsEdit` is set at construction and does not change with `connect()`. `editMessage` never
+throws on a platform error; it answers with a `SendResult`, and these refusals make no edit
+request:
+
+| Code | When |
+|---|---|
+| `edit_unsupported` | the adapter cannot edit (the four above), or a Matrix client injected without `sendMessage` |
+| `edit_too_long` | the text would need more than one platform message, counted after a `plain` text is escaped as a send escapes it; an edit replaces one message and is never split. Matrix has no length check |
+| `invalid_message_id` | the id is empty, or on Telegram not a positive integer |
+| `empty_text` | the text is empty, or on Teams only whitespace |
+| `not_connected` | the adapter is not connected, where its `sendMessage` checks that too (all but Telegram and Discord) |
+| `invalid_channel` | Telegram only: the channel id is not numeric, as on a send |
+| `encrypted_room_unsupported` | Matrix only: the room is encrypted, as on a send |
+
+Any other refusal comes from the platform, mapped as `sendMessage` maps it. Keep the preview
+within one message, and edit only a message this adapter sent: on Matrix an edit is an
+`m.replace` event, and clients apply it only to an event from the same sender. An edit whose
+markup the platform refuses is not retried as plain text. When an edit is refused, the sample
+sends the final text as a new message, so the preview stays above it.
+
+`supportsEdit` says that the adapter has an edit call, not that every edit is accepted. Treat
+`edit_unsupported` from an adapter that reports `true` as "stop previewing", like any other
+refusal. Where an adapter checks the connection, `not_connected` is answered before
+`invalid_message_id`.
+
+The adapters do not order edits. Two edits of the same message that are in flight at once can
+reach the platform in either order, and the one that lands last stays on screen; on Matrix each
+edit is a separate event and clients show the newest. Await each edit before sending the next,
+or keep one in flight and send only the latest text when it settles.
+
 ## Architecture (5 pieces)
 
 | Module | Responsibility |

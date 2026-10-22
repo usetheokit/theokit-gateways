@@ -23,7 +23,7 @@
 import { chunkText } from "@theokit/gateway";
 
 /** Mattermost's default `MaxPostSize`, in runes. */
-const MATTERMOST_MAX_POST = 16_383;
+export const MATTERMOST_MAX_POST = 16_383;
 
 /**
  * Cut inside a smaller window than the cap.
@@ -34,12 +34,37 @@ const MATTERMOST_MAX_POST = 16_383;
  */
 const SAFE_CHUNK = 16_000;
 
+const BOUNDARIES = {
+  boundaries: ["\n\n", "\n", " "],
+  lastResort: "last-boundary",
+  stripLeading: /^\s+/,
+} as const;
+
+/**
+ * Split `text` into posts that fit Mattermost's post cap.
+ *
+ * Each chunk is at most {@link MATTERMOST_MAX_POST} code points, cut inside a
+ * 16000-character window at a blank line, a newline or a space, in that order of
+ * preference.
+ *
+ * @param text - The full outbound reply.
+ * @returns The chunks in order, each with leading whitespace stripped at the cut.
+ */
 export function splitForMattermost(text: string): string[] {
+  return chunkText(text, { limit: MATTERMOST_MAX_POST, safeLimit: SAFE_CHUNK, ...BOUNDARIES });
+}
+
+/**
+ * Split a text that is escaped after the split, at half the cap.
+ *
+ * Escaping adds at most one backslash per character, so a part of at most 8191 characters fits
+ * one post once escaped. The adapter calls this only for a part whose escaped body passed the cap,
+ * so the parts of an ordinary text are the ones `splitForMattermost` returns.
+ */
+export function splitForEscapedMattermost(text: string): string[] {
   return chunkText(text, {
-    limit: MATTERMOST_MAX_POST,
-    safeLimit: SAFE_CHUNK,
-    boundaries: ["\n\n", "\n", " "],
-    lastResort: "last-boundary",
-    stripLeading: /^\s+/,
+    limit: Math.floor(MATTERMOST_MAX_POST / 2),
+    safeLimit: SAFE_CHUNK / 2,
+    ...BOUNDARIES,
   });
 }

@@ -40,6 +40,30 @@ interface TeamsAppLike {
   // ExpressAdapter or other httpServerAdapter — opaque escape hatch.
   readonly server?: unknown;
   readonly http?: unknown;
+  /**
+   * The REST client the edit uses. `activities(conversationId).update` exists across `^2.0.0`;
+   * `updateActivity` exists from `@microsoft/teams.api` 2.0.14, which deprecates the grouped
+   * accessor and announces its removal, so an edit prefers it when the installed SDK has it.
+   */
+  readonly api: {
+    readonly conversations: {
+      activities(conversationId: string): {
+        update(activityId: string, params: TeamsEditActivity): Promise<unknown>;
+      };
+      updateActivity?(
+        conversationId: string,
+        activityId: string,
+        params: TeamsEditActivity,
+      ): Promise<unknown>;
+    };
+  };
+}
+
+/** The activity an edit sends: the new text and, for a declared format, its `textFormat`. */
+interface TeamsEditActivity {
+  readonly type: "message";
+  readonly text: string;
+  readonly textFormat?: "markdown" | "xml";
 }
 
 /**
@@ -254,6 +278,60 @@ export class TeamsAdapter extends BasePlatformAdapter {
     return lastActivityId !== undefined ? { ok: true, messageId: lastActivityId } : { ok: true };
   }
 
+  /** Teams edits a sent activity's text through the conversations REST client. */
+  override readonly supportsEdit = true;
+
+  /**
+   * Replace the text of an activity this bot sent, keeping its id.
+   *
+   * Applies `sendMessage`'s checks (`empty_text`, then `not_connected`), refuses an empty id, and
+   * splits as `sendMessage` does: whitespace-only text, which `splitForTeams` reduces to nothing,
+   * is `empty_text`, a text that needs more than one activity is `edit_too_long`, and otherwise the
+   * edit carries the trimmed part a send would carry. Unlike `sendMessage`, a refused markup is
+   * not retried as plain text: one request, one answer.
+   */
+  override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    if (out.text.length === 0) {
+      return { ok: false, error: { code: "empty_text", message: "Empty text rejected." } };
+    }
+    if (!this.connected || this.app === undefined) {
+      return {
+        ok: false,
+        error: { code: "not_connected", message: "TeamsAdapter not connected." },
+      };
+    }
+    if (messageId.length === 0) {
+      return { ok: false, error: { code: "invalid_message_id", message: "message id is empty" } };
+    }
+    const parts = splitForTeams(out.text);
+    if (parts.length === 0) {
+      return {
+        ok: false,
+        error: { code: "empty_text", message: "Text reduced to zero parts after splitting." },
+      };
+    }
+    if (parts.length > 1) {
+      return {
+        ok: false,
+        error: {
+          code: "edit_too_long",
+          message: `text needs ${parts.length} Teams activities; an edit replaces one`,
+        },
+      };
+    }
+    const activity: TeamsEditActivity = {
+      type: "message",
+      text: parts[0] as string,
+      ...activityFormat(out.format),
+    };
+    try {
+      await updateActivity(this.app, out.channel.id, messageId, activity);
+    } catch (err) {
+      return { ok: false, error: mapTeamsError(err) };
+    }
+    return { ok: true, messageId };
+  }
+
   /**
    * Send one part with the caller's declared format, degrading to plain text if the service
    * refuses the markup.
@@ -363,6 +441,26 @@ export class TeamsAdapter extends BasePlatformAdapter {
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
     return this.runHandler(this.handler, event);
   }
+}
+
+/**
+ * Send one edit through whichever update call the installed SDK has (plan D5).
+ *
+ * Reading `app.api` happens here, inside the caller's `try`: an injected app without it throws a
+ * `TypeError` that the edit maps, instead of an edit that throws.
+ */
+async function updateActivity(
+  app: TeamsAppLike,
+  conversationId: string,
+  activityId: string,
+  activity: TeamsEditActivity,
+): Promise<void> {
+  const conversations = app.api.conversations;
+  if (typeof conversations.updateActivity === "function") {
+    await conversations.updateActivity(conversationId, activityId, activity);
+    return;
+  }
+  await conversations.activities(conversationId).update(activityId, activity);
 }
 
 /**
