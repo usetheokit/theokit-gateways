@@ -180,7 +180,7 @@ function proseWithPipes(minLength: number): string {
 const wrap = (t: string): string => `Here is the table.\n\n${t}\n\nThat is all.`;
 const translate = (platform: PlatformName) => channelRendering(platform).translate;
 
-describe("table rows through translate (B-556)", () => {
+describe("table rows through translate", () => {
   const markerTable = wrap(tableOf(HEADER_B, SEP_B, markerRow, 400));
 
   it("rewrites every row of the marker table cell by cell on all 15 platforms", () => {
@@ -316,7 +316,7 @@ function lineMismatchesOf(): string[] {
   return mismatches;
 }
 
-describe("rewriteMarkers on 1,000,000-character fixtures (B-556)", () => {
+describe("rewriteMarkers on 1,000,000-character fixtures", () => {
   it("equals the cell-by-cell reference on all 15 platforms and every fixture", {
     timeout: 120_000,
   }, () => {
@@ -361,7 +361,7 @@ function medianRatio(oldFn: () => unknown, newFn: () => unknown, pairs: number):
   return ratios[Math.floor(pairs / 2)] ?? Number.POSITIVE_INFINITY;
 }
 
-describe("rewriteMarkers timing against the 688c322 replace (B-556)", () => {
+describe("rewriteMarkers timing against the 688c322 replace", () => {
   const BOUNDS = [
     ["plain", 3],
     ["sparse", 3],
