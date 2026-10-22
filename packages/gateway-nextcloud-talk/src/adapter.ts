@@ -250,7 +250,6 @@ export class NextcloudTalkAdapter extends BasePlatformAdapter implements Nextclo
     return { ok: false, error: sendError(response.status) };
   }
 
-  /** Whether the server's capabilities name `bots-v1`, read within `connectTimeoutMs`. */
   /**
    * Check the server has bots, then start the listener. A `disconnect()` that lands while either
    * is pending wins: the listener is stopped again and the answer is `false`.
@@ -280,6 +279,7 @@ export class NextcloudTalkAdapter extends BasePlatformAdapter implements Nextclo
     return true;
   }
 
+  /** Whether the server's capabilities name `bots-v1`, read within `connectTimeoutMs`. */
   private async serverHasBots(): Promise<boolean> {
     const controller = new AbortController();
     const timeoutMs = this.opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
