@@ -16,7 +16,9 @@ itself over `node:tls` (port 6697 by default) or `node:net`. `connect()` sends `
 server password is set, negotiates SASL PLAIN when `saslPassword` is set (ending with `CAP END`
 after numeric 903), retries a nick in use with `_` up to 3 times, joins every channel and returns
 `true` once each join is confirmed. It returns `false`, never a throw, on `ERROR`, 464, 465, a
-SASL failure, a refused join, a closed socket or when `connectTimeoutMs` passes first. `PING` is
+SASL failure, a refused join, a closed socket or when `connectTimeoutMs` passes first. A
+`connect()` made while another is registering shares its answer; after a `disconnect()` the
+pending one answers `false` and the next `connect()` opens a fresh connection. `PING` is
 answered with `PONG`. A `PRIVMSG` from another nick becomes an `IrcMessageEvent`; `/me` arrives as
 its text with `irc.action` true, other CTCP requests and the adapter's own messages are dropped.
 `sendMessage` sends one `PRIVMSG` per line and cuts a long line so each command fits 512 bytes

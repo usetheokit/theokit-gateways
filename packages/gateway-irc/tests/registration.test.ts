@@ -188,6 +188,23 @@ describe("IrcAdapter.connect", () => {
     expect(sent.error?.code).toBe("not_connected");
   });
 
+  it("a connect made after a disconnect that overtook registration opens a fresh session", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const { server, adapter } = await setUp({ silent: true });
+    const first = adapter.connect();
+    await vi.waitFor(() => expect(server.linesOf("USER")).toHaveLength(1));
+
+    await adapter.disconnect();
+    const second = adapter.connect();
+    await vi.waitFor(() => expect(server.linesOf("USER")).toHaveLength(2));
+    server.push(":fake.irc.test 001 theobot :Welcome");
+    server.push(":fake.irc.test 366 theobot #theokit :End of /NAMES list.");
+
+    expect(await first).toBe(false);
+    expect(await second).toBe(true);
+    expect(server.connections).toBe(2);
+  });
+
   it.each([
     ["password", { password: "pw\r\nQUIT" }],
     ["saslPassword", { saslPassword: "pw\nQUIT" }],

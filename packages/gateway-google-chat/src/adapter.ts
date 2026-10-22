@@ -76,15 +76,22 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
     if (this.connected) return true;
     // A second caller while the first is still connecting shares its answer instead of starting
     // a second token exchange and a second listener on the same port.
-    this.connecting ??= this.openSession().finally(() => {
-      this.connecting = undefined;
+    if (this.connecting !== undefined) return this.connecting;
+    const attempt = this.openSession().finally(() => {
+      // Only clear what is still ours: `disconnect()` clears the slot too, and a `connect()` made
+      // after it may already hold its own attempt there.
+      if (this.connecting === attempt) this.connecting = undefined;
     });
-    return this.connecting;
+    this.connecting = attempt;
+    return attempt;
   }
 
   async disconnect(): Promise<void> {
     this.generation += 1;
     this.connected = false;
+    // The overtaken attempt still answers `false` to its own callers; a `connect()` from here on
+    // starts a fresh session instead of inheriting that answer.
+    this.connecting = undefined;
     const server = this.server;
     this.server = undefined;
     await server?.stop();
