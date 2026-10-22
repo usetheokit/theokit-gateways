@@ -260,6 +260,30 @@ describe("GatewayRunner.start() under rollback when one adapter fails", () => {
     expect(telegram.connected, "telegram connected after the rollback and stayed live").toBe(false);
   });
 
+  it("leaves_no_adapter_connected_when_one_connects_after_a_rollback_failure_without_stop", async () => {
+    const telegram = new HeldConnectAdapter("telegram");
+    const discord = new HeldConnectAdapter("discord");
+    const runner = new GatewayRunner({ adapters: [telegram, discord], handler: async () => {} });
+
+    // The catch sits on the start() call, so the rejection is never unhandled.
+    const started = runner.start().catch((err: unknown) => err);
+    await waitFor(
+      () => telegram.pendingConnects > 0 && discord.pendingConnects > 0,
+      "both connects to be entered",
+    );
+    discord.connectResult = false;
+    discord.release();
+    // One macrotask is an event-loop barrier: every pending microtask runs first, so a rollback
+    // that does not wait for the other connect has already rejected by now. Nothing asserts on time.
+    await new Promise((r) => setTimeout(r, 0));
+    telegram.release();
+    const error = await started;
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("discord");
+    expect(telegram.connected, "telegram connected after the rollback and stayed live").toBe(false);
+  });
+
   it("reports_a_disconnect_that_fails_during_the_rollback", async () => {
     const stderr = captureStderr();
     const telegram = new DisconnectRejectingAdapter("telegram");
