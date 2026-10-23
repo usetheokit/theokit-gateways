@@ -12,7 +12,12 @@
     "@theokit/gateway-imessage",
     "@theokit/gateway-google-chat",
     "@theokit/gateway-irc",
-    "@theokit/gateway-nextcloud-talk"
+    "@theokit/gateway-nextcloud-talk",
+    "@theokit/gateway-nostr",
+    "@theokit/gateway-feishu-lark",
+    "@theokit/gateway-synology-chat",
+    "@theokit/gateway-tlon-urbit",
+    "@theokit/gateway-twitch"
   ],
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
     "onlyUpdatePeerDependentsWhenOutOfRange": true
