@@ -277,11 +277,6 @@ export class UrbitShipClient {
     }, delay);
   }
 
-  /**
-   * Read the same channel again; the ship resends what was not acknowledged. A 404 means the ship
-   * dropped the channel: a new one is opened and subscribed (EC-16). A 401 or 403 means the session
-   * expired: the code logs in again, and a refusal of that is final.
-   */
   /** {@link reconnect} within the timeout: a ship that never answers is another failed attempt. */
   private async boundedReconnect(): Promise<void> {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -299,6 +294,11 @@ export class UrbitShipClient {
     }
   }
 
+  /**
+   * Read the same channel again; the ship resends what was not acknowledged. A 404 means the ship
+   * dropped the channel: a new one is opened and subscribed (EC-16). A 401 or 403 means the session
+   * expired: the code logs in again, and a refusal of that is final.
+   */
   private async reconnect(): Promise<void> {
     if (this.closed || this.channelUrl === undefined) return;
     let status = await this.openStream(this.channelUrl);
