@@ -155,7 +155,8 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
   {
     platform: "telegram",
     make: () => new TelegramAdapter({ token: "123456:not-a-real-token" }),
-  },  {
+  },
+  {
     platform: "tlon_urbit",
     make: () =>
       new TlonUrbitAdapter({
@@ -164,7 +165,6 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
         code: "lidlut-tabwed-pillex-ridrup",
       }),
   },
-
 ];
 
 describe.each(ADAPTERS)("PlatformAdapter conformance — $platform", ({ platform, make }) => {
