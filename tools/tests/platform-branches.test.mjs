@@ -61,6 +61,14 @@ describe("countPlatformBranches", () => {
     expect(count(fromSubpath)).toBe(1);
   });
 
+  it("counts an import from @theokit/gateway-feishu-lark as a feishu_lark branch", () => {
+    const source = [
+      'import { FeishuLarkAdapter } from "@theokit/gateway-feishu-lark";',
+      "new FeishuLarkAdapter();",
+    ].join("\n");
+    expect(kinds(source)).toEqual(["construct"]);
+  });
+
   it("does not count a hyphenated package that names no platform", () => {
     // The suffix maps to a key only when it names one: no hyphenated name is a platform by shape.
     expect(count('import { X } from "@theokit/gateway-acme-chat";\nnew X(o);')).toBe(0);
@@ -209,6 +217,6 @@ describe("countPlatformBranches", () => {
 
   it("keeps its platform list equal to PlatformName", () => {
     expect([...PLATFORM_NAMES].sort()).toEqual(platformNameUnion());
-    expect(PLATFORM_NAMES).toHaveLength(15);
+    expect(PLATFORM_NAMES).toHaveLength(20);
   });
 });

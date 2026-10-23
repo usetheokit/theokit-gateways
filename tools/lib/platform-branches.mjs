@@ -43,6 +43,11 @@ export const PLATFORM_NAMES = Object.freeze([
   "google_chat",
   "irc",
   "nextcloud_talk",
+  "nostr",
+  "feishu_lark",
+  "synology_chat",
+  "tlon_urbit",
+  "twitch",
 ]);
 
 /** Methods only one platform's adapter has; calling one is a branch on that platform. */
