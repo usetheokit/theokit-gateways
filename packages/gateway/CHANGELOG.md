@@ -1,5 +1,138 @@
 # Changelog
 
+## 0.12.0
+
+### Minor Changes
+
+- 05e7fdd: Edit a message an adapter sent, so a reply can stream as a preview that the final text replaces.
+
+  `BasePlatformAdapter` gains `supportsEdit` (`false` by default) and
+  `editMessage(messageId, out)`, whose default refuses with `edit_unsupported`, makes no platform
+  call and never throws. A third-party subclass that already declares a member with either name and
+  a different type no longer compiles against this release, and under `noImplicitOverride` one
+  that declares it without `override` does not either.
+
+  Telegram (`editMessageText`), Discord (one REST `PATCH` of the message, without fetching the
+  channel), Slack (`chat.update`), Mattermost (`patchPost`), Matrix (an `m.replace` event) and Teams
+  (`updateActivity`, or `activities(conversationId).update` on `@microsoft/teams.api` below 2.0.14)
+  set `supportsEdit` to `true` and replace the text of a message they sent, honouring `format` as
+  `sendMessage` does (Slack's `chat.update` takes no `mrkdwn` argument, so its edit sends the text
+  as it is for every format), and return `{ ok: true, messageId }` with the same id. E-mail, SMS, LINE and
+  WhatsApp keep the default.
+
+  An edit is refused with no request as `edit_too_long` when the text would need more than one
+  platform message (Matrix has no length check), as `invalid_message_id` for an empty id (and on
+  Telegram one that is not a safe positive integer), and as `empty_text` and `not_connected` where
+  `sendMessage` answers those. Telegram answers its "message is not modified" refusal as a success.
+  On Discord an unknown channel is answered by the platform, as `discord_10003`. On Matrix a
+  `#alias` the adapter never resolved costs one lookup before the edit. Teams and Matrix do not
+  retry a refused markup as plain text on an edit, as they do on a send.
+
+  The six adapters keep `>=0.9.0` as their peer range on `@theokit/gateway` in this release. At run
+  time they work against any core in that range, since no adapter calls the base `editMessage`. Their
+  sources declare both members with `override`, so building them against a core older than this one
+  reports TS4113. The floor rises to this core in the next release, once it is on npm
+  (`docs/adr/0008-edit-capable-adapters-raise-their-core-floor-after-the-core-ships.md`). A
+  consumer's own typecheck reads the published declarations, which carry no `override`, and passes
+  on an older core.
+
+- e646038: Make `google_chat` a first-party platform.
+
+  `@theokit/gateway` gains the `google_chat` key in `PlatformEventRegistry`, the
+  `GoogleChatMessageEvent` type, and a `channelRendering("google_chat")` row. `PlatformName` grows by
+  one member. Code that lists every platform in a `Record<PlatformName, …>` or in a switch with a
+  `never` default must add a `google_chat` entry, and a package that registered its own `google_chat`
+  key through module augmentation now collides with the first-party one (TS2717) and should drop it.
+
+- e646038: Make `imessage` a first-party platform.
+
+  `@theokit/gateway` gains the `imessage` key in `PlatformEventRegistry`, the `IMessageMessageEvent`
+  type, and a `channelRendering("imessage")` row (`plain`, markers removed). `PlatformName` grows by
+  one member. Code that lists every platform in a `Record<PlatformName, …>` or in a switch with a
+  `never` default must add an `imessage` entry, and a package that registered its own `imessage` key
+  through module augmentation now collides with the first-party one (TS2717) and should drop it.
+
+- e646038: Make `irc` a first-party platform.
+
+  `@theokit/gateway` gains the `irc` key in `PlatformEventRegistry`, the `IrcMessageEvent` type,
+  and a `channelRendering("irc")` row (`plain`, markers removed). `PlatformName` grows by one
+  member. Code that lists every platform in a `Record<PlatformName, …>` or in a switch with a
+  `never` default must add an `irc` entry, and a package that registered its own `irc` key through
+  module augmentation now collides with the first-party one (TS2717) and should drop it.
+
+- e646038: Make `nextcloud_talk` a first-party platform.
+
+  `@theokit/gateway` gains the `nextcloud_talk` key in `PlatformEventRegistry`, the
+  `NextcloudTalkMessageEvent` type, and a `channelRendering("nextcloud_talk")` row (`markdown`,
+  passed through). `PlatformName` grows by one member. Code that lists every platform in a
+  `Record<PlatformName, …>` or in a switch with a `never` default must add a `nextcloud_talk`
+  entry, and a package that registered its own `nextcloud_talk` key through module augmentation now
+  collides with the first-party one (TS2717) and should drop it.
+
+- e646038: Make `signal` a first-party platform.
+
+  `@theokit/gateway` gains the `signal` key in `PlatformEventRegistry`, the `SignalMessageEvent`
+  type, and a `channelRendering("signal")` row (`markdown`, text unchanged). `PlatformName` grows by
+  one member. Code that lists every platform in a `Record<PlatformName, …>` or in a switch with a
+  `never` default must add a `signal` entry, and a package that registered its own `signal` key
+  through module augmentation now collides with the first-party one (TS2717) and should drop it.
+
+- b0b29d3: `rawBodyCapture(tag, { maxBytes })` refuses a body larger than `maxBytes` bytes before holding it.
+  A declared `content-length` over the limit is refused before any byte is kept; a streamed body is
+  refused once it passes the limit. Either way the rest of the stream is dropped, and when it ends
+  the middleware answers 413 with the JSON body `{ "error": "request body too large" }` and one
+  stderr line naming the router. `next` is not called, so no error reaches Express's final handler,
+  which would answer with an HTML page carrying the stack outside production. The middleware
+  answers once: data, the end of the stream or a stream error after a refusal do nothing. A
+  `maxBytes` that is not a finite number of zero or more throws a `RangeError` when the middleware is
+  built. Without the option the middleware keeps no limit, as before. `RawBodyCaptureOptions` is
+  exported.
+
+### Patch Changes
+
+- d3f359a: `createChannels` builds one adapter per platform. In 0.11.0 it built every entry, so two entries
+  for one platform gave a `GatewayRunner` two adapters of that platform: the runner sent the first
+  one's replies through the second and never disconnected the first. A later entry for a platform
+  it already built is now rejected with a `GatewayConfigurationError` coded `duplicate_channel`, and
+  its `create` is not called. If your app lists two entries for one platform, the second one now
+  lands in `rejected` instead of being built. The first entry built for a platform wins, and an
+  entry rejected for its configuration does not claim its platform.
+
+  An entry whose `create` returns an adapter reporting another platform than its descriptor declares
+  is rejected with the code `platform_mismatch`, and the adapter it built is dropped unconnected.
+  The runner keys adapters by the adapter's own platform, so such an adapter would otherwise reach
+  it as a second adapter for a platform the duplicate check never saw.
+
+- 7bea3d4: Two overlapping `start()` calls on one `GatewayRunner` now share one connect. A call made while
+  the first is still connecting no longer connects every adapter again; both calls resolve the same
+  `StartResult`, or reject with the same error. A start that rejects is not remembered, so a later
+  `start()` connects again.
+
+  A `stop()` during an in-flight `start()` no longer leaves an adapter connected on a stopped runner.
+  The start disconnects what connected, wires no inbound dispatch, and resolves
+  `{ connected: [], failed }` instead of naming the platforms it connected. Under `"rollback"`, a
+  connect that fails still rejects it.
+
+  Under the default `connectFailure: "rollback"`, the rollback waits for every connect to settle, so
+  an adapter that connects after another refused is disconnected as well. The rejection therefore
+  comes only once the slowest connect settles. With one adapter refusing and another whose connect
+  hangs, `start()` used to reject at once and now stays pending, as a successful rollback start and
+  an `"isolate"` start already did.
+
+  When `stop()`, a rollback, or a start that `stop()` overtook disconnects an adapter and that
+  `disconnect()` fails, the runner now writes one line to stderr naming the platform, with any
+  credential in the error redacted. The failure used to be discarded, so an adapter that might still
+  hold its platform session left no trace. How `start()` and `stop()` resolve or reject is unchanged.
+
+- 9a8b81b: `listenerLifecycle(...).start()` rejects with the bind error when the port is taken, instead of
+  resolving over no listener. Under Express 5 the error reached the `listen` callback, which ignored
+  it, so a second server on a port another one held reported itself started and answered nothing;
+  under Express 4 the error was emitted on the server with no listener attached. The
+  `createWebhookServer` of `@theokit/gateway-line` and `@theokit/gateway-sms` returns this lifecycle,
+  so their `start()` now rejects with `EADDRINUSE` in that case, and a later `start()` tries again.
+  `ListenableApp.listen` declares the error argument Express 5 passes, and `ListenerLike` the
+  optional `once("error")` Express 4's server has.
+
 ## 0.11.0
 
 ### Minor Changes
