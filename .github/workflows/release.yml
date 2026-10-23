@@ -273,6 +273,18 @@ jobs:
             | tar xz -C /tmp trufflehog
           sudo install -m 0755 /tmp/trufflehog /usr/local/bin/trufflehog
           trufflehog --version
+      # changesets/action, pinned below, takes the version path whenever a non-empty changeset
+      # sits in .changeset/, and never reads `ignore`. With only ignored-package changesets pending
+      # (ADR-0009 keeps them there), `changeset version` changed nothing, the Version Packages
+      # pull request had no commits, and nothing was published (run 39953987046).
+      #
+      # tools/release-path.mjs asks the question the action does not: does anything pending
+      # release a package? Only when nothing does, it moves the changesets that release
+      # nothing to $RUNNER_TEMP, outside the checkout, so the action finds no pending file and
+      # takes its publish path. That path pushes only release tags at the checked-out commit,
+      # and this step writes nothing to git, so the moved files never leave this job's checkout.
+      - name: Set aside changesets that release nothing
+        run: node tools/release-path.mjs .changeset --set-aside "$RUNNER_TEMP/changesets-releasing-nothing"
       # KNOWN LIMITATION, not fixable here. When there are pending changesets
       # this step tries to open the "Version Packages" PR and fails with
       # `HttpError: GitHub Actions is not permitted to create or approve pull
