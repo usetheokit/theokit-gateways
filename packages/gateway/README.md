@@ -233,9 +233,14 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
 - `start()` resolves a `StartResult` (`{ connected, failed }`) under both values. Code that awaits
   it and ignores the value is unaffected; a type or subclass that declares
   `start(): Promise<void>` needs to change.
-- Give a runner one channel per platform. It routes replies and `stop()` by platform, so with two
-  channels of one platform the later one sends the earlier one's replies, and the earlier one is
-  connected but never disconnected.
+- A runner holds one channel per platform: it routes replies and `stop()` by platform.
+  `createChannels` enforces this. The first entry built for a platform wins, and a later entry for
+  it is rejected with a `GatewayConfigurationError` coded `duplicate_channel` and never built. An
+  entry whose `create` returns an adapter reporting another platform than its descriptor is
+  rejected with the code `platform_mismatch`, and that adapter is dropped unconnected. A
+  runner you build from adapters you constructed yourself is not checked, so give it one adapter
+  per platform: with two of one platform the later one sends the earlier one's replies, and the
+  earlier one is connected but never disconnected.
 - Under `"isolate"`, and under `"rollback"` until the first failure, `start()` waits for every
   connect, so a connect that never settles blocks it.
 - A webhook channel's request reaches your HTTP route; route it by platform to the descriptor's
