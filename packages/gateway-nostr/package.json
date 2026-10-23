@@ -1,0 +1,73 @@
+{
+  "name": "@theokit/gateway-nostr",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Nostr platform adapter for @theokit/gateway: NIP-17 and NIP-04 direct messages over a pool of relay WebSockets.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usetheokit/theokit-gateways.git",
+    "directory": "packages/gateway-nostr"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "nostr-tools": "^2.25.2"
+  },
+  "peerDependencies": {
+    "@theokit/gateway": ">=0.12.0 <1.0.0"
+  },
+  "devDependencies": {
+    "@theokit/gateway": "workspace:*",
+    "tsup": "^8.5.0",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.11"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "bugs": {
+    "url": "https://github.com/usetheokit/theokit-gateways/issues"
+  },
+  "homepage": "https://github.com/usetheokit/theokit-gateways/tree/main/packages/gateway-nostr#readme",
+  "keywords": [
+    "theokit",
+    "gateway",
+    "nostr",
+    "nip-17",
+    "relay",
+    "platform",
+    "adapter"
+  ]
+}
