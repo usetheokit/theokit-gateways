@@ -140,7 +140,7 @@ function markerFor(
 
 /**
  * A replace callback's answer for one match. `PATTERN` has named groups, so the callback's last
- * argument is the groups object and the third from last is the match's offset.
+ * argument is the groups object.
  */
 function rewriteMatch(matched: string, args: readonly unknown[], dialect: Dialect): string {
   return markerFor(matched, args.at(-1) as Record<string, string | undefined> | undefined, dialect);
@@ -155,7 +155,12 @@ function replaceMarkers(text: string, dialect: Dialect): string {
  * A table row: optional blanks, then a pipe (GFM 0.29 § 4.10). GFM also accepts a row with no
  * leading pipe under a delimiter row; reading those would mean reading the delimiter row, and no
  * measurement here asked for it (B-556 plan, glossary and ADR D1). Sticky, so it is tested at a line
- * start without slicing the line out; every caller sets `lastIndex` first.
+ * start without slicing the line out. A template only: each caller copies it with `new RegExp`,
+ * so no `lastIndex` is shared between calls.
+ *
+ * The splitters of gateway-line, gateway-sms and gateway-nextcloud-talk carry their own copy of
+ * this definition (`startsTableRow` in each `src/split.ts`, plan ADR D2); a change here belongs
+ * there too.
  */
 const ROW_START = /[^\S\r\n]*\|/y;
 
@@ -179,6 +184,7 @@ const CR = 0x0d;
  * scanned once rather than once per match.
  */
 function rowLocator(text: string): (offset: number) => boolean {
+  const rowStart = new RegExp(ROW_START);
   let lineStart = 0;
   let scanned = 0;
   return (offset) => {
@@ -186,8 +192,8 @@ function rowLocator(text: string): (offset: number) => boolean {
       const code = text.charCodeAt(scanned);
       if (code === LF || code === CR) lineStart = scanned + 1;
     }
-    ROW_START.lastIndex = lineStart;
-    return ROW_START.test(text);
+    rowStart.lastIndex = lineStart;
+    return rowStart.test(text);
   };
 }
 
@@ -215,10 +221,13 @@ function rewriteTableRow(row: string, dialect: Dialect): string {
   return out + replaceMarkers(row.slice(from), dialect);
 }
 
-/** A table row cell by cell; any other line, or a line ending, with the single pass. */
-function rewriteLine(line: string, dialect: Dialect): string {
-  ROW_START.lastIndex = 0;
-  if (!ROW_START.test(line)) return replaceMarkers(line, dialect);
+/**
+ * A table row cell by cell; any other line, or a line ending, with the single pass. `rowStart` is
+ * the caller's copy of `ROW_START`.
+ */
+function rewriteLine(line: string, dialect: Dialect, rowStart: RegExp): string {
+  rowStart.lastIndex = 0;
+  if (!rowStart.test(line)) return replaceMarkers(line, dialect);
   return MARKER_CHARACTER.test(line) ? rewriteTableRow(line, dialect) : line;
 }
 
@@ -228,9 +237,10 @@ function rewriteLine(line: string, dialect: Dialect): string {
  * lookaround sees a line ending and a string edge alike.
  */
 function rewriteByLine(text: string, dialect: Dialect): string {
+  const rowStart = new RegExp(ROW_START);
   return text
     .split(LINE_ENDING)
-    .map((piece) => rewriteLine(piece, dialect))
+    .map((piece) => rewriteLine(piece, dialect, rowStart))
     .join("");
 }
 
@@ -254,6 +264,7 @@ function rewriteByLine(text: string, dialect: Dialect): string {
 export function rewriteMarkers(text: string, dialect: Dialect): string {
   const onTableRow = rowLocator(text);
   let crossesRowPipe = false;
+  // The third argument from the last of a replace callback is the match's offset.
   const rewritten = text.replace(PATTERN, (matched, ...args) => {
     if (!crossesRowPipe && matched.includes("|")) {
       crossesRowPipe = onTableRow(args.at(-3) as number);

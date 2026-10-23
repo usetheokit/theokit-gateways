@@ -61,9 +61,9 @@ function dialectOf(platform: PlatformName): Dialect | undefined {
 
 // `rewriteMarkers` as it was at 688c322: one replace over the whole text. Kept here as the
 // reference the new function must equal wherever no span crosses a table row's pipe.
-const PATTERN_AT_688C322 =
+const WHOLE_TEXT_PATTERN =
   /\*\*(?<bold>.+?)\*\*|~~(?<strike>.+?)~~|(?<![*\w])\*(?!\s)(?<italicStar>.+?)(?<!\s)\*(?!\*)|(?<![_\w])_(?!\s)(?<italicUnderscore>.+?)(?<!\s)_(?!\w)|`(?<code>.+?)`/gu;
-const GROUPS_AT_688C322 = [
+const WHOLE_TEXT_GROUPS = [
   ["bold", "bold"],
   ["strike", "strike"],
   ["italicStar", "italic"],
@@ -71,12 +71,12 @@ const GROUPS_AT_688C322 = [
   ["code", "code"],
 ] as const;
 
-function markerAt688c322(
+function markerOfWholeTextMatch(
   matched: string,
   groups: Record<string, string | undefined>,
   dialect: Dialect,
 ): string {
-  for (const [group, marker] of GROUPS_AT_688C322) {
+  for (const [group, marker] of WHOLE_TEXT_GROUPS) {
     const content = groups[group];
     if (content === undefined) continue;
     const wrap = dialect[marker];
@@ -85,15 +85,15 @@ function markerAt688c322(
   return matched;
 }
 
-function rewriteAt688c322(text: string, dialect: Dialect): string {
-  return text.replace(PATTERN_AT_688C322, (matched, ...args) =>
-    markerAt688c322(matched, args.at(-1) as Record<string, string | undefined>, dialect),
+function rewriteWholeText(text: string, dialect: Dialect): string {
+  return text.replace(WHOLE_TEXT_PATTERN, (matched, ...args) =>
+    markerOfWholeTextMatch(matched, args.at(-1) as Record<string, string | undefined>, dialect),
   );
 }
 
-function translateAt688c322(platform: PlatformName, text: string): string {
+function translateWholeText(platform: PlatformName, text: string): string {
   const dialect = dialectOf(platform);
-  return dialect === undefined ? text : rewriteAt688c322(text, dialect);
+  return dialect === undefined ? text : rewriteWholeText(text, dialect);
 }
 
 /** Splits a row at unescaped pipes, keeping each pipe as its own element. */
@@ -130,10 +130,16 @@ function referenceRewrite(text: string, dialect: Dialect): string {
     .split(/(\r\n|\r|\n)/)
     .map((piece) =>
       ROW.test(piece)
-        ? rewriteCells(piece, (cell) => rewriteAt688c322(cell, dialect))
-        : rewriteAt688c322(piece, dialect),
+        ? rewriteCells(piece, (cell) => rewriteWholeText(cell, dialect))
+        : rewriteWholeText(piece, dialect),
     )
     .join("");
+}
+
+/** What `platform` must make of `text`: the reference in its dialect, or the text unchanged. */
+function expectedOf(platform: PlatformName, text: string): string {
+  const dialect = dialectOf(platform);
+  return dialect === undefined ? text : referenceRewrite(text, dialect);
 }
 
 const pipeCount = (s: string): number => s.split("|").length - 1;
@@ -186,10 +192,9 @@ describe("table rows through translate", () => {
   it("rewrites every row of the marker table cell by cell on all 15 platforms", () => {
     const perCellMismatches: string[] = [];
     for (const p of PLATFORMS) {
-      const tr = translate(p);
-      const out = rowsOf(tr(markerTable));
+      const out = rowsOf(translate(p)(markerTable));
       rowsOf(markerTable).forEach((row, k) => {
-        if (out[k] !== rewriteCells(row, tr)) perCellMismatches.push(`${p}: ${row}`);
+        if (out[k] !== expectedOf(p, row)) perCellMismatches.push(`${p}: ${row}`);
       });
     }
     expect(perCellMismatches).toEqual([]);
@@ -213,6 +218,29 @@ describe("table rows through translate", () => {
     for (const p of IDENTITY) expect(translate(p)(row)).toBe(row);
   });
 
+  it("keeps the text after the last pipe of a row with no closing pipe", () => {
+    expect(translate("telegram")("| *a | b* | **tail**")).toBe("| *a | b* | tail");
+    expect(translate("whatsapp")("| *a | b* | **tail**")).toBe("| *a | b* | *tail*");
+  });
+
+  it("reads a pipe after two backslashes as a cell delimiter", () => {
+    const row = "| *a \\\\| b* |";
+    expect(translate("telegram")(row)).toBe(row);
+    expect(translate("whatsapp")(row)).toBe(row);
+  });
+
+  it("rewrites a row with an empty cell as the reference does on all 15 platforms", () => {
+    const row = "| *a || b* | **c** |";
+    for (const p of PLATFORMS) expect(translate(p)(row)).toBe(expectedOf(p, row));
+    expect(translate("telegram")(row)).toBe("| *a || b* | c |");
+  });
+
+  it("rewrites a row with a cell holding only an escaped pipe as the reference does", () => {
+    const row = "| \\| | *a | b* | **c** |";
+    for (const p of PLATFORMS) expect(translate(p)(row)).toBe(expectedOf(p, row));
+    expect(translate("telegram")(row)).toBe("| \\| | *a | b* | c |");
+  });
+
   it("keeps the pipe count of every row on all 15 platforms", () => {
     for (const p of PLATFORMS) {
       const out = rowsOf(translate(p)(markerTable));
@@ -228,15 +256,15 @@ describe("table rows through translate", () => {
 
   it("translates prose with a mid-sentence pipe exactly as at 688c322 (FR-002)", () => {
     const prose = "a *x | y* b";
-    for (const p of PLATFORMS) expect(translate(p)(prose)).toBe(translateAt688c322(p, prose));
+    for (const p of PLATFORMS) expect(translate(p)(prose)).toBe(translateWholeText(p, prose));
   });
 
   it("translates a multi-line reply with no pipe byte-identically to 688c322 (FR-002)", () => {
     const reply = "Hello **there**.\nSome _italic_ and ~~gone~~.\n\nA `code` span and *more*.\n";
-    for (const p of PLATFORMS) expect(translate(p)(reply)).toBe(translateAt688c322(p, reply));
+    for (const p of PLATFORMS) expect(translate(p)(reply)).toBe(translateWholeText(p, reply));
   });
 
-  it("rewrites every cell of a CRLF table and keeps every CRLF", () => {
+  it("rewrites a CRLF table cell by cell, its CRLFs in place", () => {
     const table = "| **a** | *b | c* |\r\n| `d` | e |\r\n";
     expect(translate("telegram")(table)).toBe("| a | *b | c* |\r\n| d | e |\r\n");
   });
@@ -258,16 +286,23 @@ describe("table rows through translate", () => {
     );
   });
 
+  it("translates every platform as the representative of its dialect does", () => {
+    const representativeOf = (p: PlatformName): PlatformName => {
+      if (STRIPPING.includes(p)) return "telegram";
+      return IDENTITY.includes(p) ? "discord" : p;
+    };
+    for (const p of PLATFORMS) {
+      expect(translate(p)(markerTable)).toBe(translate(representativeOf(p))(markerTable));
+    }
+  });
+
   it("rewrites a row whose only markers are backticks cell by cell", () => {
     expect(translate("telegram")("| `a` | x `b | c` y |")).toBe("| a | x `b | c` y |");
   });
 
   it("splits inline code at an unescaped pipe inside a cell, as GFM does (EC-1)", () => {
     const row = "| run `a|b` here |";
-    for (const p of PLATFORMS) {
-      const tr = translate(p);
-      expect(tr(row)).toBe(rewriteCells(row, tr));
-    }
+    for (const p of PLATFORMS) expect(translate(p)(row)).toBe(expectedOf(p, row));
     expect(translate("telegram")(row)).toBe(row);
   });
 });
@@ -301,11 +336,18 @@ function referencesFor(dialect: Dialect, cache: Map<Dialect, Record<string, stri
   return computed;
 }
 
+/**
+ * One platform per distinct dialect: telegram strips like the seven other STRIPPING platforms and
+ * discord passes text through like the four other IDENTITY ones. The per-platform tests above run
+ * all 15 on the marker table, so a platform that left its dialect would fail there.
+ */
+const DIALECT_REPRESENTATIVES = ["telegram", "whatsapp", "slack", "discord"] as const;
+
 /** Each platform/fixture pair on which translate differs from the reference. */
 function lineMismatchesOf(): string[] {
   const cache = new Map<Dialect, Record<string, string>>();
   const mismatches: string[] = [];
-  for (const p of PLATFORMS) {
+  for (const p of DIALECT_REPRESENTATIVES) {
     const dialect = dialectOf(p);
     const expected: Readonly<Record<string, string>> =
       dialect === undefined ? bigFixtures() : referencesFor(dialect, cache);
@@ -317,7 +359,7 @@ function lineMismatchesOf(): string[] {
 }
 
 describe("rewriteMarkers on 1,000,000-character fixtures", () => {
-  it("equals the cell-by-cell reference on all 15 platforms and every fixture", {
+  it("equals the cell-by-cell reference for each distinct dialect on every fixture", {
     timeout: 120_000,
   }, () => {
     const lineMismatches = lineMismatchesOf();
@@ -377,7 +419,7 @@ describe("rewriteMarkers timing against the 688c322 replace", () => {
         const dialect = dialectOf(platform) ?? STRIP;
         const tr = translate(platform);
         const ratio = medianRatio(
-          () => rewriteAt688c322(text, dialect),
+          () => rewriteWholeText(text, dialect),
           () => tr(text),
           5,
         );
