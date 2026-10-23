@@ -52,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING (behaviour):** all ten adapters now read `OutboundMessage.format`, where two did. A consumer passing `format: "markdown"` received plain text; it is now acted on wherever the platform can act on it — Telegram `parse_mode`, Slack `mrkdwn`, Teams `textFormat`. Matrix and Email cannot: `formatted_body` promises HTML, so markdown there would render literal asterisks and drop any `<tag>` in the text, and Email escapes markdown into a `<pre>` part rather than parsing it. Both say so once instead of faking it. Discord and Mattermost escape `*_`~` when `plain` is declared, so a user's literal asterisks stay literal. LINE, SMS and WhatsApp carry no formatting on their message type and now log once that the declared format was dropped, instead of discarding it in silence (#B-020)
 
 ### Fixed
+- **ci:** the release workflow published nothing while the only pending changesets named ignored
+  packages. `changesets/action` takes the version path whenever any file sits in `.changeset/` and
+  never reads `ignore`, so run 39953987046 found nothing to version, opened a Version Packages pull
+  request with no commits, and never reached `changeset publish`; seven versions on `main` stayed
+  off npm. A step before the action now runs `tools/release-path.mjs`, which prints the path the
+  pending changesets call for and, only when none of them releases a package, moves them to
+  `$RUNNER_TEMP`, outside the job's checkout. The action then takes its publish path. Nothing is
+  committed, and the changesets stay in the repository. (#B-067)
 - **gateway-email:** 62.42% to 86.71%, the largest gap in the repository. Its automated-sender
   filter — the loop guard that stops the bot answering auto-replies and mailing lists — could not
   tell `&&` from `||`, because every test supplied a header whose value MATCHED. Under `||` a
