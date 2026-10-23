@@ -157,6 +157,16 @@ describe("MessageEvent (T1.1)", () => {
           return `ln:${e.line.messageId}`;
         case "matrix":
           return `mx:${e.matrix.eventId}`;
+        case "signal":
+          return `sg:${e.signal.timestamp}`;
+        case "imessage":
+          return `im:${e.imessage.guid}`;
+        case "google_chat":
+          return `gc:${e.google_chat.messageName}`;
+        case "irc":
+          return `irc:${e.irc.nick}`;
+        case "nextcloud_talk":
+          return `nextcloud_talk:${e.nextcloud_talk.roomToken}`;
         default: {
           const _exhaustive: never = e;
           throw new Error(`unhandled platform: ${JSON.stringify(_exhaustive)}`);

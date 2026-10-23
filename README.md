@@ -13,6 +13,11 @@ Multi-channel gateway packages for the Theo ecosystem, extracted from `theokit-s
 | `@theokit/gateway-matrix` | Matrix | **full** — send and receive |
 | `@theokit/gateway-mattermost` | Mattermost | **full** — send and receive |
 | `@theokit/gateway-email` | Email (nodemailer + imapflow) | **full** — send and receive |
+| `@theokit/gateway-signal` | Signal (signal-cli JSON-RPC) | **none** — no signal-cli or registered number here; the live suite is written and has never run |
+| `@theokit/gateway-google-chat` | Google Chat (HTTP endpoint app) | **none** — no Chat app or service account here; the live suite is written and has never run |
+| `@theokit/gateway-imessage` | iMessage (imsg JSON-RPC, macOS) | **none** — no Mac signed in to Messages here; the live suite is written and has never run |
+| `@theokit/gateway-irc` | IRC (line protocol over TLS) | partial — send and receive on Libera.Chat over TLS (2026-10-22); the split, refusal and empty-text paths are not asserted live |
+| `@theokit/gateway-nextcloud-talk` | Nextcloud Talk (bot webhook + bot API) | **full** — send and receive, against Nextcloud 31 with Talk in Docker |
 | `@theokit/gateway-line` | LINE Messaging API | **full** — send and receive |
 | `@theokit/gateway-whatsapp` | WhatsApp (Meta Cloud API + whatsapp-web.js + Baileys) | partial — the Cloud API send is accepted by Meta, delivery and inbound not asserted here; the two unofficial backends reach a pairing QR and have never been paired here |
 | `@theokit/gateway-teams` | Microsoft Teams | **none** — no credentials; four tests written, never executed |

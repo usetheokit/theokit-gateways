@@ -119,6 +119,18 @@ export const CREDENTIAL_SHAPES: {
       why: "32 lowercase hex, the same shape as the Twilio auth token above and as every md5 and dashless UUID. Masking it would eat the correlation ids in a log.",
     },
     {
+      field: "gateway-nextcloud-talk `secret`",
+      why: "a Talk bot secret is a string of 40 to 128 characters the administrator chose for `occ talk:bot:install`, with no prefix or format to recognise. It never travels: both sides send only an HMAC made with it, and the adapter never logs it.",
+    },
+    {
+      field: "gateway-irc `password` and `saslPassword`",
+      why: "a server password and a NickServ password are passphrases the operator chose, with no format to recognise. The SDK's `key=value` rule masks them as fields wherever they appear as `password=...`; the SASL payload on the wire is their base64, which the adapter never logs.",
+    },
+    {
+      field: "gateway-google-chat `privateKey`",
+      why: "a PEM block spans lines, and in a log it usually arrives inside a JSON string with its line breaks escaped as \\n, which no single-line shape can claim whole. The SDK's `key=value` rule masks it as a field wherever it appears as `private_key=...` or `privateKey=...`.",
+    },
+    {
       field: "gateway-line `channelAccessToken`, gateway-sms `authToken` (Plivo)",
       why: "long base64 runs with no prefix, indistinguishable from any encoded blob a platform library puts in an error message.",
     },

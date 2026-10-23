@@ -54,7 +54,17 @@ const translateWith =
  *   carries no formatting flag on a text message.
  * - slack: the same emphasis, declared `markdown` so the adapter sets `mrkdwn`.
  * - discord, mattermost, teams: markdown is what they render, so the text passes through.
+ * - signal: `markdown`, passed through; its adapter turns the markers into Signal's `textStyle`
+ *   ranges, so the text it sends carries no marker characters.
  * - line, sms: no rich text at all; the existing `toDialect` rows drop the markers.
+ * - imessage: markers dropped and `plain`. `imsg` sends the text as typed, and Messages shows a
+ *   marker character as itself.
+ * - google_chat: markers dropped and `plain`. Chat's own markup is close to, but not, markdown, and
+ *   how it renders a reply is unmeasured until a live run (plan Q3).
+ * - nextcloud_talk: `markdown`, passed through. Talk renders the markdown a bot sends (the Q6
+ *   probe's inbound bodies carry `mediaType: "text/markdown"`).
+ * - irc: markers dropped and `plain`. IRC has no markdown; its own formatting is control bytes,
+ *   and a marker character reaches the channel as itself.
  * - telegram: markers dropped and `plain`. Its adapter maps `markdown` to legacy Markdown, which
  *   refuses a reply with an unpaired `_` or `*` and loses it with no retry; losing emphasis is the
  *   cheaper failure (plan ADR D3).
@@ -67,11 +77,16 @@ const RENDERINGS: Readonly<Record<PlatformName, ChannelRendering>> = {
   discord: { format: "markdown", translate: identity },
   mattermost: { format: "markdown", translate: identity },
   teams: { format: "markdown", translate: identity },
+  signal: { format: "markdown", translate: identity },
   line: { format: "plain", translate: translateWith(DIALECTS.line) },
   sms: { format: "plain", translate: translateWith(DIALECTS.sms) },
   telegram: { format: "plain", translate: translateWith(STRIP) },
   matrix: { format: "plain", translate: translateWith(STRIP) },
   email: { format: "plain", translate: translateWith(STRIP) },
+  imessage: { format: "plain", translate: translateWith(STRIP) },
+  google_chat: { format: "plain", translate: translateWith(STRIP) },
+  irc: { format: "plain", translate: translateWith(STRIP) },
+  nextcloud_talk: { format: "markdown", translate: identity },
 };
 
 /**
@@ -83,7 +98,7 @@ const RENDERINGS: Readonly<Record<PlatformName, ChannelRendering>> = {
  *
  * @param platform - the destination, typically `event.platform` of the inbound message
  * @returns the `{ translate, format }` pair for that platform
- * @throws RangeError when `platform` is not one of the ten this package knows. Answering with
+ * @throws RangeError when `platform` is not one of the platforms this package knows. Answering with
  *   nothing would let the presenter fall back to identity and `markdown`, which is the defect this
  *   function exists to remove.
  * @public

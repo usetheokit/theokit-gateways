@@ -82,8 +82,8 @@ export abstract class BasePlatformAdapter {
    * process nor the connection. Two adapters used to discard the rejection with `void`, which under
    * Node's default ends the process, and two more reported it as a platform-client error, sending
    * whoever debugged their own handler to the wrong repository. Eight had converged on the right
-   * behaviour without anything writing it down; `tests/lint/adapter-contract.test.ts` now holds all
-   * ten to it.
+   * behaviour without anything writing it down; `tests/lint/adapter-contract.test.ts` now holds every
+   * adapter to it.
    */
   abstract onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void;
 

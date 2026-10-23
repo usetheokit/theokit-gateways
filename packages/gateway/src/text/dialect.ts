@@ -14,6 +14,18 @@
  * `gateway-whatsapp` reads `format` only to warn once, because emphasis there is inline in the
  * text rather than a transport flag. An adapter is transport.
  *
+ * `gateway-signal`, added later, edits a body and stays on the transport side of that line:
+ * Signal carries emphasis as `textStyle` ranges sent beside the text, so the adapter moves a
+ * markdown reply's markers into those ranges. Its rendering row is `markdown` with identity, and
+ * nothing here translates for it.
+ *
+ * `gateway-imessage`, `gateway-google-chat` and `gateway-irc`, added with it, send to platforms
+ * with no markup at all, and their rendering rows are `plain`. A presenter given
+ * `channelRendering(platform)` hands them text already translated and declared `plain`. A caller
+ * that sends `format: "markdown"` without that step would put the asterisks in front of the user,
+ * so those three adapters apply their own row in that one case, as a fallback. The presenter is
+ * still where translation is decided, and the row they apply is the one it would have applied.
+ *
  * Translation is PRESENTATION — it depends on what was said and on where it is going at the same
  * time — so it belongs to the presenter. It is exported from here as a pure function and CALLED by
  * the channel presenter in `theokit`, never the reverse: `@theokit/gateway` must not depend on

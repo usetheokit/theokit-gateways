@@ -23,7 +23,7 @@ import { createRequire } from "node:module";
 const ts = createRequire(import.meta.url)("typescript");
 
 /**
- * The ten values of `PlatformName` in `packages/gateway/src/types/message-event.ts`. A tool cannot
+ * The values of `PlatformName` in `packages/gateway/src/types/message-event.ts`. A tool cannot
  * import a TypeScript type, so the list is written here and a test reads the union with the type
  * checker and asserts the two are equal.
  */
@@ -38,6 +38,11 @@ export const PLATFORM_NAMES = Object.freeze([
   "sms",
   "line",
   "teams",
+  "signal",
+  "imessage",
+  "google_chat",
+  "irc",
+  "nextcloud_talk",
 ]);
 
 /** Methods only one platform's adapter has; calling one is a branch on that platform. */
@@ -50,7 +55,11 @@ const EQUALITY = new Set([
   ts.SyntaxKind.ExclamationEqualsEqualsToken,
 ]);
 
-const PLATFORM_PACKAGE = /^@theokit\/gateway-([a-z]+)(?:\/.*)?$/;
+/**
+ * `@theokit/gateway-<suffix>` and its subpaths. A hyphenated suffix names an underscored key:
+ * `gateway-google-chat` is `google_chat` (plan D1).
+ */
+const PLATFORM_PACKAGE = /^@theokit\/gateway-([a-z]+(?:-[a-z]+)*)(?:\/.*)?$/;
 
 function isPlatformName(text) {
   return PLATFORM_NAMES.includes(text);
@@ -115,10 +124,10 @@ function moduleDeclarationsOf(sourceFile) {
   );
 }
 
-/** Is this specifier a platform package, `@theokit/gateway-<platform>`? */
+/** Is this specifier a platform package, `@theokit/gateway-<suffix>`, the suffix being the key with `_` as `-`? */
 function isPlatformPackage(specifier) {
   const match = PLATFORM_PACKAGE.exec(specifier);
-  return match !== null && isPlatformName(match[1]);
+  return match !== null && isPlatformName(match[1].replaceAll("-", "_"));
 }
 
 /** Add the local names one import clause binds: descriptors (`*Channel`) apart from the rest. */

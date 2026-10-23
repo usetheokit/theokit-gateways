@@ -27,7 +27,7 @@
  */
 
 /** The servers this project boots for itself, each with its own teardown script. */
-export type SelfHostedPlatform = "matrix" | "mattermost";
+export type SelfHostedPlatform = "matrix" | "mattermost" | "nextcloud-talk";
 
 /**
  * How each server refuses when its state survives from a previous run.
@@ -39,6 +39,9 @@ export type SelfHostedPlatform = "matrix" | "mattermost";
 const SIGNATURES: Record<SelfHostedPlatform, readonly string[]> = {
   matrix: ["invalid registration token"],
   mattermost: ["an account with that username already exists"],
+  // occ's own words on a second run against a kept container, measured 2026-10-21 on
+  // nextcloud:31-apache with spreed 21.1.11: `app:install spreed`, then `talk:bot:install`.
+  "nextcloud-talk": ["spreed already installed", "bot with the same url is already registered"],
 };
 
 /**

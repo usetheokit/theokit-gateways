@@ -13,7 +13,7 @@
 //     fail to join — it annihilated the union, and every first-party narrowing site failed with
 //     `TS2339: Property 'telegram' does not exist on type 'never'`.
 //
-//   * `signal?: SomeEvent` — a shape an author writes by accident — kept its optional modifier
+//   * `acmechat?: SomeEvent` — a shape an author writes by accident — kept its optional modifier
 //     through the homomorphic mapping and injected `undefined` into the union, so a plain
 //     `switch (event.platform)` failed with `TS18048: 'e' is possibly 'undefined'`.
 //
@@ -45,16 +45,16 @@ const DTS = join(ROOT, "packages", "gateway", "dist", "index.d.ts");
  * here means an outsider can break first-party consumers by installing a package.
  */
 const CASES = [
-  { name: "well-formed", body: `signal: Ev<"signal">;` },
-  { name: "optional-member", body: `signal?: Ev<"signal">;` },
+  { name: "well-formed", body: `acmechat: Ev<"acmechat">;` },
+  { name: "optional-member", body: `acmechat?: Ev<"acmechat">;` },
   { name: "string-index-signature", body: `[key: string]: BaseMessageEvent;` },
   { name: "readonly-index-signature", body: `readonly [key: string]: BaseMessageEvent;` },
   { name: "number-index-signature", body: `[key: number]: BaseMessageEvent;` },
   { name: "any-value", body: `sloppy: any;` },
   { name: "unknown-value", body: `mystery: unknown;` },
   { name: "never-value", body: `nothing: never;` },
-  { name: "base-event-value", body: `signal: BaseMessageEvent;` },
-  { name: "key-literal-mismatch", body: `signal: Ev<"signl">;` },
+  { name: "base-event-value", body: `acmechat: BaseMessageEvent;` },
+  { name: "key-literal-mismatch", body: `acmechat: Ev<"acmechet">;` },
   { name: "half-valid-union", body: `half: Ev<"half"> | { readonly nonsense: true };` },
   { name: "function-value", body: `fn: () => void;` },
 ];

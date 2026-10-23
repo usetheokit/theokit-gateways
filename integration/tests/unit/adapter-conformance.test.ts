@@ -1,7 +1,7 @@
 /**
- * One contract, ten adapters — asserted by behaviour, against all of them at once.
+ * One contract, every adapter — asserted by behaviour, against all of them at once.
  *
- * `packages/gateway/tests/lint/adapter-contract.test.ts` already holds the ten to a set of
+ * `packages/gateway/tests/lint/adapter-contract.test.ts` already holds every adapter to a set of
  * invariants, and it does it by reading source text. That was the right tool for what it catches
  * — a guard deleted, a rejection floated — and it is the wrong tool for what this catches, because
  * a regex can only ever assert that a shape is present. It cannot run the thing.
@@ -25,9 +25,14 @@
 import type { BasePlatformAdapter } from "@theokit/gateway";
 import { DiscordAdapter } from "@theokit/gateway-discord";
 import { EmailAdapter } from "@theokit/gateway-email";
+import { GoogleChatAdapter } from "@theokit/gateway-google-chat";
+import { IMessageAdapter } from "@theokit/gateway-imessage";
+import { IrcAdapter } from "@theokit/gateway-irc";
 import { LineAdapter } from "@theokit/gateway-line";
 import { MatrixAdapter } from "@theokit/gateway-matrix";
 import { MattermostAdapter } from "@theokit/gateway-mattermost";
+import { NextcloudTalkAdapter } from "@theokit/gateway-nextcloud-talk";
+import { SignalAdapter } from "@theokit/gateway-signal";
 import { SlackAdapter } from "@theokit/gateway-slack";
 import { SMSAdapter } from "@theokit/gateway-sms";
 import { TeamsAdapter } from "@theokit/gateway-teams";
@@ -54,6 +59,23 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
       }),
   },
   {
+    platform: "google_chat",
+    make: () =>
+      new GoogleChatAdapter({
+        serviceAccountEmail: "nobody@not-a-project.iam.gserviceaccount.com",
+        privateKey: "not-a-real-key",
+        audience: "https://chat.invalid/google-chat",
+      }),
+  },
+  {
+    platform: "imessage",
+    make: () => new IMessageAdapter({ cliPath: "imsg-not-installed" }),
+  },
+  {
+    platform: "irc",
+    make: () => new IrcAdapter({ host: "irc.invalid", nick: "nobody", channels: ["#nowhere"] }),
+  },
+  {
     platform: "line",
     make: () =>
       new LineAdapter({ channelAccessToken: "not-a-real-token", channelSecret: "not-a-secret" }),
@@ -71,6 +93,19 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
     platform: "mattermost",
     make: () =>
       new MattermostAdapter({ baseUrl: "https://mm.invalid", accessToken: "not-a-real-token" }),
+  },
+  {
+    platform: "nextcloud_talk",
+    make: () =>
+      new NextcloudTalkAdapter({
+        baseUrl: "https://nextcloud.invalid",
+        secret: "not-a-real-bot-secret-but-forty-characters-long",
+      }),
+  },
+  {
+    platform: "signal",
+    make: () =>
+      new SignalAdapter({ account: "+15550000000", signalCliPath: "signal-cli-not-installed" }),
   },
   {
     platform: "slack",

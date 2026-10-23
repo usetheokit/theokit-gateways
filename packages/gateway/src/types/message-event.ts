@@ -259,6 +259,94 @@ export interface MatrixMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** Signal-specific event variant (B-354), received from `signal-cli jsonRpc`. */
+export interface SignalMessageEvent extends BaseMessageEvent {
+  readonly platform: "signal";
+  readonly signal: {
+    /** Envelope timestamp (ms since epoch); Signal's own message id. */
+    readonly timestamp: number;
+    /** Sender's phone number, when signal-cli knows it. */
+    readonly sourceNumber?: string;
+    /** Sender's account UUID, when signal-cli knows it. */
+    readonly sourceUuid?: string;
+    /** Group id, present only for a group message. */
+    readonly groupId?: string;
+    /** Raw signal-cli envelope — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
+/** iMessage-specific event variant (B-355), received from `imsg rpc` on a signed-in Mac. */
+export interface IMessageMessageEvent extends BaseMessageEvent {
+  readonly platform: "imessage";
+  readonly imessage: {
+    /** `imsg`'s numeric chat id; the send target for a reply. */
+    readonly chatId: number;
+    /** Messages' own message GUID. */
+    readonly guid: string;
+    /** `imsg`'s `is_group` for the chat; agrees with `channel.type === "group"`. */
+    readonly isGroup: boolean;
+    /** Participant handles (phone numbers or emails) as `imsg` reports them for the chat. */
+    readonly participants: readonly string[];
+    /** Raw `imsg` notification payload — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
+/** Google Chat-specific event variant (B-356), posted to the Chat app's HTTPS endpoint. */
+export interface GoogleChatMessageEvent extends BaseMessageEvent {
+  readonly platform: "google_chat";
+  readonly google_chat: {
+    /** The message's resource name, `spaces/<space>/messages/<message>`. */
+    readonly messageName: string;
+    /** The space's resource name, `spaces/<space>`; the send target for a reply. */
+    readonly spaceName: string;
+    /** The space's `spaceType` (`SPACE`, `GROUP_CHAT` or `DIRECT_MESSAGE`), when Chat sent one. */
+    readonly spaceType?: string;
+    /** The thread's resource name, when the message is in a thread. */
+    readonly threadName?: string;
+    /** Raw Chat event — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
+/** IRC-specific event variant (B-357), read from a PRIVMSG on the adapter's own connection. */
+export interface IrcMessageEvent extends BaseMessageEvent {
+  readonly platform: "irc";
+  readonly irc: {
+    /** Where the PRIVMSG was addressed: a channel, `#name`, or the adapter's own nick for a DM. */
+    readonly target: string;
+    /** The sender's nick, from the line's prefix. */
+    readonly nick: string;
+    /** True for a CTCP ACTION (`/me`); `text` then holds the action without its CTCP framing. */
+    readonly action: boolean;
+    /** The line's IRCv3 message tags, unescaped; empty when the server sent none. */
+    readonly tags: Readonly<Record<string, string>>;
+    /** The raw line as the server sent it, without CRLF — escape hatch. */
+    readonly raw: string;
+  };
+}
+
+/**
+ * Nextcloud Talk event variant (B-358), read from a bot webhook `Create` activity that carried a
+ * signature the adapter verified.
+ */
+export interface NextcloudTalkMessageEvent extends BaseMessageEvent {
+  readonly platform: "nextcloud_talk";
+  readonly nextcloud_talk: {
+    /** The conversation's token, the `target.id` of the activity; a reply goes to it. */
+    readonly roomToken: string;
+    /** Talk's id for the message, the activity's `object.id`. */
+    readonly messageId: string;
+    /** Who wrote it, as Talk names actors: `users/<id>`, `guests/<id>`, `bots/<id>`… */
+    readonly actorId: string;
+    /** The id of the message this one answers, when it is a reply. */
+    readonly replyToId?: string;
+    /** The parsed webhook body — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /**
  * The open registry every platform's inbound event is filed under.
  *
@@ -274,7 +362,7 @@ export interface MatrixMessageEvent extends BaseMessageEvent {
  * ```typescript
  * declare module "@theokit/gateway" {
  *   interface PlatformEventRegistry {
- *     signal: SignalMessageEvent;
+ *     acmechat: AcmeChatMessageEvent;
  *   }
  * }
  * ```
@@ -292,6 +380,11 @@ export interface PlatformEventRegistry {
   mattermost: MattermostMessageEvent;
   line: LineMessageEvent;
   matrix: MatrixMessageEvent;
+  signal: SignalMessageEvent;
+  imessage: IMessageMessageEvent;
+  google_chat: GoogleChatMessageEvent;
+  irc: IrcMessageEvent;
+  nextcloud_talk: NextcloudTalkMessageEvent;
 }
 
 /**
@@ -324,7 +417,7 @@ type LiteralKey<K> = string extends K ? never : K;
  * `TS2339: Property 'telegram' does not exist on type 'never'`.
  *
  * It also fixes a second measured defect for free. Mapping over `keyof` directly is HOMOMORPHIC, so
- * an OPTIONAL entry (`signal?: Event`, a shape an author writes by accident) kept its modifier and
+ * an OPTIONAL entry (`acmechat?: Event`, a shape an author writes by accident) kept its modifier and
  * injected `undefined` into the union — `TS18048: 'e' is possibly 'undefined'` on a plain `switch`.
  * Mapping over a computed key set is not homomorphic and drops the modifier. A `-?` was written
  * here first as an explicit belt; the gate showed it could not be made to matter while this type is
@@ -354,11 +447,11 @@ type LiteralKeysOf<R> = keyof {
  * earlier version of this docblock said it was — measured false twice over. Filtering the VALUE
  * alone left two shapes that break every consumer rather than only their author:
  * `{ [key: string]: … }` made `keyof` yield `string | number`, so the union and the platform name
- * both collapsed to `never`; and `signal?: …` kept its optional modifier through a homomorphic
+ * both collapsed to `never`; and `acmechat?: …` kept its optional modifier through a homomorphic
  * mapping and injected `undefined` into the union. Both are handled above — the first by
  * {@link LiteralKeysOf}, the second by the `-?` on the mapping. What remains true, and is the
  * honest version of the original claim:
- * a `Record<PlatformName, T>` written against the ten still fails to compile, because the rejected
+ * a `Record<PlatformName, T>` written against the first-party platforms still fails to compile, because the rejected
  * key is gone from `PlatformName` while the consumer's literal map is not. What the exclusion buys
  * is that the failure is a missing-key error at the consumer's own map rather than a silent loss
  * of narrowing everywhere.

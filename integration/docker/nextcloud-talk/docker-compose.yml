@@ -1,0 +1,27 @@
+# A real Nextcloud server with Talk, for the live suite.
+#
+# Talk has no hosted account to borrow: it is self-hosted software, so a server
+# booted for the run IS the platform, as it is for Matrix and Mattermost. The
+# image is the one the B-358 probe ran on 2026-10-21 (nextcloud:31-apache,
+# Nextcloud 31.0.14); `nextcloud-talk:up` installs Talk (spreed) from the app
+# store, so the first boot needs network access to apps.nextcloud.com.
+#
+# SQLite rather than a database container: one service, and the server exists
+# for the length of a test run.
+
+services:
+  nextcloud:
+    image: nextcloud:31-apache
+    container_name: theokit-integration-nextcloud-talk
+    environment:
+      SQLITE_DATABASE: nextcloud
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_TALK_ADMIN_PASSWORD:-theokit-integration-admin}
+      NEXTCLOUD_TRUSTED_DOMAINS: "127.0.0.1 localhost"
+    ports:
+      # Bound to loopback: nothing here should be reachable from the network.
+      - "127.0.0.1:${NEXTCLOUD_TALK_HOST_PORT:-28080}:80"
+    # Talk posts each webhook to the adapter, which listens on the host. Docker
+    # Desktop resolves host.docker.internal on its own; Linux needs this line.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

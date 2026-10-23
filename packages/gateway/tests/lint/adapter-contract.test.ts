@@ -1,7 +1,7 @@
 /**
  * Lint test — cross-adapter contract invariants that no single package can see.
  *
- * Ten adapters implement the same contract in ten repositories of code. When one
+ * Every adapter implements the same contract in its own package. When one
  * of them quietly diverges, every test in that package still passes, because a
  * package's tests only ever compare it against itself. That is exactly how two
  * defects shipped:
@@ -17,7 +17,7 @@
  *
  * Behavioural tests for both now live in the packages that had the bugs. This
  * file exists for the divergence CLASS: it reads every adapter's source and
- * fails when one stops matching its nine siblings. It is a structural gate, in
+ * fails when one stops matching its siblings. It is a structural gate, in
  * the same spirit as `no-ptbr.test.ts`, and it is honest about that — it proves
  * the guard is present in the source, not that it behaves correctly. The
  * per-package tests prove the behaviour; this one prevents a silent drift that
@@ -57,6 +57,13 @@ const CREDENTIAL_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["gateway-matrix", ["accessToken"]],
   ["gateway-mattermost", ["accessToken"]],
   ["gateway-slack", ["botToken", "appToken"]],
+  // signal-cli keeps the account's keys in its own data directory; the adapter holds no secret.
+  ["gateway-signal", []],
+  // imsg reads the Messages database and sends as the signed-in account; the adapter holds no secret.
+  ["gateway-imessage", []],
+  ["gateway-google-chat", ["privateKey"]],
+  ["gateway-irc", ["password", "saslPassword"]],
+  ["gateway-nextcloud-talk", ["secret"]],
   ["gateway-sms", ["authToken", "apiSecret", "signatureSecret"]],
   ["gateway-teams", ["clientSecret"]],
   ["gateway-telegram", ["token"]],
@@ -71,7 +78,7 @@ const CREDENTIAL_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
  * a vacuous pass looks exactly like a real one. Each entry is a claim about the platform, not about
  * our code, and each must be defensible from that platform's own documentation.
  *
- * Empty today, deliberately. Every one of the ten platforms this repository speaks renders SOME
+ * Empty today, deliberately. Every platform this repository speaks renders SOME
  * markup — LINE has emoji-only decoration and no bold, which is a reason to translate the text, not
  * a reason for the adapter to discard the caller's declared intent.
  */
@@ -368,8 +375,8 @@ describe("cross-adapter contract", () => {
         if (!guarded) offenders.push(`${path}: ${found[0].slice(0, 24)}…`);
       }
     }
-    // Counted, not guessed: 17 implementations across the ten adapters and WhatsApp's three
-    // backends. A looser scan finds 19 — the extra two are the `WhatsAppBackend` interface's own
+    // Counted, not guessed: 22 implementations across the fifteen adapters and WhatsApp's three
+    // backends. A looser scan finds 24 — the extra two are the `WhatsAppBackend` interface's own
     // declarations, which end in `;` and correctly have no body to guard.
     //
     // The floor exists because the first version of this regex used `[^)]*` and matched ZERO:
@@ -379,7 +386,7 @@ describe("cross-adapter contract", () => {
     // comment used to carry — that adding an adapter makes someone look here — was false:
     // an eighteenth declaration slid past in silence. Exact is the friction, in both
     // directions, and updating one number is the whole cost of adding an adapter.
-    expect(declarations).toBe(17);
+    expect(declarations).toBe(22);
     expect(offenders).toEqual([]);
   });
 
@@ -467,11 +474,11 @@ describe("cross-adapter contract", () => {
         if (!works) offenders.push(`${path}: connect() invokes nothing`);
       }
     }
-    // Exact, and counted rather than guessed: 16 connect bodies across the ten adapters and
+    // Exact, and counted rather than guessed: 21 connect bodies across the fifteen adapters and
     // WhatsApp's three backends. A floor only fires when the count DROPS, which catches the regex
     // breaking but not a new adapter slipping in unchecked — and this file has already shipped
     // both failure modes.
-    expect(bodies).toBe(16);
+    expect(bodies).toBe(21);
     expect(offenders).toEqual([]);
   });
 
@@ -568,11 +575,11 @@ describe("cross-adapter contract", () => {
     // above.
     const { ignoring, examined } = await adaptersIgnoringFormat();
 
-    // The count first, because an empty offender list means two different things: ten adapters
-    // read the field, or the gate read nothing. Without this assertion a rename of `src/` or a
+    // The count first, because an empty offender list means two different things: every adapter
+    // reads the field, or the gate read nothing. Without this assertion a rename of `src/` or a
     // path change would turn the gate green by making it blind — the vacuous pass the credential
     // gate in this file documents having survived once already.
-    expect(examined, "packages examined — a gate that reads nothing reports no offenders").toBe(10);
+    expect(examined, "packages examined — a gate that reads nothing reports no offenders").toBe(15);
 
     expect(ignoring, "adapters that never read the `format` their own contract declares").toEqual(
       [],

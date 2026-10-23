@@ -15,7 +15,7 @@
  *
  * The core had no HTTP concern, and `express` is a peer dependency of exactly the two packages that
  * duplicate this — so the obvious objection to putting it here is that it would impose express on
- * all ten adapters.
+ * every adapter.
  *
  * It does not, because nothing here imports express. Every shape below is structural: a request is
  * whatever has `readableEnded` and `on`, a listener is whatever has `listen` and `close`. The
@@ -31,6 +31,7 @@
 export interface RawBodyRequest {
   readonly readableEnded?: boolean;
   readonly complete?: boolean;
+  readonly headers?: Readonly<Record<string, string | string[] | undefined>>;
   setEncoding(encoding: string): unknown;
   on(event: string, listener: (arg: never) => void): unknown;
 }
@@ -38,11 +39,16 @@ export interface RawBodyRequest {
 /** What a started listener must be able to do. `http.Server` satisfies it. */
 export interface ListenerLike {
   close(cb?: (err?: Error) => void): unknown;
+  /** Where Express 4's `listen` reports a failure to bind; `http.Server` has it. */
+  once?(event: "error", listener: (err: Error) => void): unknown;
 }
 
-/** What can start a listener. Express's app satisfies it. */
+/**
+ * What can start a listener. Express's app satisfies it: Express 5 passes a failure to bind to the
+ * callback, Express 4 only emits it on the returned server.
+ */
 export interface ListenableApp {
-  listen(port: number, cb: () => void): ListenerLike;
+  listen(port: number, cb: (err?: Error) => void): ListenerLike;
 }
 
 /**
@@ -70,14 +76,33 @@ export async function loadPeer<T>(
  * Every provider signs the exact bytes, so a body that was parsed and re-serialised hashes
  * differently and fails verification for a correct request. The bytes are attached as `rawBody`.
  *
+ * With `maxBytes`, a body larger than that many bytes is refused before it is held. The rest of
+ * the stream is read and dropped, and once it ends the middleware answers 413 with the JSON body
+ * `{ "error": "request body too large" }` itself; `next` is not called. A route that must stay
+ * public (a provider dials in) sets it, or any client can stream a body until the heap runs out.
+ * The refusal is answered here rather than handed to `next` as an error because Express's final
+ * handler writes an error as an HTML page carrying its stack whenever `NODE_ENV` is not
+ * `production`, and these routes answer anyone.
+ *
+ * The middleware settles once: after a refusal, more data, the end of the stream or a stream
+ * error do nothing, and after a stream error the end of the stream does nothing.
+ *
  * @param tag the package name for the diagnostic, so a reader knows which router is complaining
+ * @param options `maxBytes`, the largest body accepted; no limit when absent
+ * @throws RangeError when `maxBytes` is not a finite number of zero or more
  */
-export function rawBodyCapture(tag: string) {
+export function rawBodyCapture(tag: string, options: RawBodyCaptureOptions = {}) {
+  const { maxBytes } = options;
+  if (maxBytes !== undefined && !(Number.isFinite(maxBytes) && maxBytes >= 0)) {
+    throw new RangeError(
+      `[${tag}] rawBodyCapture: maxBytes must be a finite number of zero or more, got ${maxBytes}`,
+    );
+  }
   // `unknown` rather than `RawBodyRequest`, and that is a type-system requirement rather than
   // laziness: a handler parameter is CONTRAVARIANT, so for express to accept this middleware the
   // parameter must be a SUPERTYPE of express's own `Request`. Narrowed on the first line, where the
   // shape this actually needs is stated once.
-  return (rawReq: unknown, _res: unknown, next: (err?: unknown) => void): void => {
+  return (rawReq: unknown, rawRes: unknown, next: (err?: unknown) => void): void => {
     const req = rawReq as RawBodyRequest;
     // Someone else already drained the stream — a global `express.json()` or `express.urlencoded()`
     // mounted ahead of this router is the usual cause. Without this branch `req.on("end")` never
@@ -96,16 +121,63 @@ export function rawBodyCapture(tag: string) {
       return;
     }
     let buf = "";
+    let bytes = 0;
+    // `refused` drops what is left of the body; `settled` keeps every path to one answer.
+    let refused = maxBytes !== undefined && declaredLength(req) > maxBytes;
+    let settled = false;
     req.setEncoding("utf8");
     req.on("data", (chunk: string) => {
+      if (refused || settled) return;
+      bytes += Buffer.byteLength(chunk);
+      if (maxBytes !== undefined && bytes > maxBytes) {
+        refused = true;
+        buf = "";
+        return;
+      }
       buf += chunk;
     });
     req.on("end", () => {
+      if (settled) return;
+      settled = true;
+      if (refused) {
+        answerTooLarge(rawRes as JsonResponse, tag, maxBytes ?? 0);
+        return;
+      }
       (req as unknown as { rawBody: string }).rawBody = buf;
       next();
     });
-    req.on("error", (err: unknown) => next(err));
+    req.on("error", (err: unknown) => {
+      if (settled) return;
+      settled = true;
+      // A client that aborts a refused body has nobody left to answer.
+      if (refused) return;
+      next(err);
+    });
   };
+}
+
+/** Options for {@link rawBodyCapture}. */
+export interface RawBodyCaptureOptions {
+  /** The largest body accepted, in bytes. A larger one is refused with 413. No limit when absent. */
+  readonly maxBytes?: number;
+}
+
+/** The `content-length` the client declared, or 0 when it declared none or an unreadable one. */
+function declaredLength(req: RawBodyRequest): number {
+  const value = req.headers?.["content-length"];
+  const declared = Number(Array.isArray(value) ? value[0] : value);
+  return Number.isFinite(declared) ? declared : 0;
+}
+
+/** What the refusal writes to. Express's `Response` satisfies it. */
+interface JsonResponse {
+  status(code: number): { json(body: unknown): unknown };
+}
+
+/** Answer 413 as JSON, and say on stderr which router refused and at what limit. */
+function answerTooLarge(res: JsonResponse, tag: string, maxBytes: number): void {
+  process.stderr.write(`[${tag}] refused a request (413): body larger than ${maxBytes} bytes\n`);
+  res.status(413).json({ error: "request body too large" });
 }
 
 /**
@@ -118,6 +190,9 @@ export function rawBodyCapture(tag: string) {
  *
  * `injected` is for the case where the caller owns the app: there is no listener to open or close,
  * and `start()`/`stop()` must still be callable and idempotent.
+ *
+ * `start()` rejects with the error the bind failed with (`EADDRINUSE` for a port another listener
+ * holds), under Express 4 and 5 alike, and a later `start()` tries again.
  */
 export function listenerLifecycle(opts: {
   readonly app: ListenableApp;
@@ -137,8 +212,19 @@ export function listenerLifecycle(opts: {
       // Cleared here rather than in stop(): a server that was stopped and is starting again is no
       // longer stopped, and leaving the flag latched made the NEXT stop() a no-op.
       stopped = false;
-      await new Promise<void>((resolve) => {
-        listener = opts.app.listen(opts.port, () => resolve());
+      // A port another process holds used to resolve this as started: Express 5 hands the bind
+      // error to the callback, which ignored it, and `connect()` answered true over no listener.
+      await new Promise<void>((resolve, reject) => {
+        const settle = (err?: Error): void => {
+          if (err === undefined) resolve();
+          else reject(err);
+        };
+        const current = opts.app.listen(opts.port, settle);
+        listener = current;
+        current.once?.("error", settle);
+      }).catch((err: unknown) => {
+        listener = undefined;
+        throw err;
       });
       started = true;
     },
