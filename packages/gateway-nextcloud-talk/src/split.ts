@@ -21,7 +21,11 @@ function isLineEnd(codePoint: string | undefined): boolean {
   return codePoint === "\n" || codePoint === "\r";
 }
 
-/** True when the line starting at `from` is a table row: optional blanks, then a pipe. */
+/**
+ * True when the line starting at `from` is a table row: optional blanks, then a pipe. The same
+ * definition lives in core `ROW_START` (packages/gateway/src/text/dialect.ts) and in the gateway-line and gateway-sms
+ * splitters; a change to one belongs in all four (plan ADR D2).
+ */
 function startsTableRow(codePoints: readonly string[], from: number): boolean {
   let at = from;
   while (at < codePoints.length && ROW_BLANK.test(codePoints[at] ?? "")) at += 1;

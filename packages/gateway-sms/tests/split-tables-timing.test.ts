@@ -6,7 +6,7 @@ import { splitForSMS } from "../src/split.js";
 const prefixWidthFor = (total: number): number => 2 * String(total).length + 4;
 
 /** `splitForSMS` as it was at 688c322: `chunkByGrapheme` inside the prefix fixed point. */
-function splitAt688c322(text: string, limit = 1600): string[] {
+function splitWithoutRowRule(text: string, limit = 1600): string[] {
   let reserved = prefixWidthFor(1);
   for (let pass = 0; pass < 8; pass += 1) {
     const parts = chunkByGrapheme(text, { limit, partLimit: limit - reserved });
@@ -15,7 +15,7 @@ function splitAt688c322(text: string, limit = 1600): string[] {
     if (needed <= reserved) return parts.map((p, i) => `(${i + 1}/${parts.length}) ${p}`);
     reserved = needed;
   }
-  throw new RangeError("splitAt688c322: the prefix width did not settle");
+  throw new RangeError("splitWithoutRowRule: the prefix width did not settle");
 }
 
 /**
@@ -52,9 +52,11 @@ function timePerCall(fn: () => unknown, budgetMs: number): number {
   return (performance.now() - start) / calls;
 }
 
-/** Median of `pairs` interleaved ratios new / old. */
+/** Median of `pairs` interleaved ratios new / old, after one warm-up call of each. */
 function medianRatio(oldFn: () => unknown, newFn: () => unknown, pairs: number): number {
   const ratios: number[] = [];
+  oldFn();
+  newFn();
   for (let k = 0; k < pairs; k += 1) {
     const old = timePerCall(oldFn, 500);
     ratios.push(timePerCall(newFn, 500) / old);
@@ -69,7 +71,7 @@ describe("splitForSMS timing against the 688c322 splitter", () => {
   it("stays within 1.5x on a 1,000,000-character table", { timeout: 120_000 }, () => {
     const text = tableOfLength(1_000_000);
     const ratio = medianRatio(
-      () => splitAt688c322(text),
+      () => splitWithoutRowRule(text),
       () => splitForSMS(text),
       3,
     );

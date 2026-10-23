@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { splitForTalk } from "../src/split.js";
 
 /** `splitForTalk` as it was at 688c322: slices of 32000 code points. */
-function splitAt688c322(text: string, limit = 32_000): string[] {
+function splitWithoutRowRule(text: string, limit = 32_000): string[] {
   const codePoints = Array.from(text);
   const parts: string[] = [];
   for (let at = 0; at < codePoints.length; at += limit) {
@@ -46,26 +46,35 @@ function timePerCall(fn: () => unknown, budgetMs: number): number {
   return (performance.now() - start) / calls;
 }
 
-/** Median of `pairs` interleaved ratios new / old. */
-function medianRatio(oldFn: () => unknown, newFn: () => unknown, pairs: number): number {
-  const ratios: number[] = [];
+/**
+ * Fastest time of new over fastest time of old, across `pairs` interleaved timings after one
+ * warm-up call of each. Load and GC pauses only add time, so the fastest timing of each function
+ * is the one least moved by them. A median of ratios does not work here: the two splitters do
+ * about the same work, so the true ratio is near 1.0, and review round 1 measured single-pair
+ * ratios from 0.5 to 1.9 at a load average of 5 to 17.
+ */
+function fastestRatio(oldFn: () => unknown, newFn: () => unknown, pairs: number): number {
+  let oldBest = Number.POSITIVE_INFINITY;
+  let newBest = Number.POSITIVE_INFINITY;
+  oldFn();
+  newFn();
   for (let k = 0; k < pairs; k += 1) {
-    const old = timePerCall(oldFn, 500);
-    ratios.push(timePerCall(newFn, 500) / old);
+    oldBest = Math.min(oldBest, timePerCall(oldFn, 500));
+    newBest = Math.min(newBest, timePerCall(newFn, 500));
   }
-  ratios.sort((x, y) => x - y);
-  return ratios[Math.floor(pairs / 2)] ?? Number.POSITIVE_INFINITY;
+  return newBest / oldBest;
 }
 
 describe("splitForTalk timing against the 688c322 splitter", () => {
-  // The 688c322 copy took 2.3 to 3.9 s per call on this table under load, so three pairs run
-  // past vitest's 5000 ms default; the budget is the plan's (panel round 2, N4 and C5).
+  // One call of either splitter took about 150 ms on this table in review round 1, so five pairs
+  // of 500 ms budgets take about 5 s, past vitest's 5000 ms default; the 120 s budget is the
+  // plan's (panel round 2, N4 and C5) and is slack here, not need.
   it("stays within 1.5x on a 1,000,000-character table", { timeout: 120_000 }, () => {
     const text = tableOfLength(1_000_000);
-    const ratio = medianRatio(
-      () => splitAt688c322(text),
+    const ratio = fastestRatio(
+      () => splitWithoutRowRule(text),
       () => splitForTalk(text),
-      3,
+      5,
     );
     expect(ratio).toBeLessThanOrEqual(1.5);
   });

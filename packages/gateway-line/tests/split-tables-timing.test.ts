@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { splitForLine } from "../src/split.js";
 
 /** `splitForLine` as it was at 688c322. */
-const splitAt688c322 = (text: string): string[] => chunkByGrapheme(text, { limit: 5000 });
+const splitWithoutRowRule = (text: string): string[] => chunkByGrapheme(text, { limit: 5000 });
 
 /**
  * B-556 NFR-002, AC-005: keeping table rows whole costs at most 1.5x the time the 688c322
@@ -40,9 +40,11 @@ function timePerCall(fn: () => unknown, budgetMs: number): number {
   return (performance.now() - start) / calls;
 }
 
-/** Median of `pairs` interleaved ratios new / old. */
+/** Median of `pairs` interleaved ratios new / old, after one warm-up call of each. */
 function medianRatio(oldFn: () => unknown, newFn: () => unknown, pairs: number): number {
   const ratios: number[] = [];
+  oldFn();
+  newFn();
   for (let k = 0; k < pairs; k += 1) {
     const old = timePerCall(oldFn, 500);
     ratios.push(timePerCall(newFn, 500) / old);
@@ -57,7 +59,7 @@ describe("splitForLine timing against the 688c322 splitter", () => {
   it("stays within 1.5x on a 1,000,000-character table", { timeout: 120_000 }, () => {
     const text = tableOfLength(1_000_000);
     const ratio = medianRatio(
-      () => splitAt688c322(text),
+      () => splitWithoutRowRule(text),
       () => splitForLine(text),
       3,
     );

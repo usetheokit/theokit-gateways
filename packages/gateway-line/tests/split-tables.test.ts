@@ -85,7 +85,7 @@ describe("splitForLine keeps table rows whole", () => {
     expectWholeDelivery(text, parts);
   });
 
-  it("cuts a row longer than the part limit by length and keeps the rows around it whole", () => {
+  it("cuts only the row longer than the part limit, by length", () => {
     const long = rowOfLength(Math.floor(PART_LIMIT * 1.2));
     const text = wrap(tableOfLength(3 * LIMIT, (i) => (i === 5 ? long : plainRow(i))));
     const parts = split(text);
@@ -100,11 +100,32 @@ describe("splitForLine keeps table rows whole", () => {
     expectWholeDelivery(text, parts);
   });
 
-  it("keeps rows holding emoji sequences whole and severs no grapheme", () => {
+  it("keeps rows holding emoji sequences whole", () => {
     const text = wrap(tableOfLength(2 * LIMIT, (i) => `| ${i} | 👩‍👩‍👧 family | 🇧🇷 flag ${i} |`));
     const parts = split(text);
     expect(rowsNotWhole(text, parts)).toEqual([]);
     expectWholeDelivery(text, parts);
+  });
+
+  it("severs no grapheme in a table of emoji sequences", () => {
+    const text = wrap(tableOfLength(2 * LIMIT, (i) => `| ${i} | 👩‍👩‍👧 family | 🇧🇷 flag ${i} |`));
+    const graphemes = new Set(
+      Array.from(
+        new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text),
+        (s) => s.segment,
+      ),
+    );
+    for (const part of split(text)) {
+      for (const { segment } of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(
+        unprefixed(part),
+      )) {
+        expect(graphemes.has(segment)).toBe(true);
+      }
+    }
+  });
+
+  it("cuts a row one unit longer than the part limit at the limit (FR-007)", () => {
+    expect(splitAt("ab\n|123456789|\ncd", 10).map(unprefixed)).toEqual(["ab\n|123456", "789|\ncd"]);
   });
 
   it("delivers two rows of exactly the part limit as row, newline, row", () => {

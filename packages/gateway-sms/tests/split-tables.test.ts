@@ -93,7 +93,7 @@ describe("splitForSMS keeps table rows whole", () => {
     expectWholeDelivery(text, parts);
   });
 
-  it("cuts a row longer than the part limit by length and keeps the rows around it whole", () => {
+  it("cuts only the row longer than the part limit, by length", () => {
     const long = rowOfLength(Math.floor(PART_LIMIT * 1.2));
     const text = wrap(tableOfLength(3 * LIMIT, (i) => (i === 5 ? long : plainRow(i))));
     const parts = split(text);
@@ -108,11 +108,32 @@ describe("splitForSMS keeps table rows whole", () => {
     expectWholeDelivery(text, parts);
   });
 
-  it("keeps rows holding emoji sequences whole and severs no grapheme", () => {
+  it("keeps rows holding emoji sequences whole", () => {
     const text = wrap(tableOfLength(2 * LIMIT, (i) => `| ${i} | 👩‍👩‍👧 family | 🇧🇷 flag ${i} |`));
     const parts = split(text);
     expect(rowsNotWhole(text, parts)).toEqual([]);
     expectWholeDelivery(text, parts);
+  });
+
+  it("severs no grapheme in a table of emoji sequences", () => {
+    const text = wrap(tableOfLength(2 * LIMIT, (i) => `| ${i} | 👩‍👩‍👧 family | 🇧🇷 flag ${i} |`));
+    const graphemes = new Set(
+      Array.from(
+        new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text),
+        (s) => s.segment,
+      ),
+    );
+    for (const part of split(text)) {
+      for (const { segment } of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(
+        unprefixed(part),
+      )) {
+        expect(graphemes.has(segment)).toBe(true);
+      }
+    }
+  });
+
+  it("cuts a row one unit longer than the part limit at the limit (FR-007)", () => {
+    expect(splitAt("ab\n|123456789|\ncd", 10).map(unprefixed)).toEqual(["ab\n|123456", "789|\ncd"]);
   });
 
   it("delivers two rows of exactly the part limit as row, newline, row", () => {
@@ -166,7 +187,7 @@ const prefixWidthFor = (total: number): number => 2 * String(total).length + 4;
 const labelOf = (part: string): string => /^\(\d+\/\d+\)/.exec(part)?.[0] ?? "";
 
 /** `splitForSMS` as it was at 688c322: `chunkByGrapheme` inside the prefix fixed point. */
-function splitAt688c322(text: string, limit = 1600): string[] {
+function splitWithoutRowRule(text: string, limit = 1600): string[] {
   let reserved = prefixWidthFor(1);
   for (let pass = 0; pass < 8; pass += 1) {
     const parts = chunkByGrapheme(text, { limit, partLimit: limit - reserved });
@@ -175,7 +196,7 @@ function splitAt688c322(text: string, limit = 1600): string[] {
     if (needed <= reserved) return parts.map((p, i) => `(${i + 1}/${parts.length}) ${p}`);
     reserved = needed;
   }
-  throw new RangeError("splitAt688c322: the prefix width did not settle");
+  throw new RangeError("splitWithoutRowRule: the prefix width did not settle");
 }
 
 /** The SMS limit whose settled prefix leaves exactly `partLimit` for the text, and its parts. */
@@ -192,7 +213,7 @@ function smsAtPartLimit(text: string, partLimit: number): { limit: number; parts
 describe("splitForSMS numbering, limits and equivalence", () => {
   it("numbers the parts (1/N) to (N/N) when the row rule adds a part", () => {
     const text = tableOfRows(91);
-    expect(splitAt688c322(text)).toHaveLength(3);
+    expect(splitWithoutRowRule(text)).toHaveLength(3);
     const parts = splitForSMS(text);
     expect(parts.map(labelOf)).toEqual(["(1/4)", "(2/4)", "(3/4)", "(4/4)"]);
     expect(rowsNotWhole(text, parts)).toEqual([]);
@@ -201,7 +222,7 @@ describe("splitForSMS numbering, limits and equivalence", () => {
 
   it("labels every part (i/10) when the row rule takes nine parts to ten", () => {
     const text = tableOfRows(263);
-    expect(splitAt688c322(text)).toHaveLength(9);
+    expect(splitWithoutRowRule(text)).toHaveLength(9);
     const parts = splitForSMS(text);
     expect(parts.map(labelOf)).toEqual(Array.from({ length: 10 }, (_, i) => `(${i + 1}/10)`));
     expect(rowsNotWhole(text, parts)).toEqual([]);
@@ -213,10 +234,13 @@ describe("splitForSMS numbering, limits and equivalence", () => {
       expectWholeDelivery("x".repeat(1594 + rest), split("x".repeat(1594 + rest)));
   });
 
-  it("throws the core's RangeError for a NaN limit and the too-small error for a tiny one", () => {
+  it("throws the core's RangeError for a NaN limit", () => {
     expect(() => splitForSMS("x".repeat(2000), Number.NaN)).toThrow(
       new RangeError("chunkByGrapheme: limit must be a positive integer, received NaN"),
     );
+  });
+
+  it("throws the too-small RangeError for a limit the prefix alone fills", () => {
     expect(() => splitForSMS("x".repeat(100), 4)).toThrow(/is too small to carry an SMS part/);
   });
 

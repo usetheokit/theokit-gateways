@@ -2,7 +2,6 @@
 "@theokit/gateway": patch
 "@theokit/gateway-line": patch
 "@theokit/gateway-sms": patch
-"@theokit/gateway-nextcloud-talk": patch
 ---
 
 Keep Markdown table rows intact through translation and splitting.
@@ -15,7 +14,7 @@ as a line ending, as in GFM. Inline code that holds an unescaped pipe inside a r
 that pipe, as GFM splits the cell, so its backticks no longer pair and the platforms that strip
 markers now keep them.
 
-`splitForLine`, `splitForSMS` and `splitForTalk` no longer cut a table row in two at a part
+`splitForLine` and `splitForSMS` no longer cut a table row in two at a part
 boundary. When a cut would fall inside a row that fits in one part, the part ends before that row
 and the row starts the next part. A row longer than a part is still cut by length. Every
 character is kept, and every part stays within its limit (with the `(i/N) ` prefix counted on

@@ -85,7 +85,7 @@ describe("splitForTalk keeps table rows whole", () => {
     expectWholeDelivery(text, parts);
   });
 
-  it("cuts a row longer than the part limit by length and keeps the rows around it whole", () => {
+  it("cuts only the row longer than the part limit, by length", () => {
     const long = rowOfLength(Math.floor(PART_LIMIT * 1.2));
     const text = wrap(tableOfLength(3 * LIMIT, (i) => (i === 5 ? long : plainRow(i))));
     const parts = split(text);
@@ -98,6 +98,10 @@ describe("splitForTalk keeps table rows whole", () => {
     const parts = split(text);
     expect(rowsNotWhole(text, parts)).toEqual([]);
     expectWholeDelivery(text, parts);
+  });
+
+  it("cuts a row one unit longer than the part limit at the limit (FR-007)", () => {
+    expect(splitAt("ab\n|123456789|\ncd", 10).map(unprefixed)).toEqual(["ab\n|123456", "789|\ncd"]);
   });
 
   it("delivers two rows of exactly the part limit as row, newline, row", () => {
@@ -134,12 +138,20 @@ const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[
 const astralRow = (i: number): string => `| ${i} | 😀😀😀 | 𝒜𝒷𝒸 | cell ${i} |`;
 
 describe("splitForTalk counts rows in code points", () => {
-  it("keeps rows of astral characters whole and splits no surrogate pair", () => {
+  it("keeps rows of astral characters whole", () => {
     const text = wrap(tableOfLength(3 * LIMIT, astralRow));
     const parts = split(text);
     expect(rowsNotWhole(text, parts)).toEqual([]);
-    for (const part of parts) expect(LONE_SURROGATE.test(part)).toBe(false);
     expectWholeDelivery(text, parts);
+  });
+
+  it("splits no surrogate pair in a table of astral characters", () => {
+    const parts = split(wrap(tableOfLength(3 * LIMIT, astralRow)));
+    for (const part of parts) expect(LONE_SURROGATE.test(part)).toBe(false);
+  });
+
+  it("gives no part for an empty text", () => {
+    expect(splitForTalk("")).toEqual([]);
   });
 
   it("keeps a row of 20000 astral characters whole inside a table over 32000 code points", () => {
