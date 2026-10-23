@@ -24,6 +24,12 @@ export interface LiveSuiteOptions {
    * read-only suites, and they light up as soon as the credential exists.
    */
   readonly sends?: boolean;
+  /**
+   * Fail, naming the missing variables, when only SOME of the platform's variables are set, instead
+   * of skipping as if none were (EC-19). Default `false`, so the suites written before it keep
+   * their skip.
+   */
+  readonly failWhenIncomplete?: boolean;
 }
 
 /**
@@ -45,32 +51,23 @@ export function describeLive(
     );
     return;
   }
+  const incomplete = opts.failWhenIncomplete === true ? incompleteFor(spec) : [];
+  if (incomplete.length > 0) {
+    describe(`${spec.label} — ${name}`, () => {
+      it("has every variable it needs", () => {
+        throw new Error(
+          `${spec.label}: some live variables are set and these are missing: ${incomplete.join(", ")}`,
+        );
+      });
+    });
+    return;
+  }
   const missing = missingFor(spec, { includeTarget: opts.sends ?? true });
   if (missing.length > 0) {
     describe.skip(`${spec.label} — ${name} [skipped: missing ${missing.join(", ")}]`, body);
     return;
   }
   describe(`${spec.label} — ${name}`, body);
-}
-
-/**
- * {@link describeLive}, except that a platform with only SOME of its variables set fails, naming the
- * missing ones, instead of skipping (EC-19). With none set, or the run not opted into, it skips as
- * `describeLive` does.
- */
-export function describeLiveAllOrNone(spec: PlatformSpec, name: string, body: () => void): void {
-  const incomplete = liveRunEnabled() ? incompleteFor(spec) : [];
-  if (incomplete.length === 0) {
-    describeLive(spec, name, body);
-    return;
-  }
-  describe(`${spec.label} — ${name}`, () => {
-    it("has every variable it needs", () => {
-      throw new Error(
-        `${spec.label}: some live variables are set and these are missing: ${incomplete.join(", ")}`,
-      );
-    });
-  });
 }
 
 /**
