@@ -442,6 +442,34 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       "The wire shapes are read from OpenClaw's Tlon extension, not observed against a ship; the live run is what confirms them. The peer must already have a DM open with the bot, or accept the bot's invite.",
   },
   {
+    id: "twitch",
+    label: "Twitch",
+    pkg: "@theokit/gateway-twitch",
+    transport: "connection",
+    credentials: [
+      {
+        name: "TWITCH_ACCESS_TOKEN",
+        what: "The bot account's user access token, with user:read:chat and user:write:chat",
+        where:
+          "dev.twitch.tv console → your app → an OAuth flow (Authorization Code or Device Code) signed in as the bot account",
+      },
+      {
+        name: "TWITCH_BOT_USER_ID",
+        what: "The bot account's numeric user id",
+        where: "`user_id` in the answer of https://id.twitch.tv/oauth2/validate for the token",
+      },
+    ],
+    target: [
+      {
+        name: "TWITCH_TEST_BROADCASTER_ID",
+        what: "The numeric user id of a throwaway channel the bot may write in",
+        where: "A channel you own; its id is in the Helix Get Users answer",
+      },
+    ],
+    caveat:
+      "Inbound needs someone chatting in the test channel, so the suite checks the connection, the subscription and one send. Follower-only or other channel modes can drop a bot's message, reported as twitch_message_dropped.",
+  },
+  {
     id: "nostr",
     label: "Nostr",
     pkg: "@theokit/gateway-nostr",

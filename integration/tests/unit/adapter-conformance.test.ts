@@ -41,6 +41,7 @@ import { SynologyChatAdapter } from "@theokit/gateway-synology-chat";
 import { TeamsAdapter } from "@theokit/gateway-teams";
 import { TelegramAdapter } from "@theokit/gateway-telegram";
 import { TlonUrbitAdapter } from "@theokit/gateway-tlon-urbit";
+import { TwitchAdapter } from "@theokit/gateway-twitch";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -163,6 +164,15 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
         shipUrl: "https://ship.invalid",
         ship: "~zod",
         code: "lidlut-tabwed-pillex-ridrup",
+      }),
+  },
+  {
+    platform: "twitch",
+    make: () =>
+      new TwitchAdapter({
+        accessToken: "not-a-real-token",
+        botUserId: "1",
+        broadcasterUserIds: ["2"],
       }),
   },
 ];

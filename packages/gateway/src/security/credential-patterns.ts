@@ -104,6 +104,10 @@ export const CREDENTIAL_SHAPES: {
   ],
   uncovered: [
     {
+      field: "gateway-twitch `accessToken`",
+      why: "30 lowercase alphanumerics with no prefix, the shape of many ids and hashes in a log. It travels only in Authorization headers, which the adapter never logs.",
+    },
+    {
       field: "gateway-tlon-urbit `code`",
       why: "a +code is four dash-joined phonemic syllable words, the same shape as an Urbit ship name such as ~sampel-palnet-sampel-palnet, which the logs exist to show. It travels only in the /~/login body, which the adapter never logs.",
     },

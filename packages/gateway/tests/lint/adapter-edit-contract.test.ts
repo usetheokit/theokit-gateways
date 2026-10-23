@@ -151,6 +151,7 @@ describe("which adapters can edit", () => {
       "gateway-teams",
       "gateway-telegram",
       "gateway-tlon-urbit",
+      "gateway-twitch",
       "gateway-whatsapp",
     ]);
   });
