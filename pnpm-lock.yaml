@@ -70,6 +70,9 @@ importers:
       '@theokit/gateway-nextcloud-talk':
         specifier: workspace:*
         version: link:../packages/gateway-nextcloud-talk
+      '@theokit/gateway-nostr':
+        specifier: workspace:*
+        version: link:../packages/gateway-nostr
       '@theokit/gateway-signal':
         specifier: workspace:*
         version: link:../packages/gateway-signal
@@ -100,6 +103,9 @@ importers:
       nodemailer:
         specifier: ^9.0.6
         version: 9.0.6
+      nostr-tools:
+        specifier: ^2.25.2
+        version: 2.25.2(typescript@5.9.3)
       telegram:
         specifier: ^2.26.22
         version: 2.26.22

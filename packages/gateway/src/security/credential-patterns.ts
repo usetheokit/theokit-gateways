@@ -96,8 +96,17 @@ export const CREDENTIAL_SHAPES: {
         /(?<![A-Za-z0-9~])[A-Za-z0-9]{3}\d[A-Za-z0-9]?~[A-Za-z0-9._~-]{30,}(?![A-Za-z0-9._~-])/g,
       alsoMatches: "an Entra-style secret is the only common value with a tilde in that position",
     },
+    {
+      field: "gateway-nostr `secretKey` (nsec1 form)",
+      pattern: /(?<![a-z0-9])nsec1[02-9ac-hj-np-z]{58}(?![a-z0-9])/g,
+      alsoMatches: "nothing plausible — `nsec1` is NIP-19's prefix for a secret key",
+    },
   ],
   uncovered: [
+    {
+      field: "gateway-nostr `secretKey` (64-hex form)",
+      why: "64 hex characters is also every Nostr public key and event id, which the logs exist to show, and a sha256 digest. The nsec1 spelling of the same key is masked above.",
+    },
     {
       field: "gateway-sms `authToken` (Twilio), gateway-line `channelSecret`",
       why: "32 lowercase hex characters, which is also an md5 digest, a dashless UUID and half a git tree hash. Masking it would eat the correlation id a developer reads the log to find.",

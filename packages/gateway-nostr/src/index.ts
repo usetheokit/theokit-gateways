@@ -1,3 +1,4 @@
+export { NostrAdapter } from "./adapter.js";
 export { NostrKeyError, parseNostrSecretKey } from "./keys.js";
 export {
   type NostrPublishResult,
@@ -7,3 +8,4 @@ export {
   type NostrSocket,
   type NostrSocketFactory,
 } from "./relay-client.js";
+export type { NostrAdapterOptions, NostrRelayLike } from "./types.js";

@@ -340,6 +340,35 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       "The suite joins a fresh #theokit-it-<8 hex> channel, so it writes nowhere anyone reads. A network that requires SASL for new connections, or blocks this host, refuses registration.",
   },
   {
+    id: "nostr",
+    label: "Nostr",
+    pkg: "@theokit/gateway-nostr",
+    transport: "connection",
+    credentials: [
+      {
+        name: "NOSTR_SECRET_KEY",
+        what: "The bot's secret key, `nsec1…` or 64 hex characters",
+        where:
+          "Generate one for the bot (`nak key generate`, or any Nostr client's new account); never reuse a personal key",
+      },
+    ],
+    target: [
+      {
+        name: "NOSTR_RELAY_URL",
+        what: "A relay the live suite may publish to, `wss://…`, that stores kind 1059 and kind 4 for the two test keys",
+        where:
+          "A relay you run (for example `nak serve`) or a public relay that accepts unauthenticated writes",
+      },
+      {
+        name: "NOSTR_PEER_SECRET_KEY",
+        what: "A second throwaway key the suite writes from, playing the person who DMs the bot",
+        where: "Generate a second key the same way as the bot's",
+      },
+    ],
+    caveat:
+      "Gift wraps are public events encrypted to the two test keys; a public relay keeps them. Use throwaway keys, and prefer a relay you run.",
+  },
+  {
     id: "nextcloud-talk",
     reachableVia: "NEXTCLOUD_TALK_URL",
     label: "Nextcloud Talk",

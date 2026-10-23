@@ -8,9 +8,9 @@
  * variable that was missing, not a vague "not configured".
  */
 
-import { describe } from "vitest";
+import { describe, it } from "vitest";
 
-import { liveRunEnabled, missingFor } from "./credentials.js";
+import { incompleteFor, liveRunEnabled, missingFor } from "./credentials.js";
 import type { PlatformSpec } from "./platforms.js";
 
 export interface LiveSuiteOptions {
@@ -51,6 +51,26 @@ export function describeLive(
     return;
   }
   describe(`${spec.label} — ${name}`, body);
+}
+
+/**
+ * {@link describeLive}, except that a platform with only SOME of its variables set fails, naming the
+ * missing ones, instead of skipping (EC-19). With none set, or the run not opted into, it skips as
+ * `describeLive` does.
+ */
+export function describeLiveAllOrNone(spec: PlatformSpec, name: string, body: () => void): void {
+  const incomplete = liveRunEnabled() ? incompleteFor(spec) : [];
+  if (incomplete.length === 0) {
+    describeLive(spec, name, body);
+    return;
+  }
+  describe(`${spec.label} — ${name}`, () => {
+    it("has every variable it needs", () => {
+      throw new Error(
+        `${spec.label}: some live variables are set and these are missing: ${incomplete.join(", ")}`,
+      );
+    });
+  });
 }
 
 /**

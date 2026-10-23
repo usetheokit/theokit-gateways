@@ -54,6 +54,10 @@ const SECRETS: ReadonlyArray<readonly [string, string]> = [
     "teams client secret with the short prefix",
     ["Abc8", "dEfGhIjKlMnOpQrStUvWxYz0123456789_"].join("~"),
   ],
+  [
+    "nostr nsec secret key",
+    ["nsec1", "qpzry9x8gf2tvdw0s3jn54khce6mua7l".repeat(2).slice(0, 58)].join(""),
+  ],
 ];
 
 // Identifiers a developer reads an error log to find. Redacting one costs a debugging session, and
@@ -93,7 +97,7 @@ describe("maskShapes", () => {
   });
 
   it.each(SECRETS)("does not mask a %s glued to a longer identifier", (_name, secret) => {
-    // The other side of every pattern's leading anchor. All six open with a negative lookbehind
+    // The other side of every pattern's leading anchor. Each one opens with a negative lookbehind
     // whose job is to refuse a match starting mid-identifier, and nothing ever put a character
     // there — so the anchors could be inverted, or dropped, and the suite stayed green. Redacting a
     // value that merely CONTAINS a token-shaped run costs a debugging session, the same cost

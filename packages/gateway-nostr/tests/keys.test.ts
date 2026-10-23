@@ -40,7 +40,9 @@ describe("parseNostrSecretKey", () => {
   });
 
   it("rejects a malformed nsec1 key without echoing it", () => {
-    const value = `${nsecEncode(key).slice(0, -1)}q`;
+    const nsec = nsecEncode(key);
+    // Change the last checksum character to a different one, so the checksum cannot match.
+    const value = `${nsec.slice(0, -1)}${nsec.endsWith("q") ? "p" : "q"}`;
 
     expect(() => parseNostrSecretKey(value)).toThrow(NostrKeyError);
     expect(() => parseNostrSecretKey(value)).not.toThrow(value);

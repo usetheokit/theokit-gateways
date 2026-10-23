@@ -32,6 +32,7 @@ import { LineAdapter } from "@theokit/gateway-line";
 import { MatrixAdapter } from "@theokit/gateway-matrix";
 import { MattermostAdapter } from "@theokit/gateway-mattermost";
 import { NextcloudTalkAdapter } from "@theokit/gateway-nextcloud-talk";
+import { NostrAdapter } from "@theokit/gateway-nostr";
 import { SignalAdapter } from "@theokit/gateway-signal";
 import { SlackAdapter } from "@theokit/gateway-slack";
 import { SMSAdapter } from "@theokit/gateway-sms";
@@ -101,6 +102,10 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
         baseUrl: "https://nextcloud.invalid",
         secret: "not-a-real-bot-secret-but-forty-characters-long",
       }),
+  },
+  {
+    platform: "nostr",
+    make: () => new NostrAdapter({ secretKey: "1".repeat(64), relays: ["wss://relay.invalid"] }),
   },
   {
     platform: "signal",
