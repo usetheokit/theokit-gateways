@@ -49,6 +49,15 @@ importers:
       '@theokit/gateway-email':
         specifier: workspace:*
         version: link:../packages/gateway-email
+      '@theokit/gateway-google-chat':
+        specifier: workspace:*
+        version: link:../packages/gateway-google-chat
+      '@theokit/gateway-imessage':
+        specifier: workspace:*
+        version: link:../packages/gateway-imessage
+      '@theokit/gateway-irc':
+        specifier: workspace:*
+        version: link:../packages/gateway-irc
       '@theokit/gateway-line':
         specifier: workspace:*
         version: link:../packages/gateway-line
@@ -58,6 +67,12 @@ importers:
       '@theokit/gateway-mattermost':
         specifier: workspace:*
         version: link:../packages/gateway-mattermost
+      '@theokit/gateway-nextcloud-talk':
+        specifier: workspace:*
+        version: link:../packages/gateway-nextcloud-talk
+      '@theokit/gateway-signal':
+        specifier: workspace:*
+        version: link:../packages/gateway-signal
       '@theokit/gateway-slack':
         specifier: workspace:*
         version: link:../packages/gateway-slack
@@ -200,6 +215,57 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
+  packages/gateway-google-chat:
+    devDependencies:
+      '@theokit/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12))
+
+  packages/gateway-imessage:
+    devDependencies:
+      '@theokit/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12))
+
+  packages/gateway-irc:
+    devDependencies:
+      '@theokit/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12))
+
   packages/gateway-line:
     devDependencies:
       '@line/bot-sdk':
@@ -299,6 +365,42 @@ importers:
       zod:
         specifier: ^4.0.0
         version: 4.4.3
+
+  packages/gateway-nextcloud-talk:
+    devDependencies:
+      '@theokit/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.27.7)(tsx@4.23.12))
+
+  packages/gateway-signal:
+    devDependencies:
+      '@theokit/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12))
 
   packages/gateway-slack:
     devDependencies:
@@ -4160,10 +4262,6 @@ packages:
     resolution: {integrity: sha512-V7+vQEJ06Z+c5tSye8S+nHUfI51xoXIXjHQ99cQtKUkQqqO1kO/KCJUfZXuB47h/YBlDhah2H3hdUGXn8ie0oA==}
     engines: {node: '>=8.6'}
 
-  picomatch@4.0.4:
-    resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
-    engines: {node: '>=12'}
-
   picomatch@4.0.7:
     resolution: {integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==}
     engines: {node: '>=12'}
@@ -6289,7 +6387,7 @@ snapshots:
       '@microsoft/teams.cards': 2.0.15
       '@microsoft/teams.common': 2.0.15
       jwt-decode: 4.0.0
-      qs: 6.15.3
+      qs: 6.16.0
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -6359,7 +6457,7 @@ snapshots:
   '@microsoft/teams.graph@2.0.15':
     dependencies:
       '@microsoft/teams.common': 2.0.15
-      qs: 6.15.3
+      qs: 6.16.0
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -7409,7 +7507,7 @@ snapshots:
       http-errors: 2.0.1
       iconv-lite: 0.7.3
       on-finished: 2.4.1
-      qs: 6.15.3
+      qs: 6.16.0
       raw-body: 3.0.2
       type-is: 2.1.0
     transitivePeerDependencies:
@@ -7966,7 +8064,7 @@ snapshots:
       once: 1.4.0
       parseurl: 1.3.3
       proxy-addr: 2.0.8
-      qs: 6.15.3
+      qs: 6.16.0
       range-parser: 1.3.0
       router: 2.2.0
       send: 1.2.1
@@ -8030,10 +8128,6 @@ snapshots:
   fd-slicer@1.1.0:
     dependencies:
       pend: 1.2.0
-
-  fdir@6.5.0(picomatch@4.0.4):
-    optionalDependencies:
-      picomatch: 4.0.4
 
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
@@ -8986,8 +9080,6 @@ snapshots:
 
   picomatch@2.3.2: {}
 
-  picomatch@4.0.4: {}
-
   picomatch@4.0.7: {}
 
   pify@4.0.1: {}
@@ -9753,8 +9845,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.4)
-      picomatch: 4.0.4
+      fdir: 6.5.0(picomatch@4.0.7)
+      picomatch: 4.0.7
 
   tinyrainbow@3.1.0: {}
 
@@ -9997,7 +10089,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.3
       pathe: 2.0.3
-      picomatch: 4.0.4
+      picomatch: 4.0.7
       std-env: 4.1.0
       tinybench: 2.9.0
       tinyexec: 1.2.4
@@ -10026,7 +10118,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.3
       pathe: 2.0.3
-      picomatch: 4.0.4
+      picomatch: 4.0.7
       std-env: 4.1.0
       tinybench: 2.9.0
       tinyexec: 1.2.4
@@ -10054,7 +10146,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.3
       pathe: 2.0.3
-      picomatch: 4.0.4
+      picomatch: 4.0.7
       std-env: 4.1.0
       tinybench: 2.9.0
       tinyexec: 1.2.4

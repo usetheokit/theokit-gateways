@@ -1,0 +1,25 @@
+---
+"@theokit/gateway-google-chat": minor
+---
+
+Add `@theokit/gateway-google-chat`, a Google Chat adapter.
+
+`@theokit/gateway-google-chat` (first release) exports `GoogleChatAdapter`, for a Chat app
+configured with an HTTP endpoint. Chat's requests arrive on an Express route (default port 3000,
+path `/google-chat`; `express` is an optional peer), or on the caller's own Express app given as
+`app`, which then owns listening. A port another listener holds makes `connect()` answer `false`. Every request's bearer token is checked
+before its body is read: an RS256 signature under a key from Google's published set, issuer
+`accounts.google.com`, an audience equal to the configured `audience`, the Chat service account's
+verified email, and an unexpired `exp` with 60 s of skew. A request that fails any check gets 401
+and reaches no handler. A request with no bearer token gets 401 before its body is read, and a
+body over 1 MiB gets 413 with a JSON error body. When Google's key set cannot be read the answer is 503, and no read starts
+within 60 s of the previous one. `connect()` exchanges a service-account assertion for an access
+token and only then starts the listener. It returns `false`, never a throw, when the key is
+unreadable, the exchange fails or no token arrives within `connectTimeoutMs`. A `connect()` made
+while another is pending shares its answer, and a `disconnect()` made while one is pending wins:
+the connect answers `false` and leaves no listener, and a `connect()` made after that
+`disconnect()` starts a fresh session instead of inheriting the `false`. Replies go through
+`spaces.messages.create`; `channel.id` is the space name, `spaces/<id>`, and anything else is
+refused with `invalid_space`. Long messages are not split. The package has no runtime
+dependencies and requires `@theokit/gateway` 0.12.0 or later, the first version with the
+`google_chat` key.

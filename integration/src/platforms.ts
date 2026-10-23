@@ -235,6 +235,152 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       "to its own mail loops forever by email, and that loop outlives the process.",
   },
   {
+    id: "signal",
+    label: "Signal",
+    pkg: "@theokit/gateway-signal",
+    transport: "connection",
+    credentials: [
+      {
+        name: "SIGNAL_ACCOUNT",
+        what: "The bot's Signal number in E.164 form, registered or linked to signal-cli",
+        where:
+          "`signal-cli -a <number> register` then `verify <code>`, or `signal-cli link` and scan the QR code from a phone's Signal app (Settings → Linked devices)",
+      },
+    ],
+    target: [
+      {
+        name: "SIGNAL_PEER",
+        what: "E.164 number of a second, throwaway Signal account the test messages and answers from",
+        where:
+          "Register it in the same signal-cli data directory as SIGNAL_ACCOUNT (`signal-cli -a <peer> register`); the suite drives both accounts, one signal-cli process each",
+      },
+    ],
+    caveat:
+      'Needs signal-cli on PATH (the GraalVM native build, or the JVM build with a Java 25 runtime) holding the account\'s keys in its data directory. The suite skips with "signal-cli not on PATH" when the binary is missing.',
+  },
+  {
+    id: "google-chat",
+    label: "Google Chat",
+    pkg: "@theokit/gateway-google-chat",
+    transport: "webhook",
+    credentials: [
+      {
+        name: "GOOGLE_CHAT_SERVICE_ACCOUNT_EMAIL",
+        what: "The Chat app's service account, <name>@<project>.iam.gserviceaccount.com",
+        where: "Google Cloud console → IAM & Admin → Service Accounts",
+      },
+      {
+        name: "GOOGLE_CHAT_PRIVATE_KEY",
+        what: "The private_key field of that service account's JSON key; a \\n written as two characters is read as a line break",
+        where:
+          "Google Cloud console → IAM & Admin → Service Accounts → the account → Keys → Add key → JSON",
+      },
+      {
+        name: "GOOGLE_CHAT_AUDIENCE",
+        what: "The HTTP endpoint URL configured for the Chat app, which every inbound token names as its audience",
+        where:
+          "Google Cloud console → Google Chat API → Configuration → Connection settings → HTTP endpoint URL",
+      },
+    ],
+    target: [
+      {
+        name: "GOOGLE_CHAT_SPACE",
+        what: "A space name, spaces/<id>, where the app is a member and someone answers the test message",
+        where:
+          "The space's URL in chat.google.com ends in its id; or the space.name of any inbound event",
+      },
+    ],
+    caveat:
+      "Needs a Chat app configured with an HTTP endpoint, in a Google Workspace organisation. Inbound needs INTEGRATION_PUBLIC_URL, a public HTTPS tunnel to this machine, and the app's endpoint URL must equal GOOGLE_CHAT_AUDIENCE.",
+  },
+  {
+    id: "imessage",
+    label: "iMessage",
+    pkg: "@theokit/gateway-imessage",
+    transport: "connection",
+    credentials: [
+      {
+        name: "IMESSAGE_CLI_PATH",
+        what: "Path to the imsg binary on a Mac signed in to Messages, or to a script that runs `imsg rpc` on that Mac over ssh",
+        where:
+          "Install imsg (github.com/openclaw/imsg) on macOS 14 or newer, sign in to Messages, and give the terminal Full Disk Access (System Settings → Privacy & Security)",
+      },
+    ],
+    target: [
+      {
+        name: "IMESSAGE_PEER_CHAT_ID",
+        what: "imsg's numeric chat id of a conversation with a second person or device, who answers the test's message",
+        where: "`imsg chats` on the Mac lists each chat with its id",
+      },
+    ],
+    caveat:
+      'Needs macOS: imsg does not send or receive on Linux. The suite skips with "not macOS" anywhere else, and someone on the peer device must answer the test message.',
+  },
+  {
+    id: "irc",
+    label: "IRC",
+    pkg: "@theokit/gateway-irc",
+    transport: "connection",
+    credentials: [
+      {
+        name: "IRC_NICK",
+        what: "The nick the adapter registers, unregistered and at most 16 characters; the peer client takes it plus `pr`",
+        where:
+          "Choose one no one on the network holds; Libera.Chat needs no account for an unregistered nick",
+      },
+    ],
+    target: [
+      {
+        name: "IRC_HOST",
+        what: "The network the live suite may write to, over TLS on port 6697; the suite only posts into a channel it creates for the run",
+        where: "irc.libera.chat, or any network that accepts unregistered nicks over TLS",
+      },
+    ],
+    caveat:
+      "The suite joins a fresh #theokit-it-<8 hex> channel, so it writes nowhere anyone reads. A network that requires SASL for new connections, or blocks this host, refuses registration.",
+  },
+  {
+    id: "nextcloud-talk",
+    reachableVia: "NEXTCLOUD_TALK_URL",
+    label: "Nextcloud Talk",
+    pkg: "@theokit/gateway-nextcloud-talk",
+    transport: "webhook",
+    credentials: [
+      {
+        name: "NEXTCLOUD_TALK_URL",
+        what: "Nextcloud server base URL — provisioned, not created by hand",
+        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      },
+      {
+        name: "NEXTCLOUD_TALK_BOT_SECRET",
+        what: "The bot secret, generated per run and never printed — provisioned",
+        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      },
+      {
+        name: "NEXTCLOUD_TALK_WEBHOOK_PORT",
+        what: "The host port the bot's webhook points at, where the suite's adapter listens — provisioned",
+        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      },
+      {
+        name: "NEXTCLOUD_TALK_USER_PASSWORD",
+        what: "The admin password the suite writes in the conversation with — provisioned",
+        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      },
+    ],
+    target: [
+      {
+        name: "NEXTCLOUD_TALK_ROOM",
+        what: "Conversation token the bot is attached to — provisioned",
+        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      },
+    ],
+    caveat:
+      "Talk is self-hosted, so a server booted in Docker for the run IS the platform, as for Matrix " +
+      "and Mattermost. The bot's webhook reaches the suite at host.docker.internal, so no public " +
+      "URL is needed; the first boot installs Talk from apps.nextcloud.com. It does NOT cover a " +
+      "hosted Nextcloud behind a proxy, or Talk's federation.",
+  },
+  {
     id: "line",
     label: "LINE",
     pkg: "@theokit/gateway-line",

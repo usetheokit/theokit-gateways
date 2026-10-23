@@ -20,14 +20,14 @@ import type { MessageEvent, PlatformName } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 /** A platform the core has never heard of, shaped the way a real third-party gateway would shape it. */
-interface SignalMessageEvent {
+interface AcmeChatMessageEvent {
   readonly id: string;
-  readonly platform: "signal";
+  readonly platform: "acmechat";
   readonly sender: { readonly id: string; readonly username?: string };
   readonly channel: { readonly id: string; readonly type: "dm" | "group" | "thread" };
   readonly text: string;
   readonly receivedAt: number;
-  readonly signal: {
+  readonly acmechat: {
     readonly senderUuid: string;
     readonly groupId?: string;
     readonly raw: unknown;
@@ -38,68 +38,67 @@ interface SignalMessageEvent {
 // block, against the published module specifier, from its own source.
 declare module "@theokit/gateway" {
   interface PlatformEventRegistry {
-    signal: SignalMessageEvent;
+    acmechat: AcmeChatMessageEvent;
   }
 }
 
-const SIGNAL_EVENT: SignalMessageEvent = {
-  id: "sg-1",
-  platform: "signal",
+const ACMECHAT_EVENT: AcmeChatMessageEvent = {
+  id: "ac-1",
+  platform: "acmechat",
   sender: { id: "uuid-abc" },
   channel: { id: "uuid-abc", type: "dm" },
   text: "hi from outside the monorepo",
   receivedAt: 1_700_000_000_000,
-  signal: { senderUuid: "uuid-abc", raw: {} },
+  acmechat: { senderUuid: "uuid-abc", raw: {} },
+};
+
+/** One router per platform, each receiving only that platform's variant. */
+type Routes = {
+  readonly [P in PlatformName]: (event: Extract<MessageEvent, { platform: P }>) => string;
 };
 
 /**
  * Routes any event to a short id, narrowing per platform.
  *
- * The `never` default is the assertion that carries this file: it holds only while every member of
- * the union — the ten first-party platforms AND the foreign one registered above — has a case.
+ * The mapped `Routes` type is the assertion that carries this file: the table compiles only while
+ * every member of the union — the first-party platforms AND the foreign one registered above — has
+ * an entry, and only with the fields that member declares.
  */
-function route(event: MessageEvent): string {
-  switch (event.platform) {
-    case "telegram":
-      return `tg:${event.telegram.chatId}`;
-    case "discord":
-      return `dc:${event.discord.channelId}`;
-    case "slack":
-      return `sl:${event.slack.channelId}`;
-    case "whatsapp":
-      return `wa:${event.whatsapp.wamid}`;
-    case "teams":
-      return `tm:${event.teams.conversationId}`;
-    case "email":
-      return `em:${event.email.messageId}`;
-    case "sms":
-      return `sm:${event.sms.messageId}`;
-    case "mattermost":
-      return `mm:${event.mattermost.postId}`;
-    case "line":
-      return `ln:${event.line.messageId}`;
-    case "matrix":
-      return `mx:${event.matrix.eventId}`;
-    case "signal":
-      return `sg:${event.signal.senderUuid}`;
-    default: {
-      const unhandled: never = event;
-      throw new Error(`unhandled platform: ${JSON.stringify(unhandled)}`);
-    }
-  }
+const ROUTES: Routes = {
+  telegram: (event) => `tg:${event.telegram.chatId}`,
+  discord: (event) => `dc:${event.discord.channelId}`,
+  slack: (event) => `sl:${event.slack.channelId}`,
+  whatsapp: (event) => `wa:${event.whatsapp.wamid}`,
+  teams: (event) => `tm:${event.teams.conversationId}`,
+  email: (event) => `em:${event.email.messageId}`,
+  sms: (event) => `sm:${event.sms.messageId}`,
+  mattermost: (event) => `mm:${event.mattermost.postId}`,
+  line: (event) => `ln:${event.line.messageId}`,
+  matrix: (event) => `mx:${event.matrix.eventId}`,
+  signal: (event) => `sg:${event.signal.timestamp}`,
+  imessage: (event) => `im:${event.imessage.guid}`,
+  google_chat: (event) => `gc:${event.google_chat.messageName}`,
+  irc: (event) => `irc:${event.irc.nick}`,
+  nextcloud_talk: (event) => `nextcloud_talk:${event.nextcloud_talk.roomToken}`,
+  acmechat: (event) => `ac:${event.acmechat.senderUuid}`,
+};
+
+function route<E extends MessageEvent>(event: E): string {
+  const handler = ROUTES[event.platform] as (event: E) => string;
+  return handler(event);
 }
 
 describe("a gateway authored outside this repository", () => {
   it("registers a platform the core has never heard of", () => {
     // Without the augmentation this literal is not a `PlatformName` — which is exactly the
     // `TS2416` that B-008 measured against the published 0.6.1 declaration.
-    const registered: PlatformName = "signal";
+    const registered: PlatformName = "acmechat";
 
-    expect(registered).toBe("signal");
+    expect(registered).toBe("acmechat");
   });
 
   it("narrows to the foreign variant's own fields", () => {
-    expect(route(SIGNAL_EVENT)).toBe("sg:uuid-abc");
+    expect(route(ACMECHAT_EVENT)).toBe("ac:uuid-abc");
   });
 
   it("still rejects a platform nobody registered", () => {
@@ -125,8 +124,13 @@ describe("a gateway authored outside this repository", () => {
       "line",
       "matrix",
       "signal",
+      "imessage",
+      "google_chat",
+      "irc",
+      "nextcloud_talk",
+      "acmechat",
     ];
 
-    expect(names).toHaveLength(11);
+    expect(names).toHaveLength(16);
   });
 });

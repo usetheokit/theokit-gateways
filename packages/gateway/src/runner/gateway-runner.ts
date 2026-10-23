@@ -110,6 +110,30 @@ function connectFailureReason(outcome: PromiseSettledResult<boolean>): string {
 }
 
 /**
+ * Disconnect every adapter the runner is giving back, from a rollback, an overtaken start or
+ * `stop()`. A disconnect that fails does not stop the others and does not change how the caller
+ * settles, but it is reported: such an adapter may still hold its platform session, and a
+ * discarded failure left that state with no trace.
+ */
+async function releaseAdapters(
+  adapters: ReadonlyArray<BasePlatformAdapter>,
+  during: string,
+): Promise<void> {
+  await Promise.all(
+    adapters.map(async (a) => {
+      try {
+        await a.disconnect();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        process.stderr.write(
+          `[gateway] adapter "${a.platform}" disconnect failed while ${during}: ${redactSecrets(message)}\n`,
+        );
+      }
+    }),
+  );
+}
+
+/**
  * Holds the registered adapters and dispatches inbound events through
  * the hook chain to the user handler. Use the sugar `runner.command(...)`
  * for slash command dispatch with word-boundary matching (EC-A).
@@ -124,6 +148,8 @@ export class GatewayRunner {
   /** Slash command registry: name → handler (word-boundary match, EC-A). */
   private readonly commands = new Map<string, GatewayHandler>();
   private startResult: StartResult | undefined;
+  /** The start that has not settled yet, shared by every overlapping `start()` call. */
+  private startInFlight: Promise<StartResult> | undefined;
   private stopped = false;
 
   constructor(private readonly opts: GatewayRunnerOptions) {
@@ -147,10 +173,24 @@ export class GatewayRunner {
    * Resolves with what connected. A second call after the first resolved returns the same result
    * without connecting again.
    *
+   * Overlapping calls share one start; a start overtaken by stop resolves with no adapter connected.
+   * A call made before `stop()` while another is still connecting connects nothing and settles
+   * with it; a call made after `stop()` throws `runner_stopped`. When `stop()` runs before the
+   * connect settles, the adapters that connected are disconnected, no inbound dispatch is wired,
+   * and the start resolves `{ connected: [], failed }`, keeping the `"isolate"` failures. Under
+   * `"rollback"`, a connect that fails still rejects the start.
+   *
+   * Under `connectFailure: "rollback"`, every connect settles before the rollback, so a failing
+   * start rejects only once its slowest connect settles, as a successful one resolves only then.
+   *
+   * An adapter whose `disconnect()` fails while a start rolls back, or while a start that `stop()`
+   * overtook gives its adapters back, is named on stderr with the error redacted; how the start
+   * settles does not change.
+   *
    * @throws {GatewayLifecycleError} `runner_stopped` — the runner was already
    * stopped. A stopped runner is spent; construct a new one.
-   * @throws {Error} under the default `connectFailure: "rollback"`, the first connect failure, after the
-   * adapters that did connect were disconnected.
+   * @throws {Error} under the default `connectFailure: "rollback"`, the first connect failure, after
+   * every connect settled and the adapters that did connect were disconnected.
    */
   async start(): Promise<StartResult> {
     if (this.stopped) {
@@ -165,10 +205,35 @@ export class GatewayRunner {
       });
     }
     if (this.startResult !== undefined) return this.startResult;
+    if (this.startInFlight === undefined) {
+      // Recorded in the same synchronous section that calls `connect()`, before anything awaits: a
+      // guard on `startResult` alone, written after the connect, let an overlapping call connect
+      // every adapter a second time.
+      const pending = this.runStart();
+      this.startInFlight = pending;
+      // A rejected start is not memoised, so a later call connects again. The identity check is
+      // defensive: this handler is the first reaction on `pending`, so no newer record can exist
+      // yet. The returned promise still carries the rejection to every caller.
+      pending.catch(() => {
+        if (this.startInFlight === pending) this.startInFlight = undefined;
+      });
+    }
+    return this.startInFlight;
+  }
+
+  private async runStart(): Promise<StartResult> {
     const result =
       (this.opts.connectFailure ?? "rollback") === "isolate"
         ? await this.connectIsolated()
         : await this.connectAllOrRollback();
+    if (this.stopped) {
+      // stop() ran while the connect was pending: it disconnected these adapters before their
+      // connect settled, and a later stop() returns at its guard. Wiring them would leave a live
+      // adapter on a stopped runner.
+      await releaseAdapters(result.connected, "releasing a start that stop() overtook");
+      this.startResult = { connected: [], failed: result.failed };
+      return this.startResult;
+    }
     this.wireInbound(result.connected);
     this.startResult = {
       connected: result.connected.map((a) => a.platform),
@@ -177,23 +242,40 @@ export class GatewayRunner {
     return this.startResult;
   }
 
-  /** All or nothing: one failure disconnects the adapters already open, then rethrows. */
+  /**
+   * All or nothing: when any connect fails, disconnect the adapters that did connect, then rethrow
+   * the first failure. Every connect settles before the rollback: rolling back while one is still
+   * pending left that adapter live once it connected.
+   */
   private async connectAllOrRollback(): Promise<ConnectOutcome> {
-    const connected: BasePlatformAdapter[] = [];
-    try {
-      await Promise.all(
-        this.opts.adapters.map(async (a) => {
-          const ok = await a.connect();
-          if (ok) connected.push(a);
-          else throw new Error(`adapter "${a.platform}" connect returned false`);
-        }),
-      );
-    } catch (err) {
-      // Roll back partial connections.
-      await Promise.all(connected.map((a) => a.disconnect().catch(() => undefined)));
-      throw err;
+    const adapters = this.opts.adapters;
+    // In the order they occur. Its length decides, never a value's truthiness, so a connect that
+    // rejects with `undefined` still rolls back.
+    const failures: unknown[] = [];
+    const settled = await Promise.allSettled(
+      adapters.map(async (a) => {
+        let ok: boolean;
+        try {
+          // Inside the `try`, a `connect()` that throws before returning a promise lands here too.
+          ok = await a.connect();
+        } catch (err) {
+          failures.push(err);
+          throw err;
+        }
+        if (!ok) {
+          const refusal = new Error(`adapter "${a.platform}" connect returned false`);
+          failures.push(refusal);
+          throw refusal;
+        }
+      }),
+    );
+    if (failures.length > 0) {
+      // "fulfilled" means connected: a refusal and a throw both reject their wrapper.
+      const connected = adapters.filter((_, i) => settled[i]?.status === "fulfilled");
+      await releaseAdapters(connected, "rolling back a failed start");
+      throw failures[0];
     }
-    return { connected: [...this.opts.adapters], failed: [] };
+    return { connected: [...adapters], failed: [] };
   }
 
   /**
@@ -235,7 +317,12 @@ export class GatewayRunner {
 
   /**
    * Stop the runner. Drains in-flight handlers up to `drainTimeoutMs`,
-   * then disconnects adapters. Idempotent (EC-E).
+   * then disconnects adapters. Idempotent (EC-E). A disconnect that fails does not make `stop()`
+   * reject and does not stop the other disconnects; it is written to stderr, redacted, naming the
+   * platform.
+   *
+   * An adapter still connecting under an in-flight start is released when that start settles;
+   * `stop()` does not wait for it.
    */
   async stop(): Promise<void> {
     if (this.stopped) return;
@@ -271,9 +358,7 @@ export class GatewayRunner {
       }
     }
 
-    await Promise.all(
-      [...this.adaptersByPlatform.values()].map((a) => a.disconnect().catch(() => undefined)),
-    );
+    await releaseAdapters([...this.adaptersByPlatform.values()], "stopping the runner");
   }
 
   /**

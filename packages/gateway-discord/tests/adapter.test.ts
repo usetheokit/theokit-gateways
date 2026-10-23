@@ -242,6 +242,23 @@ describe("DiscordAdapter — the format the caller declared", () => {
     expect(sent[0]).toBe("**bold**");
   });
 
+  it("sends a plain text whose escaped body passes 2000 characters as messages that each fit", async () => {
+    // 995 copies of `*a` are 1990 characters, one part for the splitter, and 2985 once escaped.
+    // Sent as one message, Discord refuses it with 50035 after the request. Split again inside
+    // the 950-character half window, it goes out as 950 + 950 + 90 characters before escaping.
+    const sent: string[] = [];
+    const result = await adapterSending(sent).sendMessage({
+      channel: { id: "c1", type: "group" },
+      text: "*a".repeat(995),
+      format: "plain",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(sent.length).toBe(3);
+    for (const chunk of sent) expect(chunk.length).toBeLessThanOrEqual(2000);
+    expect(sent.join("")).toBe("\\*a".repeat(995));
+  });
+
   it("never cuts an escape pair across a message boundary", async () => {
     // Escaping before splitting inflates the string, so the hard window cut can land between a
     // backslash and its character: message 1 ends in a stray backslash the user never typed and

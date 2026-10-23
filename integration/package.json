@@ -19,6 +19,8 @@
     "matrix:down": "tsx scripts/teardown-docker.ts matrix",
     "mattermost:up": "tsx scripts/bootstrap-mattermost.ts",
     "mattermost:down": "tsx scripts/teardown-docker.ts mattermost",
+    "nextcloud-talk:up": "tsx scripts/bootstrap-nextcloud-talk.ts",
+    "nextcloud-talk:down": "tsx scripts/teardown-docker.ts nextcloud-talk",
     "capture:line": "tsx scripts/capture-line-user.ts"
   },
   "devDependencies": {
@@ -27,9 +29,14 @@
     "@theokit/gateway": "workspace:*",
     "@theokit/gateway-discord": "workspace:*",
     "@theokit/gateway-email": "workspace:*",
+    "@theokit/gateway-google-chat": "workspace:*",
+    "@theokit/gateway-imessage": "workspace:*",
+    "@theokit/gateway-irc": "workspace:*",
     "@theokit/gateway-line": "workspace:*",
     "@theokit/gateway-matrix": "workspace:*",
     "@theokit/gateway-mattermost": "workspace:*",
+    "@theokit/gateway-nextcloud-talk": "workspace:*",
+    "@theokit/gateway-signal": "workspace:*",
     "@theokit/gateway-slack": "workspace:*",
     "@theokit/gateway-sms": "workspace:*",
     "@theokit/gateway-teams": "workspace:*",

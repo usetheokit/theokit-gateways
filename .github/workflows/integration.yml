@@ -245,6 +245,12 @@ jobs:
       - name: Boot the Mattermost server
         run: pnpm --filter @theokit/gateway-integration mattermost:up
 
+      # Nextcloud Talk is self-hosted too. The bootstrap installs Talk from the
+      # app store and points a bot's webhook at the suite's listener on the
+      # runner (host.docker.internal), so nothing here needs a public URL.
+      - name: Boot the Nextcloud Talk server
+        run: pnpm --filter @theokit/gateway-integration nextcloud-talk:up
+
       - name: Live suites
         # The dispatch input reaches the shell as an environment variable, never as
         # text spliced into the script. `${{ inputs.x }}` inside a run block is
@@ -275,9 +281,9 @@ jobs:
           # about a gap that is already known and documented in the registry.
           #
           # Set only on this step. The readiness report above runs BEFORE the
-          # Matrix and Mattermost servers boot, so those two are legitimately
-          # unconfigured at that point.
-          INTEGRATION_REQUIRE_PLATFORMS: "discord,email,line,matrix,mattermost,slack,telegram"
+          # Matrix, Mattermost and Nextcloud Talk servers boot, so those three are
+          # legitimately unconfigured at that point.
+          INTEGRATION_REQUIRE_PLATFORMS: "discord,email,line,matrix,mattermost,nextcloud-talk,slack,telegram"
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_TEST_CHAT_ID: ${{ secrets.TELEGRAM_TEST_CHAT_ID }}
           # Telegram inbound is NOT wired here, deliberately (decided 2026-08-17,
@@ -349,3 +355,7 @@ jobs:
       - name: Tear down the Mattermost server
         if: always()
         run: pnpm --filter @theokit/gateway-integration mattermost:down
+
+      - name: Tear down the Nextcloud Talk server
+        if: always()
+        run: pnpm --filter @theokit/gateway-integration nextcloud-talk:down

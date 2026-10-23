@@ -25,6 +25,11 @@ const ALL_PLATFORMS = [
   "mattermost",
   "line",
   "matrix",
+  "signal",
+  "imessage",
+  "google_chat",
+  "irc",
+  "nextcloud_talk",
 ] as const satisfies readonly PlatformName[];
 
 // `PlatformName` is a derived type with no runtime list, so the list above is checked against it
@@ -34,11 +39,26 @@ type MissingFromList = Exclude<PlatformName, (typeof ALL_PLATFORMS)[number]>;
 const listIsComplete: [MissingFromList] extends [never] ? true : false = true;
 
 const SINGLE_CHARACTER: readonly PlatformName[] = ["whatsapp", "slack"];
-const MARKDOWN_AS_IS: readonly PlatformName[] = ["discord", "mattermost", "teams"];
-const PLAIN: readonly PlatformName[] = ["telegram", "matrix", "email", "line", "sms"];
+const MARKDOWN_AS_IS: readonly PlatformName[] = [
+  "discord",
+  "mattermost",
+  "teams",
+  "signal",
+  "nextcloud_talk",
+];
+const PLAIN: readonly PlatformName[] = [
+  "telegram",
+  "matrix",
+  "email",
+  "line",
+  "sms",
+  "imessage",
+  "google_chat",
+  "irc",
+];
 
 describe("channelRendering", () => {
-  it("covers all ten platforms", () => {
+  it("covers every platform", () => {
     expect(listIsComplete).toBe(true);
     for (const platform of ALL_PLATFORMS) {
       const rendering = channelRendering(platform);
@@ -64,7 +84,7 @@ describe("channelRendering", () => {
     }
   });
 
-  it("removes the markers for telegram, matrix, email, line and sms", () => {
+  it("removes the markers for every plain platform", () => {
     for (const platform of PLAIN) {
       const rendering = channelRendering(platform);
       expect(rendering.translate("**b** _e_ ~~s~~ `c`"), platform).toBe("b e s c");
@@ -82,9 +102,9 @@ describe("channelRendering", () => {
     // A JavaScript caller, or one holding a name from a newer adapter, can reach this. Returning
     // undefined would let ChatPresenter fall back to identity and markdown: the asterisk defect,
     // silently.
-    const call = (): unknown => channelRendering("irc" as PlatformName);
+    const call = (): unknown => channelRendering("acmechat" as PlatformName);
     expect(call).toThrow(RangeError);
-    expect(call).toThrow(/"irc"/);
+    expect(call).toThrow(/"acmechat"/);
     for (const platform of ALL_PLATFORMS) {
       expect(call).toThrow(new RegExp(`\\b${platform}\\b`));
     }

@@ -16,9 +16,9 @@ import { reachabilityOf, unreachable } from "../../src/reachability.js";
 
 describe("reachability", () => {
   it("declares which platforms are only ready when a server answers", () => {
-    // Exactly the two whose credentials are provisioned by a bootstrap script.
+    // Exactly the three whose credentials are provisioned by a bootstrap script.
     const declared = PLATFORMS.filter((p) => p.reachableVia !== undefined).map((p) => p.id);
-    expect(declared.sort()).toEqual(["matrix", "mattermost"]);
+    expect(declared.sort()).toEqual(["matrix", "mattermost", "nextcloud-talk"]);
   });
 
   it("reports a platform whose URL nothing is listening on as unreachable", async () => {

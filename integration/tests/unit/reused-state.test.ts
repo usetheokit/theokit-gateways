@@ -66,6 +66,20 @@ describe("reusedStateAdvice", () => {
     ).toBeUndefined();
   });
 
+  it("advice for nextcloud-talk names nextcloud-talk:down", () => {
+    // The wording occ printed on a second run against a kept container (measured 2026-10-21 on
+    // nextcloud:31-apache with spreed 21.1.11): the app, then the bot, already there.
+    const appAdvice = reusedStateAdvice("nextcloud-talk", "spreed already installed");
+    const botAdvice = reusedStateAdvice(
+      "nextcloud-talk",
+      "talk:bot:install failed: Bot with the same URL is already registered",
+    );
+
+    expect(appAdvice).toContain("nextcloud-talk:down");
+    expect(botAdvice).toContain("nextcloud-talk:down");
+    expect(botAdvice).not.toContain("matrix:down");
+  });
+
   it("reads a signature that arrives with different casing or padding", () => {
     // The text comes from two servers' error bodies, which are not a contract we control.
     expect(reusedStateAdvice("matrix", "  INVALID REGISTRATION TOKEN  ")).toBeDefined();
