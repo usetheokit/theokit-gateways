@@ -104,6 +104,10 @@ export const CREDENTIAL_SHAPES: {
   ],
   uncovered: [
     {
+      field: "gateway-synology-chat `botToken` and `incomingUrl`",
+      why: "a bot token is a random string the NAS generates with no prefix, and the Incoming URL carries its own token as a query parameter of an ordinary entry.cgi URL. Neither has a shape to claim without eating ordinary ids and URLs; the adapter never logs the URL, and refuses a callback token before reading it.",
+    },
+    {
       field: "gateway-feishu-lark `appSecret`",
       why: "32 alphanumerics with no prefix, the shape of many tokens and hashes; it travels only in the body of the tenant-token request, which the adapter never logs.",
     },

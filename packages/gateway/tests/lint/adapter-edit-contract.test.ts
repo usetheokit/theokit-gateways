@@ -147,6 +147,7 @@ describe("which adapters can edit", () => {
       "gateway-signal",
       "gateway-slack",
       "gateway-sms",
+      "gateway-synology-chat",
       "gateway-teams",
       "gateway-telegram",
       "gateway-whatsapp",

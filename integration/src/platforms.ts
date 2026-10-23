@@ -373,6 +373,33 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       "The app needs the bot capability, the im:message and im:message:send_as_bot scopes, and the long-connection event mode with im.message.receive_v1 subscribed. Inbound needs a person to write in the chat, so the suite checks the outbound half and the connection.",
   },
   {
+    id: "synology-chat",
+    label: "Synology Chat",
+    pkg: "@theokit/gateway-synology-chat",
+    transport: "webhook",
+    credentials: [
+      {
+        name: "SYNOLOGY_CHAT_BOT_TOKEN",
+        what: "The bot's token, sent with every outgoing callback",
+        where: "Synology Chat → Integration → Bots → your bot, beside the Outgoing URL",
+      },
+      {
+        name: "SYNOLOGY_CHAT_INCOMING_URL",
+        what: "The bot's Incoming URL, `https://<nas>/webapi/entry.cgi?api=SYNO.Chat.External&method=chatbot&version=2&token=…`",
+        where: "Synology Chat → Integration → Bots → your bot",
+      },
+    ],
+    target: [
+      {
+        name: "SYNOLOGY_CHAT_TEST_USER_ID",
+        what: "The numeric user id of a throwaway account the bot may write to",
+        where: "The `user_id` of a callback that account sends the bot, or the bot's user_list",
+      },
+    ],
+    caveat:
+      "Inbound is a webhook: the NAS must reach the adapter's Outgoing URL, so the round trip needs INTEGRATION_PUBLIC_URL or a NAS on the same network. The suite records whether the callback came form-encoded or as JSON, and fails if the bot's own reply calls back.",
+  },
+  {
     id: "nostr",
     label: "Nostr",
     pkg: "@theokit/gateway-nostr",
