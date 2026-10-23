@@ -49,6 +49,9 @@ importers:
       '@theokit/gateway-email':
         specifier: workspace:*
         version: link:../packages/gateway-email
+      '@theokit/gateway-feishu-lark':
+        specifier: workspace:*
+        version: link:../packages/gateway-feishu-lark
       '@theokit/gateway-google-chat':
         specifier: workspace:*
         version: link:../packages/gateway-google-chat
@@ -220,6 +223,24 @@ importers:
       zod:
         specifier: ^4.0.0
         version: 4.4.3
+
+  packages/gateway-feishu-lark:
+    devDependencies:
+      '@larksuiteoapi/node-sdk':
+        specifier: 1.76.0
+        version: 1.76.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+      '@theokit/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12))
 
   packages/gateway-google-chat:
     devDependencies:
@@ -1726,6 +1747,9 @@ packages:
 
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
+
+  '@larksuiteoapi/node-sdk@1.76.0':
+    resolution: {integrity: sha512-v/bxQNCugwAmMPbZtBGJtSu8hdQLiB1/29Jr+GBIG18DyQ4LYyp7gxQ74pkhXVSuoUeH4v+/ZHAw/SW+KMrj2g==}
 
   '@line/bot-sdk@11.2.0':
     resolution: {integrity: sha512-JKYFa3jaPYWqgI4hnc0ls+7tMmUEgnFF0Jb48kscKcGOO8qh4hddJyiq8/TFqaTWWxXQeSgYd1o5zrHjt6FrpQ==}
@@ -3898,6 +3922,9 @@ packages:
   lodash.groupby@4.6.0:
     resolution: {integrity: sha512-5dcWxm23+VAoz+awKmBaiBvzox8+RqMgFhi7UvX9DHZr2HdxHXM/Wrf8cfKpsW37RNrvtPn6hSwNqurSILbmJw==}
 
+  lodash.identity@3.0.0:
+    resolution: {integrity: sha512-AupTIzdLQxJS5wIYUQlgGyk2XRTfGXA+MCghDHqZk0pzUNYvd3EESS6dkChNauNYVIutcb0dfHw1ri9Q1yPV8Q==}
+
   lodash.includes@4.3.0:
     resolution: {integrity: sha512-W3Bx6mdkRTGtlJISOvVD/lbqjTlPPUDTMnlXZFnVwi9NKJ6tiAk6LVdlhZMm17VZisqhKcgzpO5Wz91PCt5b0w==}
 
@@ -3916,8 +3943,14 @@ packages:
   lodash.isstring@4.0.1:
     resolution: {integrity: sha512-0wJxfxH1wgO3GrbuP+dTTk7op+6L41QCXbGINEmD+ny/G/eCqGzxyCsh7159S+mgDDcoarnBw6PC1PS5+wUGgw==}
 
+  lodash.merge@4.6.2:
+    resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
+
   lodash.once@4.1.1:
     resolution: {integrity: sha512-Sb487aTOCr9drQVL8pIxOzVhafOjZN9UU54hiN8PU3uAiSV7lx1yYNpbNmex2PK6dSJoNTSJUUswT651yww3Mg==}
+
+  lodash.pickby@4.6.0:
+    resolution: {integrity: sha512-AZV+GsS/6ckvPOVQPXSiFFacKvKB4kOQu6ynt9wz0F3LO4R9Ij4K1ddYsIytDpSgLz88JHd9P+oaLeej5/Sl7Q==}
 
   lodash.snakecase@4.1.1:
     resolution: {integrity: sha512-QZ1d4xoBHYUeuouhEq3lk3Uq7ldgyFXGBhg04+oRLnIz8o9T65Eh+8YdroUwn846zchkA9yDsDl5CVVaV2nqYw==}
@@ -6398,6 +6431,21 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
+  '@larksuiteoapi/node-sdk@1.76.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)':
+    dependencies:
+      axios: 1.20.0
+      lodash.identity: 3.0.0
+      lodash.merge: 4.6.2
+      lodash.pickby: 4.6.0
+      protobufjs: 7.6.5
+      qs: 6.16.0
+      ws: 8.21.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+    transitivePeerDependencies:
+      - bufferutil
+      - debug
+      - supports-color
+      - utf-8-validate
+
   '@line/bot-sdk@11.2.0':
     dependencies:
       '@types/node': 24.13.3
@@ -8784,6 +8832,8 @@ snapshots:
 
   lodash.groupby@4.6.0: {}
 
+  lodash.identity@3.0.0: {}
+
   lodash.includes@4.3.0: {}
 
   lodash.isboolean@3.0.3: {}
@@ -8796,7 +8846,11 @@ snapshots:
 
   lodash.isstring@4.0.1: {}
 
+  lodash.merge@4.6.2: {}
+
   lodash.once@4.1.1: {}
+
+  lodash.pickby@4.6.0: {}
 
   lodash.snakecase@4.1.1: {}
 

@@ -29,6 +29,7 @@
     "@theokit/gateway": "workspace:*",
     "@theokit/gateway-discord": "workspace:*",
     "@theokit/gateway-email": "workspace:*",
+    "@theokit/gateway-feishu-lark": "workspace:*",
     "@theokit/gateway-google-chat": "workspace:*",
     "@theokit/gateway-imessage": "workspace:*",
     "@theokit/gateway-irc": "workspace:*",

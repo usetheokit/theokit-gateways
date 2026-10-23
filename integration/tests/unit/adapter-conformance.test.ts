@@ -25,6 +25,7 @@
 import type { BasePlatformAdapter } from "@theokit/gateway";
 import { DiscordAdapter } from "@theokit/gateway-discord";
 import { EmailAdapter } from "@theokit/gateway-email";
+import { FeishuLarkAdapter } from "@theokit/gateway-feishu-lark";
 import { GoogleChatAdapter } from "@theokit/gateway-google-chat";
 import { IMessageAdapter } from "@theokit/gateway-imessage";
 import { IrcAdapter } from "@theokit/gateway-irc";
@@ -58,6 +59,10 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
         address: "nobody@invalid",
         password: "not-a-real-password",
       }),
+  },
+  {
+    platform: "feishu_lark",
+    make: () => new FeishuLarkAdapter({ appId: "cli_0000000000000000", appSecret: "not-a-secret" }),
   },
   {
     platform: "google_chat",

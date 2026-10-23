@@ -340,6 +340,39 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       "The suite joins a fresh #theokit-it-<8 hex> channel, so it writes nowhere anyone reads. A network that requires SASL for new connections, or blocks this host, refuses registration.",
   },
   {
+    id: "feishu-lark",
+    label: "Feishu/Lark",
+    pkg: "@theokit/gateway-feishu-lark",
+    transport: "connection",
+    credentials: [
+      {
+        name: "LARK_APP_ID",
+        what: "The custom app's App ID, `cli_` and 16 hex characters",
+        where: "Feishu or Lark developer console → your custom app → Credentials & Basic Info",
+      },
+      {
+        name: "LARK_APP_SECRET",
+        what: "The same app's App Secret",
+        where: "Feishu or Lark developer console → your custom app → Credentials & Basic Info",
+      },
+    ],
+    target: [
+      {
+        name: "LARK_DOMAIN",
+        what: "`feishu` for open.feishu.cn or `lark` for open.larksuite.com",
+        where: "Whichever console the app was created in",
+      },
+      {
+        name: "LARK_TEST_CHAT_ID",
+        what: "A chat the app's bot is in and the suite may write to, `oc_…`",
+        where:
+          "Add the bot to a throwaway group; the chat id is in the group settings or an event payload",
+      },
+    ],
+    caveat:
+      "The app needs the bot capability, the im:message and im:message:send_as_bot scopes, and the long-connection event mode with im.message.receive_v1 subscribed. Inbound needs a person to write in the chat, so the suite checks the outbound half and the connection.",
+  },
+  {
     id: "nostr",
     label: "Nostr",
     pkg: "@theokit/gateway-nostr",

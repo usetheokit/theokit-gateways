@@ -104,6 +104,10 @@ export const CREDENTIAL_SHAPES: {
   ],
   uncovered: [
     {
+      field: "gateway-feishu-lark `appSecret`",
+      why: "32 alphanumerics with no prefix, the shape of many tokens and hashes; it travels only in the body of the tenant-token request, which the adapter never logs.",
+    },
+    {
       field: "gateway-nostr `secretKey` (64-hex form)",
       why: "64 hex characters is also every Nostr public key and event id, which the logs exist to show, and a sha256 digest. The nsec1 spelling of the same key is masked above.",
     },

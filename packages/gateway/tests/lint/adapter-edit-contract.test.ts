@@ -135,6 +135,7 @@ describe("which adapters can edit", () => {
     expect((await adapterSources()).map(({ pkg }) => pkg)).toEqual([
       "gateway-discord",
       "gateway-email",
+      "gateway-feishu-lark",
       "gateway-google-chat",
       "gateway-imessage",
       "gateway-irc",
