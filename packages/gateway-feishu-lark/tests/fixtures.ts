@@ -10,16 +10,24 @@ export function larkEvent(
     chatType?: string;
   } = {},
 ): Record<string, unknown> {
+  const o = {
+    eventId: "ev_1",
+    senderType: "user",
+    messageType: "text",
+    content: JSON.stringify({ text: "hello" }),
+    chatType: "p2p",
+    ...overrides,
+  };
   return {
-    event_id: overrides.eventId ?? "ev_1",
+    event_id: o.eventId,
     event_type: "im.message.receive_v1",
-    sender: { sender_type: overrides.senderType ?? "user", sender_id: { open_id: "ou_alice" } },
+    sender: { sender_type: o.senderType, sender_id: { open_id: "ou_alice" } },
     message: {
       message_id: "om_1",
       chat_id: "oc_chat",
-      chat_type: overrides.chatType ?? "p2p",
-      message_type: overrides.messageType ?? "text",
-      content: overrides.content ?? JSON.stringify({ text: "hello" }),
+      chat_type: o.chatType,
+      message_type: o.messageType,
+      content: o.content,
     },
   };
 }

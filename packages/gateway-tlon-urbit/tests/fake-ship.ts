@@ -45,23 +45,28 @@ export class FakeShip {
   private readonly channels = new Map<string, Channel>();
   private latest: Channel | undefined;
 
-  readonly fetch: FetchLike = async (input, init) => {
+  readonly fetch: FetchLike = async (input, init = {}) => {
     const url = new URL(String(input));
-    const method = init?.method ?? "GET";
-    if (url.pathname === "/~/login") {
-      this.logins.push(String(init?.body ?? ""));
-      return this.login();
-    }
-    const match = /^\/~\/channel\/(.+)$/.exec(url.pathname);
-    if (match === null) return new Response(null, { status: 404 });
-    const channel = this.channel(match[1] ?? "");
-    if (method === "PUT") return this.onPut(channel, String(init?.body ?? "[]"));
+    const body = String(init.body ?? "");
+    if (url.pathname === "/~/login") return this.onLogin(body);
+    const id = /^\/~\/channel\/(.+)$/.exec(url.pathname)?.[1];
+    if (id === undefined) return new Response(null, { status: 404 });
+    const channel = this.channel(id);
+    return init.method === "PUT" ? this.onPut(channel, body) : this.onGet(channel, init.signal);
+  };
+
+  private onLogin(body: string): Promise<Response> {
+    this.logins.push(body);
+    return this.login();
+  }
+
+  private onGet(channel: Channel, signal: AbortSignal | null | undefined): Promise<Response> {
     this.gets.push(channel.id);
     if (this.hangGets) return new Promise(() => undefined);
     const status = this.getStatus(channel.id);
-    if (status !== 200) return new Response(null, { status });
-    return this.openStream(channel, init?.signal);
-  };
+    if (status !== 200) return Promise.resolve(new Response(null, { status }));
+    return Promise.resolve(this.openStream(channel, signal));
+  }
 
   /** The ship pushes one `/v3` fact on the latest channel, for subscription `subscriptionId`. */
   fact(json: unknown, subscriptionId = this.subscriptionId()): void {
