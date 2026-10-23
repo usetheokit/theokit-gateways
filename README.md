@@ -20,6 +20,7 @@ Multi-channel gateway packages for the Theo ecosystem, extracted from `theokit-s
 | `@theokit/gateway-nextcloud-talk` | Nextcloud Talk (bot webhook + bot API) | **full** — send and receive, against Nextcloud 31 with Talk in Docker |
 | `@theokit/gateway-feishu-lark` | Feishu / Lark (open platform long connection + IM API) | unverified — no live run yet; the live suite needs a custom app on Feishu or Lark |
 | `@theokit/gateway-synology-chat` | Synology Chat (bot outgoing callback + Incoming URL) | unverified — no live run yet; the live suite needs a NAS with Synology Chat and a bot |
+| `@theokit/gateway-tlon-urbit` | Tlon / Urbit (ship HTTP channel + `chat` app pokes) | unverified — no live run yet; the wire shapes are read from OpenClaw and the live suite needs a ship |
 | `@theokit/gateway-nostr` | Nostr (NIP-17 and NIP-04 direct messages over relay WebSockets) | unverified — no live run yet; the live suite needs a relay and two keys |
 | `@theokit/gateway-line` | LINE Messaging API | **full** — send and receive |
 | `@theokit/gateway-whatsapp` | WhatsApp (Meta Cloud API + whatsapp-web.js + Baileys) | partial — the Cloud API send is accepted by Meta, delivery and inbound not asserted here; the two unofficial backends reach a pairing QR and have never been paired here |

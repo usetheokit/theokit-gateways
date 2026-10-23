@@ -400,6 +400,48 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       "Inbound is a webhook: the NAS must reach the adapter's Outgoing URL, so the round trip needs INTEGRATION_PUBLIC_URL or a NAS on the same network. The suite records whether the callback came form-encoded or as JSON, and fails if the bot's own reply calls back.",
   },
   {
+    id: "tlon-urbit",
+    label: "Tlon/Urbit",
+    pkg: "@theokit/gateway-tlon-urbit",
+    transport: "connection",
+    credentials: [
+      {
+        name: "TLON_SHIP_URL",
+        what: "The bot ship's HTTP base URL",
+        where: "Tlon hosting shows it for the ship; a self-hosted ship serves on its own host",
+      },
+      {
+        name: "TLON_SHIP",
+        what: "The bot ship's name, `~sampel-palnet`",
+        where: "The ship's own name",
+      },
+      {
+        name: "TLON_CODE",
+        what: "The bot ship's web login code",
+        where: "`+code` in the ship's dojo, or the ship's settings on Tlon hosting",
+      },
+    ],
+    target: [
+      {
+        name: "TLON_PEER_SHIP_URL",
+        what: "A second, throwaway ship's HTTP base URL, the one that DMs the bot",
+        where: "As for the bot ship",
+      },
+      {
+        name: "TLON_PEER_SHIP",
+        what: "That second ship's name",
+        where: "As for the bot ship",
+      },
+      {
+        name: "TLON_PEER_CODE",
+        what: "That second ship's web login code",
+        where: "As for the bot ship",
+      },
+    ],
+    caveat:
+      "The wire shapes are read from OpenClaw's Tlon extension, not observed against a ship; the live run is what confirms them. The peer must already have a DM open with the bot, or accept the bot's invite.",
+  },
+  {
     id: "nostr",
     label: "Nostr",
     pkg: "@theokit/gateway-nostr",

@@ -94,6 +94,9 @@ importers:
       '@theokit/gateway-telegram':
         specifier: workspace:*
         version: link:../packages/gateway-telegram
+      '@theokit/gateway-tlon-urbit':
+        specifier: workspace:*
+        version: link:../packages/gateway-tlon-urbit
       '@theokit/gateway-whatsapp':
         specifier: workspace:*
         version: link:../packages/gateway-whatsapp
@@ -615,6 +618,25 @@ importers:
       zod:
         specifier: ^4.0.0
         version: 4.4.3
+
+  packages/gateway-tlon-urbit:
+    dependencies:
+      '@urbit/aura':
+        specifier: 3.0.0
+        version: 3.0.0
+    devDependencies:
+      '@theokit/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.0.16(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.12))
 
   packages/gateway-whatsapp:
     dependencies:
@@ -2488,6 +2510,10 @@ packages:
 
   '@types/yauzl@2.10.3':
     resolution: {integrity: sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q==}
+
+  '@urbit/aura@3.0.0':
+    resolution: {integrity: sha512-N8/FHc/lmlMDCumMuTXyRHCxlov5KZY6unmJ9QR2GOw+OpROZMBsXYGwE+ZMtvN21ql9+Xb8KhGNBj08IrG3Wg==}
+    engines: {node: '>=16', npm: '>=8'}
 
   '@vitejs/plugin-react@4.7.0':
     resolution: {integrity: sha512-gUu9hwfWvvEDBBmgtAowQCojwZmJ5mcLn3aufeCsitijs3+f2NsrPtlAWIR6OPiqljl96GVCUbLe0HyqIpVaoA==}
@@ -7199,6 +7225,8 @@ snapshots:
     dependencies:
       '@types/node': 26.4.0
     optional: true
+
+  '@urbit/aura@3.0.0': {}
 
   '@vitejs/plugin-react@4.7.0(vite@7.3.6(@types/node@22.20.1)(lightningcss@1.33.0)(tsx@4.23.12))':
     dependencies:

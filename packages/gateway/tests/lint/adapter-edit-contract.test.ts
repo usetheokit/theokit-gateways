@@ -150,6 +150,7 @@ describe("which adapters can edit", () => {
       "gateway-synology-chat",
       "gateway-teams",
       "gateway-telegram",
+      "gateway-tlon-urbit",
       "gateway-whatsapp",
     ]);
   });

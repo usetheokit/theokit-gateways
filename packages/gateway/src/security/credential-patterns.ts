@@ -104,6 +104,10 @@ export const CREDENTIAL_SHAPES: {
   ],
   uncovered: [
     {
+      field: "gateway-tlon-urbit `code`",
+      why: "a +code is four dash-joined phonemic syllable words, the same shape as an Urbit ship name such as ~sampel-palnet-sampel-palnet, which the logs exist to show. It travels only in the /~/login body, which the adapter never logs.",
+    },
+    {
       field: "gateway-synology-chat `botToken` and `incomingUrl`",
       why: "a bot token is a random string the NAS generates with no prefix, and the Incoming URL carries its own token as a query parameter of an ordinary entry.cgi URL. Neither has a shape to claim without eating ordinary ids and URLs; the adapter never logs the URL, and refuses a callback token before reading it.",
     },

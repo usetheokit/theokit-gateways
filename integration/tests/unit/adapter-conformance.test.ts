@@ -40,6 +40,7 @@ import { SMSAdapter } from "@theokit/gateway-sms";
 import { SynologyChatAdapter } from "@theokit/gateway-synology-chat";
 import { TeamsAdapter } from "@theokit/gateway-teams";
 import { TelegramAdapter } from "@theokit/gateway-telegram";
+import { TlonUrbitAdapter } from "@theokit/gateway-tlon-urbit";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -154,7 +155,16 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
   {
     platform: "telegram",
     make: () => new TelegramAdapter({ token: "123456:not-a-real-token" }),
+  },  {
+    platform: "tlon_urbit",
+    make: () =>
+      new TlonUrbitAdapter({
+        shipUrl: "https://ship.invalid",
+        ship: "~zod",
+        code: "lidlut-tabwed-pillex-ridrup",
+      }),
   },
+
 ];
 
 describe.each(ADAPTERS)("PlatformAdapter conformance — $platform", ({ platform, make }) => {
