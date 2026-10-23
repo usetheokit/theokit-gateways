@@ -80,23 +80,30 @@ export type {
   BaseMessageEvent,
   DiscordMessageEvent,
   EmailMessageEvent,
-  GoogleChatMessageEvent,
-  IMessageMessageEvent,
-  IrcMessageEvent,
   LineMessageEvent,
   MatrixMessageEvent,
   MattermostMessageEvent,
   MessageEvent,
-  NextcloudTalkMessageEvent,
   PlatformEventRegistry,
   PlatformName,
-  SignalMessageEvent,
   SlackMessageEvent,
   SMSMessageEvent,
   TeamsMessageEvent,
   TelegramMessageEvent,
   WhatsAppMessageEvent,
 } from "./types/message-event.js";
+export type {
+  FeishuLarkMessageEvent,
+  GoogleChatMessageEvent,
+  IMessageMessageEvent,
+  IrcMessageEvent,
+  NextcloudTalkMessageEvent,
+  NostrMessageEvent,
+  SignalMessageEvent,
+  SynologyChatMessageEvent,
+  TlonUrbitMessageEvent,
+  TwitchMessageEvent,
+} from "./types/platform-events.js";
 
 // The shared half of an Express webhook server — see `webhook/express-server.ts` for why it lives
 // here and why it does not make express a dependency of the core (#89).

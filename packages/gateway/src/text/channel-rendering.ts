@@ -70,6 +70,9 @@ const translateWith =
  *   cheaper failure (plan ADR D3).
  * - matrix, email: markers dropped and `plain`. Neither renders `markdown` (see the module comment),
  *   and producing HTML would need a markdown renderer this package does not have.
+ * - nostr, feishu_lark, synology_chat, tlon_urbit, twitch: markers dropped and `plain`. Nostr and
+ *   Twitch chat show a marker character as itself; Lark posts and Tlon inline styles are richer
+ *   formats this package does not map yet, so emphasis is lost rather than spelled (plan ADR D3).
  */
 const RENDERINGS: Readonly<Record<PlatformName, ChannelRendering>> = {
   whatsapp: { format: "plain", translate: translateWith(DIALECTS.whatsapp) },
@@ -87,6 +90,11 @@ const RENDERINGS: Readonly<Record<PlatformName, ChannelRendering>> = {
   google_chat: { format: "plain", translate: translateWith(STRIP) },
   irc: { format: "plain", translate: translateWith(STRIP) },
   nextcloud_talk: { format: "markdown", translate: identity },
+  nostr: { format: "plain", translate: translateWith(STRIP) },
+  feishu_lark: { format: "plain", translate: translateWith(STRIP) },
+  synology_chat: { format: "plain", translate: translateWith(STRIP) },
+  tlon_urbit: { format: "plain", translate: translateWith(STRIP) },
+  twitch: { format: "plain", translate: translateWith(STRIP) },
 };
 
 /**

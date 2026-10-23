@@ -16,8 +16,8 @@ pnpm add @theokit/gateway-discord discord.js
 
 ## How each adapter treats `OutboundMessage.format`
 
-**All ten honour it** — they read the field and let it decide what the platform receives. What they can DO with it differs by platform, and a consumer should not have
-to read ten packages to learn which — so the classes are stated here.
+**Every adapter honours it** — each reads the field and lets it decide what the platform receives. What they can DO with it differs by platform, and a consumer should not have
+to read every package to learn which — so the classes are stated here.
 
 | Platform | What it does with `format` |
 |---|---|
@@ -73,8 +73,8 @@ presenter per turn; it keeps state between `present()` calls.
 |---|---|---|
 | whatsapp | `**b**` to `*b*`, `*i*` or `_i_` to `_i_`, `~~s~~` to `~s~`, `` `c` `` to ` ```c``` ` | `plain` |
 | slack | `**b**` to `*b*`, `*i*` or `_i_` to `_i_`, `~~s~~` to `~s~`, `` `c` `` kept | `markdown` |
-| discord, mattermost, teams | unchanged | `markdown` |
-| telegram, matrix, email, line, sms | the markers removed, their content kept | `plain` |
+| discord, mattermost, teams, signal, nextcloud_talk | unchanged | `markdown` |
+| telegram, matrix, email, line, sms, imessage, google_chat, irc, nostr, feishu_lark, synology_chat, tlon_urbit, twitch | the markers removed, their content kept | `plain` |
 
 - Only the four inline markers are translated: bold, italic, strikethrough and inline code.
   Headings, links, lists and block quotes reach every platform unchanged.

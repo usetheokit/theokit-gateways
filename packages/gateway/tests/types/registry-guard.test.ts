@@ -81,7 +81,12 @@ type FirstParty =
   | "imessage"
   | "google_chat"
   | "irc"
-  | "nextcloud_talk";
+  | "nextcloud_talk"
+  | "nostr"
+  | "feishu_lark"
+  | "synology_chat"
+  | "tlon_urbit"
+  | "twitch";
 
 describe("PlatformEventRegistry — what may join the union", () => {
   it("is exactly the first-party platforms, no more and no fewer", () => {

@@ -29,6 +29,14 @@ const PLATFORM_NAMES = [
   "irc",
   "nextcloud_talk",
   "nextcloud-talk",
+  "nostr",
+  "feishu_lark",
+  "feishu-lark",
+  "synology_chat",
+  "synology-chat",
+  "tlon_urbit",
+  "tlon-urbit",
+  "twitch",
 ] as const;
 
 const SRC = new URL("../../src/", import.meta.url).pathname;

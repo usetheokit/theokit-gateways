@@ -80,6 +80,11 @@ const ROUTES: Routes = {
   google_chat: (event) => `gc:${event.google_chat.messageName}`,
   irc: (event) => `irc:${event.irc.nick}`,
   nextcloud_talk: (event) => `nextcloud_talk:${event.nextcloud_talk.roomToken}`,
+  nostr: (event) => `ns:${event.nostr.pubkey}`,
+  feishu_lark: (event) => `fl:${event.feishu_lark.messageId}`,
+  synology_chat: (event) => `sc:${event.synology_chat.postId}`,
+  tlon_urbit: (event) => `tu:${event.tlon_urbit.messageId}`,
+  twitch: (event) => `tw:${event.twitch.messageId}`,
   acmechat: (event) => `ac:${event.acmechat.senderUuid}`,
 };
 
