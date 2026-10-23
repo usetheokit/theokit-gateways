@@ -27,22 +27,12 @@ const preloadUrl = new URL("./fixtures/deny-process-and-network.mjs", import.met
 
 const ALLOWED_IMPORTS = ["node:fs", "node:path", "node:url", "node:process"];
 
-// The decision the pinned action makes while the repository makes none of its own, as the held
-// copy approximates its bundle: `m = changesets.length !== 0` selects the version path.
-function pinnedActionDecision(changesetDir) {
-  const pending = readdirSync(changesetDir).filter(
-    (name) => name.endsWith(".md") && name !== "README.md",
-  );
-  return pending.length !== 0 ? "version" : "publish";
-}
-
 async function loadScript() {
   expect(existsSync(scriptPath), "tools/release-path.mjs must exist").toBe(true);
   return import(pathToFileURL(scriptPath).href);
 }
 
 async function decide(changesetDir) {
-  if (!existsSync(scriptPath)) return pinnedActionDecision(changesetDir);
   return (await loadScript()).releasePath(changesetDir);
 }
 
