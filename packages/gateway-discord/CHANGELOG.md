@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.4.0
+
+### Minor Changes
+
+- 05e7fdd: Edit a message an adapter sent, so a reply can stream as a preview that the final text replaces.
+
+  `BasePlatformAdapter` gains `supportsEdit` (`false` by default) and
+  `editMessage(messageId, out)`, whose default refuses with `edit_unsupported`, makes no platform
+  call and never throws. A third-party subclass that already declares a member with either name and
+  a different type no longer compiles against this release, and under `noImplicitOverride` one
+  that declares it without `override` does not either.
+
+  Telegram (`editMessageText`), Discord (one REST `PATCH` of the message, without fetching the
+  channel), Slack (`chat.update`), Mattermost (`patchPost`), Matrix (an `m.replace` event) and Teams
+  (`updateActivity`, or `activities(conversationId).update` on `@microsoft/teams.api` below 2.0.14)
+  set `supportsEdit` to `true` and replace the text of a message they sent, honouring `format` as
+  `sendMessage` does (Slack's `chat.update` takes no `mrkdwn` argument, so its edit sends the text
+  as it is for every format), and return `{ ok: true, messageId }` with the same id. E-mail, SMS, LINE and
+  WhatsApp keep the default.
+
+  An edit is refused with no request as `edit_too_long` when the text would need more than one
+  platform message (Matrix has no length check), as `invalid_message_id` for an empty id (and on
+  Telegram one that is not a safe positive integer), and as `empty_text` and `not_connected` where
+  `sendMessage` answers those. Telegram answers its "message is not modified" refusal as a success.
+  On Discord an unknown channel is answered by the platform, as `discord_10003`. On Matrix a
+  `#alias` the adapter never resolved costs one lookup before the edit. Teams and Matrix do not
+  retry a refused markup as plain text on an edit, as they do on a send.
+
+  The six adapters keep `>=0.9.0` as their peer range on `@theokit/gateway` in this release. At run
+  time they work against any core in that range, since no adapter calls the base `editMessage`. Their
+  sources declare both members with `override`, so building them against a core older than this one
+  reports TS4113. The floor rises to this core in the next release, once it is on npm
+  (`docs/adr/0008-edit-capable-adapters-raise-their-core-floor-after-the-core-ships.md`). A
+  consumer's own typecheck reads the published declarations, which carry no `override`, and passes
+  on an older core.
+
+### Patch Changes
+
+- 13117af: A `plain` text full of markup characters no longer goes out as a message longer than the
+  platform allows. The text was split on its own length and escaped afterwards, and escaping can
+  double a part, so 995 copies of `*a` went to Discord as one 2985-character message and came back
+  `discord_50035`, and 8000 copies went to Mattermost as one 24000-character post and came back
+  `invalid_request`. A part whose escaped body passes the cap is now split again at half the cap.
+  `editMessage` sends the same parts, so on both platforms an edit is refused as `edit_too_long`
+  for exactly the texts a send delivers as more than one message.
+
 ## 0.3.0
 
 ### Minor Changes
