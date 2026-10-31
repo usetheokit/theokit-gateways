@@ -244,6 +244,18 @@ describe.each(REFUSING_ATTACHMENTS)("attachment refusal — $platform", ({ platf
     expect(result.error?.message).toContain(platform);
   }, 30_000);
 
+  it("refuses an attachments value with no length as attachments_unsupported (EC-1)", async () => {
+    // A JavaScript caller's non-array value: a `> 0` presence check would read it as "no
+    // attachments" and send the text alone, dropping whatever the caller meant to attach.
+    const adapter = make();
+    const out = { channel: { id: "1", type: "dm" }, text: "here it is", attachments: {} };
+    const result = await adapter.sendMessage(
+      out as unknown as Parameters<typeof adapter.sendMessage>[0],
+    );
+
+    expect(result.error?.code).toBe("attachments_unsupported");
+  }, 30_000);
+
   it("answers a null attachments value without throwing and without refusing it", async () => {
     // `null` from a JavaScript caller means no attachments: the send goes on to its usual checks
     // (here `not_connected` or a platform error), never a TypeError and never the refusal.
