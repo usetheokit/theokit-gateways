@@ -4,11 +4,14 @@
  * The text rides as the first photo's caption when it is 1 to 1024 UTF-16 units. A longer text
  * gets no caption and follows the last photo through the same split as a text send, so nothing of
  * it is cut. Every attachment is checked before the first request, so a refusal makes no call.
+ *
+ * The module also holds how a send maps a declared format and a thrown grammy error, which
+ * `TelegramAdapter` imports from here: both paths must answer them the same way, and keeping them
+ * here rather than in `adapter.ts` avoids an import cycle.
  */
 
 import type { OutboundAttachment, OutboundMessage, SendResult } from "@theokit/gateway";
-import { type Api, InputFile } from "grammy";
-import { mapFormat, mapSendError } from "./send-mapping.js";
+import { type Api, GrammyError, HttpError, InputFile } from "grammy";
 import { splitForTelegram } from "./split.js";
 
 /** Telegram's limit on a photo caption, in UTF-16 units (Bot API `sendPhoto`). */
@@ -129,4 +132,45 @@ function validatePhotos(attachments: unknown): SendResult | undefined {
 
 function refuse(code: string, message: string): SendResult {
   return { ok: false, error: { code, message } };
+}
+
+/** The `parse_mode` grammy takes for a declared format, or `undefined` for plain text. */
+export function mapFormat(
+  format: "plain" | "markdown" | "html" | undefined,
+): "Markdown" | "HTML" | undefined {
+  if (format === "markdown") return "Markdown";
+  if (format === "html") return "HTML";
+  return undefined;
+}
+
+/** The `parse_mode` option for a declared format, or no option. */
+export function parseModeOptions(format: OutboundMessage["format"]): {
+  parse_mode?: "Markdown" | "HTML";
+} {
+  const parseMode = mapFormat(format);
+  return parseMode !== undefined ? { parse_mode: parseMode } : {};
+}
+
+/** A thrown grammy error as a `SendResult`; never rethrows. */
+export function mapSendError(err: unknown): SendResult {
+  if (err instanceof GrammyError) {
+    const description = err.description.toLowerCase();
+    if (description.includes("rate limit") || err.error_code === 429) {
+      return { ok: false, error: { code: "rate_limited", message: err.description } };
+    }
+    if (description.includes("forbidden") || err.error_code === 403) {
+      return { ok: false, error: { code: "no_permission", message: err.description } };
+    }
+    if (description.includes("parse")) {
+      return { ok: false, error: { code: "markdown_error", message: err.description } };
+    }
+    return {
+      ok: false,
+      error: { code: `telegram_${err.error_code}`, message: err.description },
+    };
+  }
+  if (err instanceof HttpError) {
+    return { ok: false, error: { code: "network_error", message: err.message } };
+  }
+  return { ok: false, error: { code: "unknown", message: (err as Error).message } };
 }

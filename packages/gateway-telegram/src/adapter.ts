@@ -18,8 +18,13 @@ import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "@the
 import { Bot, type Context, GrammyError } from "grammy";
 import { buildEvent } from "./parse-inbound.js";
 import { refuseAttachments } from "./refuse-attachments.js";
-import { mapFormat, mapSendError, parseModeOptions } from "./send-mapping.js";
-import { hasAttachments, sendPhotos } from "./send-photos.js";
+import {
+  hasAttachments,
+  mapFormat,
+  mapSendError,
+  parseModeOptions,
+  sendPhotos,
+} from "./send-photos.js";
 import { splitForTelegram } from "./split.js";
 
 export interface TelegramAdapterOptions {
