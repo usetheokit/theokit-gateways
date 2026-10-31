@@ -50,9 +50,11 @@ caption and is sent after the last photo, split as any text send is, in the same
 the reply target, so none of it is cut. An empty text sends the photos alone.
 
 Every attachment is checked before the first request: an `attachments` value that is not a list,
-or an image with no bytes, is refused as `invalid_attachment`, and a `kind` other than `image` as
-`attachments_unsupported`, with no request. A photo Telegram refuses ends the send with the mapped
-error, and the photos before it stay delivered; the returned `messageId` is the last message sent.
+more than 10 images, or an image with no bytes or over 10 MiB (Telegram's photo limit) is refused
+as `invalid_attachment`, and a `kind` other than `image` as `attachments_unsupported`, with no
+request. On success the returned `messageId` is the last message sent. A photo Telegram refuses
+ends the send with the mapped error and no `messageId`, and the photos before it stay delivered,
+so retrying the whole send after a `rate_limited` or `network_error` sends those photos again.
 An edit carrying attachments is refused as `attachments_unsupported`.
 
 Attachments need `@theokit/gateway` 0.13.0 or later: an older core's `ctx.reply` does not carry

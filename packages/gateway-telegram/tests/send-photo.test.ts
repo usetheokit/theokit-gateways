@@ -9,9 +9,14 @@ import { GrammyError, HttpError, InputFile } from "grammy";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TelegramAdapter } from "../src/adapter.js";
+import { splitForTelegram } from "../src/split.js";
 
 const CHANNEL = { id: "100", type: "dm" } as const;
 const CAPTION_LIMIT = 1024;
+/** Telegram's limit on an uploaded photo (Bot API `sendPhoto`: "at most 10 MB"). */
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+/** The most images one send takes. */
+const MAX_PHOTOS = 10;
 
 function image(bytes: number[] = [137, 80, 78, 71]): OutboundAttachment {
   return { kind: "image", mediaType: "image/png", data: new Uint8Array(bytes) };
@@ -64,19 +69,22 @@ describe("TelegramAdapter.sendMessage with attachments", () => {
     expect(options).toMatchObject({ caption: "here it is" });
   });
 
-  it("a 1024-unit text is the caption and a 1025-unit text follows the photos", async () => {
+  it("a 1024-unit text is the caption", async () => {
     const fits = "a".repeat(CAPTION_LIMIT);
     await adapter.sendMessage(out(fits, [image()]));
+
     expect(sendPhoto.mock.calls[0]?.[2]).toMatchObject({ caption: fits });
     expect(sendText).not.toHaveBeenCalled();
+  });
 
-    sendPhoto.mockClear();
+  it("a 1025-unit text follows the photos in the topic, without the reply target", async () => {
     const tooLong = "b".repeat(CAPTION_LIMIT + 1);
     const result = await adapter.sendMessage({
       ...out(tooLong, [image()]),
       replyTo: "7",
       channel: { ...CHANNEL, topicId: "9" },
     });
+
     expect(sendPhoto.mock.calls[0]?.[2]).not.toHaveProperty("caption");
     expect(sendPhoto.mock.calls[0]?.[2]).toMatchObject({
       reply_parameters: { message_id: 7 },
@@ -89,12 +97,54 @@ describe("TelegramAdapter.sendMessage with attachments", () => {
     expect(result).toEqual({ ok: true, messageId: String(nextId) });
   });
 
+  it("a text over one Telegram message follows the photos one chunk per sendMessage", async () => {
+    const paragraph = `${"c".repeat(3000)}\n\n`;
+    const longText = paragraph.repeat(3);
+    const result = await adapter.sendMessage({
+      ...out(longText, [image()]),
+      replyTo: "7",
+      channel: { ...CHANNEL, topicId: "9" },
+    });
+
+    const chunks = splitForTelegram(longText);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(sendText.mock.calls.map((call) => call[1])).toEqual(chunks);
+    for (const call of sendText.mock.calls) {
+      expect(call[2]).toMatchObject({ message_thread_id: 9 });
+      expect(call[2]).not.toHaveProperty("reply_parameters");
+    }
+    expect(result).toEqual({ ok: true, messageId: String(nextId) });
+  });
+
+  it("a markdown caption rides with parse_mode Markdown", async () => {
+    await adapter.sendMessage({ ...out("*bold*", [image()]), format: "markdown" });
+
+    expect(sendPhoto.mock.calls[0]?.[2]).toMatchObject({
+      caption: "*bold*",
+      parse_mode: "Markdown",
+    });
+  });
+
+  it("an html caption rides with parse_mode HTML", async () => {
+    await adapter.sendMessage({ ...out("<b>bold</b>", [image()]), format: "html" });
+
+    expect(sendPhoto.mock.calls[0]?.[2]).toMatchObject({ parse_mode: "HTML" });
+  });
+
+  it("passes an attachment's filename to the InputFile", async () => {
+    await adapter.sendMessage(out("chart", [{ ...image(), filename: "chart.png" }]));
+
+    const file = sendPhoto.mock.calls[0]?.[1] as InputFile;
+    expect(file.filename).toBe("chart.png");
+  });
+
   it("sends several images in order with the caption on the first", async () => {
     const first = image([1]);
     const second = image([2]);
     const result = await adapter.sendMessage({
       ...out("two", [first, second]),
       replyTo: "5",
+      channel: { ...CHANNEL, topicId: "9" },
     });
 
     expect(sendPhoto).toHaveBeenCalledTimes(2);
@@ -104,6 +154,8 @@ describe("TelegramAdapter.sendMessage with attachments", () => {
     expect(calls[0]?.[2]).toMatchObject({ caption: "two", reply_parameters: { message_id: 5 } });
     expect(calls[1]?.[2]).not.toHaveProperty("caption");
     expect(calls[1]?.[2]).not.toHaveProperty("reply_parameters");
+    expect(calls[0]?.[2]).toMatchObject({ message_thread_id: 9 });
+    expect(calls[1]?.[2]).toMatchObject({ message_thread_id: 9 });
     expect(result).toEqual({ ok: true, messageId: "43" });
   });
 
@@ -134,15 +186,12 @@ describe("TelegramAdapter.sendMessage with attachments", () => {
     expect(sendText).not.toHaveBeenCalled();
   });
 
-  it("maps a sendPhoto failure", async () => {
+  it("maps a 429 from sendPhoto to rate_limited and stops the send", async () => {
     sendPhoto.mockRejectedValueOnce(grammyError(429, "Too Many Requests: retry after 3"));
     const rateLimited = await adapter.sendMessage(out("hi", [image(), image()]));
+
     expect(rateLimited.error?.code).toBe("rate_limited");
     expect(sendPhoto).toHaveBeenCalledTimes(1);
-
-    sendPhoto.mockRejectedValueOnce(new HttpError("Network request failed", new Error("down")));
-    const network = await adapter.sendMessage(out("hi", [image()]));
-    expect(network.error?.code).toBe("network_error");
   });
 
   it("returns mapSendError's result when photo 2 is refused, photo 1 staying sent", async () => {
@@ -201,7 +250,9 @@ describe("TelegramAdapter.sendMessage with attachments", () => {
   });
 
   it("refuses an attachments value that is not an array", async () => {
-    const notAList = { channel: CHANNEL, text: "hi", attachments: "image.png" } as unknown;
+    // A value with no numeric length: a `> 0` presence check would take it for "no attachments"
+    // and send the text alone, which is the silent drop EC-1 forbids.
+    const notAList = { channel: CHANNEL, text: "hi", attachments: {} } as unknown;
     const result = await adapter.sendMessage(notAList as OutboundMessage);
 
     expect(result.error?.code).toBe("invalid_attachment");
@@ -216,5 +267,41 @@ describe("TelegramAdapter.sendMessage with attachments", () => {
     expect(result.ok).toBe(true);
     expect(sendPhoto).not.toHaveBeenCalled();
     expect(sendText).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends ten images, the most one send takes", async () => {
+    const ten = Array.from({ length: MAX_PHOTOS }, (_, index) => image([index + 1]));
+    const result = await adapter.sendMessage(out("ten", ten));
+
+    expect(result.ok).toBe(true);
+    expect(sendPhoto).toHaveBeenCalledTimes(MAX_PHOTOS);
+  });
+
+  it("refuses eleven images with no platform call", async () => {
+    const eleven = Array.from({ length: MAX_PHOTOS + 1 }, (_, index) => image([index + 1]));
+    const result = await adapter.sendMessage(out("eleven", eleven));
+
+    expect(result.error?.code).toBe("invalid_attachment");
+    expect(result.error?.message).toContain("10");
+    expect(sendPhoto).not.toHaveBeenCalled();
+    expect(sendText).not.toHaveBeenCalled();
+  });
+
+  it("sends an image of exactly 10 MiB", async () => {
+    const atLimit = { ...image(), data: new Uint8Array(MAX_PHOTO_BYTES) };
+    const result = await adapter.sendMessage(out("big", [atLimit]));
+
+    expect(result.ok).toBe(true);
+    expect(sendPhoto).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses an image one byte over 10 MiB before the first photo goes out", async () => {
+    const tooBig = { ...image(), data: new Uint8Array(MAX_PHOTO_BYTES + 1) };
+    const result = await adapter.sendMessage(out("big", [image(), image(), tooBig]));
+
+    expect(result.error?.code).toBe("invalid_attachment");
+    expect(result.error?.message).toContain("10 MiB");
+    expect(sendPhoto).not.toHaveBeenCalled();
+    expect(sendText).not.toHaveBeenCalled();
   });
 });

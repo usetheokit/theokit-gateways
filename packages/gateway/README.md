@@ -138,7 +138,7 @@ if (sent.error?.code === "attachments_unsupported") {
 | Code | When |
 |---|---|
 | `attachments_unsupported` | the adapter cannot send attachments, the outbound is an edit, or (Telegram) an attachment's `kind` is not `image` |
-| `invalid_attachment` | Telegram only: `attachments` is not a list, or an image has no bytes |
+| `invalid_attachment` | Telegram only: `attachments` is not a list, holds more than 10 images, or an image has no bytes or is over 10 MiB |
 
 ## Editing a sent message
 

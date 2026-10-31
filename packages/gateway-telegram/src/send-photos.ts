@@ -17,6 +17,16 @@ import { splitForTelegram } from "./split.js";
 /** Telegram's limit on a photo caption, in UTF-16 units (Bot API `sendPhoto`). */
 const CAPTION_LIMIT = 1024;
 
+/** Telegram's limit on an uploaded photo: "The photo must be at most 10 MB" (Bot API `sendPhoto`). */
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+
+/**
+ * The most images one send takes. Each image is a request, and a group chat takes about 20
+ * messages a minute before Telegram answers 429; ten, the size of a `sendMediaGroup` album, leaves
+ * room for the text that follows. A longer list is refused whole rather than cut off part way.
+ */
+const MAX_PHOTOS_PER_SEND = 10;
+
 /** Options every request of one send shares: the parse mode and the forum topic. */
 interface SharedOptions {
   parse_mode?: "Markdown" | "HTML";
@@ -110,23 +120,44 @@ function sharedOptions(out: OutboundMessage): SharedOptions {
 /**
  * The refusal for an attachment list Telegram cannot send as photos, or `undefined`.
  *
- * Not an array, or an image with no bytes: `invalid_attachment`. A kind other than `image`:
- * `attachments_unsupported`, the code every adapter answers for what it cannot attach.
+ * Not an array, more than ten images, an image with no bytes or over 10 MiB:
+ * `invalid_attachment`. A kind other than `image`: `attachments_unsupported`, the code every
+ * adapter answers for what it cannot attach. Every entry is checked before the first request, so
+ * a refusal makes no call and never leaves part of the list delivered.
  */
 function validatePhotos(attachments: unknown): SendResult | undefined {
   if (!Array.isArray(attachments)) {
     return refuse("invalid_attachment", "attachments is not a list");
   }
+  if (attachments.length > MAX_PHOTOS_PER_SEND) {
+    return refuse(
+      "invalid_attachment",
+      `telegram adapter sends at most ${MAX_PHOTOS_PER_SEND} images at once, got ${attachments.length}`,
+    );
+  }
   for (const attachment of attachments as ReadonlyArray<OutboundAttachment | null>) {
-    if (typeof attachment !== "object" || attachment === null) {
-      return refuse("invalid_attachment", "an attachment is not an object");
-    }
-    if (attachment.kind !== "image") {
-      return refuse("attachments_unsupported", "telegram adapter sends only image attachments");
-    }
-    if (!(attachment.data instanceof Uint8Array) || attachment.data.length === 0) {
-      return refuse("invalid_attachment", "an image attachment has no bytes");
-    }
+    const refusal = validatePhoto(attachment);
+    if (refusal !== undefined) return refusal;
+  }
+  return undefined;
+}
+
+/** The refusal for one entry of the list, or `undefined` when Telegram can send it as a photo. */
+function validatePhoto(attachment: OutboundAttachment | null): SendResult | undefined {
+  if (typeof attachment !== "object" || attachment === null) {
+    return refuse("invalid_attachment", "an attachment is not an object");
+  }
+  if (attachment.kind !== "image") {
+    return refuse("attachments_unsupported", "telegram adapter sends only image attachments");
+  }
+  if (!(attachment.data instanceof Uint8Array) || attachment.data.length === 0) {
+    return refuse("invalid_attachment", "an image attachment has no bytes");
+  }
+  if (attachment.data.length > MAX_PHOTO_BYTES) {
+    return refuse(
+      "invalid_attachment",
+      `an image attachment is ${attachment.data.length} bytes; Telegram takes at most 10 MiB`,
+    );
   }
   return undefined;
 }
