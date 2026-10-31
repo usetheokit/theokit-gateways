@@ -145,6 +145,31 @@ describe("TelegramAdapter.sendMessage with attachments", () => {
     expect(network.error?.code).toBe("network_error");
   });
 
+  it("returns mapSendError's result when photo 2 is refused, photo 1 staying sent", async () => {
+    sendPhoto
+      .mockImplementationOnce(async () => ({ message_id: 50 }))
+      .mockRejectedValueOnce(grammyError(400, "Bad Request: IMAGE_PROCESS_FAILED"));
+    const result = await adapter.sendMessage(
+      out("c".repeat(CAPTION_LIMIT + 1), [image(), image(), image()]),
+    );
+
+    // Photo 1 went out, photo 2 was refused (4xx), and nothing was sent after it.
+    expect(sendPhoto).toHaveBeenCalledTimes(2);
+    expect(sendText).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      error: { code: "telegram_400", message: "Bad Request: IMAGE_PROCESS_FAILED" },
+    });
+  });
+
+  it("returns mapSendError's network_error when sendPhoto fails on the network", async () => {
+    sendPhoto.mockRejectedValueOnce(new HttpError("Network request failed", new Error("down")));
+    const result = await adapter.sendMessage(out("hi", [image(), image()]));
+
+    expect(sendPhoto).toHaveBeenCalledTimes(1);
+    expect(result.error?.code).toBe("network_error");
+  });
+
   it("declares supportsAttachments true", () => {
     expect(adapter.supportsAttachments).toBe(true);
   });
