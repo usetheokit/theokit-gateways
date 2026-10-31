@@ -22,8 +22,8 @@ import { type FetchedMessage, type IImapClient, ImapClient } from "./imap-client
 import { normalizeEmail } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import { SeenUidSet } from "./seen-uids.js";
-import { type ISmtpClient, SmtpClient } from "./smtp-client.js";
-import { ThreadStore } from "./thread-store.js";
+import { type ISmtpClient, SmtpClient, type SmtpSendOptions } from "./smtp-client.js";
+import { type ThreadContext, ThreadStore } from "./thread-store.js";
 import type { EmailAdapterOptions } from "./types.js";
 
 const DEFAULT_POLL_INTERVAL_MS = 15_000;
@@ -176,7 +176,6 @@ export class EmailAdapter extends BasePlatformAdapter {
     return refuseAttachments(out) ?? this.sendText(out);
   }
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: send orchestrates input validation + thread-context lookup + Re: prepend + EC-6 references dedup + From: formatting + SMTP-error mapping — each branch is a single-responsibility check; splitting hurts the "one outbound transaction" locality.
   private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "Empty text rejected." } };
@@ -190,16 +189,7 @@ export class EmailAdapter extends BasePlatformAdapter {
     const to = out.channel.id;
     const topicId = out.channel.topicId;
     const context = topicId !== undefined ? this.threadStore.lookup(topicId) : undefined;
-
-    let subject = "Message from agent";
-    let inReplyTo: string | undefined;
-    let references: readonly string[] | undefined;
-    if (context !== undefined) {
-      subject = context.subject.startsWith("Re:") ? context.subject : `Re: ${context.subject}`;
-      inReplyTo = context.lastMessageId;
-      // EC-6: dedup the chain.
-      references = Array.from(new Set([...context.references, context.lastMessageId]));
-    }
+    const { subject, inReplyTo, references } = replyHeaders(context);
 
     const from =
       this.options.fromName !== undefined
@@ -221,20 +211,7 @@ export class EmailAdapter extends BasePlatformAdapter {
           ? htmlPartFor(out.text, out.format)
           : undefined;
 
-      let messageId: string;
-      try {
-        messageId = await this.smtp.send(html === undefined ? base : { ...base, html });
-      } catch (err) {
-        // ADR-2: an undelivered message is worse than an unformatted one. A server that refuses
-        // the html part still accepts the text one, and the recipient reading a plain-text
-        // client would never have seen the difference. Only attempted when there WAS an html
-        // part — otherwise this would retry a send that failed for some entirely other reason.
-        if (html === undefined) throw err;
-        process.stderr.write(
-          "[gateway-email] the server rejected the html part; retrying with text only\n",
-        );
-        messageId = await this.smtp.send(base);
-      }
+      const messageId = await sendWithTextFallback(this.smtp, base, html);
       return { ok: true, messageId };
     } catch (err) {
       return { ok: false, error: mapEmailError(err) };
@@ -394,5 +371,48 @@ export class EmailAdapter extends BasePlatformAdapter {
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
     return this.runHandler(this.handler, event);
+  }
+}
+
+/**
+ * The subject and threading headers of a send: a reply's when the topic has a thread, a fresh
+ * subject otherwise. Extracted from `sendText` unchanged (B-674) to keep it under the complexity
+ * limit once it was renamed from `sendMessage`.
+ */
+function replyHeaders(context: ThreadContext | undefined): {
+  subject: string;
+  inReplyTo?: string;
+  references?: readonly string[];
+} {
+  if (context === undefined) return { subject: "Message from agent" };
+  return {
+    subject: context.subject.startsWith("Re:") ? context.subject : `Re: ${context.subject}`,
+    inReplyTo: context.lastMessageId,
+    // EC-6: dedup the chain.
+    references: Array.from(new Set([...context.references, context.lastMessageId])),
+  };
+}
+
+/**
+ * Send `base` with its html part, and once more as text alone if the server refuses the html.
+ *
+ * ADR-2: an undelivered message is worse than an unformatted one. A server that refuses the html
+ * part still accepts the text one, and the recipient reading a plain-text client would never have
+ * seen the difference. Only attempted when there WAS an html part — otherwise this would retry a
+ * send that failed for some entirely other reason.
+ */
+async function sendWithTextFallback(
+  smtp: ISmtpClient,
+  base: SmtpSendOptions,
+  html: string | undefined,
+): Promise<string> {
+  try {
+    return await smtp.send(html === undefined ? base : { ...base, html });
+  } catch (err) {
+    if (html === undefined) throw err;
+    process.stderr.write(
+      "[gateway-email] the server rejected the html part; retrying with text only\n",
+    );
+    return smtp.send(base);
   }
 }
