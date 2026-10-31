@@ -30,7 +30,12 @@
  * @public
  */
 
-import type { BasePlatformAdapter, OutboundMessage, SendResult } from "../adapter/base.js";
+import type {
+  BasePlatformAdapter,
+  OutboundAttachment,
+  OutboundMessage,
+  SendResult,
+} from "../adapter/base.js";
 import { GatewayLifecycleError } from "../errors/lifecycle-error.js";
 import { HookExecutor } from "../hooks/executor.js";
 import type { GatewayHook } from "../hooks/types.js";
@@ -40,7 +45,14 @@ import type { MessageEvent as GatewayMessageEvent, PlatformName } from "../types
 /** Per-event context passed to the user handler. */
 export interface GatewayContext {
   /** Send a reply to the originating channel (auto-routed by `event.platform`). */
-  reply(text: string, opts?: { format?: "plain" | "markdown" | "html" }): Promise<SendResult>;
+  reply(
+    text: string,
+    opts?: {
+      format?: "plain" | "markdown" | "html";
+      /** Images to send with the text; an empty list is left out (B-674). */
+      attachments?: ReadonlyArray<OutboundAttachment>;
+    },
+  ): Promise<SendResult>;
   /** The triggering event. */
   readonly event: GatewayMessageEvent;
 }
@@ -442,6 +454,7 @@ export class GatewayRunner {
           channel: event.channel,
           text,
           ...(opts?.format !== undefined ? { format: opts.format } : {}),
+          ...attachmentsOf(opts?.attachments),
         }),
     };
   }
@@ -473,4 +486,14 @@ export class GatewayRunner {
     await this.hookExecutor.firePostOutbound({ event, outbound, result });
     return result;
   }
+}
+
+/**
+ * The non-empty `attachments` of a reply, or nothing. `!== 0`, not `> 0`: a non-array value from a
+ * JavaScript caller is carried to the adapter, which refuses it, instead of being dropped (EC-1).
+ */
+function attachmentsOf(attachments: ReadonlyArray<OutboundAttachment> | undefined): {
+  attachments?: ReadonlyArray<OutboundAttachment>;
+} {
+  return attachments !== undefined && attachments.length !== 0 ? { attachments } : {};
 }

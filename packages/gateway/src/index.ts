@@ -3,6 +3,7 @@
 // Adapter contract
 export {
   BasePlatformAdapter,
+  type OutboundAttachment,
   type OutboundMessage,
   type SendResult,
 } from "./adapter/base.js";
