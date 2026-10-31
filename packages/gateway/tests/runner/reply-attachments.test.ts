@@ -72,6 +72,14 @@ describe("ctx.reply attachments (B-674)", () => {
     expect("attachments" in (adapter.sent[0] ?? {})).toBe(false);
   });
 
+  it("a null attachments value from a JavaScript caller is left out, not thrown on", async () => {
+    const nullList = null as unknown as ReadonlyArray<OutboundAttachment>;
+    const adapter = await replyOnce((ctx) => ctx.reply("plain", { attachments: nullList }));
+
+    expect(adapter.sent).toHaveLength(1);
+    expect("attachments" in (adapter.sent[0] ?? {})).toBe(false);
+  });
+
   it("post_outbound sees the attachments", async () => {
     const seen: PostOutboundContext[] = [];
     await replyOnce((ctx) => ctx.reply("here", { attachments: [image] }), seen);

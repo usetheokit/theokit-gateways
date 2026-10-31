@@ -489,11 +489,11 @@ export class GatewayRunner {
 }
 
 /**
- * The non-empty `attachments` of a reply, or nothing. `!== 0`, not `> 0`: a non-array value from a
- * JavaScript caller is carried to the adapter, which refuses it, instead of being dropped (EC-1).
+ * The non-empty `attachments` of a reply, or nothing for absent, `null` or empty. `!== 0`, not
+ * `> 0`: another non-array value is carried to the adapter, which refuses it (EC-1).
  */
 function attachmentsOf(attachments: ReadonlyArray<OutboundAttachment> | undefined): {
   attachments?: ReadonlyArray<OutboundAttachment>;
 } {
-  return attachments !== undefined && attachments.length !== 0 ? { attachments } : {};
+  return attachments != null && attachments.length !== 0 ? { attachments } : {};
 }

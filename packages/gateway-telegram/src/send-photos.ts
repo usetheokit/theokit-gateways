@@ -24,11 +24,12 @@ interface SharedOptions {
 }
 
 /**
- * Whether an outbound carries attachments to send. `!== 0`, not `> 0`: a non-array value has no
- * numeric length and is taken down the photo path, where it is refused rather than dropped (EC-1).
+ * Whether an outbound carries attachments to send. Absent, `null` and an empty list do not. `!== 0`,
+ * not `> 0`: any other non-array value has no numeric length and is taken down the photo path,
+ * where it is refused rather than dropped (EC-1).
  */
 export function hasAttachments(out: OutboundMessage): boolean {
-  return out.attachments !== undefined && out.attachments.length !== 0;
+  return out.attachments != null && out.attachments.length !== 0;
 }
 
 /**

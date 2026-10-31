@@ -208,4 +208,13 @@ describe("TelegramAdapter.sendMessage with attachments", () => {
     expect(sendPhoto).not.toHaveBeenCalled();
     expect(sendText).not.toHaveBeenCalled();
   });
+
+  it("sends the text alone when attachments is null", async () => {
+    const nullList = { channel: CHANNEL, text: "hi", attachments: null } as unknown;
+    const result = await adapter.sendMessage(nullList as OutboundMessage);
+
+    expect(result.ok).toBe(true);
+    expect(sendPhoto).not.toHaveBeenCalled();
+    expect(sendText).toHaveBeenCalledTimes(1);
+  });
 });

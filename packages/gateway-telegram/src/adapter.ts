@@ -116,7 +116,7 @@ export class TelegramAdapter extends BasePlatformAdapter {
     }
   }
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: validation + parse_mode mapping + thread option + chunk loop + error mapping are all single-responsibility branches inline; splitting hurts readability more than the score.
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: photo dispatch (send-photos.ts) + validation + parse_mode mapping + thread option + chunk loop + error mapping are all single-responsibility branches inline; splitting hurts readability more than the score.
   override async sendMessage(out: OutboundMessage): Promise<SendResult> {
     if (hasAttachments(out)) return sendPhotos(this.bot.api, out);
     if (out.text.length === 0) {
@@ -162,9 +162,10 @@ export class TelegramAdapter extends BasePlatformAdapter {
    * Refuses, with no request, an outbound carrying attachments (`attachments_unsupported`: no
    * Telegram edit adds an image), empty text, a message id that is not a safe positive integer,
    * and a non-numeric channel, in that order; empty text and the channel are `sendMessage`'s own
-   * checks. A text `splitForTelegram` would cut in two is refused as `edit_too_long`: an edit replaces one message. Telegram's "message is not
-   * modified" refusal is answered as a success, because the message already shows the text; a
-   * caller that treated it as a failure would send the same text again as a second message.
+   * checks. A text `splitForTelegram` would cut in two is refused as `edit_too_long`: an edit
+   * replaces one message. Telegram's "message is not modified" refusal is answered as a success,
+   * because the message already shows the text; a caller that treated it as a failure would send
+   * the same text again as a second message.
    */
   override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
     return refuseAttachments(out) ?? this.editText(messageId, out);
