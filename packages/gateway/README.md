@@ -93,6 +93,39 @@ presenter per turn; it keeps state between `present()` calls.
 - `@theokit/presenter` is your dependency, not this package's: `@theokit/gateway` does not depend
   on it.
 
+## Sending an image
+
+`ctx.reply` takes an optional `attachments` list of images, each an `OutboundAttachment`: its
+bytes (`data`, a `Uint8Array`), their `mediaType`, and an optional `filename`. The runner carries
+the list to the adapter's `sendMessage` as `OutboundMessage.attachments`, by reference, and leaves
+an empty list out. `post_outbound` hooks see the same outbound, image bytes included.
+
+Only Telegram sends images today. Read `supportsAttachments` before attaching: every other adapter
+reports `false` and refuses an outbound carrying attachments with `attachments_unsupported`,
+making no platform call, so an image is never dropped in silence. An edit carrying attachments is
+refused the same way on every adapter, Telegram included. `BasePlatformAdapter`,
+`OutboundAttachment` and `SendResult` come from `@theokit/gateway`.
+
+```typescript
+async function sendChart(
+  adapter: BasePlatformAdapter,
+  channel: OutboundMessage["channel"],
+  chart: OutboundAttachment,
+): Promise<SendResult> {
+  // No image send on this platform: say so in text instead.
+  if (!adapter.supportsAttachments) {
+    const text = "The chart is ready, but this chat cannot show images.";
+    return adapter.sendMessage({ channel, text });
+  }
+  return adapter.sendMessage({ channel, text: "Here is the chart.", attachments: [chart] });
+}
+```
+
+| Code | When |
+|---|---|
+| `attachments_unsupported` | the adapter cannot send attachments, the outbound is an edit, or (Telegram) an attachment's `kind` is not `image` |
+| `invalid_attachment` | Telegram only: `attachments` is not a list, or an image has no bytes |
+
 ## Editing a sent message
 
 Six adapters can replace the text of a message they sent, keeping its id: Telegram, Discord,

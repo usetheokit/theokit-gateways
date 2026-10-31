@@ -41,6 +41,23 @@ const runner = new GatewayRunner({
 await runner.start();
 ```
 
+## Sending an image
+
+`ctx.reply(text, { attachments })` sends each image through `sendPhoto`, one request per image, in
+order, and the adapter reports `supportsAttachments` as `true`. The text becomes the first photo's
+caption when it is 1 to 1024 UTF-16 units long, Telegram's caption limit. A longer text gets no
+caption and is sent after the last photo, split as any text send is, in the same topic and without
+the reply target, so none of it is cut. An empty text sends the photos alone.
+
+Every attachment is checked before the first request: an `attachments` value that is not a list,
+or an image with no bytes, is refused as `invalid_attachment`, and a `kind` other than `image` as
+`attachments_unsupported`, with no request. A photo Telegram refuses ends the send with the mapped
+error, and the photos before it stay delivered; the returned `messageId` is the last message sent.
+An edit carrying attachments is refused as `attachments_unsupported`.
+
+Attachments need `@theokit/gateway` 0.13.0 or later: an older core's `ctx.reply` does not carry
+them to the adapter, so install both together.
+
 ## Channel descriptor
 
 `telegramChannel` describes this channel as data, for `createChannels` in `@theokit/gateway`:
