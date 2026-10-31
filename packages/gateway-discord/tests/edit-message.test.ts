@@ -211,8 +211,18 @@ describe("DiscordAdapter.editMessage", () => {
 });
 
 describe("DiscordAdapter.editMessage attachments (B-674)", () => {
+  let adapter: DiscordAdapter;
+
+  beforeEach(() => {
+    adapter = new DiscordAdapter({ token: "fake-token" });
+  });
+
+  afterEach(async () => {
+    await adapter.disconnect();
+    vi.restoreAllMocks();
+  });
+
   it("refuses an edit that carries an image with no platform call", async () => {
-    const adapter = new DiscordAdapter({ token: "fake-token" });
     const patch = vi.fn(async () => ({ id: "m1" }));
     vi.spyOn(adapter.getBot().rest, "patch").mockImplementation(patch as never);
 
@@ -225,7 +235,5 @@ describe("DiscordAdapter.editMessage attachments (B-674)", () => {
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe("attachments_unsupported");
     expect(patch).toHaveBeenCalledTimes(0);
-    await adapter.disconnect();
-    vi.restoreAllMocks();
   });
 });
