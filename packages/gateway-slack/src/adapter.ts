@@ -226,6 +226,10 @@ export class SlackAdapter extends BasePlatformAdapter {
    * `chat.update` takes no `mrkdwn` argument, so the text is sent as it is for every format.
    */
   override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.editText(messageId, out);
+  }
+
+  private async editText(messageId: string, out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "text is empty" } };
     }

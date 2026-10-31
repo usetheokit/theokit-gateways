@@ -175,6 +175,10 @@ export class DiscordAdapter extends BasePlatformAdapter {
    * deliver as more than one message is refused as `edit_too_long` with no request.
    */
   override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.editText(messageId, out);
+  }
+
+  private async editText(messageId: string, out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "text is empty" } };
     }

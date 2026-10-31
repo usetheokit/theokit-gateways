@@ -184,3 +184,16 @@ describe("MattermostAdapter.editMessage", () => {
     },
   );
 });
+
+describe("MattermostAdapter.editMessage attachments (B-674)", () => {
+  it("refuses an edit that carries an image with no platform call", async () => {
+    const result = await connectedAdapter().editMessage("post-1", {
+      ...out("hello"),
+      attachments: [{ kind: "image", mediaType: "image/png", data: new Uint8Array([1]) }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("attachments_unsupported");
+    expect(patchPost).toHaveBeenCalledTimes(0);
+  });
+});

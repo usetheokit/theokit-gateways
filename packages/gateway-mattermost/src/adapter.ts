@@ -127,6 +127,10 @@ export class MattermostAdapter extends BasePlatformAdapter {
    * with no request, so an edit is refused for exactly the texts a send delivers as several posts.
    */
   override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.editText(messageId, out);
+  }
+
+  private async editText(messageId: string, out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }
