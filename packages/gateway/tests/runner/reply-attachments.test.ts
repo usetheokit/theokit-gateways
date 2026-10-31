@@ -29,11 +29,16 @@ const image: OutboundAttachment = {
   data: new Uint8Array([137, 80, 78, 71]),
 };
 
+/** A mock whose platform sends images, as Telegram's does. */
+class ImageMockAdapter extends MockAdapter {
+  override readonly supportsAttachments = true;
+}
+
 async function replyOnce(
   reply: (ctx: GatewayContext) => Promise<unknown>,
   seen: PostOutboundContext[] = [],
+  adapter: MockAdapter = new ImageMockAdapter("telegram"),
 ): Promise<MockAdapter> {
-  const adapter = new MockAdapter("telegram");
   const runner = new GatewayRunner({
     adapters: [adapter],
     handler: async (_event, ctx) => {
@@ -86,5 +91,55 @@ describe("ctx.reply attachments (B-674)", () => {
 
     expect(seen).toHaveLength(1);
     expect(seen[0]?.outbound.attachments).toHaveLength(1);
+  });
+
+  it("carries an attachments value with no length on to the adapter (EC-1)", async () => {
+    const notAList = {} as unknown as ReadonlyArray<OutboundAttachment>;
+    const adapter = await replyOnce((ctx) => ctx.reply("here", { attachments: notAList }));
+
+    expect(adapter.sent).toHaveLength(1);
+    expect(adapter.sent[0]?.attachments).toBe(notAList);
+  });
+
+  it("refuses an image for an adapter without supportsAttachments, calling no sendMessage", async () => {
+    const results: unknown[] = [];
+    const seen: PostOutboundContext[] = [];
+    const textOnly = new MockAdapter("telegram");
+    await replyOnce(
+      async (ctx) => results.push(await ctx.reply("here", { attachments: [image] })),
+      seen,
+      textOnly,
+    );
+
+    expect(textOnly.sendAttempts).toBe(0);
+    expect(results[0]).toEqual({
+      ok: false,
+      error: {
+        code: "attachments_unsupported",
+        message: "telegram adapter cannot send attachments",
+      },
+    });
+    expect(seen[0]?.result.error?.code).toBe("attachments_unsupported");
+  });
+
+  it("refuses a lengthless attachments value for an adapter without supportsAttachments", async () => {
+    const results: Array<{ error?: { code: string } }> = [];
+    const notAList = {} as unknown as ReadonlyArray<OutboundAttachment>;
+    const textOnly = new MockAdapter("telegram");
+    await replyOnce(
+      async (ctx) => results.push(await ctx.reply("here", { attachments: notAList })),
+      [],
+      textOnly,
+    );
+
+    expect(textOnly.sendAttempts).toBe(0);
+    expect(results[0]?.error?.code).toBe("attachments_unsupported");
+  });
+
+  it("sends a reply with no attachments through an adapter without supportsAttachments", async () => {
+    const textOnly = new MockAdapter("telegram");
+    await replyOnce((ctx) => ctx.reply("plain", { attachments: [] }), [], textOnly);
+
+    expect(textOnly.sent).toHaveLength(1);
   });
 });

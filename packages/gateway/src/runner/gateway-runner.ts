@@ -36,6 +36,7 @@ import type {
   OutboundMessage,
   SendResult,
 } from "../adapter/base.js";
+import { attachmentsOf, refuseUnsupportedAttachments } from "../delivery/attachments.js";
 import { GatewayLifecycleError } from "../errors/lifecycle-error.js";
 import { HookExecutor } from "../hooks/executor.js";
 import type { GatewayHook } from "../hooks/types.js";
@@ -467,6 +468,10 @@ export class GatewayRunner {
    * adapter for the platform. An audit hook that counted only the deliveries
    * which reached a transport would omit precisely the ones that went nowhere.
    *
+   * An outbound with attachments for an adapter that does not declare `supportsAttachments` is
+   * refused here as `attachments_unsupported`, with no `sendMessage` call, so an adapter that
+   * ignores the field cannot drop the image and report success (B-674).
+   *
    * `post_outbound` observes; it does not intercept. The adapter's `SendResult`
    * is returned to the caller unchanged, and `HookExecutor` already contains a
    * throwing hook, so a broken observer cannot turn a delivered reply into a
@@ -482,18 +487,9 @@ export class GatewayRunner {
     const result: SendResult =
       adapter === undefined
         ? { ok: false, error: { code: "no_adapter", message: `no adapter for ${event.platform}` } }
-        : await adapter.sendMessage(outbound);
+        : (refuseUnsupportedAttachments(adapter, outbound) ??
+          (await adapter.sendMessage(outbound)));
     await this.hookExecutor.firePostOutbound({ event, outbound, result });
     return result;
   }
-}
-
-/**
- * The non-empty `attachments` of a reply, or nothing for absent, `null` or empty. `!== 0`, not
- * `> 0`: another non-array value is carried to the adapter, which refuses it (EC-1).
- */
-function attachmentsOf(attachments: ReadonlyArray<OutboundAttachment> | undefined): {
-  attachments?: ReadonlyArray<OutboundAttachment>;
-} {
-  return attachments != null && attachments.length !== 0 ? { attachments } : {};
 }

@@ -16,7 +16,9 @@ import type { MessageEvent as GatewayMessageEvent, PlatformName } from "../types
 /**
  * An image an outbound message carries: its bytes and their media type (B-674).
  *
- * The bytes travel by reference: the runner does not copy them on the way to the adapter.
+ * The bytes travel by reference: the runner does not copy them on the way to the adapter. The
+ * caller must not change `data` or the list until the send's promise settles: an adapter that
+ * sends several images reads each one only when its turn comes.
  */
 export interface OutboundAttachment {
   readonly kind: "image";
@@ -67,7 +69,9 @@ export interface SendResult {
  *   (rate-limit, 4xx, network). Programmer errors (missing config) MAY throw.
  * - `onInbound(handler)` returns an unsubscribe function. EC-H: calling
  *   `onInbound` twice replaces the previous handler — does NOT stack.
- * - `sendMessage` with empty text returns `{ ok: false, code: "empty_text" }`.
+ * - `sendMessage` with empty text and no attachments returns `{ ok: false, code: "empty_text" }`.
+ *   An adapter that refuses attachments answers `attachments_unsupported` first, and one that
+ *   sends them (Telegram) accepts empty text with an image.
  * - `supportsEdit` says whether the adapter has an edit call. It is `false` unless the adapter
  *   overrides it, and it MUST NOT change with `connect()`. `true` does not promise that every
  *   edit is accepted: an adapter whose injected client lacks the edit call (Matrix) still answers

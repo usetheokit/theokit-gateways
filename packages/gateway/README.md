@@ -98,13 +98,15 @@ presenter per turn; it keeps state between `present()` calls.
 `ctx.reply` takes an optional `attachments` list of images, each an `OutboundAttachment`: its
 bytes (`data`, a `Uint8Array`), their `mediaType`, and an optional `filename`. The runner carries
 the list to the adapter's `sendMessage` as `OutboundMessage.attachments`, by reference, and leaves
-an empty list out. `post_outbound` hooks see the same outbound, image bytes included.
+an empty list out. `post_outbound` hooks see the same outbound, image bytes included. Do not change
+the bytes or the list until the reply's promise settles: Telegram reads each image only when its
+turn comes. `DeliveryRouter.send` takes the same `attachments` field for a scheduled delivery.
 
-Only Telegram sends images today. Read `supportsAttachments` before attaching: every other adapter
-reports `false` and refuses an outbound carrying attachments with `attachments_unsupported`,
-making no platform call, so an image is never dropped in silence. An edit carrying attachments is
-refused the same way on every adapter, Telegram included. `BasePlatformAdapter`,
-`OutboundAttachment` and `SendResult` come from `@theokit/gateway`.
+Only Telegram sends images today. Code that holds the adapter reads `supportsAttachments` before
+attaching: every other adapter reports `false` and refuses an outbound carrying attachments with
+`attachments_unsupported`, making no platform call, so an image is never dropped in silence. An
+edit carrying attachments is refused the same way on every adapter, Telegram included.
+`BasePlatformAdapter`, `OutboundAttachment` and `SendResult` come from `@theokit/gateway`.
 
 ```typescript
 async function sendChart(
@@ -118,6 +120,18 @@ async function sendChart(
     return adapter.sendMessage({ channel, text });
   }
   return adapter.sendMessage({ channel, text: "Here is the chart.", attachments: [chart] });
+}
+```
+
+The runner and the router answer `attachments_unsupported` themselves, with no `sendMessage` call,
+when the adapter does not declare `supportsAttachments`, so an adapter that ignores the field
+cannot drop the image and report success. A handler, which receives no adapter, branches on that
+code:
+
+```typescript
+const sent = await ctx.reply("Here is the chart.", { attachments: [chart] });
+if (sent.error?.code === "attachments_unsupported") {
+  await ctx.reply("The chart is ready, but this chat cannot show images.");
 }
 ```
 

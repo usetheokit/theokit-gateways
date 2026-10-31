@@ -71,4 +71,70 @@ describe("DeliveryRouter (T3.1)", () => {
     expect(r.ok).toBe(false);
     expect(r.error?.code).toBe("rate_limited");
   });
+
+  describe("attachments (B-674)", () => {
+    const image = {
+      kind: "image",
+      mediaType: "image/png",
+      data: new Uint8Array([137, 80, 78, 71]),
+    } as const;
+
+    class ImageMockAdapter extends MockAdapter {
+      override readonly supportsAttachments = true;
+    }
+
+    it("forwards an image to an adapter that sends attachments, by reference", async () => {
+      const router = new DeliveryRouter();
+      const tg = new ImageMockAdapter("telegram");
+      router.register(tg);
+      const attachments = [image];
+
+      const r = await router.send({
+        platform: "telegram",
+        channel: { id: "c", type: "dm" },
+        text: "chart",
+        attachments,
+      });
+
+      expect(r.ok).toBe(true);
+      expect(tg.sent[0]?.attachments).toBe(attachments);
+    });
+
+    it("leaves an empty attachments list out of the outbound", async () => {
+      const router = new DeliveryRouter();
+      const tg = new ImageMockAdapter("telegram");
+      router.register(tg);
+
+      await router.send({
+        platform: "telegram",
+        channel: { id: "c", type: "dm" },
+        text: "hi",
+        attachments: [],
+      });
+
+      expect("attachments" in (tg.sent[0] ?? {})).toBe(false);
+    });
+
+    it("refuses an image for an adapter without supportsAttachments, with no send", async () => {
+      const router = new DeliveryRouter();
+      const dc = new MockAdapter("discord");
+      router.register(dc);
+
+      const r = await router.send({
+        platform: "discord",
+        channel: { id: "c", type: "dm" },
+        text: "chart",
+        attachments: [image],
+      });
+
+      expect(r).toEqual({
+        ok: false,
+        error: {
+          code: "attachments_unsupported",
+          message: "discord adapter cannot send attachments",
+        },
+      });
+      expect(dc.sendAttempts).toBe(0);
+    });
+  });
 });
