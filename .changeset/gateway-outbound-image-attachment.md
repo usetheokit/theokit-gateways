@@ -30,3 +30,7 @@ than 10 images or an image over 10 MiB as `invalid_attachment`; all with no requ
 Every other adapter, and every adapter's `editMessage`, refuses an outbound carrying attachments
 with `attachments_unsupported` and makes no platform call, instead of sending the text and
 dropping the image.
+
+The runner's auto-reply to a blocking `pre_inbound` hook no longer discards a `sendMessage` that
+throws: the error reaches the `on_error` hooks with the event and is written to stderr, redacted,
+as a handler error is. Dispatch still does not throw.
