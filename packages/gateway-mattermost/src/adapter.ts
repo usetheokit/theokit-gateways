@@ -22,6 +22,7 @@ import {
 import { ConfigurationError } from "./errors.js";
 import { shouldRespond } from "./filters.js";
 import { mapChannelType, normalizeMattermostType, postToMessageEvent } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { MATTERMOST_MAX_POST, splitForEscapedMattermost, splitForMattermost } from "./split.js";
 import type { MattermostAdapterOptions, MattermostPost } from "./types.js";
 
@@ -81,6 +82,10 @@ export class MattermostAdapter extends BasePlatformAdapter {
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }

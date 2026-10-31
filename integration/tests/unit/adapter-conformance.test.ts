@@ -223,3 +223,24 @@ describe.each(ADAPTERS)("PlatformAdapter conformance — $platform", ({ platform
     expect(() => off()).not.toThrow();
   }, 30_000);
 });
+
+/** Every adapter but Telegram, the one whose platform send takes images (B-674). */
+const REFUSING_ATTACHMENTS = ADAPTERS.filter(({ platform }) => platform !== "telegram");
+
+describe.each(REFUSING_ATTACHMENTS)("attachment refusal — $platform", ({ platform, make }) => {
+  it("refuses an outbound with an image as attachments_unsupported with no platform call", async () => {
+    // The adapter is never connected, so any platform call would surface as `not_connected` or a
+    // network error instead; `attachments_unsupported` is only reachable by refusing first.
+    const adapter = make();
+    const result = await adapter.sendMessage({
+      channel: { id: "1", type: "dm" },
+      text: "here it is",
+      attachments: [{ kind: "image", mediaType: "image/png", data: new Uint8Array([1, 2, 3]) }],
+    });
+
+    expect(adapter.supportsAttachments).toBe(false);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("attachments_unsupported");
+    expect(result.error?.message).toContain(platform);
+  }, 30_000);
+});

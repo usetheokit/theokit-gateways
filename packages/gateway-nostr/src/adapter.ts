@@ -25,6 +25,7 @@ import {
   sealNip04,
 } from "./dm.js";
 import { parseNostrSecretKey } from "./keys.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { type NostrPublishResult, NostrRelayClient } from "./relay-client.js";
 import { messageOf } from "./relay-frames.js";
 import { SeenIds } from "./seen-ids.js";
@@ -100,6 +101,10 @@ export class NostrAdapter extends BasePlatformAdapter {
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }

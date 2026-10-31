@@ -42,6 +42,7 @@ import {
 
 import { mapSlackError } from "./errors.js";
 import { type BoltMessageBody, normalizeSlackEvent } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { splitForSlack } from "./split.js";
 
 /** Construction options for {@link SlackAdapter}. */
@@ -187,6 +188,10 @@ export class SlackAdapter extends BasePlatformAdapter {
   }
 
   override async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     // Input first, transport second — the order the other nine adapters use and the one the
     // contract states without a condition. Checking the connection first made the same empty-text
     // call answer `not_connected` here and `empty_text` everywhere else, so a caller branching on

@@ -21,7 +21,7 @@ import {
   type Message,
   Routes,
 } from "discord.js";
-
+import { refuseAttachments } from "./refuse-attachments.js";
 import { DISCORD_MAX_MESSAGE, splitForDiscord, splitForEscapedDiscord } from "./split.js";
 
 export interface DiscordAdapterOptions {
@@ -118,6 +118,10 @@ export class DiscordAdapter extends BasePlatformAdapter {
   }
 
   override async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "text is empty" } };
     }

@@ -15,6 +15,7 @@ import {
 
 import { type EventSubMetadata, EventSubSession } from "./eventsub.js";
 import { HelixClient } from "./helix.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { SeenIds } from "./seen-ids.js";
 import { splitForTwitch } from "./split.js";
 import type { FetchLike, TwitchAdapterOptions, TwitchSocket } from "./types.js";
@@ -103,6 +104,10 @@ export class TwitchAdapter extends BasePlatformAdapter {
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }

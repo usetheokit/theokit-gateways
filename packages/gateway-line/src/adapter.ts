@@ -15,6 +15,7 @@ import {
 import { type LineSdkClient, loadLineSdk, makeClient } from "./client.js";
 import { ConfigurationError } from "./errors.js";
 import { lineEventToMessageEvent } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { ReplyTokenCache } from "./reply-cache.js";
 import { splitForLine } from "./split.js";
 import type { LineAdapterOptions, LineWebhookEnvelope, LineWebhookEvent } from "./types.js";
@@ -79,8 +80,12 @@ export class LineAdapter extends BasePlatformAdapter {
     this.replyCache.clear();
   }
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: reply-token-vs-push selection + multipart loop + per-part error mapping is one cohesive send pipeline (D407 + D411); splitting hurts traceability.
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: reply-token-vs-push selection + multipart loop + per-part error mapping is one cohesive send pipeline (D407 + D411); splitting hurts traceability.
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }

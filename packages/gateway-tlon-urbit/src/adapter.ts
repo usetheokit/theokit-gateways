@@ -12,7 +12,7 @@ import {
   type OutboundMessage,
   type SendResult,
 } from "@theokit/gateway";
-
+import { refuseAttachments } from "./refuse-attachments.js";
 import { SeenIds } from "./seen-ids.js";
 import { UrbitShipClient } from "./ship-client.js";
 import type { FetchLike, TlonUrbitAdapterOptions } from "./types.js";
@@ -82,6 +82,10 @@ export class TlonUrbitAdapter extends BasePlatformAdapter {
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }

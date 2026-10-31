@@ -23,6 +23,7 @@ import {
 import { AccessTokenClient, AccessTokenError } from "./access-token.js";
 import { googleKeySet, type KeySet } from "./key-set.js";
 import { chatEventToMessageEvent, type GoogleChatEventBody } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import type { FetchLike, GoogleChatAdapterOptions } from "./types.js";
 import { verifyChatRequest } from "./verify-token.js";
 import { createWebhookServer, type WebhookServer } from "./webhook-server.js";
@@ -98,6 +99,10 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }

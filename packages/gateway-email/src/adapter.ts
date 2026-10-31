@@ -20,6 +20,7 @@ import { mapEmailError } from "./errors.js";
 import { isAllowedSender, isAutomatedSender } from "./filters.js";
 import { type FetchedMessage, type IImapClient, ImapClient } from "./imap-client.js";
 import { normalizeEmail } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { SeenUidSet } from "./seen-uids.js";
 import { type ISmtpClient, SmtpClient } from "./smtp-client.js";
 import { ThreadStore } from "./thread-store.js";
@@ -171,8 +172,12 @@ export class EmailAdapter extends BasePlatformAdapter {
     this.threadStore.clear();
   }
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: send orchestrates input validation + thread-context lookup + Re: prepend + EC-6 references dedup + From: formatting + SMTP-error mapping — each branch is a single-responsibility check; splitting hurts the "one outbound transaction" locality.
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: send orchestrates input validation + thread-context lookup + Re: prepend + EC-6 references dedup + From: formatting + SMTP-error mapping — each branch is a single-responsibility check; splitting hurts the "one outbound transaction" locality.
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "Empty text rejected." } };
     }

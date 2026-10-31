@@ -31,6 +31,7 @@ import type {
 import { ConfigurationError } from "./errors.js";
 import { digitsOnly, type InboundRules, isForAnotherNumber } from "./inbound-rules.js";
 import { decideForOwnNumber, requireOwnPhoneNumberId } from "./own-number.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { splitForWhatsApp } from "./split.js";
 
 export { digitsOnly };
@@ -403,6 +404,10 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "Empty text rejected." } };
     }

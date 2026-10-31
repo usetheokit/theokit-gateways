@@ -14,6 +14,7 @@ import {
 } from "@theokit/gateway";
 
 import { type ChatAnswer, SynologyChatClient } from "./client.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { SeenIds } from "./seen-ids.js";
 import { tokensMatch } from "./token.js";
 import {
@@ -98,6 +99,10 @@ export class SynologyChatAdapter extends BasePlatformAdapter implements Synology
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }

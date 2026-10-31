@@ -23,6 +23,7 @@ import {
 
 import { mapTeamsError } from "./errors.js";
 import { normalizeTeamsActivity } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { splitForTeams } from "./split.js";
 import type { TeamsAdapterOptions } from "./types.js";
 
@@ -250,6 +251,10 @@ export class TeamsAdapter extends BasePlatformAdapter {
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return {
         ok: false,

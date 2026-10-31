@@ -16,6 +16,7 @@ import { AliasCache } from "./alias.js";
 import { loadMatrixSdk, type MatrixSdkClient } from "./client.js";
 import { ConfigurationError } from "./errors.js";
 import { matrixEventToMessageEvent } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { replaceContent } from "./replace-content.js";
 import { subscribeToTimeline, type TimelineSubscription } from "./sync.js";
 import type { MatrixAdapterOptions, MatrixEventLike, MatrixRoomLike } from "./types.js";
@@ -140,6 +141,10 @@ export class MatrixAdapter extends BasePlatformAdapter {
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }
