@@ -3,22 +3,12 @@
 "@theokit/gateway-telegram": minor
 "@theokit/gateway-discord": patch
 "@theokit/gateway-email": patch
-"@theokit/gateway-feishu-lark": patch
-"@theokit/gateway-google-chat": patch
-"@theokit/gateway-imessage": patch
-"@theokit/gateway-irc": patch
 "@theokit/gateway-line": patch
 "@theokit/gateway-matrix": patch
 "@theokit/gateway-mattermost": patch
-"@theokit/gateway-nextcloud-talk": patch
-"@theokit/gateway-nostr": patch
-"@theokit/gateway-signal": patch
 "@theokit/gateway-slack": patch
 "@theokit/gateway-sms": patch
-"@theokit/gateway-synology-chat": patch
 "@theokit/gateway-teams": patch
-"@theokit/gateway-tlon-urbit": patch
-"@theokit/gateway-twitch": patch
 "@theokit/gateway-whatsapp": patch
 ---
 
