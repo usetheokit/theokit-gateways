@@ -174,4 +174,15 @@ describe("TelegramAdapter.editMessage", () => {
     expect(edit).toHaveBeenCalledWith(100, 1, "a", {});
     expect(edit).toHaveBeenCalledWith(100, 2, "b", {});
   });
+
+  it("refuses an edit that carries an image with no platform call", async () => {
+    const result = await adapter.editMessage("42", {
+      ...out("hello"),
+      attachments: [{ kind: "image", mediaType: "image/png", data: new Uint8Array([1]) }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("attachments_unsupported");
+    expect(edit).toHaveBeenCalledTimes(0);
+  });
 });

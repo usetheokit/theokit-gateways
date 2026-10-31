@@ -17,6 +17,7 @@ import type { MessageEvent as GatewayMessageEvent, TelegramMessageEvent } from "
 import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "@theokit/gateway";
 import { Bot, type Context, GrammyError } from "grammy";
 import { buildEvent } from "./parse-inbound.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { mapFormat, mapSendError, parseModeOptions } from "./send-mapping.js";
 import { hasAttachments, sendPhotos } from "./send-photos.js";
 import { splitForTelegram } from "./split.js";
@@ -153,13 +154,18 @@ export class TelegramAdapter extends BasePlatformAdapter {
   /**
    * Replace the text of a message this bot sent, through `editMessageText`.
    *
-   * Refuses, with no request, empty text, a message id that is not a safe positive integer, and
-   * a non-numeric channel, in that order; the first and last are `sendMessage`'s own checks. A text `splitForTelegram` would cut in
-   * two is refused as `edit_too_long`: an edit replaces one message. Telegram's "message is not
+   * Refuses, with no request, an outbound carrying attachments (`attachments_unsupported`: no
+   * Telegram edit adds an image), empty text, a message id that is not a safe positive integer,
+   * and a non-numeric channel, in that order; empty text and the channel are `sendMessage`'s own
+   * checks. A text `splitForTelegram` would cut in two is refused as `edit_too_long`: an edit replaces one message. Telegram's "message is not
    * modified" refusal is answered as a success, because the message already shows the text; a
    * caller that treated it as a failure would send the same text again as a second message.
    */
   override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.editText(messageId, out);
+  }
+
+  private async editText(messageId: string, out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "text is empty" } };
     }
