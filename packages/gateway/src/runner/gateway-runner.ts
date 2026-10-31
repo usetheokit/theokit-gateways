@@ -392,10 +392,9 @@ export class GatewayRunner {
     const decision = await this.hookExecutor.firePreInbound({ event });
     if (decision.block === true) {
       if (decision.message !== undefined && decision.message.length > 0) {
-        // Dispatch stays non-throwing, but a rejected auto-reply is reported the way a handler
-        // error is (EC-F): post_outbound only fires once the send resolves, so this is its only trace.
-        await ctx.reply(decision.message).catch(async (err: unknown) => {
-          const error = err instanceof Error ? err : new Error(String(err));
+        // Reported as a handler error is (EC-F): post_outbound never fires for a rejected send.
+        await ctx.reply(decision.message).catch(async (err) => {
+          const error = err as Error;
           await this.hookExecutor.fireOnError({ event, error });
           process.stderr.write(`[gateway] auto-reply error: ${redactSecrets(error.message)}\n`);
         });
