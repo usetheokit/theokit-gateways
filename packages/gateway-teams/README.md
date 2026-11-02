@@ -139,3 +139,16 @@ What else to expect from the verifier:
   SDK would otherwise log claim values the sender chose. The example logs the `reason` of every
   refusal instead, so refusals can be counted by reason, and the `message` only for the 5xx ones:
   neither ever holds the token or a claim value.
+
+## Group messages and mentions
+
+`requireMention` decides which group chat and channel messages reach your handler. It defaults to
+`true`: a message is delivered only when one of the activity's `mention` entities names the
+activity's own `recipient.id`, the bot. A personal (1:1) conversation is always delivered. An
+activity that names no recipient is dropped in a group, and one stderr line per adapter says why.
+`deliver()` and the SDK's activity path apply the same rule, and `deliver()` answers `"ok"` for a
+message it drops.
+
+**Upgrading:** before this option the adapter delivered every group message. Pass
+`requireMention: false` to keep that behaviour.
+
