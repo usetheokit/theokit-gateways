@@ -62,7 +62,8 @@ An edit carrying attachments is refused as `attachments_unsupported`.
 **Reading.** A voice note that arrives by polling reaches the handler with `event.audio` set: the
 adapter calls `getFile` for its path and downloads it from Telegram's file server with the bot
 token. The download is bounded at 20 MiB (Telegram's `getFile` limit; a voice whose declared
-`file_size` is larger is not fetched at all) and 30 seconds, body included. `mediaType` is the
+`file_size` is larger is not fetched at all), and the whole read, `getFile` and download with its
+body, at 30 seconds. `mediaType` is the
 voice's `mime_type`, `audio/ogg` when it has none, and `durationSeconds` its `duration`, 0 when it
 is not a number. A blocked sender or a message without a voice triggers no request. A voice that
 cannot be read (`getFile` fails, the download answers an error status, times out, passes 20 MiB,

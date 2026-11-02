@@ -203,6 +203,30 @@ describe("readVoice bounds", () => {
     expect(await pending).toEqual({ reason: "timeout" });
   });
 
+  it("a getFile that never answers aborts at the timeout, with 0 fetch calls", async () => {
+    // The deadline covers the whole read: a stalled getFile would otherwise hold the polling
+    // handler, and every later update, as a stalled download would (NFR-006).
+    vi.useFakeTimers();
+    const fetchSpy = vi.fn(stalledFetch());
+    const ctx = {
+      message: { voice: { file_id: "v1", duration: 1 } },
+      getFile: (signal?: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        }),
+    } as unknown as Context;
+    let settled: unknown;
+    void readVoice(ctx, TOKEN, fetchSpy).then((value) => {
+      settled = value;
+    });
+    await vi.advanceTimersByTimeAsync(TIMEOUT_MS);
+
+    expect(settled).toEqual({ reason: "timeout" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("a body that stalls after the headers aborts at the timeout", async () => {
     vi.useFakeTimers();
     const pending = readVoice(fakeContext({ file_id: "v1", duration: 1 }), TOKEN, async () =>

@@ -16,8 +16,8 @@ import type { Context } from "grammy";
 /** The largest voice read: Bot API `getFile` serves files of at most 20 MB. */
 const MAX_VOICE_BYTES = 20 * 1024 * 1024;
 
-/** How long the download may take before it is abandoned. */
-const DOWNLOAD_TIMEOUT_MS = 30_000;
+/** How long the whole read, `getFile` and download, may take before it is abandoned. */
+const READ_TIMEOUT_MS = 30_000;
 
 const DEFAULT_MEDIA_TYPE = "audio/ogg";
 
@@ -54,11 +54,20 @@ export async function readVoice(
   if (typeof voice.file_size === "number" && voice.file_size > MAX_VOICE_BYTES) {
     return { reason: "too_large" };
   }
-  const path = await filePath(ctx);
-  if (typeof path !== "string") return path;
-  const bytes = await download(`https://api.telegram.org/file/bot${token}/${path}`, fetchImpl);
-  if (!(bytes instanceof Uint8Array)) return bytes;
-  return { audio: { data: bytes, ...voiceDetails(voice) } };
+  // One deadline over both requests: a stalled getFile holds the polling handler, and every
+  // later update, as surely as a stalled download (NFR-006).
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
+  try {
+    const path = await filePath(ctx, controller.signal);
+    if (typeof path !== "string") return path;
+    const url = `https://api.telegram.org/file/bot${token}/${path}`;
+    const bytes = await download(url, fetchImpl, controller.signal);
+    if (!(bytes instanceof Uint8Array)) return bytes;
+    return { audio: { data: bytes, ...voiceDetails(voice) } };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** The media type and duration, each replaced by its default when it is not of its type. */
@@ -71,12 +80,13 @@ function voiceDetails(voice: VoiceFields): { mediaType: string; durationSeconds:
 }
 
 /** The file's path on Telegram's file server, or the reason it is not known. */
-async function filePath(ctx: Context): Promise<string | Failure> {
+async function filePath(ctx: Context, signal: AbortSignal): Promise<string | Failure> {
   let file: { file_path?: string };
   try {
-    file = await ctx.getFile();
+    // grammy types the signal with the abort-controller polyfill; a native one is what it reads.
+    file = await ctx.getFile(signal as Parameters<Context["getFile"]>[0]);
   } catch {
-    return { reason: "get_file_failed" };
+    return { reason: signal.aborted ? "timeout" : "get_file_failed" };
   }
   return file.file_path ?? { reason: "no_file_path" };
 }
@@ -84,22 +94,21 @@ async function filePath(ctx: Context): Promise<string | Failure> {
 /**
  * The downloaded bytes, or the reason the download failed.
  *
- * The timer stays armed until the body is read, not only until the headers arrive: a body that
- * stalls after the headers would otherwise hold the polling handler, and every later update, for
- * good (EC-1).
+ * `signal` covers the body read too, not only the headers: a body that stalls after the headers
+ * would otherwise hold the polling handler, and every later update, for good (EC-1).
  */
-async function download(url: string, fetchImpl: FetchLike): Promise<Uint8Array | Failure> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+async function download(
+  url: string,
+  fetchImpl: FetchLike,
+  signal: AbortSignal,
+): Promise<Uint8Array | Failure> {
   try {
-    const response = await fetchImpl(url, { signal: controller.signal });
+    const response = await fetchImpl(url, { signal });
     if (!response.ok) return { reason: `download_status_${response.status}` };
     if (response.body === null) return { reason: "download_failed" };
-    return await readBounded(response.body, controller.signal);
+    return await readBounded(response.body, signal);
   } catch {
-    return { reason: controller.signal.aborted ? "timeout" : "download_failed" };
-  } finally {
-    clearTimeout(timer);
+    return { reason: signal.aborted ? "timeout" : "download_failed" };
   }
 }
 
