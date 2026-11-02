@@ -17,6 +17,7 @@ import type { MessageEvent as GatewayMessageEvent, TelegramMessageEvent } from "
 import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "@theokit/gateway";
 import { Bot, type Context, GrammyError } from "grammy";
 import { buildEvent } from "./parse-inbound.js";
+import { readVoice } from "./read-voice.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import {
   hasAttachments,
@@ -235,7 +236,24 @@ export class TelegramAdapter extends BasePlatformAdapter {
     }
     const event = normalizeEvent(ctx);
     if (event === undefined) return;
-    await this.dispatchEvent(event);
+    await this.dispatchEvent(await this.withVoice(ctx, event));
+  }
+
+  /**
+   * The event with the voice note's audio when the message has one (B-715, ADR D1).
+   *
+   * An unreadable voice leaves the event as it was and writes the reason to stderr: the message is
+   * delivered either way, as it was before voice notes were read.
+   */
+  private async withVoice(
+    ctx: Context,
+    event: TelegramMessageEvent,
+  ): Promise<TelegramMessageEvent> {
+    if (ctx.message?.voice === undefined) return event;
+    const read = await readVoice(ctx, this.bot.token);
+    if ("audio" in read) return { ...event, audio: read.audio };
+    process.stderr.write(`[telegram] voice not read: ${read.reason}\n`);
+    return event;
   }
 
   /**
