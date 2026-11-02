@@ -27,12 +27,19 @@ type VoiceRead = { readonly audio: InboundAudio } | { readonly reason: string };
 /** The `fetch` this module calls; injected in tests so nothing reaches api.telegram.org. */
 type FetchLike = (url: string, init: { signal: AbortSignal }) => Promise<Response>;
 
-/** The voice object of the message, as far as this module reads it. */
+/**
+ * The voice object of the message, as far as this module reads it. Every field is `unknown`: a
+ * hand-built update or a change on Telegram's side may send any of them in another shape (EC-2).
+ */
 interface VoiceFields {
+  readonly file_id?: unknown;
   readonly duration?: unknown;
   readonly mime_type?: unknown;
   readonly file_size?: unknown;
 }
+
+/** A failure, named by the reason the caller writes to stderr. */
+type Failure = { readonly reason: string };
 
 /**
  * Read the voice note of `ctx.message`. The caller calls this only when the message has a `voice`.
@@ -43,6 +50,7 @@ export async function readVoice(
   fetchImpl: FetchLike = fetch,
 ): Promise<VoiceRead> {
   const voice = (ctx.message?.voice ?? {}) as VoiceFields;
+  if (typeof voice.file_id !== "string") return { reason: "no_file_id" };
   if (typeof voice.file_size === "number" && voice.file_size > MAX_VOICE_BYTES) {
     return { reason: "too_large" };
   }
@@ -50,17 +58,20 @@ export async function readVoice(
   if (typeof path !== "string") return path;
   const bytes = await download(`https://api.telegram.org/file/bot${token}/${path}`, fetchImpl);
   if (!(bytes instanceof Uint8Array)) return bytes;
+  return { audio: { data: bytes, ...voiceDetails(voice) } };
+}
+
+/** The media type and duration, each replaced by its default when it is not of its type. */
+function voiceDetails(voice: VoiceFields): { mediaType: string; durationSeconds: number } {
+  const duration = voice.duration;
   return {
-    audio: {
-      data: bytes,
-      mediaType: (voice.mime_type as string | undefined) ?? DEFAULT_MEDIA_TYPE,
-      durationSeconds: voice.duration as number,
-    },
+    mediaType: typeof voice.mime_type === "string" ? voice.mime_type : DEFAULT_MEDIA_TYPE,
+    durationSeconds: typeof duration === "number" && Number.isFinite(duration) ? duration : 0,
   };
 }
 
 /** The file's path on Telegram's file server, or the reason it is not known. */
-async function filePath(ctx: Context): Promise<string | { reason: string }> {
+async function filePath(ctx: Context): Promise<string | Failure> {
   let file: { file_path?: string };
   try {
     file = await ctx.getFile();
@@ -70,30 +81,49 @@ async function filePath(ctx: Context): Promise<string | { reason: string }> {
   return file.file_path ?? { reason: "no_file_path" };
 }
 
-/** The downloaded bytes, or the reason the download failed. */
-async function download(
-  url: string,
-  fetchImpl: FetchLike,
-): Promise<Uint8Array | { reason: string }> {
+/**
+ * The downloaded bytes, or the reason the download failed.
+ *
+ * The timer stays armed until the body is read, not only until the headers arrive: a body that
+ * stalls after the headers would otherwise hold the polling handler, and every later update, for
+ * good (EC-1).
+ */
+async function download(url: string, fetchImpl: FetchLike): Promise<Uint8Array | Failure> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
-  let response: Response;
   try {
-    response = await fetchImpl(url, { signal: controller.signal });
+    const response = await fetchImpl(url, { signal: controller.signal });
+    if (!response.ok) return { reason: `download_status_${response.status}` };
+    if (response.body === null) return { reason: "download_failed" };
+    return await readBounded(response.body, controller.signal);
   } catch {
     return { reason: controller.signal.aborted ? "timeout" : "download_failed" };
   } finally {
     clearTimeout(timer);
   }
-  if (!response.ok) return { reason: `download_status_${response.status}` };
-  return readBounded(response.body as ReadableStream<Uint8Array>);
 }
 
-/** The whole body, or `too_large` as soon as it passes the bound. */
+/** The whole body, `too_large` as soon as it passes the bound, or `timeout` when `signal` aborts. */
 async function readBounded(
   body: ReadableStream<Uint8Array>,
-): Promise<Uint8Array | { reason: string }> {
+  signal: AbortSignal,
+): Promise<Uint8Array | Failure> {
   const reader = body.getReader();
+  const cancel = (): void => void reader.cancel().catch(() => undefined);
+  signal.addEventListener("abort", cancel, { once: true });
+  try {
+    const chunks = await readChunks(reader);
+    if (signal.aborted) return { reason: "timeout" };
+    return chunks ?? { reason: "too_large" };
+  } finally {
+    signal.removeEventListener("abort", cancel);
+  }
+}
+
+/** The chunks joined into one array, or `undefined` once more than the bound has arrived. */
+async function readChunks(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): Promise<Uint8Array | undefined> {
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
@@ -102,7 +132,7 @@ async function readBounded(
     total += value.length;
     if (total > MAX_VOICE_BYTES) {
       await reader.cancel();
-      return { reason: "too_large" };
+      return undefined;
     }
     chunks.push(value);
   }
