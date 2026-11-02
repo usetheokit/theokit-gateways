@@ -18,6 +18,7 @@ import { expect, it } from "vitest";
 import { optional, required, runMarker } from "../../src/credentials.js";
 import { describeLive, describeLiveInbound, waitFor } from "../../src/harness.js";
 import { platformById } from "../../src/platforms.js";
+import { inboundProbeAdapter } from "./inbound-probe-adapter.js";
 
 const DISCORD = platformById("discord");
 
@@ -157,7 +158,7 @@ describeLiveInbound(DISCORD, "inbound round trip", () => {
       return;
     }
 
-    const adapter = new DiscordAdapter({ token: required("DISCORD_BOT_TOKEN") });
+    const adapter = inboundProbeAdapter(required("DISCORD_BOT_TOKEN"));
     const channelId = required("DISCORD_TEST_CHANNEL_ID");
     const marker = runMarker();
     const seen: string[] = [];

@@ -38,6 +38,20 @@ const runner = new GatewayRunner({
 await runner.start();
 ```
 
+## Group messages and mentions
+
+`requireMention` decides which guild and thread messages reach your handler. It defaults to
+`true`: a message there is delivered only when it mentions the bot, meaning the bot's user id is
+in the message's `mentions.users`. A direct `<@id>` counts, and so does a reply that pings the
+bot. `@everyone`, `@here` and role mentions do not. A DM is always delivered.
+
+Until the client is ready the bot's user id is unknown, so group messages are dropped and one
+stderr line says why. `deliver()` and the socket path apply the same rule, and `deliver()` answers
+`"ok"` for a message it drops.
+
+**Upgrading:** before this option the adapter delivered every group message. Pass
+`requireMention: false` to keep that behaviour.
+
 ## Limitations (v0.1)
 
 - **Text-trigger commands only.** Proper Discord slash commands (registered via Application Commands API) are out of scope — use `event.text.startsWith("!cmd")` for now.

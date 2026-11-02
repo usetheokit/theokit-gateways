@@ -30,6 +30,15 @@ export interface TeamsAdapterOptions {
   /** Optional bot display name used as a fallback for mention stripping. */
   readonly botDisplayName?: string;
   /**
+   * Deliver a groupChat or channel message only when it mentions the bot. Default `true`.
+   *
+   * A mention is a `mention` entity on the activity whose `mentioned.id` is the activity's
+   * `recipient.id`. An activity with no `recipient.id` is dropped (one stderr line says why). A
+   * personal conversation is always delivered. Pass `false` to deliver every message, as the
+   * adapter did before this option existed.
+   */
+  readonly requireMention?: boolean;
+  /**
    * Pluggable HTTP server adapter — typically `new ExpressAdapter(yourExpressApp)`
    * from `@microsoft/teams.apps`. When provided, the SDK registers
    * `POST /api/messages` on your existing server (ADR D316/D326).
