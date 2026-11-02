@@ -39,6 +39,18 @@ export interface DiscordAdapterOptions {
    * empty `msg.content` (EC-C silent failure).
    */
   readonly intents?: GatewayIntentBits[];
+  /**
+   * Deliver a guild or thread message only when it mentions the bot. Default `true`.
+   *
+   * A mention is the bot's user id in the message's `mentions.users`: a direct `<@id>`, and a
+   * reply that pings the bot (Discord lists the pinged author there; a reply with the ping off is
+   * not a mention). `@everyone`, `@here` and role mentions do not count. An event with no
+   * discord.js mentions collection (one built by hand for `deliver()`) is read for `<@id>` or
+   * `<@!id>` in its text. A DM is always delivered. Until the client is ready the bot id is
+   * unknown, so every group message is dropped and one stderr line says why. Pass `false` to
+   * deliver every message, as the adapter did before this option existed.
+   */
+  readonly requireMention?: boolean;
 }
 
 export const DEFAULT_DISCORD_INTENTS: ReadonlyArray<GatewayIntentBits> = [
@@ -62,10 +74,13 @@ export class DiscordAdapter extends BasePlatformAdapter {
   private readonly token: string;
   private handler?: (event: GatewayMessageEvent) => Promise<void>;
   private connected = false;
+  private readonly requireMention: boolean;
+  private warnedMissingBotId = false;
 
   constructor(opts: DiscordAdapterOptions) {
     super();
     this.token = opts.token;
+    this.requireMention = opts.requireMention ?? true;
     const intents = (opts.intents ?? DEFAULT_DISCORD_INTENTS) as GatewayIntentBits[];
     if (intents.length === 0) {
       process.stderr.write(
@@ -209,7 +224,37 @@ export class DiscordAdapter extends BasePlatformAdapter {
   private async handleInbound(msg: Message): Promise<void> {
     if (this.handler === undefined) return;
     if (msg.author.bot) return;
-    await this.dispatchEvent(normalizeEvent(msg));
+    const event = normalizeEvent(msg);
+    if (!this.passesMentionGate(event)) return;
+    await this.dispatchEvent(event);
+  }
+
+  /**
+   * Whether an event may reach the handler: always for a DM or with `requireMention` off,
+   * otherwise only when the message mentions the bot. Both `deliver()` and the socket path call
+   * it, so the two entries cannot disagree.
+   */
+  private passesMentionGate(event: GatewayMessageEvent): boolean {
+    if (event.channel.type === "dm" || !this.requireMention) return true;
+    const botId = this.client.user?.id;
+    if (botId === undefined) {
+      this.warnMissingBotIdOnce();
+      return false;
+    }
+    const raw = event.platform === "discord" ? event.discord.raw : undefined;
+    const mentionedUsers = (raw as { mentions?: { users?: { has?: unknown } } } | undefined)
+      ?.mentions?.users;
+    if (typeof mentionedUsers?.has === "function") return mentionedUsers.has(botId) === true;
+    // A hand-built event carries no discord.js collection; the mention syntax is the evidence left.
+    return event.text.includes(`<@${botId}>`) || event.text.includes(`<@!${botId}>`);
+  }
+
+  private warnMissingBotIdOnce(): void {
+    if (this.warnedMissingBotId) return;
+    this.warnedMissingBotId = true;
+    process.stderr.write(
+      "[discord] dropping every group message: requireMention is on and the bot user id is not known until the client is ready\n",
+    );
   }
 
   /**
@@ -245,12 +290,14 @@ export class DiscordAdapter extends BasePlatformAdapter {
   /**
    * Deliver an event that arrived out of band — the ingest `onInbound` had no counterpart for (#83).
    *
-   * One line over `runHandler`, which owns the containment: a handler is user code, its throw is
-   * named as the handler's failure rather than the platform's, and delivery continues.
+   * The mention gate runs first, as on the socket path: an event it drops answers `"ok"`, with or
+   * without a handler subscribed. `runHandler` owns the containment: a handler is user code, its
+   * throw is named as the handler's failure rather than the platform's, and delivery continues.
    */
   override async deliver(
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
+    if (!this.passesMentionGate(event)) return "ok";
     return this.runHandler(this.handler, event);
   }
 }
