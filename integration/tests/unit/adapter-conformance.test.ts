@@ -244,6 +244,21 @@ describe.each(REFUSING_ATTACHMENTS)("attachment refusal — $platform", ({ platf
     expect(result.error?.message).toContain(platform);
   }, 30_000);
 
+  it("refuses an outbound with audio as attachments_unsupported with no platform call", async () => {
+    // B-715: the refusal reads the list's length, not the kind, so audio is refused like an image.
+    // This pins it: a refusal that came to read the kind could otherwise let audio through.
+    const adapter = make();
+    const result = await adapter.sendMessage({
+      channel: { id: "1", type: "dm" },
+      text: "listen",
+      attachments: [{ kind: "audio", mediaType: "audio/ogg", data: new Uint8Array([1, 2, 3]) }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("attachments_unsupported");
+    expect(result.error?.message).toContain(platform);
+  }, 30_000);
+
   it("refuses an attachments value with no length as attachments_unsupported (EC-1)", async () => {
     // A JavaScript caller's non-array value: a `> 0` presence check would read it as "no
     // attachments" and send the text alone, dropping whatever the caller meant to attach.

@@ -54,6 +54,22 @@ describe("WhatsAppAdapter attachments", () => {
     expect(backend.sends).toHaveLength(0);
   });
 
+  it("refuses an outbound with audio with 0 backend sends (B-715)", async () => {
+    const backend = new CountingBackend();
+    const adapter = new WhatsAppAdapter(backend);
+    await adapter.connect();
+
+    const result = await adapter.sendMessage({
+      channel: { id: "5511888888888", type: "dm" },
+      text: "listen",
+      attachments: [{ kind: "audio", mediaType: "audio/ogg", data: new Uint8Array([1]) }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("attachments_unsupported");
+    expect(backend.sends).toHaveLength(0);
+  });
+
   it("still sends an outbound with no attachments", async () => {
     const backend = new CountingBackend();
     const adapter = new WhatsAppAdapter(backend);

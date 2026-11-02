@@ -136,5 +136,22 @@ describe("DeliveryRouter (T3.1)", () => {
       });
       expect(dc.sendAttempts).toBe(0);
     });
+
+    it("refuses audio for an adapter without supportsAttachments, with no send (B-715)", async () => {
+      const router = new DeliveryRouter();
+      const dc = new MockAdapter("discord");
+      router.register(dc);
+
+      const r = await router.send({
+        platform: "discord",
+        channel: { id: "c", type: "dm" },
+        text: "listen",
+        attachments: [{ kind: "audio", mediaType: "audio/ogg", data: new Uint8Array([79, 103]) }],
+      });
+
+      expect(r.ok).toBe(false);
+      expect(r.error?.code).toBe("attachments_unsupported");
+      expect(dc.sendAttempts).toBe(0);
+    });
   });
 });
