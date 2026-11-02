@@ -244,6 +244,8 @@ export class LineAdapter extends BasePlatformAdapter {
   override async deliver(
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
+    // The webhook path applies the same guard (D409); a dropped event is acknowledged, not delivered.
+    if (!this.passesMentionGuard(event)) return "ok";
     return this.runHandler(this.inboundHandler, event);
   }
 }
