@@ -24,6 +24,16 @@ export interface MatrixAdapterOptions {
    */
   readonly freshnessWindowMs?: number;
   /**
+   * Deliver a room message only when it mentions the bot. Default `true`.
+   *
+   * A mention is the bot's `userId` in the event's `m.mentions.user_ids`. An event with no
+   * `m.mentions` (an older client) is read for the id in `body` or `formatted_body`, where a
+   * mention pill carries it. `m.mentions.room` alone is not a mention. A direct message (a room
+   * of two members) is always delivered. Pass `false` to deliver every message, as the adapter
+   * did before this option existed.
+   */
+  readonly requireMention?: boolean;
+  /**
    * Test seam — inject a client instead of building one from the SDK.
    *
    * Mirrors `__imapFactory` in gateway-email and `__appFactory` in
@@ -52,7 +62,12 @@ export interface MatrixEventLike {
   getSender(): string | undefined;
   getRoomId(): string | undefined;
   getType(): string;
-  getContent(): { body?: string; msgtype?: string };
+  getContent(): {
+    body?: string;
+    msgtype?: string;
+    formatted_body?: string;
+    "m.mentions"?: { user_ids?: string[]; room?: boolean };
+  };
   getTs(): number;
 }
 
