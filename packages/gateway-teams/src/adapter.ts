@@ -22,6 +22,7 @@ import {
 } from "@theokit/gateway";
 
 import { mapTeamsError } from "./errors.js";
+import { NO_RECIPIENT_WARNING, readBotMention } from "./mention-gate.js";
 import { normalizeTeamsActivity } from "./normalize.js";
 import { splitForTeams } from "./split.js";
 import type { TeamsAdapterOptions } from "./types.js";
@@ -142,6 +143,7 @@ export class TeamsAdapter extends BasePlatformAdapter {
   private app: TeamsAppLike | undefined;
   private handler?: (event: GatewayMessageEvent) => Promise<void>;
   private connected = false;
+  private warnedMissingRecipient = false;
   // EC-5 downgraded after Phase 0: we don't need conversation refs (SDK manages),
   // but we keep a bounded Set of seen conversation ids for debug telemetry.
   private readonly seenConversations = new Set<string>();
@@ -414,6 +416,7 @@ export class TeamsAdapter extends BasePlatformAdapter {
     if (activity === undefined || activity.type !== "message") return;
 
     const event = normalizeTeamsActivity(activity, this.opts.botDisplayName);
+    if (!this.passesMentionGate(event)) return;
     this.trackConversation(activity.conversation?.id);
     try {
       await this.handler(event);
@@ -425,6 +428,17 @@ export class TeamsAdapter extends BasePlatformAdapter {
     }
   }
 
+  /** A DM, or `requireMention` off, passes; else the activity must mention its recipient. */
+  private passesMentionGate(event: GatewayMessageEvent): boolean {
+    if (event.channel.type === "dm" || !(this.opts.requireMention ?? true)) return true;
+    const verdict = readBotMention(event.platform === "teams" ? event.teams.raw : undefined);
+    if (verdict === "no_recipient" && !this.warnedMissingRecipient) {
+      this.warnedMissingRecipient = true;
+      process.stderr.write(NO_RECIPIENT_WARNING);
+    }
+    return verdict === "mentioned";
+  }
+
   /** Test seam — current seen-conversation count. @internal */
   get _seenConversationsSize(): number {
     return this.seenConversations.size;
@@ -433,12 +447,11 @@ export class TeamsAdapter extends BasePlatformAdapter {
   /**
    * Deliver an event that arrived out of band — the ingest `onInbound` had no counterpart for (#83).
    *
-   * One line over `runHandler`, which owns the containment: a handler is user code, its throw is
-   * named as the handler's failure rather than the platform's, and delivery continues.
-   */
+   * The mention gate runs first (a dropped event answers `"ok"`), then `runHandler` contains throws. */
   override async deliver(
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
+    if (!this.passesMentionGate(event)) return "ok";
     return this.runHandler(this.handler, event);
   }
 }
