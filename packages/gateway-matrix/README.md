@@ -62,6 +62,20 @@ room.getJoinedMemberCount() === 2 → channel.type: "dm"
 
 Edge case: a user who creates a 2-person room intended as a small group will still be detected as a DM. Use `event.matrix.roomId` + Matrix's `m.direct` account-data to override if you need precision.
 
+## Group messages and mentions
+
+`requireMention` decides which messages in a group room (3 or more members) reach your handler.
+It defaults to `true`: a message is delivered only when it mentions the bot. A mention is the
+adapter's `userId` in the content's `m.mentions.user_ids`, which current clients send. When a
+client sends no `m.mentions`, the full user id in `body` or in a `formatted_body` mention pill
+counts instead. A mention by display name alone from such a client is not seen, so mention the bot
+with a client that sends `m.mentions` or with its full id. `@room` does not count. A DM is always
+delivered. `deliver()` and the sync path apply the same rule, and `deliver()` answers `"ok"` for a
+message it drops.
+
+**Upgrading:** before this option the adapter delivered every group message. Pass
+`requireMention: false` to keep that behaviour.
+
 ## Initial sync flood guard (EC-3 absorbed)
 
 On startup, `matrix-js-sdk` delivers the most recent ~10 events per room. A bot in 50 rooms = 500 events fired in seconds → 500 LLM calls = cost explosion. **The adapter filters events older than 60s** (`event.getTs() < Date.now() - 60_000`) so initial sync only delivers genuinely live messages. To replay history programmatically, use the raw `MatrixClient` via `adapter.getClient()`.

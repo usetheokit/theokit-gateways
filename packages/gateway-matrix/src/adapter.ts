@@ -348,6 +348,7 @@ export class MatrixAdapter extends BasePlatformAdapter {
     }
     const normalized = matrixEventToMessageEvent(event, room);
     if (normalized === undefined) return;
+    if (!this.passesMentionGate(normalized)) return;
     if (this.inboundHandler === undefined) return;
     try {
       await this.inboundHandler(normalized);
@@ -355,6 +356,22 @@ export class MatrixAdapter extends BasePlatformAdapter {
       const m = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[gateway-matrix] handler threw: ${m}\n`);
     }
+  }
+
+  /**
+   * Whether an event may reach the handler: always for a DM or with `requireMention` off,
+   * otherwise only when the content mentions the bot. Both `deliver()` and the sync path call it,
+   * so the two entries cannot disagree.
+   */
+  private passesMentionGate(event: GatewayMessageEvent): boolean {
+    if (event.channel.type === "dm" || !(this.opts.requireMention ?? true)) return true;
+    const botId = this.opts.userId;
+    const raw = event.platform === "matrix" ? event.matrix.raw : undefined;
+    const content = (raw as Partial<MatrixEventLike> | undefined)?.getContent?.();
+    if (content === undefined) return event.text.includes(botId);
+    const mentions = content["m.mentions"];
+    if (mentions !== undefined) return mentions.user_ids?.includes(botId) ?? false;
+    return (content.body ?? "").includes(botId) || (content.formatted_body ?? "").includes(botId);
   }
 
   private isEncrypted(roomId: string): boolean {
@@ -378,12 +395,14 @@ export class MatrixAdapter extends BasePlatformAdapter {
   /**
    * Deliver an event that arrived out of band — the ingest `onInbound` had no counterpart for (#83).
    *
-   * One line over `runHandler`, which owns the containment: a handler is user code, its throw is
-   * named as the handler's failure rather than the platform's, and delivery continues.
+   * The mention gate runs first, as on the sync path: an event it drops answers `"ok"`, with or
+   * without a handler subscribed. `runHandler` owns the containment: a handler is user code, its
+   * throw is named as the handler's failure rather than the platform's, and delivery continues.
    */
   override async deliver(
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
+    if (!this.passesMentionGate(event)) return "ok";
     return this.runHandler(this.inboundHandler, event);
   }
 }

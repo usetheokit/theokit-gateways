@@ -7,13 +7,7 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": [
-    "@theokit/gateway-signal",
-    "@theokit/gateway-imessage",
-    "@theokit/gateway-google-chat",
-    "@theokit/gateway-irc",
-    "@theokit/gateway-nextcloud-talk"
-  ],
+  "ignore": [],
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
     "onlyUpdatePeerDependentsWhenOutOfRange": true
   }
