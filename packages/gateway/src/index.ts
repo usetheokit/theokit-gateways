@@ -81,6 +81,7 @@ export type {
   BaseMessageEvent,
   DiscordMessageEvent,
   EmailMessageEvent,
+  InboundAudio,
   LineMessageEvent,
   MatrixMessageEvent,
   MattermostMessageEvent,

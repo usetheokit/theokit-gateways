@@ -18,9 +18,9 @@ import type { MessageEvent as GatewayMessageEvent, PlatformName } from "../types
  *
  * The bytes travel by reference: the runner does not copy them on the way to the adapter. The
  * caller must not change `data` or the list until the send's promise settles: an adapter that
- * sends several images reads each one only when its turn comes.
+ * sends several attachments reads each one only when its turn comes.
  */
-export interface OutboundAttachment {
+interface OutboundImageAttachment {
   readonly kind: "image";
   /** The media type of `data`, such as `image/png`. */
   readonly mediaType: string;
@@ -28,6 +28,19 @@ export interface OutboundAttachment {
   /** A file name the platform may show; optional. */
   readonly filename?: string;
 }
+
+/** An audio clip an outbound message carries, such as a spoken reply (B-715). Same rules as an image. */
+interface OutboundAudioAttachment {
+  readonly kind: "audio";
+  /** The media type of `data`, such as `audio/ogg`. */
+  readonly mediaType: string;
+  readonly data: Uint8Array;
+  /** A file name the platform may show; optional. */
+  readonly filename?: string;
+}
+
+/** An attachment an outbound message carries, told apart by `kind`. */
+export type OutboundAttachment = OutboundImageAttachment | OutboundAudioAttachment;
 
 /** Outbound message shape — what `sendMessage` accepts. */
 export interface OutboundMessage {

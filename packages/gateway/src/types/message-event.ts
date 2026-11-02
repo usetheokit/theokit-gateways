@@ -37,6 +37,21 @@ import type {
   TwitchMessageEvent,
 } from "./platform-events.js";
 
+/**
+ * The audio of a voice note an inbound message carries (B-715): its bytes, their media type and
+ * the length the platform reported.
+ *
+ * The bytes travel by reference, as an outbound attachment's do: hooks and the handler see the
+ * same array.
+ */
+export interface InboundAudio {
+  readonly data: Uint8Array;
+  /** The media type of `data`, such as `audio/ogg`. */
+  readonly mediaType: string;
+  /** The length in whole seconds the platform reported; 0 when it reported none. */
+  readonly durationSeconds: number;
+}
+
 /** Fields common to every platform's inbound event. */
 export interface BaseMessageEvent {
   /** Stable id used as a session-key segment and for dedup. */
@@ -69,6 +84,11 @@ export interface BaseMessageEvent {
   readonly receivedAt: number;
   /** Optional reply-target message id. */
   readonly replyTo?: string;
+  /**
+   * The voice note's audio, when the adapter read one (B-715). Absent for a message with no voice,
+   * and for a voice the adapter could not read.
+   */
+  readonly audio?: InboundAudio;
 }
 
 /** Telegram-specific event variant. */
