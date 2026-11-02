@@ -137,8 +137,35 @@ if (sent.error?.code === "attachments_unsupported") {
 
 | Code | When |
 |---|---|
-| `attachments_unsupported` | the adapter cannot send attachments, the outbound is an edit, or (Telegram) an attachment's `kind` is not `image` |
-| `invalid_attachment` | Telegram only: `attachments` is not a list, holds more than 10 images, or an image has no bytes or is over 10 MiB |
+| `attachments_unsupported` | the adapter cannot send attachments, the outbound is an edit, or (Telegram) an attachment's `kind` is neither `image` nor `audio` |
+| `invalid_attachment` | Telegram only: `attachments` is not a list, holds more than 10 attachments, an entry has no bytes, an image is over 10 MiB, or an audio clip is over 50 MiB or its `mediaType` is not `audio/*` |
+
+## Voice notes and spoken replies
+
+An inbound event may carry `audio`, an `InboundAudio`: the voice note's bytes (`data`, a
+`Uint8Array`), their `mediaType` (such as `audio/ogg`) and `durationSeconds`, a whole number the
+platform reported (0 when it reported none). The field is optional and absent on every message
+without a voice note. Only the Telegram adapter fills it today, and only for updates it polls: a
+voice arriving through a webhook is not read. A voice the adapter could not read leaves `audio`
+absent and writes one stderr line naming the reason, so an empty `text` with no `audio` can mean
+either; the message is delivered in both cases. The bytes reach `post_inbound` hooks by reference.
+
+To answer with speech, attach an audio clip: `{ kind: "audio", mediaType: "audio/ogg", data }`.
+`OutboundAttachment` is a union of the image and the audio member, told apart by `kind`; code
+that switches on `kind` exhaustively gains a case. Every adapter but Telegram refuses an audio
+attachment as it refuses an image, with `attachments_unsupported` and no platform call.
+
+```typescript
+const runner = new GatewayRunner({
+  adapters: [adapter],
+  handler: async (event, ctx) => {
+    if (event.audio === undefined) return;
+    const text = await transcribe(event.audio.data, event.audio.mediaType);
+    const speech = await synthesize(await answer(text));
+    await ctx.reply(text, { attachments: [{ kind: "audio", mediaType: "audio/ogg", data: speech }] });
+  },
+});
+```
 
 ## Editing a sent message
 

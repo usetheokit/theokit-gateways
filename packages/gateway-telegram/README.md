@@ -57,6 +57,26 @@ ends the send with the mapped error and no `messageId`, and the photos before it
 so retrying the whole send after a `rate_limited` or `network_error` sends those photos again.
 An edit carrying attachments is refused as `attachments_unsupported`.
 
+## Voice notes
+
+**Reading.** A voice note that arrives by polling reaches the handler with `event.audio` set: the
+adapter calls `getFile` for its path and downloads it from Telegram's file server with the bot
+token. The download is bounded at 20 MiB (Telegram's `getFile` limit; a voice whose declared
+`file_size` is larger is not fetched at all) and 30 seconds, body included. `mediaType` is the
+voice's `mime_type`, `audio/ogg` when it has none, and `durationSeconds` its `duration`, 0 when it
+is not a number. A blocked sender or a message without a voice triggers no request. A voice that
+cannot be read (`getFile` fails, the download answers an error status, times out, passes 20 MiB,
+or the voice has no `file_id`) is delivered without `audio`, as before this release, with one
+stderr line `[telegram] voice not read: <reason>`; the line never carries the download URL, which
+holds the token. A voice delivered through a webhook (`parseInbound`) is not read.
+
+**Sending.** An attachment with `kind: "audio"` goes out through `sendVoice`, in the same path and
+order as images: the text is the caption of the first attachment whatever its kind, under the
+same 1024-unit rule, and an audio-only reply with empty text sends the clip alone. Audio must have
+bytes, be at most 50 MiB (the Bot API upload limit) and declare an `audio/*` media type (any case,
+parameters allowed), or the send is refused as `invalid_attachment` before any request. Telegram
+shows OGG/Opus, MP3 and M4A as a voice bubble; other audio is delivered as a file.
+
 Attachments need `@theokit/gateway` 0.13.0 or later: an older core's `ctx.reply` does not carry
 them to the adapter, so install both together.
 
