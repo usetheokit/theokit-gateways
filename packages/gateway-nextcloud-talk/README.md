@@ -95,3 +95,16 @@ parts before it are already in the room.
 | `invalid_room` | `channel.id` is not a room token (letters and digits only) |
 | `empty_text` | the text is empty |
 | `not_connected` | `connect()` has not succeeded |
+
+## Verification status
+
+The offline `tests/gateway-runner.test.ts` exercises a signed inbound webhook through
+`GatewayRunner` and checks the signed outbound reply using a scripted server. The existing
+adapter supplies `deliver()` for messages received out of band; application handlers need no
+Talk protocol code.
+
+As of 2026-11-05, this issue's real-account send-and-receive run and TheoClaw live reply
+remain unverified in the factory sandbox: no Nextcloud account credentials or live model
+were supplied. The offline test is not evidence of either live condition. With an installed
+bot, run the quick start above, send a room message, and record the date, server/Talk
+versions, inbound message ID and observed bot reply (without credentials).
