@@ -198,6 +198,22 @@ describe("TwitchAdapter inbound", () => {
     });
   });
 
+  it("delivers out-of-band events and reports removed or throwing handlers", async () => {
+    const { adapter, sockets, seen } = await connected();
+    sockets.latest().chat({ messageId: "deliver-source", text: "hello" });
+    await until(() => seen.length === 1, "source event");
+    const event = seen[0]!;
+    expect(await adapter.deliver(event)).toBe("ok");
+    expect(seen).toHaveLength(2);
+    const remove = adapter.onInbound(async () => {
+      throw new Error("handler failed");
+    });
+    quiet();
+    expect(await adapter.deliver(event)).toBe("handler_threw");
+    remove();
+    expect(await adapter.deliver(event)).toBe("no_handler");
+  });
+
   it("produces no event for a message from the bot's own user id", async () => {
     const { sockets, seen } = await connected();
     sockets.latest().chat({ messageId: "own", chatter: BOT });

@@ -64,3 +64,15 @@ await runner.start();
 
 - The adapter does not refresh the access token. When it expires, `connect()` fails with the
   validator's error; supply a refreshed token.
+
+## Verification status (2026-11-05)
+
+The deterministic package tests exercise EventSub receive, Helix send, and `deliver()` handler
+outcomes. `integration/tests/unit/twitch-runner.test.ts` exercises a received message and a reply
+through `GatewayRunner`, keeping Twitch protocol handling inside this package.
+
+A real-account send-and-receive run has **not been verified** in this sandbox: no Twitch account
+credentials are provided. To complete that check, run the quick start with a bot user token and
+numeric bot/channel IDs, send a message from a second account, and confirm the reply in Twitch.
+Record the date, channel, inbound message ID and outbound reply ID without recording the token.
+This status is not evidence of a shipped real-account surface.
