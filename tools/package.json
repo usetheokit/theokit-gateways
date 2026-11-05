@@ -5,7 +5,7 @@
   "description": "Repository quality gates. Never published; the `private` flag is what keeps it that way.",
   "type": "module",
   "scripts": {
-    "test": "vitest run",
+    "test": "pnpm audit --prod --audit-level=high && vitest run",
     "typecheck": "echo 'no TypeScript in tools/ \u2014 the gates are .mjs' && exit 0"
   },
   "devDependencies": {
