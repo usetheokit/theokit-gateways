@@ -114,6 +114,10 @@ export class JsonRpcLineClient {
       return;
     }
     if (message === null || typeof message !== "object" || Array.isArray(message)) return;
+    this.onMessage(message);
+  }
+
+  private onMessage(message: RpcMessage): void {
     if (typeof message.method === "string" && (message.id === undefined || message.id === null)) {
       this.onNotification({ method: message.method, params: message.params });
       return;
