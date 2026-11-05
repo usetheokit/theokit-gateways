@@ -70,3 +70,18 @@ await runner.start();
   disconnected.
 - An event id is remembered when the event arrives, before any handler runs, so an event that
   arrives while no handler is subscribed is not delivered on Lark's redelivery either.
+
+## Real-account verification
+
+Status on 2026-11-05: **not run** in the factory sandbox; no Feishu/Lark account or
+app credentials were supplied. Offline transport and runner tests do not establish
+real-account send/receive or TheoClaw deployment parity.
+
+To complete verification, enable the bot capability and message event subscription
+for an installed custom app, grant its message send/receive permissions, and run
+the example above with that app's credentials. Send a unique text from a real user
+to the bot and confirm the matching `you said:` reply in the same chat. Record the
+UTC date, domain, redacted app/chat identifiers, inbound message ID and outbound
+message ID, and the command used. For TheoClaw, supply this adapter to its
+`GatewayRunner` and verify its handler's reply in the chat; keep protocol handling
+inside this package. Never include app secrets or access tokens in the record.
