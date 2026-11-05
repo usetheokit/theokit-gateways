@@ -84,3 +84,12 @@ exported for callers that need the same cut.
 | `empty_text` | the text is empty, or holds only line breaks |
 | `invalid_target` | `channel.id` holds a space, a comma or a line break, starts with `:`, or is too long to leave room for any text in a 512-byte command |
 | `not_connected` | `connect()` has not succeeded, or the connection closed |
+
+## Verification status
+
+On 2026-11-05, the issue #179 implementation was checked with offline adapter tests,
+including a local IRC server receiving a `GatewayRunner` reply and `deliver()` handler
+containment. A real-account send-and-receive run and a live TheoClaw reply were not
+verified in this sandbox: no IRC account credentials or live model were supplied.
+The opt-in real-network harness is in `integration/tests/irc/live.test.ts`; this status
+is not evidence of a successful live run.
