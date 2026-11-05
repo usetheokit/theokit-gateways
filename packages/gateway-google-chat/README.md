@@ -99,3 +99,16 @@ markup in a reply is not measured yet, and long texts are not split.
 
 A successful send returns the created message's resource name as `messageId`. An access token
 is reused until a minute before it expires, and concurrent sends share one token exchange.
+
+## Verification status (2026-11-05)
+
+Offline coverage includes authenticated inbound events routed through `GatewayRunner` and
+replies sent through the adapter's REST transport, with Google endpoints replaced by deterministic
+fixtures. Application handlers only use the gateway event and `ctx.reply()`.
+
+A real-account send-and-receive run has **not been performed** in this sandbox: no Google Chat
+account or service-account credentials are available. This package is not claimed as live verified.
+To complete that check, configure a Chat app and its service account, expose the quick-start
+endpoint over HTTPS, add the app to a space, and send it a unique message. Record the date,
+received message resource name, and visible reply resource name (never credentials) after
+confirming the reply appears in that space. TheoClaw integration also remains unverified here.

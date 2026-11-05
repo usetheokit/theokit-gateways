@@ -1,7 +1,7 @@
 import { request } from "node:http";
 import { createServer } from "node:net";
 
-import type { MessageEvent } from "@theokit/gateway";
+import { GatewayRunner, type MessageEvent } from "@theokit/gateway";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GoogleChatAdapter, type GoogleChatAdapterOptions } from "../src/index.js";
@@ -532,4 +532,31 @@ describe("the token request", () => {
     });
     expect(claims.exp - claims.iat).toBe(3600);
   });
+});
+
+it("routes an authenticated message through GatewayRunner and sends its reply", async () => {
+  const google = scriptedGoogle();
+  const adapter = await connected(google);
+  const runner = new GatewayRunner({
+    adapters: [adapter],
+    handler: async (event, ctx) => {
+      await ctx.reply(`you said: ${event.text}`);
+    },
+  });
+  await runner.start();
+  try {
+    const response = await adapter.handleRequest(
+      `Bearer ${idToken()}`,
+      JSON.stringify(messageEvent()),
+    );
+    expect(response.status).toBe(200);
+    await until(() => google.sends.length === 1, "runner reply");
+    expect(google.sends[0]).toEqual({
+      url: "https://chat.googleapis.com/v1/spaces/AAA/messages",
+      text: "you said: hello there",
+      authorization: "Bearer token-1",
+    });
+  } finally {
+    await runner.stop();
+  }
 });
