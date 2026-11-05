@@ -88,3 +88,16 @@ The adapter never retries a send: each `imsg` error keeps its meaning.
 
 A successful send returns the message's guid as `messageId`, or `imsg`'s numeric row id when
 there is no guid. When `imsg` answers with neither, `messageId` is absent.
+
+## Verification status
+
+2026-11-05: real-account send and receive and a TheoClaw reply remain unverified.
+The implementation can be tested offline with a simulated `imsg` child; that does not
+establish delivery on Apple’s service. A live check requires a Mac signed in to Messages,
+`imsg`, and the required macOS permissions, which the sandbox does not provide.
+
+On that Mac, run the GatewayRunner example above, send a message from a second account,
+and confirm the reply on that second account. Record the date, macOS and `imsg` versions,
+and the observed inbound and outbound results without recording private account details.
+TheoClaw should supply its handler through the gateway contract shown above; iMessage
+protocol handling stays in this package.

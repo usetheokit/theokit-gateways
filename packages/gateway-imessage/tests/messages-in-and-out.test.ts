@@ -128,6 +128,28 @@ describe("inbound", () => {
     expect(order).toEqual(Array.from({ length: 50 }, (_, i) => i * 2 + 1));
   });
 
+  it("replies through deliver using only the gateway message contract", async () => {
+    const { adapter, child } = await connected();
+    const events = received(adapter);
+    child.message({ id: 42, chat_id: 7, text: "hello" });
+    await until(() => events.length === 1, "inbound event");
+    const event = events[0] as MessageEvent;
+    adapter.onInbound(async (incoming) => {
+      const result = await adapter.sendMessage({
+        channel: incoming.channel,
+        text: `reply: ${incoming.text}`,
+      });
+      expect(result.ok).toBe(true);
+    });
+    const delivering = adapter.deliver(event);
+    await until(() => child.last("send") !== undefined, "reply request");
+    const request = child.last("send") as { id: number; params: unknown };
+    expect(request.params).toEqual({ chat_id: 7, text: "reply: hello" });
+    child.answer(request.id, { guid: "reply-guid" });
+    await expect(delivering).resolves.toBe("ok");
+    await adapter.disconnect();
+  });
+
   it("deliver() hands an out-of-band event to the handler", async () => {
     const { adapter } = await connected();
     const events = received(adapter);
