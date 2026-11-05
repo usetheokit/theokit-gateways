@@ -115,7 +115,7 @@ export class SynologyChatAdapter extends BasePlatformAdapter implements Synology
         },
       };
     }
-    if (!DIGITS.test(out.channel.id)) {
+    if (!isUserId(out.channel.id)) {
       return {
         ok: false,
         error: {
@@ -244,11 +244,15 @@ function readCallback(
   }
   const userId = fields.get("user_id") ?? "";
   const text = fields.get("text");
-  if (!DIGITS.test(userId) || text === undefined) {
+  if (!isUserId(userId) || text === undefined) {
     return { status: 400, body: { error: "user_id must be digits and text must be present" } };
   }
   const postId = fields.get("post_id");
   return { fields, userId: Number(userId), text, postId: postId === "" ? undefined : postId };
+}
+
+function isUserId(value: string): boolean {
+  return DIGITS.test(value) && Number.isSafeInteger(Number(value));
 }
 
 function usable(listed: ChatAnswer | "timeout", timeoutMs: number): boolean {
