@@ -287,3 +287,23 @@ describe("SynologyChatAdapter.sendMessage", () => {
     expect(JSON.stringify(result)).not.toContain("incoming-secret-xyz");
   });
 });
+
+describe("Synology Chat user ID precision", () => {
+  it("rejects unsafe IDs on receive and send without posting to another user", async () => {
+    const { adapter, nas, seen } = await connected();
+    try {
+      const unsafeId = "9007199254740993";
+      const answer = await adapter.handleCallback(FORM, callbackForm({ user_id: unsafeId }));
+      expect(answer.status).toBe(400);
+      expect(seen).toEqual([]);
+      const result = await adapter.sendMessage({
+        channel: { id: unsafeId, type: "dm" },
+        text: "hello",
+      });
+      expect(result.ok).toBe(false);
+      expect(nas.posts()).toEqual([]);
+    } finally {
+      await adapter.disconnect();
+    }
+  });
+});

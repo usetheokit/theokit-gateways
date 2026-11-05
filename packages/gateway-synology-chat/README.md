@@ -57,3 +57,16 @@ Pass `app` to mount the route on an Express app you already run; the adapter the
   `timeout`. `markdown` loses its markers.
 - The Incoming URL holds a token, so no error or log line the adapter writes contains it.
 - A bot reply is not known to call the bot back; the live suite fails if it does.
+
+## Verification status
+
+As of 2026-11-05, a real-account send-and-receive run has not been verified in
+this sandbox: no Synology Chat account credentials or reachable NAS were supplied.
+The offline adapter and GatewayRunner tests use a scripted NAS; they are not
+evidence of a live run.
+
+For a live check, configure the bot's Incoming URL and token, expose the callback
+listener as its Outgoing URL, and run the GatewayRunner example above. Send a
+message to the bot from a real Chat user and confirm the reply appears in that
+user's conversation. Record the date, Chat Server version, received message and
+reply (with tokens redacted) before claiming live verification.
