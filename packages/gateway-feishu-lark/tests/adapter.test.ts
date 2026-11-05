@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FeishuLarkAdapter } from "../src/adapter.js";
 import { createLarkTransport, type LarkSdk } from "../src/transport.js";
 import type { LarkApiResult, LarkConnectionHandlers, LarkTransport } from "../src/types.js";
+import { normalizeLarkMessage } from "../src/normalize.js";
 import { larkEvent } from "./fixtures.js";
 
 const APP_ID = "cli_0123456789abcdef";
@@ -435,5 +436,25 @@ describe("FeishuLarkAdapter.sendMessage", () => {
     await vi.advanceTimersByTimeAsync(1);
 
     expect(result).toMatchObject({ ok: false, error: { code: "timeout" } });
+  });
+});
+
+describe("FeishuLarkAdapter.deliver", () => {
+  it("reports missing, successful and throwing handlers for an out-of-band event", async () => {
+    const adapter = makeAdapter(new FakeTransport());
+    const normalized = normalizeLarkMessage(larkEvent(), 123);
+    if (normalized.kind !== "event") throw new Error("invalid fixture");
+    const event = normalized.event;
+    expect(await adapter.deliver(event)).toBe("no_handler");
+    const handler = vi.fn(async () => undefined);
+    const unsubscribe = adapter.onInbound(handler);
+    expect(await adapter.deliver(event)).toBe("ok");
+    expect(handler).toHaveBeenCalledWith(event);
+    unsubscribe();
+    expect(await adapter.deliver(event)).toBe("no_handler");
+    adapter.onInbound(async () => {
+      throw new Error("handler failed");
+    });
+    expect(await adapter.deliver(event)).toBe("handler_threw");
   });
 });
