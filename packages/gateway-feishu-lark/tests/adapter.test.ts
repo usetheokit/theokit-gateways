@@ -2,9 +2,9 @@ import type { MessageEvent } from "@theokit/gateway";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { FeishuLarkAdapter } from "../src/adapter.js";
+import { normalizeLarkMessage } from "../src/normalize.js";
 import { createLarkTransport, type LarkSdk } from "../src/transport.js";
 import type { LarkApiResult, LarkConnectionHandlers, LarkTransport } from "../src/types.js";
-import { normalizeLarkMessage } from "../src/normalize.js";
 import { larkEvent } from "./fixtures.js";
 
 const APP_ID = "cli_0123456789abcdef";
