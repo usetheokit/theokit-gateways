@@ -33,7 +33,7 @@ const KEY_SET_READ_TIMEOUT_MS = 10_000;
 
 /**
  * The largest key-set document the verifier reads. Measured 2026-10-11, the live Bot Framework set
- * was 876,002 bytes listing 251 keys, about 3.5 KB a key: a 1 MiB cap sat at 84% of it, and crossing
+ * was 876,002 bytes listing 251 keys, about 3.5 KB a key: the document occupied 84% of the old 1 MiB cap, and crossing
  * a cap refuses every new key. 8 MiB is about ten times that document and holds
  * {@link MAX_KEYS_PER_SET} keys of that size; the cap still bounds what an endpoint can make the
  * verifier buffer.
