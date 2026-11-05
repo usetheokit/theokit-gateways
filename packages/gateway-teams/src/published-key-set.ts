@@ -252,9 +252,8 @@ export function keySet(label: string, url: string): PublishedKeySet {
       const now = performance.now();
       const listed = held?.get(kid);
       if (listed !== undefined) {
-        // Nothing awaits the background read. `read` already keeps what it throws, so this
-        // `.catch` never runs; it is here because a floated promise carries its own handler
-        // (the cross-adapter contract in packages/gateway/tests/lint/adapter-contract.test.ts).
+        // Keep an explicit rejection handler at the background boundary, even though `read`
+        // handles expected failures, so an unexpected rejection preserves the last good copy.
         if (now - readAt >= KEY_SET_MAX_AGE_MS) void currentRead(now)?.catch(keepThrown);
         return listed;
       }
