@@ -285,7 +285,22 @@ export class SlackAdapter extends BasePlatformAdapter {
   override async deliver(
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
+    if (!this.passesMentionGate(event)) return "ok";
     return this.runHandler(this.handler, event);
+  }
+
+  /**
+   * The Socket Mode path's `requireMention` gate, applied to a pre-built event so `deliver()` and
+   * the socket path cannot disagree. A public-channel message (`group`, and `channel_type:
+   * "channel"` when the raw body says so) without `<@bot>` is dropped; a DM or thread passes.
+   */
+  private passesMentionGate(event: GatewayMessageEvent): boolean {
+    if (!(this.opts.requireMention ?? true)) return true;
+    if (event.channel.type !== "group" || this.botUserId === undefined) return true;
+    const raw = event.platform === "slack" ? event.slack.raw : undefined;
+    const channelType = (raw as BoltMessageBody | undefined)?.event?.channel_type;
+    if (channelType !== undefined && channelType !== "channel") return true;
+    return event.text.includes(`<@${this.botUserId}>`);
   }
 }
 
