@@ -35,12 +35,14 @@
  *
  * It is not a markdown parser. It rewrites the four inline markers that reach a chat surface in
  * practice — bold, italic, strikethrough, inline code — and it leaves everything else alone:
- * links, headings, lists, block quotes and fenced code are untouched, because no measurement here
+ * links, headings, lists and block quotes are untouched (and fenced code is copied byte for byte), because no measurement here
  * says what they should become on a platform with no equivalent.
  *
  * A platform it has not been taught is passed through UNCHANGED. Inventing a mapping would be
  * wrong invisibly; passing `**bold**` through is wrong where somebody can see it.
  */
+
+import { findFences } from "./fence.js";
 
 /** A dialect is what each of the four markers becomes. `undefined` means "drop the marker". */
 export interface Dialect {
@@ -262,6 +264,22 @@ function rewriteByLine(text: string, dialect: Dialect): string {
  * @returns the rewritten text
  */
 export function rewriteMarkers(text: string, dialect: Dialect): string {
+  const fences = findFences(text);
+  if (fences.length === 0) return rewriteOutsideFences(text, dialect);
+  // A fenced region (markers, info string, code lines) is copied byte for byte; only the text
+  // between regions is rewritten.
+  let out = "";
+  let from = 0;
+  for (const fence of fences) {
+    out +=
+      rewriteOutsideFences(text.slice(from, fence.start), dialect) +
+      text.slice(fence.start, fence.end);
+    from = fence.end;
+  }
+  return out + rewriteOutsideFences(text.slice(from), dialect);
+}
+
+function rewriteOutsideFences(text: string, dialect: Dialect): string {
   const onTableRow = rowLocator(text);
   let crossesRowPipe = false;
   // The third argument from the last of a replace callback is the match's offset.

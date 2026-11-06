@@ -76,6 +76,7 @@ export {
   chunkText,
 } from "./text/chunk.js";
 export { toDialect } from "./text/dialect.js";
+export { type FenceRegion, findFences } from "./text/fence.js";
 // Types
 export type {
   BaseMessageEvent,

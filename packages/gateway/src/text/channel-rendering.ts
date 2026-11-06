@@ -101,8 +101,8 @@ const RENDERINGS: Readonly<Record<PlatformName, ChannelRendering>> = {
  * The rendering `ChatPresenter` needs for `platform`.
  *
  * Only the four inline markers `toDialect` knows are rewritten: bold, italic, strikethrough and
- * inline code. Headings, links, lists and block quotes pass through on every platform, and fenced
- * code is not handled yet (the inline-code rule rewrites a fence's backticks).
+ * inline code. Headings, links, lists and block quotes pass through on every platform, and a
+ * fenced code block (markers and code lines) passes through byte for byte.
  *
  * @param platform - the destination, typically `event.platform` of the inbound message
  * @returns the `{ translate, format }` pair for that platform

@@ -1,0 +1,649 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`fence-aware chunking > splits text with no fence exactly as before 1`] = `
+[
+  "para 0 *x*
+
+more words here
+
+para 1 *x*
+
+more words here
+
+para 2 *x*
+
+more words here
+
+para 3 *x*
+
+more words here
+
+para 4 *x*
+
+more words here
+
+para 5 *x*
+
+more words here
+
+para 6 *x*
+
+more words here
+
+para 7 *x*
+
+more words here
+
+para 8 *x*
+
+more words here
+
+para 9 *x*
+
+more words here",
+  "para 10 *x*
+
+more words here
+
+para 11 *x*
+
+more words here
+
+para 12 *x*
+
+more words here
+
+para 13 *x*
+
+more words here
+
+para 14 *x*
+
+more words here
+
+para 15 *x*
+
+more words here
+
+para 16 *x*
+
+more words here
+
+para 17 *x*
+
+more words here
+
+para 18 *x*
+
+more words here
+
+para 19 *x*
+
+more words here",
+  "para 20 *x*
+
+more words here
+
+para 21 *x*
+
+more words here
+
+para 22 *x*
+
+more words here
+
+para 23 *x*
+
+more words here
+
+para 24 *x*
+
+more words here
+
+para 25 *x*
+
+more words here
+
+para 26 *x*
+
+more words here
+
+para 27 *x*
+
+more words here
+
+para 28 *x*
+
+more words here
+
+para 29 *x*
+
+more words here",
+  "para 30 *x*
+
+more words here
+
+para 31 *x*
+
+more words here
+
+para 32 *x*
+
+more words here
+
+para 33 *x*
+
+more words here
+
+para 34 *x*
+
+more words here
+
+para 35 *x*
+
+more words here
+
+para 36 *x*
+
+more words here
+
+para 37 *x*
+
+more words here
+
+para 38 *x*
+
+more words here
+
+para 39 *x*
+
+more words here",
+  "para 40 *x*
+
+more words here
+
+para 41 *x*
+
+more words here
+
+para 42 *x*
+
+more words here
+
+para 43 *x*
+
+more words here
+
+para 44 *x*
+
+more words here
+
+para 45 *x*
+
+more words here
+
+para 46 *x*
+
+more words here
+
+para 47 *x*
+
+more words here
+
+para 48 *x*
+
+more words here
+
+para 49 *x*
+
+more words here",
+  "para 50 *x*
+
+more words here
+
+para 51 *x*
+
+more words here
+
+para 52 *x*
+
+more words here
+
+para 53 *x*
+
+more words here
+
+para 54 *x*
+
+more words here
+
+para 55 *x*
+
+more words here
+
+para 56 *x*
+
+more words here
+
+para 57 *x*
+
+more words here
+
+para 58 *x*
+
+more words here
+
+para 59 *x*
+
+more words here",
+  "para 60 *x*
+
+more words here
+
+para 61 *x*
+
+more words here
+
+para 62 *x*
+
+more words here
+
+para 63 *x*
+
+more words here
+
+para 64 *x*
+
+more words here
+
+para 65 *x*
+
+more words here
+
+para 66 *x*
+
+more words here
+
+para 67 *x*
+
+more words here
+
+para 68 *x*
+
+more words here
+
+para 69 *x*
+
+more words here",
+  "para 70 *x*
+
+more words here
+
+para 71 *x*
+
+more words here
+
+para 72 *x*
+
+more words here
+
+para 73 *x*
+
+more words here
+
+para 74 *x*
+
+more words here
+
+para 75 *x*
+
+more words here
+
+para 76 *x*
+
+more words here
+
+para 77 *x*
+
+more words here
+
+para 78 *x*
+
+more words here
+
+para 79 *x*
+
+more words here",
+]
+`;
+
+exports[`fence-aware chunking > splits text with no fence exactly as before 2`] = `
+[
+  "para 0 *x*
+
+more words here
+
+para 1 *x*
+
+more words here
+
+para 2 *x*
+
+more words here
+
+para 3 *x*
+
+more words here
+
+para 4 *x*
+
+more words here
+
+para 5 *x*
+
+more words here
+
+para 6 *x*
+
+more words here
+
+para 7 *x*
+
+more words here
+
+para 8 *x*
+
+more words here
+
+para 9 *x*
+
+more words here
+
+para 10 *x",
+  "*
+
+more words here
+
+para 11 *x*
+
+more words here
+
+para 12 *x*
+
+more words here
+
+para 13 *x*
+
+more words here
+
+para 14 *x*
+
+more words here
+
+para 15 *x*
+
+more words here
+
+para 16 *x*
+
+more words here
+
+para 17 *x*
+
+more words here
+
+para 18 *x*
+
+more words here
+
+para 19 *x*
+
+more words here
+
+para 20 *x",
+  "*
+
+more words here
+
+para 21 *x*
+
+more words here
+
+para 22 *x*
+
+more words here
+
+para 23 *x*
+
+more words here
+
+para 24 *x*
+
+more words here
+
+para 25 *x*
+
+more words here
+
+para 26 *x*
+
+more words here
+
+para 27 *x*
+
+more words here
+
+para 28 *x*
+
+more words here
+
+para 29 *x*
+
+more words here
+
+para 30 *x",
+  "*
+
+more words here
+
+para 31 *x*
+
+more words here
+
+para 32 *x*
+
+more words here
+
+para 33 *x*
+
+more words here
+
+para 34 *x*
+
+more words here
+
+para 35 *x*
+
+more words here
+
+para 36 *x*
+
+more words here
+
+para 37 *x*
+
+more words here
+
+para 38 *x*
+
+more words here
+
+para 39 *x*
+
+more words here
+
+para 40 *x",
+  "*
+
+more words here
+
+para 41 *x*
+
+more words here
+
+para 42 *x*
+
+more words here
+
+para 43 *x*
+
+more words here
+
+para 44 *x*
+
+more words here
+
+para 45 *x*
+
+more words here
+
+para 46 *x*
+
+more words here
+
+para 47 *x*
+
+more words here
+
+para 48 *x*
+
+more words here
+
+para 49 *x*
+
+more words here
+
+para 50 *x",
+  "*
+
+more words here
+
+para 51 *x*
+
+more words here
+
+para 52 *x*
+
+more words here
+
+para 53 *x*
+
+more words here
+
+para 54 *x*
+
+more words here
+
+para 55 *x*
+
+more words here
+
+para 56 *x*
+
+more words here
+
+para 57 *x*
+
+more words here
+
+para 58 *x*
+
+more words here
+
+para 59 *x*
+
+more words here
+
+para 60 *x",
+  "*
+
+more words here
+
+para 61 *x*
+
+more words here
+
+para 62 *x*
+
+more words here
+
+para 63 *x*
+
+more words here
+
+para 64 *x*
+
+more words here
+
+para 65 *x*
+
+more words here
+
+para 66 *x*
+
+more words here
+
+para 67 *x*
+
+more words here
+
+para 68 *x*
+
+more words here
+
+para 69 *x*
+
+more words here
+
+para 70 *x",
+  "*
+
+more words here
+
+para 71 *x*
+
+more words here
+
+para 72 *x*
+
+more words here
+
+para 73 *x*
+
+more words here
+
+para 74 *x*
+
+more words here
+
+para 75 *x*
+
+more words here
+
+para 76 *x*
+
+more words here
+
+para 77 *x*
+
+more words here
+
+para 78 *x*
+
+more words here
+
+para 79 *x*
+
+more words here",
+]
+`;
