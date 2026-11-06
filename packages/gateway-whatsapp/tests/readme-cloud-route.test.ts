@@ -32,6 +32,7 @@ function readmeRouteSource(): string {
 }
 
 const tempDirs: string[] = [];
+const routeStateKeys: string[] = [];
 
 /**
  * Load a fresh copy of the README route, so each test gets its own adapter and its own record of
@@ -50,16 +51,20 @@ async function loadRoute(
   const dir = mkdtempSync(join(tmpdir(), "whatsapp-readme-route-"));
   tempDirs.push(dir);
   const file = join(dir, "route.ts");
+  // A key of its own per load: a test that timed out can still be loading when the next one
+  // starts, and a shared global would hand it the next test's handler.
+  const stateKey = `__whatsappReadmeRoute_${crypto.randomUUID()}`;
+  routeStateKeys.push(stateKey);
   writeFileSync(
     file,
     [
       "// biome-ignore-all lint: generated from README.md",
-      "const { cloud, handleMessage, handleReceipt } = (globalThis as any).__whatsappReadmeRoute;",
+      `const { cloud, handleMessage, handleReceipt } = (globalThis as any)[${JSON.stringify(stateKey)}];`,
       source.replace('from "@theokit/gateway-whatsapp"', `from ${importTarget}`),
       "export { onWebhook };",
     ].join("\n"),
   );
-  (globalThis as Record<string, unknown>).__whatsappReadmeRoute = {
+  (globalThis as Record<string, unknown>)[stateKey] = {
     cloud: CLOUD,
     handleMessage,
     handleReceipt,
@@ -140,7 +145,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  delete (globalThis as Record<string, unknown>).__whatsappReadmeRoute;
+  for (const key of routeStateKeys.splice(0)) delete (globalThis as Record<string, unknown>)[key];
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
@@ -181,6 +186,24 @@ describe("the Cloud route documented in README.md", () => {
 
     expect([firstStatus, retryStatus]).toEqual([503, 200]);
     expect(calls).toBe(2);
+  });
+
+  it("gives a route still loading when the next test starts its own handler, not the next test's", async () => {
+    // A test that times out leaves its loadRoute running while the next test starts.
+    const mine: string[] = [];
+    const theirs: string[] = [];
+    const earlier = loadRoute(async (event) => {
+      mine.push(event.id);
+    });
+    const later = loadRoute(async (event) => {
+      theirs.push(event.id);
+    });
+    const [earlierRoute] = await Promise.all([earlier, later]);
+    const { body, signature } = signedBody("wamid.isolated");
+
+    expect(await earlierRoute(body, signature)).toBe(200);
+    expect(mine).toEqual(["wamid.isolated"]);
+    expect(theirs).toEqual([]);
   });
 
   it("does not deliver a message twice once it was delivered", async () => {
