@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { OutboundAttachment } from "../../src/adapter/base.js";
+import type { OutboundAttachment, SendResult } from "../../src/adapter/base.js";
 import type { InboundAudio, MessageEvent } from "../../src/index.js";
 import { GatewayRunner } from "../../src/runner/gateway-runner.js";
 import { MockAdapter } from "../adapter/mock-adapter.js";
@@ -80,5 +80,37 @@ describe("audio in the gateway contract (B-715)", () => {
     const sent = adapter.sent[0]?.attachments?.[0];
     expect(sent?.kind).toBe("audio");
     expect(sent?.data).toBe(voiceBytes);
+  });
+
+  it("an audio reply to a text-only adapter returns attachments_unsupported without sending", async () => {
+    const adapter = new MockAdapter("telegram");
+    const replies: SendResult[] = [];
+    const runner = new GatewayRunner({
+      adapters: [adapter],
+      handler: async (_event, ctx) => {
+        replies.push(
+          await ctx.reply("listen", {
+            attachments: [{ kind: "audio", mediaType: "audio/ogg", data: voiceBytes }],
+          }),
+        );
+      },
+    });
+    await runner.start();
+    await adapter.emit(
+      voiceEvent({ data: voiceBytes, mediaType: "audio/ogg", durationSeconds: 1 }),
+    );
+    await runner.stop();
+
+    expect(replies).toEqual([
+      {
+        ok: false,
+        error: {
+          code: "attachments_unsupported",
+          message: "telegram adapter cannot send attachments",
+        },
+      },
+    ]);
+    expect(adapter.sendAttempts).toBe(0);
+    expect(adapter.sent).toHaveLength(0);
   });
 });

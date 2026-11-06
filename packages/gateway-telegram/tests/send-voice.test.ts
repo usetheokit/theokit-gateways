@@ -225,5 +225,14 @@ describe("GatewayRunner over TelegramAdapter: a reply voice", () => {
 
     expect(replies).toEqual([{ ok: true, messageId: "77" }]);
     expect(sendVoice).toHaveBeenCalledTimes(1);
+    const [chatId, file, options] = sendVoice.mock.calls[0] as unknown as [
+      number,
+      InputFile,
+      object,
+    ];
+    expect(chatId).toBe(100);
+    expect(file).toBeInstanceOf(InputFile);
+    expect(await file.toRaw()).toEqual(clip.data);
+    expect(options).toMatchObject({ caption: "spoken" });
   });
 });
