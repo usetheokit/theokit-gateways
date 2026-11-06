@@ -221,7 +221,28 @@ export class MattermostAdapter extends BasePlatformAdapter {
   override async deliver(
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
+    if (!this.passesMentionGate(event)) return "ok";
     return this.runHandler(this.inboundHandler, event);
+  }
+
+  /**
+   * The same `shouldRespond` gate the websocket path applies, run on an out-of-band event.
+   *
+   * Needs the bot identity from a live connection and the raw post on the event; when either is
+   * missing there is nothing to judge by, so the event passes as it did before.
+   */
+  private passesMentionGate(event: GatewayMessageEvent): boolean {
+    const handle = this.handle;
+    const mm = (event as { mattermost?: { raw?: MattermostPost } }).mattermost;
+    if (handle === undefined || mm?.raw === undefined) return true;
+    return shouldRespond({
+      post: mm.raw,
+      channelType:
+        event.channel.type === "thread" ? "thread" : event.channel.type === "dm" ? "dm" : "group",
+      botUserId: handle.botUserId,
+      botUsername: handle.botUsername,
+      requireMention: this.opts.requireMention ?? true,
+    });
   }
 }
 
