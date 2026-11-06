@@ -109,6 +109,7 @@ describe("TelegramAdapter reads a polled voice note", () => {
     expect(audio?.durationSeconds).toBe(3);
     expect(audio?.data).toBeInstanceOf(Uint8Array);
     expect(audio?.data.length).toBe(9000);
+    expect(audio?.data).toEqual(new Uint8Array(9000).fill(7));
     expect(getFile).toHaveBeenCalledWith("v1");
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(String(fetchSpy.mock.calls[0]?.[0])).toBe(
@@ -123,9 +124,23 @@ describe("TelegramAdapter reads a polled voice note", () => {
   });
 
   it("a text message produces an event with no audio key and 0 getFile calls", async () => {
-    await adapter.getBot().handleUpdate(update({ text: "hello" }));
+    const inbound = update({ text: "hello" });
+    await adapter.getBot().handleUpdate(inbound);
 
     expect(events).toHaveLength(1);
+    expect(events[0]).toEqual({
+      id: `tg-100-${inbound.message?.message_id}`,
+      platform: "telegram",
+      sender: { id: "100", displayName: "u" },
+      channel: { id: "100", type: "dm" },
+      text: "hello",
+      receivedAt: 0,
+      telegram: {
+        chatId: 100,
+        messageId: inbound.message?.message_id,
+        raw: expect.objectContaining({ update: inbound }),
+      },
+    });
     expect("audio" in (events[0] ?? {})).toBe(false);
     expect(getFile).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
