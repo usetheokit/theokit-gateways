@@ -362,19 +362,32 @@ here). Both halves exist now, and the wiring needs three things that are easy to
 import { handleChannelWebhook } from "theokit/server/agent";
 import { route } from "theokit/server/define";
 import { whatsapp, whatsappSubscribe } from "theokit/server/webhook";
-import { normalizeInboundMessages, parseWebhookPayload } from "@theokit/gateway-whatsapp";
+import { parseWebhookPayload, WhatsAppAdapter } from "@theokit/gateway-whatsapp";
+
+// The adapter applies the sender allowlist and the group rule, and drops a message addressed to
+// another phone number of the same Meta app. `normalizeInboundMessages` alone applies none of them.
+const adapter = WhatsAppAdapter.fromCloud(
+  {
+    accessToken: process.env.WHATSAPP_ACCESS_TOKEN!,
+    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID!,
+    appSecret: process.env.META_APP_SECRET!,
+  },
+  { allowedSenders: process.env.WHATSAPP_ALLOWED },
+);
+
+async function onMessage({ payload }: { payload: unknown }): Promise<void> {
+  const envelope = parseWebhookPayload(payload);
+  if (envelope === null) return; // not a shape we know — answer normally
+  for (const event of adapter.toDeliverableEvents(envelope)) {
+    console.log(`${event.from}: ${event.text}`);
+  }
+}
 
 const handle = ({ request }: { request: Request }) =>
   handleChannelWebhook(request, new URL(request.url).pathname, {
     validators: { whatsapp: whatsapp({ appSecret: process.env.META_APP_SECRET! }) },
     subscribe: { whatsapp: whatsappSubscribe({ verifyToken: process.env.META_VERIFY_TOKEN! }) },
-    onMessage: async ({ payload }) => {
-      const envelope = parseWebhookPayload(payload);
-      if (envelope === null) return; // not a shape we know — answer normally
-      for (const event of normalizeInboundMessages(envelope)) {
-        console.log(`${event.from}: ${event.text}`);
-      }
-    },
+    onMessage,
   });
 
 // BOTH verbs, and `.csrf(false)` on each.
@@ -413,7 +426,7 @@ the raw body, the headers and the URL, and `ChannelMessage` provides none of the
 own `createWebhookServer` rather than this seam.
 Every other adapter exports its translation under its own name — `gateway-line` has
 `lineEventToMessageEvent`, `gateway-whatsapp` composes `parseWebhookPayload` with
-`normalizeInboundMessages` — each with its own signature: read the one you are using rather than
+`WhatsAppAdapter.toDeliverableEvents` — each with its own signature: read the one you are using rather than
 assuming this one's.
 
 Adapters whose transport is a long-lived connection rather than a webhook own that transport and do
