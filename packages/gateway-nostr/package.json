@@ -39,7 +39,8 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:live": "vitest run tests/live"
   },
   "dependencies": {
     "nostr-tools": "^2.25.2"

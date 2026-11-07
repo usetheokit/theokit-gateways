@@ -60,6 +60,22 @@ await runner.start();
 - A relay can refuse a long reply with its own size limit, reported as `relay_rejected`; replies
   are not split.
 
+## Live run
+
+Status: **unverified, no live run recorded yet.** The offline tests use a scripted relay. The live
+suite in `tests/live/nostr-live.test.ts` sends a direct message from a throwaway peer key to the bot
+and the bot's reply back, over a real relay. It is skipped unless these are set:
+
+```sh
+NOSTR_LIVE_RELAY=wss://relay.example \
+NOSTR_LIVE_BOT_KEY=nsec1... \
+NOSTR_LIVE_PEER_KEY=nsec1... \
+pnpm --filter @theokit/gateway-nostr test:live
+```
+
+When it passes, add a line here such as `YYYY-MM-DD: send and receive passed against <relay>`, and
+only then change the root README's table row. TheoClaw replying on Nostr is also unverified.
+
 ## The relay client
 
 `NostrRelayClient` is exported for other Nostr-based adapters.
