@@ -25,6 +25,7 @@
  */
 
 import type {
+  BuzzMessageEvent,
   ClickClackMessageEvent,
   FeishuLarkMessageEvent,
   GoogleChatMessageEvent,
@@ -339,6 +340,7 @@ export interface PlatformEventRegistry {
   twitch: TwitchMessageEvent;
   zalo_personal: ZaloPersonalMessageEvent;
   clickclack: ClickClackMessageEvent;
+  buzz: BuzzMessageEvent;
 }
 
 /**

@@ -161,6 +161,25 @@ export interface TlonUrbitMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** Buzz event variant (B-367), a `message.created` realtime event. */
+export interface BuzzMessageEvent extends BaseMessageEvent {
+  readonly platform: "buzz";
+  readonly buzz: {
+    /** The message's id. */
+    readonly messageId: string;
+    /** The channel the message was posted in; for a DM, the DM channel id. */
+    readonly channelId: string;
+    /** The workspace the event belongs to, when the event names one. */
+    readonly workspaceId: string;
+    /** The parent message id when the message is a thread reply, else `""`. */
+    readonly threadId: string;
+    /** The realtime cursor of the event, `""` when absent. */
+    readonly cursor: string;
+    /** The event object — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** ClickClack event variant (B-366), a `message.created` realtime event. */
 export interface ClickClackMessageEvent extends BaseMessageEvent {
   readonly platform: "clickclack";

@@ -40,6 +40,7 @@ const PLATFORM_NAMES = [
   "zalo_personal",
   "zalo-personal",
   "clickclack",
+  "buzz",
 ] as const;
 
 const SRC = new URL("../../src/", import.meta.url).pathname;

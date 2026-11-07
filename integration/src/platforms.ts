@@ -507,6 +507,43 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       "The suite sends one message, then waits up to 120 s for someone else to write in the channel, so a person must reply during the run. The wire shapes are written from ClickClack's public docs and not yet confirmed against a server.",
   },
   {
+    id: "buzz",
+    label: "Buzz",
+    pkg: "@theokit/gateway-buzz",
+    transport: "connection",
+    credentials: [
+      {
+        name: "BUZZ_BASE_URL",
+        what: "Base URL of the Buzz server",
+        where: "The operator's own Buzz deployment",
+      },
+      {
+        name: "BUZZ_TOKEN",
+        what: "A bot token (bz_…) with bot:write and realtime:read",
+        where: "The Buzz admin console",
+      },
+      {
+        name: "BUZZ_WORKSPACE_ID",
+        what: "The workspace whose realtime stream is followed",
+        where: "The Buzz workspace settings or API",
+      },
+      {
+        name: "BUZZ_BOT_USER_ID",
+        what: "The bot's own user id, so its own messages are ignored",
+        where: "Shown when the bot is created",
+      },
+    ],
+    target: [
+      {
+        name: "BUZZ_TEST_CHANNEL_ID",
+        what: "A channel the bot can post in",
+        where: "The channel's id in Buzz",
+      },
+    ],
+    caveat:
+      "The suite sends one message, then waits up to 120 s for someone else to write in the channel, so a person must reply during the run. The wire shapes are an assumption, since no Buzz spec was available, and not yet confirmed against a server.",
+  },
+  {
     id: "zalo_personal",
     label: "Zalo Personal",
     pkg: "@theokit/gateway-zalo-personal",

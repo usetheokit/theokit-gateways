@@ -74,6 +74,7 @@ const CREDENTIAL_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["gateway-twitch", ["accessToken"]],
   ["gateway-zalo-personal", ["credentials"]],
   ["gateway-clickclack", ["token"]],
+  ["gateway-buzz", ["token"]],
   ["gateway-whatsapp", ["accessToken", "appSecret"]],
 ]);
 
@@ -393,7 +394,7 @@ describe("cross-adapter contract", () => {
     // comment used to carry — that adding an adapter makes someone look here — was false:
     // an eighteenth declaration slid past in silence. Exact is the friction, in both
     // directions, and updating one number is the whole cost of adding an adapter.
-    expect(declarations).toBe(29);
+    expect(declarations).toBe(30);
     expect(offenders).toEqual([]);
   });
 
@@ -485,7 +486,7 @@ describe("cross-adapter contract", () => {
     // WhatsApp's three backends. A floor only fires when the count DROPS, which catches the regex
     // breaking but not a new adapter slipping in unchecked — and this file has already shipped
     // both failure modes.
-    expect(bodies).toBe(28);
+    expect(bodies).toBe(29);
     expect(offenders).toEqual([]);
   });
 
@@ -586,7 +587,7 @@ describe("cross-adapter contract", () => {
     // reads the field, or the gate read nothing. Without this assertion a rename of `src/` or a
     // path change would turn the gate green by making it blind — the vacuous pass the credential
     // gate in this file documents having survived once already.
-    expect(examined, "packages examined — a gate that reads nothing reports no offenders").toBe(22);
+    expect(examined, "packages examined — a gate that reads nothing reports no offenders").toBe(23);
 
     expect(ignoring, "adapters that never read the `format` their own contract declares").toEqual(
       [],

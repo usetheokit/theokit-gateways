@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 
 import type {
+  BuzzMessageEvent,
   ClickClackMessageEvent,
   FeishuLarkMessageEvent,
   MessageEvent,
@@ -90,6 +91,19 @@ function makeEvents(): readonly MessageEvent[] {
         raw: {},
       },
     },
+    {
+      ...BASE,
+      id: "b1",
+      platform: "buzz",
+      buzz: {
+        messageId: "bm1",
+        channelId: "bch1",
+        workspaceId: "w1",
+        threadId: "",
+        cursor: "8",
+        raw: {},
+      },
+    },
   ];
 }
 
@@ -103,11 +117,12 @@ describe("nostr, feishu_lark, synology_chat, tlon_urbit and twitch events", () =
       "twitch",
       "zalo_personal",
       "clickclack",
+      "buzz",
     ];
 
     // The assertion that matters is the annotation above, which `tsc` checks; this line only
     // keeps the array from being an unused binding.
-    expect(names).toHaveLength(7);
+    expect(names).toHaveLength(8);
   });
 
   it("narrows each event to its own variant on the discriminator", () => {
@@ -149,11 +164,16 @@ describe("nostr, feishu_lark, synology_chat, tlon_urbit and twitch events", () =
           fields.push(narrowed.clickclack.channelId);
           break;
         }
+        case "buzz": {
+          const narrowed: BuzzMessageEvent = event;
+          fields.push(narrowed.buzz.channelId);
+          break;
+        }
         default:
           throw new Error(`unexpected platform ${event.platform}`);
       }
     }
 
-    expect(fields).toEqual(["14", "oc_1", "42", "~zod", "viewer", "u1", "ch1"]);
+    expect(fields).toEqual(["14", "oc_1", "42", "~zod", "viewer", "u1", "ch1", "bch1"]);
   });
 });

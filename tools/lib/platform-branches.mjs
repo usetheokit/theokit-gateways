@@ -50,6 +50,7 @@ export const PLATFORM_NAMES = Object.freeze([
   "twitch",
   "zalo_personal",
   "clickclack",
+  "buzz",
 ]);
 
 /** Methods only one platform's adapter has; calling one is a branch on that platform. */

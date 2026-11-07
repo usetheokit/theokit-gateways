@@ -104,6 +104,10 @@ export const CREDENTIAL_SHAPES: {
   ],
   uncovered: [
     {
+      field: "gateway-buzz `token`",
+      why: "a Buzz bot token with no fixed shape this package could confirm. It travels only in Authorization headers, which the adapter never logs.",
+    },
+    {
       field: "gateway-clickclack `token`",
       why: "a ClickClack bot token (`ccb_` prefix) or session token with no fixed shape for the latter. It travels only in Authorization headers, which the adapter never logs.",
     },
