@@ -150,11 +150,16 @@ describe("mixedChangesets", () => {
 
   it("refuses_a_front_matter_line_it_cannot_read", () => {
     const changesetDir = fixture(ignored, {
-      "colon.md": "---\n@theokit/gateway-held patch\n---\n",
+      "colon.md": '---\n"@theokit/gateway-held" patch\n---\n',
     });
     const colonFile = join(changesetDir, "colon.md");
     expect(() => mixedChangesets(changesetDir)).toThrow(
-      `${colonFile}: malformed front matter line "@theokit/gateway-held patch"`,
+      `${colonFile}: malformed front matter line ""@theokit/gateway-held" patch"`,
+    );
+    // A bare name starting with @ is refused too, colon or not.
+    writeFileSync(colonFile, "---\n@theokit/gateway-held: patch\n---\n");
+    expect(() => mixedChangesets(changesetDir)).toThrow(
+      `${colonFile}: malformed front matter line "@theokit/gateway-held: patch"`,
     );
     writeFileSync(colonFile, '---\n"@theokit/gateway": pach\n---\n');
     expect(() => mixedChangesets(changesetDir)).toThrow(
