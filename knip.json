@@ -4,6 +4,15 @@
     ".": {
       "entry": ["scripts/*.mjs", "tools/*.mjs"]
     },
+    "packages/gateway": {
+      "entry": ["vitest.mutation.config.ts"]
+    },
+    "packages/gateway-discord": {
+      "entry": ["shims/types-node-26.d.ts"]
+    },
+    "packages/gateway-teams": {
+      "entry": ["tests/**/*.ts"]
+    },
     "packages/gateway-whatsapp": {
       "entry": ["src/bridge/whatsapp-web-bridge.mjs"]
     }

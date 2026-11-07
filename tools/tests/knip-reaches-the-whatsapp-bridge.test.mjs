@@ -23,6 +23,21 @@ describe("knip reaches the WhatsApp bridge", () => {
     expect(undeclared(config, "packages/gateway-whatsapp", BRIDGE)).toBeUndefined();
   });
 
+  it("declares_the_other_files_knip_cannot_reach", () => {
+    const config = JSON.parse(readFileSync(join(ROOT, "knip.json"), "utf8"));
+    expect(undeclared(config, "packages/gateway", "vitest.mutation.config.ts")).toBeUndefined();
+    expect(
+      undeclared(config, "packages/gateway-discord", "shims/types-node-26.d.ts"),
+    ).toBeUndefined();
+    expect(undeclared(config, "packages/gateway-teams", "tests/**/*.ts")).toBeUndefined();
+    for (const [workspace, file] of [
+      ["packages/gateway", "vitest.mutation.config.ts"],
+      ["packages/gateway-discord", "shims/types-node-26.d.ts"],
+    ]) {
+      expect(existsSync(join(ROOT, workspace, file))).toBe(true);
+    }
+  });
+
   it("names_a_file_that_exists", () => {
     expect(existsSync(join(ROOT, "packages/gateway-whatsapp", BRIDGE))).toBe(true);
   });
