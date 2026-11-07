@@ -106,6 +106,7 @@ export type {
   SynologyChatMessageEvent,
   TlonUrbitMessageEvent,
   TwitchMessageEvent,
+  ZaloPersonalMessageEvent,
 } from "./types/platform-events.js";
 
 // The shared half of an Express webhook server — see `webhook/express-server.ts` for why it lives

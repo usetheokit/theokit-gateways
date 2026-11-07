@@ -177,6 +177,8 @@ describe("MessageEvent (T1.1)", () => {
           return `tu:${e.tlon_urbit.messageId}`;
         case "twitch":
           return `tw:${e.twitch.messageId}`;
+        case "zalo_personal":
+          return `zp:${e.zalo_personal.messageId}`;
         default: {
           const _exhaustive: never = e;
           throw new Error(`unhandled platform: ${JSON.stringify(_exhaustive)}`);

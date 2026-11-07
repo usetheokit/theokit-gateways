@@ -35,6 +35,7 @@ const ALL_PLATFORMS = [
   "synology_chat",
   "tlon_urbit",
   "twitch",
+  "zalo_personal",
 ] as const satisfies readonly PlatformName[];
 
 // `PlatformName` is a derived type with no runtime list, so the list above is checked against it
@@ -65,6 +66,7 @@ const PLAIN: readonly PlatformName[] = [
   "synology_chat",
   "tlon_urbit",
   "twitch",
+  "zalo_personal",
 ];
 
 describe("channelRendering", () => {

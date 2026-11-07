@@ -37,6 +37,8 @@ const PLATFORM_NAMES = [
   "tlon_urbit",
   "tlon-urbit",
   "twitch",
+  "zalo_personal",
+  "zalo-personal",
 ] as const;
 
 const SRC = new URL("../../src/", import.meta.url).pathname;

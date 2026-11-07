@@ -470,6 +470,38 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       "Inbound needs someone chatting in the test channel, so the suite checks the connection, the subscription and one send. Follower-only or other channel modes can drop a bot's message, reported as twitch_message_dropped.",
   },
   {
+    id: "zalo_personal",
+    label: "Zalo Personal",
+    pkg: "@theokit/gateway-zalo-personal",
+    transport: "connection",
+    credentials: [
+      {
+        name: "ZALO_PERSONAL_COOKIE",
+        what: "The account's Zalo web cookie jar, as JSON",
+        where: "A `zca-js` QR login for the throwaway account, saved by the operator",
+      },
+      {
+        name: "ZALO_PERSONAL_IMEI",
+        what: "The device id the session was opened with",
+        where: "The same `zca-js` login",
+      },
+      {
+        name: "ZALO_PERSONAL_USER_AGENT",
+        what: "The user agent the session was opened with",
+        where: "The same `zca-js` login",
+      },
+    ],
+    target: [
+      {
+        name: "ZALO_PERSONAL_TEST_THREAD_ID",
+        what: "The uid of a friend of the throwaway account that agrees to receive the test message",
+        where: "The friend's profile in Zalo, or the `zca-js` friends list",
+      },
+    ],
+    caveat:
+      "Unofficial: Zalo may restrict an account that automates, so use a throwaway account. Inbound needs the friend to write, so the suite checks the login, the listener and one send. `zca-js` must be installed beside the adapter.",
+  },
+  {
     id: "nostr",
     label: "Nostr",
     pkg: "@theokit/gateway-nostr",

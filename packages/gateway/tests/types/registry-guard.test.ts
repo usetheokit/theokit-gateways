@@ -86,7 +86,8 @@ type FirstParty =
   | "feishu_lark"
   | "synology_chat"
   | "tlon_urbit"
-  | "twitch";
+  | "twitch"
+  | "zalo_personal";
 
 describe("PlatformEventRegistry — what may join the union", () => {
   it("is exactly the first-party platforms, no more and no fewer", () => {

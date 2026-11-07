@@ -12,7 +12,8 @@
     "@theokit/gateway-feishu-lark",
     "@theokit/gateway-synology-chat",
     "@theokit/gateway-tlon-urbit",
-    "@theokit/gateway-twitch"
+    "@theokit/gateway-twitch",
+    "@theokit/gateway-zalo-personal"
   ],
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
     "onlyUpdatePeerDependentsWhenOutOfRange": true
