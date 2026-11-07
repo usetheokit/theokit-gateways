@@ -161,6 +161,23 @@ export interface TlonUrbitMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** Zalo Personal event variant (B-365), a message read from a personal Zalo account's listener. */
+export interface ZaloPersonalMessageEvent extends BaseMessageEvent {
+  readonly platform: "zalo_personal";
+  readonly zalo_personal: {
+    /** The message's `msgId`. */
+    readonly messageId: string;
+    /** The conversation's id: the peer's uid for a direct chat, the group id for a group. */
+    readonly threadId: string;
+    /** `"user"` for a direct chat, `"group"` for a group. */
+    readonly threadType: "user" | "group";
+    /** The sender's uid. */
+    readonly senderUid: string;
+    /** The listener's message object — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** Twitch event variant (B-363), a `channel.chat.message` EventSub notification. */
 export interface TwitchMessageEvent extends BaseMessageEvent {
   readonly platform: "twitch";

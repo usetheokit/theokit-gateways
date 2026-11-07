@@ -42,6 +42,7 @@ import { TeamsAdapter } from "@theokit/gateway-teams";
 import { TelegramAdapter } from "@theokit/gateway-telegram";
 import { TlonUrbitAdapter } from "@theokit/gateway-tlon-urbit";
 import { TwitchAdapter } from "@theokit/gateway-twitch";
+import { ZaloPersonalAdapter } from "@theokit/gateway-zalo-personal";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -173,6 +174,13 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
         accessToken: "not-a-real-token",
         botUserId: "1",
         broadcasterUserIds: ["2"],
+      }),
+  },
+  {
+    platform: "zalo_personal",
+    make: () =>
+      new ZaloPersonalAdapter({
+        credentials: { cookie: [], imei: "not-a-real-imei", userAgent: "not-a-real-agent" },
       }),
   },
 ];

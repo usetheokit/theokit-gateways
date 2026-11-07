@@ -104,6 +104,10 @@ export const CREDENTIAL_SHAPES: {
   ],
   uncovered: [
     {
+      field: "gateway-zalo-personal `credentials`",
+      why: "a Zalo web session: a cookie jar, an IMEI-like device id and a user agent. The cookie has no prefix or fixed shape to recognise. It travels only to the Zalo library, which the adapter never logs.",
+    },
+    {
       field: "gateway-twitch `accessToken`",
       why: "30 lowercase alphanumerics with no prefix, the shape of many ids and hashes in a log. It travels only in Authorization headers, which the adapter never logs.",
     },

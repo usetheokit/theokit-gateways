@@ -16,6 +16,7 @@ import type {
   SynologyChatMessageEvent,
   TlonUrbitMessageEvent,
   TwitchMessageEvent,
+  ZaloPersonalMessageEvent,
 } from "../../src/index.js";
 
 const BASE = {
@@ -63,6 +64,18 @@ function makeEvents(): readonly MessageEvent[] {
         raw: {},
       },
     },
+    {
+      ...BASE,
+      id: "z1",
+      platform: "zalo_personal",
+      zalo_personal: {
+        messageId: "zm1",
+        threadId: "t1",
+        threadType: "user",
+        senderUid: "u1",
+        raw: {},
+      },
+    },
   ];
 }
 
@@ -74,11 +87,12 @@ describe("nostr, feishu_lark, synology_chat, tlon_urbit and twitch events", () =
       "synology_chat",
       "tlon_urbit",
       "twitch",
+      "zalo_personal",
     ];
 
     // The assertion that matters is the annotation above, which `tsc` checks; this line only
     // keeps the array from being an unused binding.
-    expect(names).toHaveLength(5);
+    expect(names).toHaveLength(6);
   });
 
   it("narrows each event to its own variant on the discriminator", () => {
@@ -110,11 +124,16 @@ describe("nostr, feishu_lark, synology_chat, tlon_urbit and twitch events", () =
           fields.push(narrowed.twitch.chatterLogin);
           break;
         }
+        case "zalo_personal": {
+          const narrowed: ZaloPersonalMessageEvent = event;
+          fields.push(narrowed.zalo_personal.senderUid);
+          break;
+        }
         default:
           throw new Error(`unexpected platform ${event.platform}`);
       }
     }
 
-    expect(fields).toEqual(["14", "oc_1", "42", "~zod", "viewer"]);
+    expect(fields).toEqual(["14", "oc_1", "42", "~zod", "viewer", "u1"]);
   });
 });
