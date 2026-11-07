@@ -12,7 +12,9 @@ const BRIDGE = "src/bridge/whatsapp-web-bridge.mjs";
 
 function undeclared(config, workspace, file) {
   const entries = config.workspaces?.[workspace]?.entry ?? [];
-  return entries.includes(file) ? undefined : `${workspace} does not declare ${file} as a knip entry`;
+  return entries.includes(file)
+    ? undefined
+    : `${workspace} does not declare ${file} as a knip entry`;
 }
 
 describe("knip reaches the WhatsApp bridge", () => {
