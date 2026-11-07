@@ -133,6 +133,7 @@ const OVERRIDES_EDIT_MESSAGE = /^\s+override async editMessage\(/m;
 describe("which adapters can edit", () => {
   it("reads every adapter source", async () => {
     expect((await adapterSources()).map(({ pkg }) => pkg)).toEqual([
+      "gateway-clickclack",
       "gateway-discord",
       "gateway-email",
       "gateway-feishu-lark",
