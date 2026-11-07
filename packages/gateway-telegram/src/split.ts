@@ -23,9 +23,13 @@ export function splitForTelegram(text: string): string[] {
       parts.push(remaining);
       break;
     }
-    let boundary = remaining.lastIndexOf("\n\n", SAFE_CHUNK);
-    if (boundary < SAFE_CHUNK / 2) boundary = remaining.lastIndexOf("\n", SAFE_CHUNK);
-    if (boundary < SAFE_CHUNK / 2) boundary = SAFE_CHUNK;
+    let boundary = findBoundary(remaining);
+    // B-556: a cut inside a table row that fits a chunk moves back to the row's start.
+    const afterRow = takeRowSafe(parts, remaining, boundary);
+    if (afterRow !== undefined) {
+      remaining = afterRow;
+      continue;
+    }
     const rawChunk = remaining.slice(0, boundary);
     const balanced = balanceMarkdownPairs(rawChunk);
     // Forward progress is not negotiable. `balanceMarkdownPairs` trims back to
@@ -47,6 +51,61 @@ export function splitForTelegram(text: string): string[] {
     remaining = remaining.slice(boundary).replace(/^\n+/, "");
   }
   return parts;
+}
+
+/** The paragraph, then line, then hard boundary within the safe window. */
+function findBoundary(remaining: string): number {
+  let boundary = remaining.lastIndexOf("\n\n", SAFE_CHUNK);
+  if (boundary < SAFE_CHUNK / 2) boundary = remaining.lastIndexOf("\n", SAFE_CHUNK);
+  return boundary < SAFE_CHUNK / 2 ? SAFE_CHUNK : boundary;
+}
+
+/**
+ * When `boundary` falls inside a table row that fits a chunk, pushes the part before the row and
+ * returns the text from the row on; undefined otherwise.
+ */
+function takeRowSafe(parts: string[], remaining: string, boundary: number): string | undefined {
+  const moved = rowSafeCut(remaining, boundary, SAFE_CHUNK);
+  if (moved === undefined) return undefined;
+  parts.push(remaining.slice(0, moved.end));
+  return remaining.slice(moved.start);
+}
+
+/** `\n`, or `\r` alone or before `\n`: GFM reads a lone CR as a line ending too. */
+const isLineEnd = (ch: string | undefined): boolean => ch === "\n" || ch === "\r";
+
+/**
+ * Where to cut instead of `cut` so a Markdown table row (a line whose first non-blank character is
+ * `|`) it falls inside stays whole: `start` is the row's first character, `end` where the chunk
+ * ends with its trailing line endings dropped. Undefined when `cut` is not inside a row, the row
+ * opens the chunk, or the row is longer than `window`. The same rule is in core `chunkText`
+ * (`keepTableRows`); this package keeps its own copy because it peers core `>=0.9.0`.
+ */
+function rowSafeCut(
+  text: string,
+  cut: number,
+  window: number,
+): { readonly end: number; readonly start: number } | undefined {
+  const start = tableRowStart(text, cut);
+  if (start === undefined || rowLength(text, start, cut, window) > window) return undefined;
+  let end = start;
+  while (end > 0 && isLineEnd(text[end - 1])) end -= 1;
+  return end > 0 ? { end, start } : undefined;
+}
+
+/** Start of the table row `cut` falls inside, or undefined (not in a row, or the row opens the text). */
+function tableRowStart(text: string, cut: number): number | undefined {
+  if (cut >= text.length || isLineEnd(text[cut])) return undefined;
+  let start = cut;
+  while (start > 0 && !isLineEnd(text[start - 1])) start -= 1;
+  return start > 0 && /^[^\S\r\n]*\|/.test(text.slice(start, cut + 1)) ? start : undefined;
+}
+
+/** Length of the row from `start`, scanning no further than `window` past it. */
+function rowLength(text: string, start: number, cut: number, window: number): number {
+  let rowEnd = cut;
+  while (rowEnd < text.length && rowEnd - start <= window && !isLineEnd(text[rowEnd])) rowEnd += 1;
+  return rowEnd - start;
 }
 
 /**
