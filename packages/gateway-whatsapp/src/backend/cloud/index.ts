@@ -240,12 +240,15 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
    * `WhatsAppAdapter` applies too).
    *
    * @returns `true` if the signature is valid and the body was dispatched (or held nothing to
-   *          dispatch). `false` if the signature is invalid, if the signed body is not JSON or
-   *          has a shape {@link parseWebhookPayload} refuses, or if it holds a message for this
-   *          number while no inbound handler is subscribed (before `onInbound`, or after
-   *          `disconnect()`): the whole body is refused, never a part of it dropped, and one line
-   *          on stderr says which. Answer `false` with a non-2xx (401 for a bad signature) so the
-   *          drop is seen and Meta redelivers. Status receipts with no status handler subscribed
+   *          dispatch). `false` if the signature is invalid (answer 401), or if the body holds a
+   *          message for this number while no inbound handler is subscribed (before `onInbound`,
+   *          or after `disconnect()`): the whole body is refused, never a part of it dropped, and
+   *          one line on stderr says which; answer non-2xx so Meta redelivers once a handler is
+   *          subscribed. `"unreadable_body"` if the signature is valid but the body is not JSON
+   *          or has a shape {@link parseWebhookPayload} refuses: nothing is dispatched and one
+   *          line on stderr says why. This is not forgery, and redelivery cannot recover it:
+   *          Meta resends the same bytes, which are refused again. Answer it differently from a
+   *          bad signature (the README example answers 200 so Meta stops retrying). Status receipts with no status handler subscribed
    *          are discarded on purpose: subscribing to receipts is optional, and refusing them
    *          would make Meta redeliver every receipt to a route that never wants one.
    * @throws {ConfigurationError} `missing_option` when this backend's `appSecret` is empty or
@@ -254,19 +257,19 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
   async handleWebhookPayload(
     rawBody: Buffer | string,
     signatureHeader: string | undefined,
-  ): Promise<boolean> {
+  ): Promise<boolean | "unreadable_body"> {
     if (!verifyWebhookSignature(rawBody, signatureHeader, this.appSecret)) {
       return false;
     }
     const json = this.parseBody(rawBody);
-    if (json === undefined) return false;
+    if (json === undefined) return "unreadable_body";
     const envelope = parseWebhookPayload(json);
     if (envelope === null) {
       // Answering true would let the route say 200 and Meta never redeliver the batch.
       process.stderr.write(
         "[whatsapp-cloud] signed webhook body has a shape the parser refuses (no object, no entry array, or a malformed entry, change or list); refused whole, nothing dispatched\n",
       );
-      return false;
+      return "unreadable_body";
     }
     const messages = normalizeInboundMessages(envelope).filter(
       (event) => !isForAnotherNumber(event, this.phoneNumberId, this.reportedForeignNumbers),

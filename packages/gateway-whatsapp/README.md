@@ -97,9 +97,12 @@ whose `id`, `from` or `text.body` is not a string, a contact whose `wa_id` or `p
 a string, or a status whose `id`, `status` or `recipient_id` is not a string. The whole body is refused, not just its bad entries, so the route
 answers it (400 in the example) instead of dropping part of a batch unseen. Any non-null envelope
 is safe to hand to `toDeliverableEvents` and `normalizeStatusReceipts`: neither throws on it.
-`WhatsAppCloudBackend.handleWebhookPayload` refuses such a body the same way: it answers `false`,
-as it does for a signed body that is not JSON, dispatches nothing and writes one line to stderr,
-so a route built on it answers non-2xx and Meta redelivers instead of losing the batch. It also
+`WhatsAppCloudBackend.handleWebhookPayload` refuses such a body too, and tells it from a forgery: a
+bad signature answers `false` (answer 401), while a signed body that is not JSON or that the parser
+refuses answers `"unreadable_body"`. Either way it dispatches nothing; the second also writes one
+line to stderr. A route should answer `"unreadable_body"` with something other than 401, such as 200:
+the signature proves Meta sent it, and a non-2xx only makes Meta redeliver the same bytes, which are
+refused again until Meta gives up, so redelivery cannot recover it (fix the parser, not the retry). It also
 answers `false` for a body holding a message for its number while no inbound handler is
 subscribed, before `onInbound` or after `disconnect()`. Status receipts with no status handler are
 discarded, because subscribing to them is optional.
