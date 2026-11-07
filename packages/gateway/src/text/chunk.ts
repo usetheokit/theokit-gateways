@@ -19,6 +19,8 @@
  * @public
  */
 
+import { type FenceRegion, fenceAt, openerEol, scanFences } from "./fence.js";
+
 /** Options for {@link chunkText}. */
 export interface ChunkTextOptions {
   /**
@@ -153,6 +155,69 @@ function rowLength(text: string, start: number, cut: number, window: number): nu
   return rowEnd - start;
 }
 
+/** What one fence-aware cut does: the chunk to emit and the text that remains. */
+interface CutStep {
+  readonly chunk: string;
+  readonly remaining: string;
+}
+
+/** The table-row cut as a step, undefined when the cut is not inside a row that fits. */
+function rowStep(remaining: string, cut: number, window: number): CutStep | undefined {
+  const moved = rowSafeCut(remaining, cut, window);
+  if (moved === undefined) return undefined;
+  return { chunk: remaining.slice(0, moved.end), remaining: remaining.slice(moved.start) };
+}
+
+/** A cut in a fence's opening line moves back to the fence start; undefined when nothing precedes it. */
+function stepBeforeFence(remaining: string, region: FenceRegion): CutStep | undefined {
+  let end = region.start;
+  while (end > 0 && isLineEnd(remaining[end - 1])) end -= 1;
+  if (end === 0) return undefined;
+  return { chunk: remaining.slice(0, end), remaining: remaining.slice(region.start) };
+}
+
+/** Close `region` at the end of the chunk and reopen it, opening line and all, at the start of the next. */
+function stepThroughFence(
+  remaining: string,
+  region: FenceRegion,
+  window: number,
+  surrogateGuard: boolean,
+): CutStep | undefined {
+  const eol = openerEol(remaining, region);
+  const room = window - region.closer.length - eol.length;
+  if (room <= region.contentStart) return undefined;
+  let at = remaining.lastIndexOf("\n", room);
+  let rest = at + 1;
+  if (at < region.contentStart) {
+    at = surrogateGuard ? guardSurrogate(remaining, room) : room;
+    rest = at;
+  } else if (remaining[at - 1] === "\r") {
+    at -= 1;
+  }
+  return {
+    chunk: `${remaining.slice(0, at)}${eol}${region.closer}`,
+    remaining: `${region.opener}${eol}${remaining.slice(rest)}`,
+  };
+}
+
+/**
+ * The cut for a position inside a fenced block (B-518): out of the opening line, or closed and
+ * reopened at a line end when one fits, so no code line is split. Undefined when `cut` is not inside
+ * a fence or no room is left for the closing marker, and the caller cuts as it would without fences.
+ */
+function fenceStep(
+  remaining: string,
+  cut: number,
+  window: number,
+  surrogateGuard: boolean,
+): CutStep | undefined {
+  const region = fenceAt(scanFences(remaining), cut);
+  if (region === undefined) return undefined;
+  return cut <= region.openerEnd
+    ? stepBeforeFence(remaining, region)
+    : stepThroughFence(remaining, region, window, surrogateGuard);
+}
+
 /**
  * Split `text` into chunks no longer than the configured window, preferring
  * natural boundaries. Behavior is fully determined by {@link ChunkTextOptions}.
@@ -186,17 +251,17 @@ export function chunkText(text: string, options: ChunkTextOptions): string[] {
   }
 
   const parts: string[] = [];
+  const hasFence = scanFences(text).length > 0;
   let remaining = text;
   while (remaining.length > safeLimit) {
     const cut = findCut(remaining, safeLimit, boundaries, lastResort, surrogateGuard);
-    const moved = keepTableRows ? rowSafeCut(remaining, cut, safeLimit) : undefined;
-    if (moved !== undefined) {
-      parts.push(remaining.slice(0, moved.end));
-      remaining = remaining.slice(moved.start);
-      continue;
-    }
-    parts.push(remaining.slice(0, cut));
-    remaining = remaining.slice(cut).replace(stripLeading, "");
+    const step = (hasFence ? fenceStep(remaining, cut, safeLimit, surrogateGuard) : undefined) ??
+      (keepTableRows ? rowStep(remaining, cut, safeLimit) : undefined) ?? {
+        chunk: remaining.slice(0, cut),
+        remaining: remaining.slice(cut).replace(stripLeading, ""),
+      };
+    parts.push(step.chunk);
+    remaining = step.remaining;
   }
   if (remaining.length > 0) parts.push(remaining);
   return finalize(parts);
@@ -229,6 +294,9 @@ export function chunkByGrapheme(text: string, options: ChunkByGraphemeOptions): 
   if (text.length === 0) return [""];
   if (text.length <= limit) return [text];
 
+  const regions = scanFences(text);
+  if (regions.length > 0) return chunkFencedByGrapheme(text, partLimit, regions);
+
   const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
   const parts: string[] = [];
   let buf = "";
@@ -241,4 +309,79 @@ export function chunkByGrapheme(text: string, options: ChunkByGraphemeOptions): 
   }
   if (buf.length > 0) parts.push(buf);
   return parts;
+}
+
+/** Finds the grapheme starts of `text`: the largest in `(pos, max]`, else the next one past `pos`. */
+function graphemeBoundaries(text: string): (pos: number, max: number) => number {
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  const starts = Array.from(segmenter.segment(text), (s) => s.index);
+  starts.push(text.length);
+  return (pos, max) => {
+    const after = starts.filter((b) => b > pos);
+    const within = after.filter((b) => b <= max);
+    return within.at(-1) ?? after[0] ?? text.length;
+  };
+}
+
+/** How a part ends and the next begins: the closing marker, and the opening line to put back. */
+interface GraphemeCut {
+  readonly cut: number;
+  readonly suffix: string;
+  readonly reopen: string;
+}
+
+/**
+ * The grapheme walk when `text` holds a fence (B-518): a part cut inside a fenced block ends with the
+ * closing marker and the next opens with the opening line again. A cut falls at a line end when one
+ * fits. Text with no fence never reaches here.
+ */
+function chunkFencedByGrapheme(
+  text: string,
+  partLimit: number,
+  regions: readonly FenceRegion[],
+): string[] {
+  const boundaryUpTo = graphemeBoundaries(text);
+  const parts: string[] = [];
+  let pos = 0;
+  let prefix = "";
+  while (prefix.length + (text.length - pos) > partLimit) {
+    const room = partLimit - prefix.length;
+    const plain = boundaryUpTo(pos, pos + room);
+    const region = fenceAt(regions, plain);
+    const next: GraphemeCut =
+      region === undefined
+        ? { cut: plain, suffix: "", reopen: "" }
+        : fenceGraphemeCut(text, region, pos, plain, room, boundaryUpTo);
+    parts.push(prefix + text.slice(pos, next.cut) + next.suffix);
+    pos = next.cut;
+    prefix = next.reopen;
+  }
+  parts.push(prefix + text.slice(pos));
+  return parts;
+}
+
+/** The cut for `plain`, a grapheme cut that falls inside `region`. */
+function fenceGraphemeCut(
+  text: string,
+  region: FenceRegion,
+  pos: number,
+  plain: number,
+  room: number,
+  boundaryUpTo: (pos: number, max: number) => number,
+): GraphemeCut {
+  const none: GraphemeCut = { cut: plain, suffix: "", reopen: "" };
+  if (plain <= region.openerEnd) {
+    return region.start > pos ? { ...none, cut: region.start } : none;
+  }
+  const eol = openerEol(text, region);
+  const max = pos + room - region.closer.length - eol.length;
+  const floor = Math.max(pos, region.contentStart);
+  if (max <= floor) return none;
+  let at = boundaryUpTo(pos, max);
+  const nl = text.lastIndexOf("\n", at - 1);
+  if (nl >= floor - 1 && nl + 1 > pos) at = nl + 1;
+  if (at <= pos || at > max) return none;
+  if (fenceAt([region], at) === undefined) return { ...none, cut: at };
+  const closes = isLineEnd(text[at - 1]);
+  return { cut: at, suffix: (closes ? "" : eol) + region.closer, reopen: region.opener + eol };
 }
