@@ -215,6 +215,29 @@ describe("GatewayRunner.stop() called while start() is still connecting", () => 
     expect(report[0]).toContain("socket close failed");
   });
 
+  it("disconnects_the_other_adapters_when_one_disconnect_fails_while_stopping", async () => {
+    const stderr = captureStderr();
+    const telegram = new DisconnectRejectingAdapter("telegram");
+    const discord = new MockAdapter("discord");
+    const slack = new MockAdapter("slack");
+    const runner = new GatewayRunner({
+      adapters: [telegram, discord, slack],
+      handler: async () => {},
+    });
+    await runner.start();
+
+    await expect(runner.stop(), "a failed disconnect made stop() reject").resolves.toBeUndefined();
+
+    expect(telegram.disconnectCount).toBe(1);
+    expect(discord.disconnectCount, "a failed disconnect skipped the next adapter").toBe(1);
+    expect(slack.disconnectCount, "a failed disconnect skipped the last adapter").toBe(1);
+    expect(discord.connected).toBe(false);
+    expect(slack.connected).toBe(false);
+    const report = stderr.filter((line) => line.includes("disconnect failed"));
+    expect(report).toHaveLength(1);
+    expect(report[0]).toContain('"telegram"');
+  });
+
   it("keeps_the_failed_list_when_stop_overtakes_an_isolate_start", async () => {
     const telegram = new HeldConnectAdapter("telegram");
     const discord = new MockAdapter("discord");
