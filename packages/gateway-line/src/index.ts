@@ -16,3 +16,5 @@ export type {
 } from "./types.js";
 export type { WebhookServer, WebhookServerOptions } from "./webhook-server.js";
 export { createWebhookServer } from "./webhook-server.js";
+export type { LineWebhookVerifyResult } from "./webhook-verifier.js";
+export { lineWebhookVerifier } from "./webhook-verifier.js";
