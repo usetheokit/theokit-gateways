@@ -61,6 +61,14 @@ export interface ChunkTextOptions {
    * (WhatsApp/Teams). Also applied to the single-chunk fast path. Default `false`.
    */
   readonly trimParts?: boolean;
+  /**
+   * When true, a cut that would fall inside a Markdown table row (a line whose first non-blank
+   * character is `|`) moves back to the start of that row, provided the row fits in the window and
+   * does not open the chunk; the row then opens the next chunk whole and byte-identical (B-556).
+   * A row longer than the window is cut by length as before. Text with no table row splits exactly
+   * as without the option. Default: `false`.
+   */
+  readonly keepTableRows?: boolean;
 }
 
 /** Most-preferred boundary at `>= window*0.5`, else the last boundary tried. */
@@ -102,6 +110,49 @@ function findCut(
   return cut <= 0 ? window : cut;
 }
 
+/** `\n`, or `\r` alone or before `\n`: GFM reads a lone CR as a line ending too. */
+const isLineEnd = (ch: string | undefined): boolean => ch === "\n" || ch === "\r";
+
+/** True when the line starting at `from` is a table row: optional blanks, then a pipe. */
+function startsTableRow(text: string, from: number): boolean {
+  let at = from;
+  while (at < text.length && /^[^\S\r\n]$/.test(text[at] ?? "")) at += 1;
+  return text[at] === "|";
+}
+
+/**
+ * Where to cut instead of `cut` so a table row it falls inside stays whole: `start` is the row's
+ * first character (the next chunk begins there), `end` is where this chunk ends, its trailing line
+ * endings dropped. Undefined when `cut` is not inside a row, the row opens the chunk, or the row
+ * does not fit in `window`.
+ */
+function rowSafeCut(
+  text: string,
+  cut: number,
+  window: number,
+): { readonly end: number; readonly start: number } | undefined {
+  const start = tableRowStart(text, cut);
+  if (start === undefined || rowLength(text, start, cut, window) > window) return undefined;
+  let end = start;
+  while (end > 0 && isLineEnd(text[end - 1])) end -= 1;
+  return end > 0 ? { end, start } : undefined;
+}
+
+/** Start of the table row `cut` falls inside, or undefined (not in a row, or the row opens the text). */
+function tableRowStart(text: string, cut: number): number | undefined {
+  if (cut >= text.length || isLineEnd(text[cut])) return undefined;
+  let start = cut;
+  while (start > 0 && !isLineEnd(text[start - 1])) start -= 1;
+  return start > 0 && startsTableRow(text, start) ? start : undefined;
+}
+
+/** Length of the row from `start`, scanning no further than `window` past it. */
+function rowLength(text: string, start: number, cut: number, window: number): number {
+  let rowEnd = cut;
+  while (rowEnd < text.length && rowEnd - start <= window && !isLineEnd(text[rowEnd])) rowEnd += 1;
+  return rowEnd - start;
+}
+
 /**
  * Split `text` into chunks no longer than the configured window, preferring
  * natural boundaries. Behavior is fully determined by {@link ChunkTextOptions}.
@@ -115,6 +166,7 @@ export function chunkText(text: string, options: ChunkTextOptions): string[] {
     surrogateGuard = false,
     stripLeading = /^\n+/,
     trimParts = false,
+    keepTableRows = false,
   } = options;
 
   // Fail fast at the boundary: a non-positive `limit` would make `findCut`
@@ -137,6 +189,12 @@ export function chunkText(text: string, options: ChunkTextOptions): string[] {
   let remaining = text;
   while (remaining.length > safeLimit) {
     const cut = findCut(remaining, safeLimit, boundaries, lastResort, surrogateGuard);
+    const moved = keepTableRows ? rowSafeCut(remaining, cut, safeLimit) : undefined;
+    if (moved !== undefined) {
+      parts.push(remaining.slice(0, moved.end));
+      remaining = remaining.slice(moved.start);
+      continue;
+    }
     parts.push(remaining.slice(0, cut));
     remaining = remaining.slice(cut).replace(stripLeading, "");
   }

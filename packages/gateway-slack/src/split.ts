@@ -21,5 +21,6 @@ export function splitForSlack(text: string): string[] {
     lastResort: "last-boundary",
     surrogateGuard: true,
     stripLeading: /^\s+/,
+    keepTableRows: true,
   });
 }

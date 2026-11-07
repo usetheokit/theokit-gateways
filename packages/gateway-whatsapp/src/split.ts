@@ -23,5 +23,6 @@ export function splitForWhatsApp(text: string): string[] {
     surrogateGuard: true,
     stripLeading: /^\s+/,
     trimParts: true,
+    keepTableRows: true,
   });
 }
