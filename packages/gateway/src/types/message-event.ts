@@ -25,6 +25,7 @@
  */
 
 import type {
+  ClickClackMessageEvent,
   FeishuLarkMessageEvent,
   GoogleChatMessageEvent,
   IMessageMessageEvent,
@@ -337,6 +338,7 @@ export interface PlatformEventRegistry {
   tlon_urbit: TlonUrbitMessageEvent;
   twitch: TwitchMessageEvent;
   zalo_personal: ZaloPersonalMessageEvent;
+  clickclack: ClickClackMessageEvent;
 }
 
 /**

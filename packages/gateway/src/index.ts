@@ -96,6 +96,7 @@ export type {
   WhatsAppMessageEvent,
 } from "./types/message-event.js";
 export type {
+  ClickClackMessageEvent,
   FeishuLarkMessageEvent,
   GoogleChatMessageEvent,
   IMessageMessageEvent,

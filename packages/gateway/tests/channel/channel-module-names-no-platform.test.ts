@@ -39,6 +39,7 @@ const PLATFORM_NAMES = [
   "twitch",
   "zalo_personal",
   "zalo-personal",
+  "clickclack",
 ] as const;
 
 const SRC = new URL("../../src/", import.meta.url).pathname;

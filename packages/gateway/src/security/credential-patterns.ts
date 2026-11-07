@@ -104,6 +104,10 @@ export const CREDENTIAL_SHAPES: {
   ],
   uncovered: [
     {
+      field: "gateway-clickclack `token`",
+      why: "a ClickClack bot token (`ccb_` prefix) or session token with no fixed shape for the latter. It travels only in Authorization headers, which the adapter never logs.",
+    },
+    {
       field: "gateway-zalo-personal `credentials`",
       why: "a Zalo web session: a cookie jar, an IMEI-like device id and a user agent. The cookie has no prefix or fixed shape to recognise. It travels only to the Zalo library, which the adapter never logs.",
     },

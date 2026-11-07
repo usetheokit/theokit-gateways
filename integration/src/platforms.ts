@@ -470,6 +470,43 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       "Inbound needs someone chatting in the test channel, so the suite checks the connection, the subscription and one send. Follower-only or other channel modes can drop a bot's message, reported as twitch_message_dropped.",
   },
   {
+    id: "clickclack",
+    label: "ClickClack",
+    pkg: "@theokit/gateway-clickclack",
+    transport: "connection",
+    credentials: [
+      {
+        name: "CLICKCLACK_BASE_URL",
+        what: "Base URL of the ClickClack server",
+        where: "The operator's own ClickClack deployment",
+      },
+      {
+        name: "CLICKCLACK_TOKEN",
+        what: "A bot token (ccb_…) with bot:write and realtime:read",
+        where: "`clickclack admin bot create`",
+      },
+      {
+        name: "CLICKCLACK_WORKSPACE_ID",
+        what: "The workspace whose realtime stream is followed",
+        where: "The ClickClack workspace settings or API",
+      },
+      {
+        name: "CLICKCLACK_BOT_USER_ID",
+        what: "The bot's own user id, so its own messages are ignored",
+        where: "The output of `clickclack admin bot create`",
+      },
+    ],
+    target: [
+      {
+        name: "CLICKCLACK_TEST_CHANNEL_ID",
+        what: "A channel the bot can post in",
+        where: "The channel's id in ClickClack",
+      },
+    ],
+    caveat:
+      "Inbound needs someone writing in the channel, so the suite checks the socket and one send. The wire shapes are written from ClickClack's public docs and not yet confirmed against a server.",
+  },
+  {
     id: "zalo_personal",
     label: "Zalo Personal",
     pkg: "@theokit/gateway-zalo-personal",

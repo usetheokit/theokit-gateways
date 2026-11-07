@@ -23,6 +23,7 @@
  */
 
 import type { BasePlatformAdapter } from "@theokit/gateway";
+import { ClickClackAdapter } from "@theokit/gateway-clickclack";
 import { DiscordAdapter } from "@theokit/gateway-discord";
 import { EmailAdapter } from "@theokit/gateway-email";
 import { FeishuLarkAdapter } from "@theokit/gateway-feishu-lark";
@@ -174,6 +175,16 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
         accessToken: "not-a-real-token",
         botUserId: "1",
         broadcasterUserIds: ["2"],
+      }),
+  },
+  {
+    platform: "clickclack",
+    make: () =>
+      new ClickClackAdapter({
+        baseUrl: "https://clickclack.invalid",
+        token: "not-a-real-token",
+        workspaceId: "w",
+        botUserId: "b",
       }),
   },
   {
