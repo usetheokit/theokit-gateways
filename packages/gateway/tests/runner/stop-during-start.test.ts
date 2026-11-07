@@ -215,6 +215,28 @@ describe("GatewayRunner.stop() called while start() is still connecting", () => 
     expect(report[0]).toContain("socket close failed");
   });
 
+  it("redacts_a_credential_in_a_disconnect_failure_while_stopping", async () => {
+    const stderr = captureStderr();
+    const secret = "sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789";
+    class LeakyDisconnectAdapter extends MockAdapter {
+      override async disconnect(): Promise<void> {
+        this.disconnectCount += 1;
+        throw new Error(`close failed with key ${secret}`);
+      }
+    }
+    const runner = new GatewayRunner({
+      adapters: [new LeakyDisconnectAdapter("telegram")],
+      handler: async () => {},
+    });
+    await runner.start();
+    await runner.stop();
+
+    const report = stderr.filter((line) => line.includes("disconnect failed"));
+    expect(report).toHaveLength(1);
+    expect(report[0], "stop() wrote a credential to stderr").not.toContain(secret);
+    expect(report[0]).toContain("close failed with key");
+  });
+
   it("disconnects_the_other_adapters_when_one_disconnect_fails_while_stopping", async () => {
     const stderr = captureStderr();
     const telegram = new DisconnectRejectingAdapter("telegram");
