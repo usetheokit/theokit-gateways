@@ -8,10 +8,10 @@
  */
 
 import { LineAdapter } from "./adapter.js";
-import { ConfigurationError } from "./errors.js";
 import { isEnvelope } from "./envelope.js";
+import { ConfigurationError } from "./errors.js";
 import { verifyLineSignature } from "./signature.js";
-import type { LineAdapterOptions, LineWebhookEnvelope } from "./types.js";
+import type { LineAdapterOptions } from "./types.js";
 
 const SIGNATURE_HEADER = "x-line-signature";
 
