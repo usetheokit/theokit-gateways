@@ -120,6 +120,17 @@ describe("ClickClackAdapter", () => {
     await adapter.disconnect();
   });
 
+  it("keeps one pending retry when a reconnect socket fails", async () => {
+    const { adapter, sockets, socket } = await connected({ reconnectDelayMs: 10 });
+    socket.drop();
+    await new Promise((r) => setTimeout(r, 25));
+    expect(sockets).toHaveLength(2);
+    sockets[1]?.drop(); // close event and the failed result both ask for a retry
+    await new Promise((r) => setTimeout(r, 25));
+    expect(sockets).toHaveLength(3);
+    await adapter.disconnect();
+  });
+
   it("posts a reply with the bearer token and returns its id", async () => {
     const { adapter, calls } = await connected();
     const result = await adapter.sendMessage({ channel: { id: "ch1", type: "group" }, text: "hi" });

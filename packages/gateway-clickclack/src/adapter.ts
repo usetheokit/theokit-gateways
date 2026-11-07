@@ -218,6 +218,8 @@ export class ClickClackAdapter extends BasePlatformAdapter {
   private scheduleReconnect(generation: number): void {
     const delay = this.opts.reconnectDelayMs ?? DEFAULT_RECONNECT_MS;
     if (delay <= 0) return;
+    // One pending retry at most: a failed reconnect reaches here from both its close event and its result.
+    clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout(() => {
       if (generation !== this.generation) return;
       this.reconnect(generation).catch(() => undefined);

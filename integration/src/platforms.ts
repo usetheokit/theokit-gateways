@@ -504,7 +504,7 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       },
     ],
     caveat:
-      "Inbound needs someone writing in the channel, so the suite checks the socket and one send. The wire shapes are written from ClickClack's public docs and not yet confirmed against a server.",
+      "The suite sends one message, then waits up to 120 s for someone else to write in the channel, so a person must reply during the run. The wire shapes are written from ClickClack's public docs and not yet confirmed against a server.",
   },
   {
     id: "zalo_personal",
