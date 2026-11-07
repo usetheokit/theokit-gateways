@@ -16,6 +16,7 @@ export type {
   WebhookRequest,
 } from "./channel/channel-descriptor.js";
 export {
+  type BuiltChannel,
   type ChannelEntry,
   type ChannelRejection,
   type CreateChannelsResult,

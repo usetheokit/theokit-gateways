@@ -176,6 +176,6 @@ describe("createChannels", () => {
   });
 
   it("returns empty lists for an empty entry list", () => {
-    expect(createChannels([])).toEqual({ adapters: [], rejected: [] });
+    expect(createChannels([])).toEqual({ adapters: [], channels: [], rejected: [] });
   });
 });

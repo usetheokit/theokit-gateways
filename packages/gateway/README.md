@@ -301,6 +301,7 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
   `GatewayConfigurationError` coded `missing_required_config` that names the keys, and reports a
   configuration error thrown by `create` the same way. Any other error propagates. It performs no
   network call.
+- `createChannels` also returns `channels`: each built adapter paired with the descriptor that built it, in the order of `adapters`.
 - `connectFailure` defaults to `"rollback"`: one failed connect disconnects the adapters that did
   connect and rejects `start()`, as before. Under `"isolate"`, `start()` resolves even when every
   adapter failed, so check `connected` before you rely on the runner.
