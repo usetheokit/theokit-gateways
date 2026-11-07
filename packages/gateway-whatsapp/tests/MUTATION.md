@@ -13,6 +13,7 @@ files and not the others, is in `stryker.config.json`.
 | 2026-08-30 (after this pass) | 95.86% | 162 | 7 |
 | 2026-10-06 (`inbound-rules.ts` and `signature.ts` in scope) | 96.90% | 281 | 9 |
 | 2026-10-09 (foreign phone number id redacted in `inbound-rules.ts`) | 97.00% | 291 | 9 |
+| 2026-11-07 (`addressed-number.ts` split out of `inbound-rules.ts`, B-437) | 97.37% | 296 | 8 |
 
 `break` is set to the measured figure with headroom for two mutants (one mutant is ~0.59% of 169).
 It is a ratchet: raise it when the score rises, never lower it to make a red run green.
@@ -113,5 +114,5 @@ guard had no survivor, and ten mutants of the function survived, handled this wa
 |---|---|---|
 | hex check | `/^[0-9a-f]+$/i` becomes `/[0-9a-f]+$/i` | EQUIVALENT. Without `^`, only a header whose hex part starts with a non-hex character passes the check differently, and `Buffer.from(hex, "hex")` stops at the first non-hex character, so that header decodes to an empty buffer and fails the length guard either way |
 
-The foreign phone number id check (`isForAnotherNumber`, in `inbound-rules.ts`) left no survivor,
+The foreign phone number id check (`isForAnotherNumber`, in `addressed-number.ts` since B-437) left no survivor,
 and still left none on 2026-10-09 after it began naming the id by its last four digits.

@@ -15,6 +15,7 @@
  * @public
  */
 
+import { isForAnotherNumber } from "../../addressed-number.js";
 import type {
   WhatsAppBackend,
   WhatsAppInboundEvent,
@@ -22,7 +23,6 @@ import type {
   WhatsAppSendResult,
   WhatsAppStatusReceipt,
 } from "../../backend-types.js";
-import { isForAnotherNumber } from "../../inbound-rules.js";
 import { WhatsAppCloudClient } from "./client.js";
 import type { MetaTemplateComponent, MetaWebhookEnvelope } from "./types.js";
 import {

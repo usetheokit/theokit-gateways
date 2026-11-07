@@ -6,10 +6,10 @@
  */
 
 import type { WhatsAppMessageEvent } from "@theokit/gateway";
-
+import { isForAnotherNumber } from "./addressed-number.js";
 import type { WhatsAppInboundEvent } from "./backend-types.js";
 import { ConfigurationError } from "./errors.js";
-import { decideInbound, type InboundRules, isForAnotherNumber } from "./inbound-rules.js";
+import { decideInbound, type InboundRules } from "./inbound-rules.js";
 
 /**
  * The event the agent receives for `inbound`, or `undefined` when it is addressed to another number
