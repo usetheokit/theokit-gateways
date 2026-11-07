@@ -135,6 +135,18 @@ describe("lineChannel.webhook.ingest", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  it("does not throw on a message event whose message field is null", async () => {
+    const adapter = lineChannel.create(CONFIG);
+    const handler = vi.fn(async (_event: MessageEvent) => {});
+    adapter.onInbound(handler);
+
+    const result = await lineChannel.webhook.ingest(adapter, {
+      events: [{ type: "message", message: null }],
+    });
+    expect(result).toBe("delivered");
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it("delivers a text message event to the subscribed handler with its reply token cached", async () => {
     const seen = stubLineApi();
     const adapter = lineChannel.create(CONFIG);
