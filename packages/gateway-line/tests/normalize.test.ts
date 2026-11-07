@@ -184,3 +184,14 @@ describe("lineEventToMessageEvent — happy paths", () => {
     }
   });
 });
+
+describe("null message/source (B-047)", () => {
+  it("returns undefined for message null", () => {
+    const e = textEvent({ message: null } as unknown as Partial<LineWebhookEvent>);
+    expect(lineEventToMessageEvent(e)).toBeUndefined();
+  });
+  it("returns undefined for source null", () => {
+    const e = textEvent({ source: null } as unknown as Partial<LineWebhookEvent>);
+    expect(lineEventToMessageEvent(e)).toBeUndefined();
+  });
+});

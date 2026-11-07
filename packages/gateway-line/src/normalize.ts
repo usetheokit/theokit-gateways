@@ -29,11 +29,11 @@ export function mapSourceType(sourceType: string): "dm" | "group" | "thread" {
 export function lineEventToMessageEvent(event: LineWebhookEvent): LineMessageEvent | undefined {
   // EC-4: filter at the top — non-message events have undefined fields downstream.
   if (event.type !== "message") return undefined;
-  if (event.message === undefined) return undefined;
+  if (event.message == null) return undefined;
   if (event.message.type !== "text") return undefined;
 
   const source = event.source;
-  if (source === undefined) return undefined;
+  if (source == null) return undefined;
 
   const sourceId = source.userId ?? source.groupId ?? source.roomId;
   const sourceType = source.type as "user" | "group" | "room";
