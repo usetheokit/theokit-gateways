@@ -316,8 +316,9 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
   runner you build from adapters you constructed yourself is not checked, so give it one adapter
   per platform: with two of one platform the later one sends the earlier one's replies, and the
   earlier one is connected but never disconnected.
-- Under `"isolate"`, and under `"rollback"` until the first failure, `start()` waits for every
-  connect, so a connect that never settles blocks it.
+- `start()` waits for every connect under both `connectFailure` modes, so a connect that never
+  settles blocks it. Under `"rollback"` that holds after a failure too: a failing start rejects
+  only once its slowest connect settles.
 - A webhook channel's request reaches your HTTP route; route it by platform to the descriptor's
   `webhook.verify(adapter, { rawBody, headers })`, then parse the body and pass it to
   `webhook.ingest(adapter, payload)`, which answers `"delivered"`, `"malformed"` or
