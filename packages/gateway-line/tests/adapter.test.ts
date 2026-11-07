@@ -283,7 +283,11 @@ describe("LineAdapter.dispatchWebhookBody (inbound)", () => {
       message: { type: "text", id: "m-1", text: "hi" },
     };
     const nullMessage = { type: "message", source: { type: "user", userId: "U-a" }, message: null };
-    const nullSource = { type: "message", source: null, message: { type: "text", id: "m-2", text: "x" } };
+    const nullSource = {
+      type: "message",
+      source: null,
+      message: { type: "text", id: "m-2", text: "x" },
+    };
     await expect(
       adapter.dispatchWebhookBody(
         makeEnv([good, nullMessage, nullSource, good] as unknown as LineWebhookEvent[]),
