@@ -11,11 +11,10 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 describe("knip unused files", () => {
   it("reports_no_unimported_file", () => {
-    const run = spawnSync(
-      "pnpm",
-      ["exec", "knip", "--no-progress", "--reporter", "json"],
-      { cwd: ROOT, encoding: "utf8" },
-    );
+    const run = spawnSync("pnpm", ["exec", "knip", "--no-progress", "--reporter", "json"], {
+      cwd: ROOT,
+      encoding: "utf8",
+    });
     const report = JSON.parse(run.stdout);
     const files = report.files ?? report.issues?.flatMap((i) => i.files ?? []) ?? [];
     expect(files).toEqual([]);
