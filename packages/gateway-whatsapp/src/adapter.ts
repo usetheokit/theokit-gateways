@@ -28,7 +28,8 @@ import type {
   WhatsAppStatusReceipt,
 } from "./backend-types.js";
 import { ConfigurationError } from "./errors.js";
-import { digitsOnly, type InboundRules, isForAnotherNumber } from "./inbound-rules.js";
+import { isForAnotherNumber } from "./foreign-number.js";
+import { digitsOnly, type InboundRules } from "./inbound-rules.js";
 import { decideForOwnNumber, requireOwnPhoneNumberId } from "./own-number.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import { splitForWhatsApp } from "./split.js";

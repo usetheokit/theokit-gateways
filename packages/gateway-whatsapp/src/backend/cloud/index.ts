@@ -22,7 +22,7 @@ import type {
   WhatsAppSendResult,
   WhatsAppStatusReceipt,
 } from "../../backend-types.js";
-import { isForAnotherNumber } from "../../inbound-rules.js";
+import { isForAnotherNumber } from "../../foreign-number.js";
 import { WhatsAppCloudClient } from "./client.js";
 import type { MetaTemplateComponent, MetaWebhookEnvelope } from "./types.js";
 import {
