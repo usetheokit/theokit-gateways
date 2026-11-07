@@ -42,6 +42,8 @@
  * wrong invisibly; passing `**bold**` through is wrong where somebody can see it.
  */
 
+import { scanFences } from "./fence.js";
+
 /** A dialect is what each of the four markers becomes. `undefined` means "drop the marker". */
 export interface Dialect {
   readonly bold?: string;
@@ -262,6 +264,22 @@ function rewriteByLine(text: string, dialect: Dialect): string {
  * @returns the rewritten text
  */
 export function rewriteMarkers(text: string, dialect: Dialect): string {
+  const regions = scanFences(text);
+  if (regions.length === 0) return rewriteUnfenced(text, dialect);
+  // A fenced block is code: its markers and its lines stay byte-identical (B-518).
+  let out = "";
+  let from = 0;
+  for (const region of regions) {
+    out +=
+      rewriteUnfenced(text.slice(from, region.start), dialect) +
+      text.slice(region.start, region.end);
+    from = region.end;
+  }
+  return out + rewriteUnfenced(text.slice(from), dialect);
+}
+
+/** The rewrite of text holding no fenced block: the single pass, or the row-by-row pass. */
+function rewriteUnfenced(text: string, dialect: Dialect): string {
   const onTableRow = rowLocator(text);
   let crossesRowPipe = false;
   // The third argument from the last of a replace callback is the match's offset.
