@@ -49,6 +49,9 @@ export interface WhatsAppCloudBackendOptions {
  * Business-initiated messages outside the 24-hour customer service window must use an approved
  * template — a plain text send to a cold contact is rejected by the platform, not by this code.
  */
+/** What {@link WhatsAppCloudBackend.handleWebhookPayload} tells the route; see its docblock. */
+export type WebhookOutcome = "accepted" | "bad_signature" | "unreadable_body" | "no_handler";
+
 export class WhatsAppCloudBackend implements WhatsAppBackend {
   readonly kind = "cloud" as const;
   private readonly client: WhatsAppCloudClient;
@@ -239,45 +242,49 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
    * naming none, is dropped and its id written to stderr once (`isForAnotherNumber`, the rule
    * `WhatsAppAdapter` applies too).
    *
-   * @returns `true` if the signature is valid and the body was dispatched (or held nothing to
-   *          dispatch). `false` if the signature is invalid, if the signed body is not JSON or
-   *          has a shape {@link parseWebhookPayload} refuses, or if it holds a message for this
-   *          number while no inbound handler is subscribed (before `onInbound`, or after
-   *          `disconnect()`): the whole body is refused, never a part of it dropped, and one line
-   *          on stderr says which. Answer `false` with a non-2xx (401 for a bad signature) so the
-   *          drop is seen and Meta redelivers. Status receipts with no status handler subscribed
-   *          are discarded on purpose: subscribing to receipts is optional, and refusing them
-   *          would make Meta redeliver every receipt to a route that never wants one.
+   * @returns a {@link WebhookOutcome}, so the route can answer each refusal differently:
+   *          - `"accepted"`: the signature is valid and the body was dispatched (or held nothing
+   *            to dispatch). Answer 200.
+   *          - `"bad_signature"`: forged or unsigned. Answer 401.
+   *          - `"unreadable_body"`: the signature is valid but the body is not JSON or has a shape
+   *            {@link parseWebhookPayload} refuses. Nothing was dispatched and one stderr line says
+   *            why. Meta redelivers a byte-identical body, which the parser refuses again, so a
+   *            non-2xx only makes Meta retry until it gives up: answer 2xx (200) and alert on the
+   *            stderr line; the fix is a code change, not a redelivery.
+   *          - `"no_handler"`: the body holds a message for this number while no inbound handler is
+   *            subscribed (before `onInbound`, or after `disconnect()`). Nothing was dispatched.
+   *            Redelivery can succeed once a handler subscribes: answer 503.
+   *          The whole body is refused, never a part of it dropped. Status receipts with no status
+   *          handler subscribed are discarded on purpose: subscribing to receipts is optional.
    * @throws {ConfigurationError} `missing_option` when this backend's `appSecret` is empty or
    *         whitespace only: a signature under an empty key proves nothing.
    */
   async handleWebhookPayload(
     rawBody: Buffer | string,
     signatureHeader: string | undefined,
-  ): Promise<boolean> {
+  ): Promise<WebhookOutcome> {
     if (!verifyWebhookSignature(rawBody, signatureHeader, this.appSecret)) {
-      return false;
+      return "bad_signature";
     }
     const json = this.parseBody(rawBody);
-    if (json === undefined) return false;
+    if (json === undefined) return "unreadable_body";
     const envelope = parseWebhookPayload(json);
     if (envelope === null) {
-      // Answering true would let the route say 200 and Meta never redeliver the batch.
       process.stderr.write(
         "[whatsapp-cloud] signed webhook body has a shape the parser refuses (no object, no entry array, or a malformed entry, change or list); refused whole, nothing dispatched\n",
       );
-      return false;
+      return "unreadable_body";
     }
     const messages = normalizeInboundMessages(envelope).filter(
       (event) => !isForAnotherNumber(event, this.phoneNumberId, this.reportedForeignNumbers),
     );
     const inboundHandler = this.inboundHandler;
     if (messages.length > 0 && inboundHandler === undefined) {
-      // Answering true would let the route say 200 and Meta never redeliver these messages.
+      // Redelivery can succeed once a handler subscribes, so this one is not "unreadable_body".
       process.stderr.write(
         `[whatsapp-cloud] signed webhook body holds ${messages.length} message(s) for this number and no inbound handler is subscribed; refused whole, nothing dispatched\n`,
       );
-      return false;
+      return "no_handler";
     }
     // The handler that accepted the batch receives all of it. Re-reading it per message let a
     // `disconnect()` or unsubscribe inside the first message's handler skip the rest while this
@@ -285,7 +292,7 @@ export class WhatsAppCloudBackend implements WhatsAppBackend {
     // already handled.
     if (inboundHandler !== undefined) await this.dispatchInbound(messages, inboundHandler);
     await this.dispatchStatusReceipts(envelope);
-    return true;
+    return "accepted";
   }
 
   /**

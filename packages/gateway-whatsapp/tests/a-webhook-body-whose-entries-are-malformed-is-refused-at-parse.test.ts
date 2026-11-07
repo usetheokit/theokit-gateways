@@ -211,7 +211,7 @@ describe("the Cloud backend given a signed body it cannot read", () => {
     const { backend } = backendWithHandler();
     const body = JSON.stringify(envelope([null]));
 
-    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe(false);
+    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe("unreadable_body");
     expect(stderr.mock.calls.map(([line]) => String(line))).toEqual([
       expect.stringContaining("[whatsapp-cloud] signed webhook body has a shape"),
     ]);
@@ -226,7 +226,7 @@ describe("the Cloud backend given a signed body it cannot read", () => {
       ]),
     );
 
-    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe(false);
+    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe("unreadable_body");
     expect(received).toEqual([]);
   });
 
@@ -243,7 +243,7 @@ describe("the Cloud backend given a signed body it cannot read", () => {
       ]),
     );
 
-    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe(false);
+    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe("unreadable_body");
     expect(received).toEqual([]);
   });
 
@@ -258,7 +258,7 @@ describe("the Cloud backend given a signed body it cannot read", () => {
     });
     const body = JSON.stringify(envelope([good, { id: "biz-2" }]));
 
-    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe(false);
+    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe("unreadable_body");
     expect(received).toEqual([]);
   });
 });

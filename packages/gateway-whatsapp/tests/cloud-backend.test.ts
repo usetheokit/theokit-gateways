@@ -118,12 +118,29 @@ describe("WhatsAppCloudBackend", () => {
     expect((fakeFetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
   });
 
+  it("tells a bad signature from a signed body the parser refuses, so a route can answer each differently", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const b = makeBackend();
+    const handler = vi.fn(async () => {});
+    b.onInbound(handler);
+    const refused = JSON.stringify({ object: "whatsapp_business_account", entry: [null] });
+
+    const forged = await b.handleWebhookPayload(refused, "sha256=DEADBEEF".padEnd(71, "0"));
+    const unreadable = await b.handleWebhookPayload(refused, signedHeader(refused));
+
+    expect(forged).toBe("bad_signature");
+    expect(unreadable).toBe("unreadable_body");
+    expect(forged).not.toBe(unreadable);
+    expect(handler).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
   it("test_cloud_backend_handle_webhook_invalid_signature_no_dispatch", async () => {
     const b = makeBackend();
     const handler = vi.fn(async () => {});
     b.onInbound(handler);
     const ok = await b.handleWebhookPayload(TEXT_ENVELOPE, "sha256=DEADBEEF".padEnd(71, "0"));
-    expect(ok).toBe(false);
+    expect(ok).toBe("bad_signature");
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -132,7 +149,7 @@ describe("WhatsAppCloudBackend", () => {
     const handler = vi.fn(async () => {});
     b.onInbound(handler);
     const ok = await b.handleWebhookPayload(TEXT_ENVELOPE, signedHeader(TEXT_ENVELOPE));
-    expect(ok).toBe(true);
+    expect(ok).toBe("accepted");
     expect(handler).toHaveBeenCalledTimes(1);
     const firstCall = handler.mock.calls[0];
     expect(firstCall).toBeDefined();
@@ -166,7 +183,7 @@ describe("WhatsAppCloudBackend", () => {
     b.onInbound(inboundH);
     b.onStatusReceipt(statusH);
     const ok = await b.handleWebhookPayload(statusEnv, signedHeader(statusEnv));
-    expect(ok).toBe(true);
+    expect(ok).toBe("accepted");
     expect(inboundH).not.toHaveBeenCalled();
     expect(statusH).toHaveBeenCalledTimes(1);
     const firstCall = statusH.mock.calls[0];
@@ -254,7 +271,7 @@ describe("WhatsAppCloudBackend — a throwing handler", () => {
 
     await expect(
       b.handleWebhookPayload(BATCH_ENVELOPE, signedHeader(BATCH_ENVELOPE)),
-    ).resolves.toBe(true);
+    ).resolves.toBe("accepted");
     stderr.mockRestore();
   });
 
@@ -265,7 +282,9 @@ describe("WhatsAppCloudBackend — a throwing handler", () => {
     const b = makeBackend();
     const notJson = "this is not json";
 
-    await expect(b.handleWebhookPayload(notJson, signedHeader(notJson))).resolves.toBe(false);
+    await expect(b.handleWebhookPayload(notJson, signedHeader(notJson))).resolves.toBe(
+      "unreadable_body",
+    );
     stderr.mockRestore();
   });
 });
@@ -576,7 +595,7 @@ describe("WhatsAppCloudBackend webhook entrypoint, used without WhatsAppAdapter"
 
     const ok = await b.handleWebhookPayload(body, signedHeader(body));
 
-    expect(ok).toBe(true);
+    expect(ok).toBe("accepted");
     expect(handler).not.toHaveBeenCalled();
     expect(stderr.mock.calls.map((c) => String(c[0])).join("")).toContain(
       "a phone number id ending in 1111",
@@ -633,7 +652,7 @@ describe("WhatsAppCloudBackend webhook entrypoint, used without WhatsAppAdapter"
 
     const ok = await b.handleWebhookPayload(body, signedHeader(body));
 
-    expect(ok).toBe(true);
+    expect(ok).toBe("accepted");
     expect(statusHandler).not.toHaveBeenCalled();
     expect(stderr.mock.calls.map((c) => String(c[0])).join("")).toContain(
       "a phone number id ending in 222:",
@@ -650,7 +669,7 @@ describe("WhatsAppCloudBackend webhook entrypoint, used without WhatsAppAdapter"
 
     const ok = await b.handleWebhookPayload(body, signedHeader(body));
 
-    expect(ok).toBe(true);
+    expect(ok).toBe("accepted");
     expect(statusHandler).not.toHaveBeenCalled();
     stderr.mockRestore();
   });
@@ -663,7 +682,7 @@ describe("WhatsAppCloudBackend webhook entrypoint, used without WhatsAppAdapter"
 
     const ok = await b.handleWebhookPayload(body, signedHeader(body));
 
-    expect(ok).toBe(true);
+    expect(ok).toBe("accepted");
     expect(statusHandler).toHaveBeenCalledTimes(1);
     expect((statusHandler.mock.calls[0] as unknown[])[0]).toMatchObject({
       wamid: "wamid.s",
@@ -681,7 +700,7 @@ describe("WhatsAppCloudBackend webhook entrypoint, used without WhatsAppAdapter"
 
     const ok = await b.handleWebhookPayload(body, signedHeader(body));
 
-    expect(ok).toBe(true);
+    expect(ok).toBe("accepted");
     expect(handler).not.toHaveBeenCalled();
     stderr.mockRestore();
   });
@@ -726,7 +745,7 @@ describe("WhatsAppCloudBackend webhook entrypoint with no inbound handler subscr
 
     const ok = await b.handleWebhookPayload(TEXT_ENVELOPE, signedHeader(TEXT_ENVELOPE));
 
-    expect(ok).toBe(false);
+    expect(ok).toBe("no_handler");
     expect(stderr.lines()).toEqual([expect.stringContaining("no inbound handler is subscribed")]);
     vi.restoreAllMocks();
   });
@@ -740,7 +759,7 @@ describe("WhatsAppCloudBackend webhook entrypoint with no inbound handler subscr
 
     const ok = await b.handleWebhookPayload(TEXT_ENVELOPE, signedHeader(TEXT_ENVELOPE));
 
-    expect(ok).toBe(false);
+    expect(ok).toBe("no_handler");
     expect(handler).not.toHaveBeenCalled();
     vi.restoreAllMocks();
   });
@@ -773,7 +792,7 @@ describe("WhatsAppCloudBackend webhook entrypoint with no inbound handler subscr
 
     const ok = await b.handleWebhookPayload(body, signedHeader(body));
 
-    expect({ ok, seen }).toEqual({ ok: true, seen: ["wamid.1", "wamid.2", "wamid.3"] });
+    expect({ ok, seen }).toEqual({ ok: "accepted", seen: ["wamid.1", "wamid.2", "wamid.3"] });
     vi.restoreAllMocks();
   });
 
@@ -789,7 +808,7 @@ describe("WhatsAppCloudBackend webhook entrypoint with no inbound handler subscr
 
     const ok = await b.handleWebhookPayload(body, signedHeader(body));
 
-    expect({ ok, seen }).toEqual({ ok: true, seen: ["wamid.1", "wamid.2", "wamid.3"] });
+    expect({ ok, seen }).toEqual({ ok: "accepted", seen: ["wamid.1", "wamid.2", "wamid.3"] });
     vi.restoreAllMocks();
   });
 
@@ -799,7 +818,7 @@ describe("WhatsAppCloudBackend webhook entrypoint with no inbound handler subscr
 
     const ok = await b.handleWebhookPayload(STATUS_ONLY, signedHeader(STATUS_ONLY));
 
-    expect(ok).toBe(true);
+    expect(ok).toBe("accepted");
     expect(stderr.lines()).toEqual([]);
     vi.restoreAllMocks();
   });
@@ -811,7 +830,7 @@ describe("WhatsAppCloudBackend webhook entrypoint with no inbound handler subscr
     envelope.entry[0].changes[0].value.metadata.phone_number_id = "109900001111";
     const body = JSON.stringify(envelope);
 
-    expect(await b.handleWebhookPayload(body, signedHeader(body))).toBe(true);
+    expect(await b.handleWebhookPayload(body, signedHeader(body))).toBe("accepted");
     vi.restoreAllMocks();
   });
 });

@@ -444,7 +444,7 @@ describe("WhatsAppAdapter.toDeliverableEvents and the envelope's phone number id
     );
     const hex = createHmac("sha256", CLOUD.appSecret).update(body).digest("hex");
 
-    expect(await inner.handleWebhookPayload(body, `sha256=${hex}`)).toBe(true);
+    expect(await inner.handleWebhookPayload(body, `sha256=${hex}`)).toBe("accepted");
     expect(received).toEqual(["wamid.own"]);
   });
 
@@ -487,7 +487,7 @@ describe("the foreign phone number id on the single-message and backend-hosted p
       received.push(event.id);
     });
     const backend = adapter.getBackend() as WhatsAppCloudBackend;
-    const post = async (wamid: string, phoneNumberId: string): Promise<boolean> => {
+    const post = async (wamid: string, phoneNumberId: string): Promise<string> => {
       const body = JSON.stringify(
         envelopeJson([{ from: "5511999999999", id: wamid, body: "hello" }], phoneNumberId),
       );
@@ -495,8 +495,8 @@ describe("the foreign phone number id on the single-message and backend-hosted p
       return backend.handleWebhookPayload(body, `sha256=${hex}`);
     };
 
-    expect(await post("wamid.foreign", FOREIGN)).toBe(true);
-    expect(await post("wamid.own", "PNID")).toBe(true);
+    expect(await post("wamid.foreign", FOREIGN)).toBe("accepted");
+    expect(await post("wamid.own", "PNID")).toBe("accepted");
 
     expect(received).toEqual(["wamid.own"]);
     expect(stderrLines.filter((line) => line.includes(FOREIGN_LABEL))).toHaveLength(1);
@@ -517,7 +517,7 @@ describe("a signed batch through WhatsAppAdapter reaches the handler that accept
         { from: "5511999999999", id: "wamid.3", body: "three" },
       ]),
     );
-  const postSigned = (adapter: WhatsAppAdapter, body: string): Promise<boolean> => {
+  const postSigned = (adapter: WhatsAppAdapter, body: string): Promise<string> => {
     const hex = createHmac("sha256", CLOUD.appSecret).update(body).digest("hex");
     return (adapter.getBackend() as WhatsAppCloudBackend).handleWebhookPayload(
       body,
@@ -535,7 +535,7 @@ describe("a signed batch through WhatsAppAdapter reaches the handler that accept
 
     const ok = await postSigned(adapter, threeMessageBody());
 
-    expect({ ok, seen }).toEqual({ ok: true, seen: ["wamid.1", "wamid.2", "wamid.3"] });
+    expect({ ok, seen }).toEqual({ ok: "accepted", seen: ["wamid.1", "wamid.2", "wamid.3"] });
   });
 
   it("delivers every message when the handler unsubscribes itself on the first one", async () => {
@@ -548,7 +548,7 @@ describe("a signed batch through WhatsAppAdapter reaches the handler that accept
 
     const ok = await postSigned(adapter, threeMessageBody());
 
-    expect({ ok, seen }).toEqual({ ok: true, seen: ["wamid.1", "wamid.2", "wamid.3"] });
+    expect({ ok, seen }).toEqual({ ok: "accepted", seen: ["wamid.1", "wamid.2", "wamid.3"] });
   });
 
   it("delivers the next batch to nobody once the handler has unsubscribed", async () => {

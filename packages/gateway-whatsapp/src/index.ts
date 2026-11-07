@@ -32,6 +32,7 @@ export {
 } from "./backend/baileys/socket.js";
 // Cloud backend (Meta WhatsApp Business Cloud API).
 export {
+  type WebhookOutcome,
   WhatsAppCloudBackend,
   type WhatsAppCloudBackendOptions,
 } from "./backend/cloud/index.js";

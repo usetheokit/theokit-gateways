@@ -97,11 +97,15 @@ whose `id`, `from` or `text.body` is not a string, a contact whose `wa_id` or `p
 a string, or a status whose `id`, `status` or `recipient_id` is not a string. The whole body is refused, not just its bad entries, so the route
 answers it (400 in the example) instead of dropping part of a batch unseen. Any non-null envelope
 is safe to hand to `toDeliverableEvents` and `normalizeStatusReceipts`: neither throws on it.
-`WhatsAppCloudBackend.handleWebhookPayload` refuses such a body the same way: it answers `false`,
-as it does for a signed body that is not JSON, dispatches nothing and writes one line to stderr,
-so a route built on it answers non-2xx and Meta redelivers instead of losing the batch. It also
-answers `false` for a body holding a message for its number while no inbound handler is
-subscribed, before `onInbound` or after `disconnect()`. Status receipts with no status handler are
+`WhatsAppCloudBackend.handleWebhookPayload` resolves to a `WebhookOutcome` that tells the route which
+refusal it is: `"accepted"` (answer 200), `"bad_signature"` (answer 401), `"unreadable_body"` and
+`"no_handler"`. A signed body the parser refuses, or that is not JSON, is `"unreadable_body"`: nothing
+is dispatched and one line goes to stderr. Answer it 2xx (200), not 400 or 5xx, and alert on the
+stderr line. Redelivery cannot recover it: Meta resends a byte-identical body, the parser refuses it
+again, and a non-2xx only makes Meta retry until it gives up. The fix is a code change (a Meta schema
+change the parser has not learned), not a retry. A body holding a message for the backend's number
+while no inbound handler is subscribed, before `onInbound` or after `disconnect()`, is
+`"no_handler"`: answer 503, because redelivery succeeds once a handler subscribes. Status receipts with no status handler are
 discarded, because subscribing to them is optional.
 
 Answer 200 only when every event returned `ok`. `no_handler` means nothing received the message,
