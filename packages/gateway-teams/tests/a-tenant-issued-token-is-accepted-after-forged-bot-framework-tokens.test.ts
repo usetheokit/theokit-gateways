@@ -4,11 +4,17 @@
  * genuine tenant-issued token out (B-420).
  */
 
-import { generateKeyPairSync, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { acceptingValidatorModule, activityRequest, TENANT } from "./helpers/claim-fixtures.js";
-import { CLIENT_ID, type KeyServer, SERVICE_URL, startKeyServer } from "./helpers/key-server.js";
+import {
+  CLIENT_ID,
+  type KeyServer,
+  SERVICE_URL,
+  startKeyServer,
+  unusedKeyPair,
+} from "./helpers/key-server.js";
 import { verifierUnderTest } from "./helpers/verifier-under-test.js";
 
 describe("a tenant-issued token after forged Bot Framework tokens", () => {
@@ -30,7 +36,7 @@ describe("a tenant-issued token after forged Bot Framework tokens", () => {
       cloud: ks.cloud,
       validatorModule: acceptingValidatorModule().module,
     });
-    const stray = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
+    const stray = unusedKeyPair().privateKey;
     const refused = [];
     for (let i = 0; i < 20; i += 1) {
       refused.push(

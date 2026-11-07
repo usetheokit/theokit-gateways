@@ -157,14 +157,18 @@ describe("the Cloud route documented in README.md", () => {
     });
     const { body, signature } = signedBody("wamid.slow");
 
-    const first = onWebhook(body, signature);
-    await vi.waitFor(() => expect(received).toEqual(["wamid.slow"]));
-    const redelivery = onWebhook(body, signature);
-    // Give the redelivery every chance to reach the handler before the first one finishes.
-    await new Promise((resolveTick) => setTimeout(resolveTick, 20));
-    release();
-
-    expect(await Promise.all([first, redelivery])).toEqual([200, 200]);
+    try {
+      const first = onWebhook(body, signature);
+      await vi.waitFor(() => expect(received).toEqual(["wamid.slow"]));
+      const redelivery = onWebhook(body, signature);
+      // Settle the redelivery's path to the handler on a condition: let the microtask and
+      // I/O queues drain, not a guessed duration.
+      await new Promise((resolveTurn) => setImmediate(resolveTurn));
+      release();
+      expect(await Promise.all([first, redelivery])).toEqual([200, 200]);
+    } finally {
+      release();
+    }
     expect(received).toEqual(["wamid.slow"]);
   });
 

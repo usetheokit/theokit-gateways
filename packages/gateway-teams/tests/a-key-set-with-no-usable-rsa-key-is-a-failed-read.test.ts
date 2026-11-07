@@ -12,9 +12,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest } from "./helpers/claim-fixtures.js";
-import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { CLIENT_ID, type KeyServer, startKeyServer, unusedKeyPair } from "./helpers/key-server.js";
 
-const stray = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
+const stray = unusedKeyPair().privateKey;
 
 /**
  * A key-set document whose one entry is valid RSA key material with `kid` replaced by `kid`
@@ -25,7 +25,7 @@ function rsaWithKid(kid: unknown): { keys: unknown[] } {
   return { keys: [kid === undefined ? material : { ...material, kid }] };
 }
 
-const rsaJwk = generateKeyPairSync("rsa", { modulusLength: 2048 }).publicKey.export({
+const rsaJwk = unusedKeyPair().publicKey.export({
   format: "jwk",
 });
 

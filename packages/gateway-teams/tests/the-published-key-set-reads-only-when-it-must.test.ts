@@ -5,11 +5,10 @@
  * by a stubbed `fetch` and a fake monotonic clock, with no socket.
  */
 
-import { generateKeyPairSync } from "node:crypto";
-
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { keySet, keySetUrl, tenantKeySetUrl } from "../src/published-key-set.js";
+import { unusedKeyPair } from "./helpers/key-server.js";
 
 const URL_ = "https://keys.example/keys";
 const HOUR_MS = 60 * 60 * 1000;
@@ -37,8 +36,7 @@ const keysDocument =
 
 describe("keySet", () => {
   beforeAll(() => {
-    const exportJwk = () =>
-      generateKeyPairSync("rsa", { modulusLength: 2048 }).publicKey.export({ format: "jwk" });
+    const exportJwk = () => unusedKeyPair().publicKey.export({ format: "jwk" });
     jwkA = { ...exportJwk(), kid: "a" };
     jwkB = { ...exportJwk(), kid: "b" };
   });
