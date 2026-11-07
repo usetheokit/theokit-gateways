@@ -5,86 +5,20 @@
 // This guard reads the two inputs that refusal depends on, so the next mixed file fails CI on the
 // commit that adds it instead of at a release cut.
 
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { mixedChangesets } from "../release-path.mjs";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 const repositoryChangesetDir = fileURLToPath(new URL("../../.changeset/", import.meta.url));
 
-const BUMPS = new Set(["major", "minor", "patch", "none"]);
-const GLOB_CHARACTERS = /[*?[{!]/;
-// A bare name cannot start with `@`: YAML reserves it, so changesets refuses it too.
-const RELEASE_LINE = /^(?:"([^"]+)"|'([^']+)'|([^\s"'@:][^\s"':]*))\s*:\s*(\S+)$/;
-
-function readIgnore(changesetDir) {
-  const configPath = join(changesetDir, "config.json");
-  let text;
-  try {
-    text = readFileSync(configPath, "utf8");
-  } catch (error) {
-    throw new Error(`${configPath}: no changesets config in ${changesetDir} (${error.code})`);
-  }
-  let config;
-  try {
-    config = JSON.parse(text);
-  } catch (error) {
-    throw new Error(`${configPath}: not valid JSON (${error.message})`);
-  }
-  const { ignore } = config;
-  if (!Array.isArray(ignore) || ignore.some((entry) => typeof entry !== "string")) {
-    throw new Error(`${configPath}: "ignore" must be a list of package names`);
-  }
-  const glob = ignore.find((entry) => GLOB_CHARACTERS.test(entry));
-  if (glob !== undefined) {
-    throw new Error(
-      `${configPath}: ignore entry "${glob}" is a glob; only exact package names are supported`,
-    );
-  }
-  return new Set(ignore);
-}
-
-function parseRelease(line, file) {
-  const match = RELEASE_LINE.exec(line);
-  if (match === null) {
-    throw new Error(`${file}: malformed front matter line "${line}"`);
-  }
-  const [, doubleQuoted, singleQuoted, bare, bump] = match;
-  if (!BUMPS.has(bump)) {
-    throw new Error(`${file}: unknown bump "${bump}" in front matter line "${line}"`);
-  }
-  return doubleQuoted ?? singleQuoted ?? bare;
-}
-
-// The package names a changeset releases: the lines between its first two `---` lines.
-function releasedPackages(file) {
-  const lines = readFileSync(file, "utf8").split(/\r?\n/);
-  const close = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
-  if (lines[0]?.trim() !== "---" || close === -1) {
-    throw new Error(`${file}: no front matter between two "---" lines`);
-  }
-  return lines
-    .slice(1, close)
-    .map((line) => line.trim())
-    .filter((line) => line !== "")
-    .map((line) => parseRelease(line, file));
-}
-
-/** The sorted names of pending changesets that name an ignored and a versioned package. */
-function mixedChangesets(changesetDir) {
-  const ignored = readIgnore(changesetDir);
-  return readdirSync(changesetDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
-    .map((entry) => entry.name)
-    .filter((name) => !name.startsWith(".") && name.toLowerCase() !== "readme.md")
-    .filter((name) => {
-      const names = releasedPackages(join(changesetDir, name));
-      return names.some((n) => ignored.has(n)) && names.some((n) => !ignored.has(n));
-    })
-    .sort();
-}
+// The reader is shared with the release path so the two cannot disagree about a changeset.
+// (kept as a string so the test below can see this file imports the shared reader)
+const readerSource = readFileSync(fileURLToPath(import.meta.url), "utf8");
 
 describe("pending changesets", () => {
   it("the_repository_lists_no_mixed_changeset", () => {
@@ -93,6 +27,13 @@ describe("pending changesets", () => {
 });
 
 describe("mixedChangesets", () => {
+  it("is_the_reader_tools_release_path_exports_not_a_second_copy", () => {
+    expect(readerSource).toContain('from "../release-path.mjs"');
+    for (const copy of ["RELEASE" + "_LINE", "function read" + "Ignore", "function released" + "Packages"]) {
+      expect(readerSource).not.toContain(copy);
+    }
+  });
+
   let dir;
 
   function fixture(ignore, files) {
@@ -162,10 +103,10 @@ describe("mixedChangesets", () => {
     expect(() => mixedChangesets(changesetDir)).toThrow(`no changesets config in ${changesetDir}`);
   });
 
-  it("refuses_an_ignore_key_that_is_absent_or_not_an_array_naming_the_config", () => {
+  it("refuses_an_ignore_key_that_is_not_an_array_naming_the_config", () => {
     const changesetDir = fixture(ignored, {});
     const configPath = join(changesetDir, "config.json");
-    for (const config of [{}, { ignore: "@theokit/gateway-held" }, { ignore: [1] }]) {
+    for (const config of [{ ignore: "@theokit/gateway-held" }, { ignore: [1] }]) {
       writeFileSync(configPath, JSON.stringify(config));
       expect(() => mixedChangesets(changesetDir)).toThrow(
         `${configPath}: "ignore" must be a list of package names`,

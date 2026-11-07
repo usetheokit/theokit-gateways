@@ -121,6 +121,15 @@ export function nonReleasableChangesets(changesetDir) {
   return classify(changesetDir).nonReleasable;
 }
 
+/** The sorted pending changesets that name an ignored and a non-ignored package, which `changeset version` refuses. */
+export function mixedChangesets(changesetDir) {
+  const ignore = readIgnore(changesetDir);
+  return pendingChangesets(changesetDir).filter((name) => {
+    const packages = releasedPackages(join(changesetDir, name));
+    return packages.some((pkg) => ignore.has(pkg)) && packages.some((pkg) => !ignore.has(pkg));
+  });
+}
+
 /** `version` when anything pending is releasable, `publish` otherwise. */
 export function releasePath(changesetDir) {
   return releasableChangesets(changesetDir).length > 0 ? "version" : "publish";
