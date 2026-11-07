@@ -178,6 +178,21 @@ export interface ZaloPersonalMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** Zalo Official Account event variant (B-364), a `user_send_text` webhook event. */
+export interface ZaloMessageEvent extends BaseMessageEvent {
+  readonly platform: "zalo";
+  readonly zalo: {
+    /** The message's `msg_id`. */
+    readonly messageId: string;
+    /** The sender's user id for this OA; the send target for a reply. */
+    readonly userId: string;
+    /** The Official Account's id (the event's `recipient.id`). */
+    readonly oaId: string;
+    /** The webhook event — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** Twitch event variant (B-363), a `channel.chat.message` EventSub notification. */
 export interface TwitchMessageEvent extends BaseMessageEvent {
   readonly platform: "twitch";

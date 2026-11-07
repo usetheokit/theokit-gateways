@@ -502,6 +502,34 @@ export const PLATFORMS: readonly PlatformSpec[] = [
       "Unofficial: Zalo may restrict an account that automates, so use a throwaway account. Inbound needs the friend to write, so the suite checks the login, the listener and one send. `zca-js` must be installed beside the adapter.",
   },
   {
+    id: "zalo",
+    label: "Zalo Official Account",
+    pkg: "@theokit/gateway-zalo",
+    transport: "webhook",
+    credentials: [
+      { name: "ZALO_APP_ID", what: "The Zalo app id", where: "developers.zalo.me → your app" },
+      {
+        name: "ZALO_OA_SECRET_KEY",
+        what: "The OA secret key, used for the inbound signature",
+        where: "developers.zalo.me → your app → Official Account → Webhook",
+      },
+      {
+        name: "ZALO_OA_ACCESS_TOKEN",
+        what: "An OA access token (it expires)",
+        where: "developers.zalo.me → your app → Official Account → Access token",
+      },
+    ],
+    target: [
+      {
+        name: "ZALO_TEST_USER_ID",
+        what: "The OA-scoped user id of a follower who messaged the OA in the last 48 hours",
+        where: "The `sender.id` of one webhook delivery, or the OA's follower list API",
+      },
+    ],
+    caveat:
+      "Inbound needs a public HTTPS webhook, so the suite checks the token and one send. Zalo refuses a send to a user outside the 48-hour reply window (zalo_send_failed). The access token expires.",
+  },
+  {
     id: "nostr",
     label: "Nostr",
     pkg: "@theokit/gateway-nostr",

@@ -86,6 +86,7 @@ const ROUTES: Routes = {
   tlon_urbit: (event) => `tu:${event.tlon_urbit.messageId}`,
   twitch: (event) => `tw:${event.twitch.messageId}`,
   zalo_personal: (event) => `zp:${event.zalo_personal.messageId}`,
+  zalo: (event) => `za:${event.zalo.messageId}`,
   acmechat: (event) => `ac:${event.acmechat.senderUuid}`,
 };
 

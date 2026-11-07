@@ -104,6 +104,10 @@ export const CREDENTIAL_SHAPES: {
   ],
   uncovered: [
     {
+      field: "gateway-zalo `accessToken`, `oaSecretKey`",
+      why: "a Zalo Official Account access token and OA secret key: opaque strings with no prefix or fixed shape to recognise. The token travels only in an `access_token` header and the key only into the signature check, and the adapter never logs either.",
+    },
+    {
       field: "gateway-zalo-personal `credentials`",
       why: "a Zalo web session: a cookie jar, an IMEI-like device id and a user agent. The cookie has no prefix or fixed shape to recognise. It travels only to the Zalo library, which the adapter never logs.",
     },

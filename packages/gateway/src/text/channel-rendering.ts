@@ -70,7 +70,7 @@ const translateWith =
  *   cheaper failure (plan ADR D3).
  * - matrix, email: markers dropped and `plain`. Neither renders `markdown` (see the module comment),
  *   and producing HTML would need a markdown renderer this package does not have.
- * - zalo_personal: markers dropped and `plain`. Zalo shows a marker character as itself.
+ * - zalo_personal, zalo: markers dropped and `plain`. Zalo shows a marker character as itself.
  * - nostr, feishu_lark, synology_chat, tlon_urbit, twitch: markers dropped and `plain`. Nostr and
  *   Twitch chat show a marker character as itself; Lark posts and Tlon inline styles are richer
  *   formats this package does not map yet, so emphasis is lost rather than spelled (plan ADR D3).
@@ -97,6 +97,7 @@ const RENDERINGS: Readonly<Record<PlatformName, ChannelRendering>> = {
   tlon_urbit: { format: "plain", translate: translateWith(STRIP) },
   twitch: { format: "plain", translate: translateWith(STRIP) },
   zalo_personal: { format: "plain", translate: translateWith(STRIP) },
+  zalo: { format: "plain", translate: translateWith(STRIP) },
 };
 
 /**
