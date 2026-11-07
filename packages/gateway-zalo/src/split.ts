@@ -17,7 +17,5 @@ export const ZALO_MESSAGE_LIMIT = 2000;
  */
 export function splitForZalo(text: string): string[] {
   if (text.length === 0) return [];
-  return chunkByGrapheme(text, { limit: ZALO_MESSAGE_LIMIT }).filter(
-    (part) => part.length > 0,
-  );
+  return chunkByGrapheme(text, { limit: ZALO_MESSAGE_LIMIT }).filter((part) => part.length > 0);
 }

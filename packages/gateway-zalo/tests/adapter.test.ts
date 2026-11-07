@@ -63,9 +63,9 @@ describe("connect", () => {
     expect(calls[0]?.headers.access_token).toBe("tok");
   });
   it("is false for a refused token and for a network failure", async () => {
-    expect(await make(fakeFetch(() => ({ error: -216, message: "bad token" })).fetch).connect()).toBe(
-      false,
-    );
+    expect(
+      await make(fakeFetch(() => ({ error: -216, message: "bad token" })).fetch).connect(),
+    ).toBe(false);
     const boom: ZaloFetch = async () => {
       throw new Error("down");
     };
@@ -105,7 +105,9 @@ describe("sendMessage", () => {
     const out = { channel: { id: "u1", type: "dm" as const }, text: "x" };
     expect((await a.sendMessage(out)).ok).toBe(false); // not connected
     await a.connect();
-    expect(await a.sendMessage({ ...out, text: "" })).toMatchObject({ error: { code: "empty_text" } });
+    expect(await a.sendMessage({ ...out, text: "" })).toMatchObject({
+      error: { code: "empty_text" },
+    });
     expect(await a.sendMessage({ ...out, channel: { id: "", type: "dm" } })).toMatchObject({
       error: { code: "invalid_channel" },
     });

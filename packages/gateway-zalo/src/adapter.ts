@@ -83,57 +83,6 @@ export class ZaloAdapter extends BasePlatformAdapter {
     return refuseAttachments(out) ?? this.sendText(out);
   }
 
-  onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
-    this.handler = handler;
-    return () => {
-      if (this.handler === handler) this.handler = undefined;
-    };
-  }
-
-  /** Deliver an event that arrived out of band, through `runHandler`. */
-  override async deliver(
-    event: GatewayMessageEvent,
-  ): Promise<"ok" | "no_handler" | "handler_threw"> {
-    return this.runHandler(this.handler, event);
-  }
-
-  /** The values a webhook route needs to verify a request itself. */
-  getWebhookSecrets(): { appId: string; oaSecretKey: string } {
-    return { appId: this.opts.appId, oaSecretKey: this.opts.oaSecretKey };
-  }
-
-  /**
-   * Webhook entry: verify, parse and dispatch. Answer `status` 200 only when the event was
-   * handled or is not for this adapter; `503` (no handler subscribed) must not be acknowledged,
-   * or Zalo does not redeliver and the message is lost.
-   */
-  async handleWebhook(rawBody: string, signature: string | undefined): Promise<ZaloWebhookAnswer> {
-    if (!verifyZaloSignature(this.opts, rawBody, signature)) {
-      return { status: 401, reason: "signature mismatch" };
-    }
-    let payload: ZaloWebhookEvent;
-    try {
-      payload = JSON.parse(rawBody) as ZaloWebhookEvent;
-    } catch {
-      return { status: 400, reason: "body is not JSON" };
-    }
-    if (payload.app_id !== undefined && payload.app_id !== this.opts.appId) {
-      return { status: 200, reason: "event is for another app" };
-    }
-    const event = toMessageEvent(payload);
-    if (event === undefined) return { status: 200, reason: "not a text message" };
-    if (this.seen.has(event.id)) return { status: 200, reason: "duplicate" };
-    if (this.handler === undefined) return { status: 503, reason: "no handler subscribed" };
-    this.seen.add(event.id);
-    if (this.seen.size > 1000) {
-      const oldest = this.seen.values().next().value;
-      if (oldest !== undefined) this.seen.delete(oldest);
-    }
-    const outcome = await this.runHandler(this.handler, event);
-    if (outcome === "handler_threw") process.stderr.write(`[${LABEL}] handler threw\n`);
-    return { status: 200, reason: outcome };
-  }
-
   private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
@@ -174,8 +123,72 @@ export class ZaloAdapter extends BasePlatformAdapter {
     return { ok: true, messageId };
   }
 
+  onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
+    this.handler = handler;
+    return () => {
+      if (this.handler === handler) this.handler = undefined;
+    };
+  }
+
+  /** Deliver an event that arrived out of band, through `runHandler`. */
+  override async deliver(
+    event: GatewayMessageEvent,
+  ): Promise<"ok" | "no_handler" | "handler_threw"> {
+    return this.runHandler(this.handler, event);
+  }
+
+  /** The values a webhook route needs to verify a request itself. */
+  getWebhookSecrets(): { appId: string; oaSecretKey: string } {
+    return { appId: this.opts.appId, oaSecretKey: this.opts.oaSecretKey };
+  }
+
+  /**
+   * Webhook entry: verify, parse and dispatch. Answer `status` 200 only when the event was
+   * handled or is not for this adapter; `503` (no handler subscribed) must not be acknowledged,
+   * or Zalo does not redeliver and the message is lost.
+   */
+  async handleWebhook(rawBody: string, signature: string | undefined): Promise<ZaloWebhookAnswer> {
+    if (!verifyZaloSignature(this.opts, rawBody, signature)) {
+      return { status: 401, reason: "signature mismatch" };
+    }
+    let payload: ZaloWebhookEvent;
+    try {
+      payload = JSON.parse(rawBody) as ZaloWebhookEvent;
+    } catch {
+      return { status: 400, reason: "body is not JSON" };
+    }
+    const skipped = this.skipReason(payload);
+    if (skipped !== undefined) return { status: 200, reason: skipped };
+    const event = toMessageEvent(payload) as GatewayMessageEvent;
+    if (this.handler === undefined) return { status: 503, reason: "no handler subscribed" };
+    this.remember(event.id);
+    const outcome = await this.runHandler(this.handler, event);
+    if (outcome === "handler_threw") process.stderr.write(`[${LABEL}] handler threw\n`);
+    return { status: 200, reason: outcome };
+  }
+
+  /** Why a verified event is acknowledged without dispatch, or `undefined` to dispatch it. */
+  private skipReason(payload: ZaloWebhookEvent): string | undefined {
+    if (payload.app_id !== undefined && payload.app_id !== this.opts.appId) {
+      return "event is for another app";
+    }
+    const event = toMessageEvent(payload);
+    if (event === undefined) return "not a text message";
+    return this.seen.has(event.id) ? "duplicate" : undefined;
+  }
+
+  private remember(id: string): void {
+    this.seen.add(id);
+    if (this.seen.size > 1000) {
+      const oldest = this.seen.values().next().value;
+      if (oldest !== undefined) this.seen.delete(oldest);
+    }
+  }
+
   private textFor(out: OutboundMessage): string {
-    return out.format === "markdown" ? channelRendering(this.platform).translate(out.text) : out.text;
+    return out.format === "markdown"
+      ? channelRendering(this.platform).translate(out.text)
+      : out.text;
   }
 
   private async call(method: "GET" | "POST", path: string, payload?: unknown) {

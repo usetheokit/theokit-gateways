@@ -14,9 +14,20 @@ export type ZaloFetch = (
 export interface ZaloAdapterOptions {
   /** The Zalo app id (sent as `app_id` in every webhook; part of the signed string). */
   readonly appId: string;
-  /** The OA secret key from the app's webhook settings; signs each webhook. */
+  /**
+   * The Zalo OA secret key; signs each webhook and is used only to verify it.
+   *
+   * @platform-term OA secret key (Zalo Official Account)
+   * @issued-at the Zalo developers console, your app, Official Account, Webhook settings
+   */
   readonly oaSecretKey: string;
-  /** A valid OA access token. It expires; supply a fresh one (this adapter does not refresh it). */
+  /**
+   * A Zalo Official Account access token, sent as the `access_token` header on every Open API
+   * call. It expires; supply a fresh one (this adapter does not refresh it).
+   *
+   * @platform-term OA access token (Zalo Official Account)
+   * @issued-at the Zalo developers console, your app, Official Account, access token tool
+   */
   readonly accessToken: string;
   /** Override the Open API base, `https://openapi.zalo.me`. */
   readonly apiBase?: string;
