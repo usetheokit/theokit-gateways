@@ -31,7 +31,8 @@ import { fileURLToPath } from "node:url";
 const BUMPS = new Set(["major", "minor", "patch", "none"]);
 const GLOB_CHARACTERS = /[*?[\]{}!]/;
 // A bare name cannot start with `@`: YAML reserves it, so changesets refuses it too.
-const RELEASE_LINE = /^(?:"([^"]+)"|'([^']+)'|([^\s"'@:][^\s"':]*))\s*:\s*(\S+)$/;
+const RELEASE_LINE =
+  /^(?:"([^"]+)"|'([^']+)'|([^\s"'@:][^\s"':]*))\s*:\s*(\S+)$/;
 
 export class ReleasePathError extends Error {
   constructor(message) {
@@ -43,17 +44,26 @@ export class ReleasePathError extends Error {
 function readIgnore(changesetDir) {
   const configPath = join(changesetDir, "config.json");
   if (!existsSync(configPath)) {
-    throw new ReleasePathError(`${configPath}: no changesets config in ${changesetDir}`);
+    throw new ReleasePathError(
+      `${configPath}: no changesets config in ${changesetDir}`,
+    );
   }
   let config;
   try {
     config = JSON.parse(readFileSync(configPath, "utf8"));
   } catch (error) {
-    throw new ReleasePathError(`${configPath}: not valid JSON (${error.message})`);
+    throw new ReleasePathError(
+      `${configPath}: not valid JSON (${error.message})`,
+    );
   }
   const ignore = config.ignore ?? [];
-  if (!Array.isArray(ignore) || ignore.some((entry) => typeof entry !== "string")) {
-    throw new ReleasePathError(`${configPath}: "ignore" must be a list of package names`);
+  if (
+    !Array.isArray(ignore) ||
+    ignore.some((entry) => typeof entry !== "string")
+  ) {
+    throw new ReleasePathError(
+      `${configPath}: "ignore" must be a list of package names`,
+    );
   }
   const glob = ignore.find((entry) => GLOB_CHARACTERS.test(entry));
   if (glob !== undefined) {
@@ -69,18 +79,24 @@ function pendingChangesets(changesetDir) {
   return readdirSync(changesetDir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
     .map((entry) => entry.name)
-    .filter((name) => !name.startsWith(".") && name.toLowerCase() !== "readme.md")
+    .filter(
+      (name) => !name.startsWith(".") && name.toLowerCase() !== "readme.md",
+    )
     .sort();
 }
 
 function parseRelease(line, file) {
   const match = line.match(RELEASE_LINE);
   if (match === null) {
-    throw new ReleasePathError(`${file}: malformed front matter line "${line}"`);
+    throw new ReleasePathError(
+      `${file}: malformed front matter line "${line}"`,
+    );
   }
   const [, doubleQuoted, singleQuoted, bare, bump] = match;
   if (!BUMPS.has(bump)) {
-    throw new ReleasePathError(`${file}: unknown bump "${bump}" in front matter line "${line}"`);
+    throw new ReleasePathError(
+      `${file}: unknown bump "${bump}" in front matter line "${line}"`,
+    );
   }
   return doubleQuoted ?? singleQuoted ?? bare;
 }
@@ -88,9 +104,13 @@ function parseRelease(line, file) {
 // The package names a changeset releases: the lines between its first two `---` lines.
 function releasedPackages(file) {
   const lines = readFileSync(file, "utf8").split(/\r?\n/);
-  const close = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
+  const close = lines.findIndex(
+    (line, index) => index > 0 && line.trim() === "---",
+  );
   if (lines[0]?.trim() !== "---" || close === -1) {
-    throw new ReleasePathError(`${file}: no front matter between two "---" lines`);
+    throw new ReleasePathError(
+      `${file}: no front matter between two "---" lines`,
+    );
   }
   return lines
     .slice(1, close)
@@ -99,12 +119,21 @@ function releasedPackages(file) {
     .map((line) => parseRelease(line, file));
 }
 
-function classify(changesetDir) {
+/** The `ignore` set and, per pending changeset, the package names it releases. Shared reader. */
+export function readChangesets(changesetDir) {
   const ignore = readIgnore(changesetDir);
+  const changesets = pendingChangesets(changesetDir).map((name) => ({
+    name,
+    packages: releasedPackages(join(changesetDir, name)),
+  }));
+  return { ignore, changesets };
+}
+
+function classify(changesetDir) {
+  const { ignore, changesets } = readChangesets(changesetDir);
   const releasable = [];
   const nonReleasable = [];
-  for (const name of pendingChangesets(changesetDir)) {
-    const packages = releasedPackages(join(changesetDir, name));
+  for (const { name, packages } of changesets) {
     const releases = packages.some((pkg) => !ignore.has(pkg));
     (releases ? releasable : nonReleasable).push(name);
   }
@@ -128,7 +157,8 @@ export function releasePath(changesetDir) {
 
 function isInside(parent, child) {
   const path = relative(resolve(parent), resolve(child));
-  const escapes = path === ".." || path.startsWith(`..${sep}`) || isAbsolute(path);
+  const escapes =
+    path === ".." || path.startsWith(`..${sep}`) || isAbsolute(path);
   return !escapes;
 }
 
@@ -143,14 +173,20 @@ function move(from, to) {
 }
 
 function setAside(changesetDir, names, target) {
-  const collision = names.map((name) => join(target, name)).find((path) => existsSync(path));
+  const collision = names
+    .map((name) => join(target, name))
+    .find((path) => existsSync(path));
   if (collision !== undefined) {
-    throw new ReleasePathError(`${collision}: already exists; refusing to overwrite it`);
+    throw new ReleasePathError(
+      `${collision}: already exists; refusing to overwrite it`,
+    );
   }
   try {
     mkdirSync(target, { recursive: true });
   } catch (error) {
-    throw new ReleasePathError(`${target}: cannot create the set-aside directory (${error.code})`);
+    throw new ReleasePathError(
+      `${target}: cannot create the set-aside directory (${error.code})`,
+    );
   }
   for (const name of names) {
     move(join(changesetDir, name), join(target, name));
@@ -170,7 +206,9 @@ function parseArguments(args) {
     );
   }
   if (target !== undefined && isInside(changesetDir, target)) {
-    throw new ReleasePathError(`${target}: the set-aside directory is inside ${changesetDir}`);
+    throw new ReleasePathError(
+      `${target}: the set-aside directory is inside ${changesetDir}`,
+    );
   }
   return { changesetDir, target };
 }
@@ -187,7 +225,8 @@ function main(args) {
 function invokedDirectly() {
   const entry = process.argv[1];
   return (
-    entry !== undefined && realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url))
+    entry !== undefined &&
+    realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url))
   );
 }
 
