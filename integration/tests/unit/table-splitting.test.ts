@@ -59,8 +59,9 @@ function longRichTable(minLength: number): string {
   const rows = ["| id | bold | code | note |", "|---|---|---|---|"];
   let length = rows.join("\n").length;
   for (let i = 0; length < minLength; i += 1) {
-    rows.push(richRow(i));
-    length += rows[rows.length - 1].length + 1;
+    const next = richRow(i);
+    rows.push(next);
+    length += next.length + 1;
   }
   return rows.join("\n");
 }
