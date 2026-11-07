@@ -14,18 +14,14 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { readChangesets } from "../release-path.mjs";
 
-const repositoryChangesetDir = fileURLToPath(
-  new URL("../../.changeset/", import.meta.url),
-);
+const repositoryChangesetDir = fileURLToPath(new URL("../../.changeset/", import.meta.url));
 
 /** The sorted names of pending changesets that name an ignored and a versioned package. */
 function mixedChangesets(changesetDir) {
   const { ignore, changesets } = readChangesets(changesetDir);
   return changesets
     .filter(
-      ({ packages }) =>
-        packages.some((n) => ignore.has(n)) &&
-        packages.some((n) => !ignore.has(n)),
+      ({ packages }) => packages.some((n) => ignore.has(n)) && packages.some((n) => !ignore.has(n)),
     )
     .map(({ name }) => name)
     .sort();
@@ -60,8 +56,7 @@ describe("mixedChangesets", () => {
 
   it("names_a_changeset_listing_an_ignored_and_a_versioned_package", () => {
     const changesetDir = fixture(ignored, {
-      "mixed.md":
-        '---\n"@theokit/gateway-held": minor\n"@theokit/gateway": patch\n---\n\nBoth.\n',
+      "mixed.md": '---\n"@theokit/gateway-held": minor\n"@theokit/gateway": patch\n---\n\nBoth.\n',
       "clean.md": '---\n"@theokit/gateway": patch\n---\n\nOne.\n',
     });
     expect(mixedChangesets(changesetDir)).toEqual(["mixed.md"]);
@@ -76,8 +71,7 @@ describe("mixedChangesets", () => {
 
   it("passes_a_changeset_naming_only_versioned_packages", () => {
     const changesetDir = fixture(ignored, {
-      "core.md":
-        '---\n"@theokit/gateway": patch\n"@theokit/gateway-slack": minor\n---\n\nCore.\n',
+      "core.md": '---\n"@theokit/gateway": patch\n"@theokit/gateway-slack": minor\n---\n\nCore.\n',
     });
     expect(mixedChangesets(changesetDir)).toEqual([]);
   });
@@ -88,8 +82,7 @@ describe("mixedChangesets", () => {
   });
 
   it("skips_dotfiles_and_a_readme_in_any_case", () => {
-    const mixedText =
-      '---\n"@theokit/gateway-held": minor\n"@theokit/gateway": patch\n---\n';
+    const mixedText = '---\n"@theokit/gateway-held": minor\n"@theokit/gateway": patch\n---\n';
     const changesetDir = fixture(ignored, {
       ".draft.md": mixedText,
       "README.md": mixedText,
@@ -100,26 +93,20 @@ describe("mixedChangesets", () => {
 
   it("parses_crlf_and_single_quoted_front_matter", () => {
     const changesetDir = fixture(ignored, {
-      "crlf.md":
-        "---\r\n'@theokit/gateway-held': minor\r\n'@theokit/gateway': patch\r\n---\r\n",
+      "crlf.md": "---\r\n'@theokit/gateway-held': minor\r\n'@theokit/gateway': patch\r\n---\r\n",
     });
     expect(mixedChangesets(changesetDir)).toEqual(["crlf.md"]);
   });
 
   it("refuses_a_missing_config_naming_the_directory", () => {
     const changesetDir = fixture(undefined, {});
-    expect(() => mixedChangesets(changesetDir)).toThrow(
-      `no changesets config in ${changesetDir}`,
-    );
+    expect(() => mixedChangesets(changesetDir)).toThrow(`no changesets config in ${changesetDir}`);
   });
 
   it("refuses_an_ignore_key_that_is_absent_or_not_an_array_naming_the_config", () => {
     const changesetDir = fixture(ignored, {});
     const configPath = join(changesetDir, "config.json");
-    for (const config of [
-      { ignore: "@theokit/gateway-held" },
-      { ignore: [1] },
-    ]) {
+    for (const config of [{ ignore: "@theokit/gateway-held" }, { ignore: [1] }]) {
       writeFileSync(configPath, JSON.stringify(config));
       expect(() => mixedChangesets(changesetDir)).toThrow(
         `${configPath}: "ignore" must be a list of package names`,
@@ -146,18 +133,13 @@ describe("mixedChangesets", () => {
       "a}",
     ]) {
       const changesetDir = fixture([entry], {});
-      expect(() => mixedChangesets(changesetDir)).toThrow(
-        `ignore entry "${entry}" is a glob`,
-      );
+      expect(() => mixedChangesets(changesetDir)).toThrow(`ignore entry "${entry}" is a glob`);
       rmSync(changesetDir, { recursive: true, force: true });
     }
   });
 
   it("refuses_unclosed_front_matter_naming_the_file", () => {
-    for (const text of [
-      '---\n"@theokit/gateway": patch\n',
-      'Title\n---\n"a": patch\n---\n',
-    ]) {
+    for (const text of ['---\n"@theokit/gateway": patch\n', 'Title\n---\n"a": patch\n---\n']) {
       const changesetDir = fixture(ignored, { "broken.md": text });
       expect(() => mixedChangesets(changesetDir)).toThrow(
         `${join(changesetDir, "broken.md")}: no front matter between two "---" lines`,
