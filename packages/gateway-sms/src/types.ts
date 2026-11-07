@@ -25,7 +25,11 @@ export interface TwilioOptions {
   readonly authToken: string;
   /** Bot's own E.164 number (used as `from` in outbound). */
   readonly fromNumber: string;
-  /** Public URL where Twilio posts inbound — used by signature verifier. */
+  /**
+   * Public URL the provider posts inbound to. This configured value is the
+   * URL the signature is checked against, used before `x-forwarded-proto`
+   * and the `host` header.
+   */
   readonly publicUrl: string;
   /** Default country for unprefixed inbound `from` numbers. Optional. */
   readonly defaultCountry?: string;
@@ -38,6 +42,11 @@ export interface PlivoOptions {
   /** Auth token used for V3 signature verification — REQUIRED (D392, EC-1). */
   readonly authToken: string;
   readonly fromNumber: string;
+  /**
+   * Public URL the provider posts inbound to. This configured value is the
+   * URL the signature is checked against, used before `x-forwarded-proto`
+   * and the `host` header.
+   */
   readonly publicUrl: string;
   readonly defaultCountry?: string;
 }
@@ -64,6 +73,11 @@ export interface VonageOptions {
    */
   readonly signatureSecret: string;
   readonly fromNumber: string;
+  /**
+   * Public URL the provider posts inbound to. This configured value is the
+   * URL the signature is checked against, used before `x-forwarded-proto`
+   * and the `host` header.
+   */
   readonly publicUrl: string;
   readonly defaultCountry?: string;
 }
