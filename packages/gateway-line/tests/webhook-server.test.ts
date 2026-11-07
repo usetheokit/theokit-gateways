@@ -185,6 +185,19 @@ describe("createWebhookServer — malformed payloads", () => {
     expect(rec.dispatched).toEqual([]);
   });
 
+  it("answers 400 for an events array holding a non-object, as the channel path does", async () => {
+    const app = express();
+    const { adapter, rec } = makeAdapter();
+    await createWebhookServer({ adapter, app });
+    const base = await listen(app);
+
+    const body = JSON.stringify({ events: [null] });
+    const res = await post(base, "/line", body, { "x-line-signature": sign(body) });
+
+    expect(res.status).toBe(400);
+    expect(rec.dispatched).toEqual([]);
+  });
+
   it("accepts LINE's empty-events verification ping", async () => {
     // LINE posts `{"events":[]}` when you press Verify in the console. Rejecting
     // it makes the console report the webhook as broken while it works.
