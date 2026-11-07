@@ -68,13 +68,19 @@ export class SignalAdapter extends BasePlatformAdapter {
     if (this.connected) return true;
     // A second caller while the first is still waiting for listGroups shares its answer instead
     // of starting a second signal-cli, which would be left running and deliver every message twice.
-    this.connecting ??= this.openSession().finally(() => {
-      this.connecting = undefined;
+    if (this.connecting !== undefined) return this.connecting;
+    const attempt = this.openSession().finally(() => {
+      // Only clear what is still ours: disconnect() clears the slot and a later connect() may
+      // already hold its own attempt there.
+      if (this.connecting === attempt) this.connecting = undefined;
     });
-    return this.connecting;
+    this.connecting = attempt;
+    return attempt;
   }
 
   async disconnect(): Promise<void> {
+    // The overtaken attempt answers false to its own callers; a later connect() starts fresh.
+    this.connecting = undefined;
     this.endChild();
   }
 
