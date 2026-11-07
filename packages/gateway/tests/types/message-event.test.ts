@@ -181,6 +181,8 @@ describe("MessageEvent (T1.1)", () => {
           return `zp:${e.zalo_personal.messageId}`;
         case "clickclack":
           return `cc:${e.clickclack.messageId}`;
+        case "buzz":
+          return `bz:${e.buzz.messageId}`;
         default: {
           const _exhaustive: never = e;
           throw new Error(`unhandled platform: ${JSON.stringify(_exhaustive)}`);

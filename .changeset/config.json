@@ -14,7 +14,8 @@
     "@theokit/gateway-tlon-urbit",
     "@theokit/gateway-twitch",
     "@theokit/gateway-zalo-personal",
-    "@theokit/gateway-clickclack"
+    "@theokit/gateway-clickclack",
+    "@theokit/gateway-buzz"
   ],
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
     "onlyUpdatePeerDependentsWhenOutOfRange": true
