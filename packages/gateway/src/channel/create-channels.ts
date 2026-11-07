@@ -27,9 +27,17 @@ export interface ChannelRejection {
   readonly error: GatewayConfigurationError;
 }
 
+/** A built adapter paired with the descriptor that built it, so a consumer need not re-pair them. */
+export interface BuiltChannel {
+  readonly descriptor: ChannelDescriptor<BasePlatformAdapter>;
+  readonly adapter: BasePlatformAdapter;
+}
+
 /** What `createChannels` built and what it refused. */
 export interface CreateChannelsResult {
   readonly adapters: BasePlatformAdapter[];
+  /** The same adapters, in the same order, each paired with its descriptor. */
+  readonly channels: BuiltChannel[];
   readonly rejected: ChannelRejection[];
 }
 
@@ -143,6 +151,7 @@ function createAdapter(
  */
 export function createChannels(entries: ReadonlyArray<ChannelEntry>): CreateChannelsResult {
   const adapters: BasePlatformAdapter[] = [];
+  const channels: BuiltChannel[] = [];
   const rejected: ChannelRejection[] = [];
   const builtPlatforms = new Set<PlatformName>();
   for (const entry of entries) {
@@ -154,7 +163,8 @@ export function createChannels(entries: ReadonlyArray<ChannelEntry>): CreateChan
       continue;
     }
     adapters.push(outcome.adapter);
+    channels.push({ descriptor: entry.descriptor, adapter: outcome.adapter });
     builtPlatforms.add(entry.descriptor.platform);
   }
-  return { adapters, rejected };
+  return { adapters, channels, rejected };
 }
