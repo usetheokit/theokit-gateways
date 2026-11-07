@@ -9,10 +9,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { mixedChangesets } from "../release-path.mjs";
-
 import { afterEach, describe, expect, it } from "vitest";
+import { mixedChangesets } from "../release-path.mjs";
 
 const repositoryChangesetDir = fileURLToPath(new URL("../../.changeset/", import.meta.url));
 
@@ -29,7 +27,11 @@ describe("pending changesets", () => {
 describe("mixedChangesets", () => {
   it("is_the_reader_tools_release_path_exports_not_a_second_copy", () => {
     expect(readerSource).toContain('from "../release-path.mjs"');
-    for (const copy of ["RELEASE" + "_LINE", "function read" + "Ignore", "function released" + "Packages"]) {
+    for (const copy of [
+      "RELEASE" + "_LINE",
+      "function read" + "Ignore",
+      "function released" + "Packages",
+    ]) {
       expect(readerSource).not.toContain(copy);
     }
   });
