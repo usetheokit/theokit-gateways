@@ -99,12 +99,21 @@ function releasedPackages(file) {
     .map((line) => parseRelease(line, file));
 }
 
-function classify(changesetDir) {
+/** The `ignore` set and, per pending changeset, the package names it releases. Shared reader. */
+export function readChangesets(changesetDir) {
   const ignore = readIgnore(changesetDir);
+  const changesets = pendingChangesets(changesetDir).map((name) => ({
+    name,
+    packages: releasedPackages(join(changesetDir, name)),
+  }));
+  return { ignore, changesets };
+}
+
+function classify(changesetDir) {
+  const { ignore, changesets } = readChangesets(changesetDir);
   const releasable = [];
   const nonReleasable = [];
-  for (const name of pendingChangesets(changesetDir)) {
-    const packages = releasedPackages(join(changesetDir, name));
+  for (const { name, packages } of changesets) {
     const releases = packages.some((pkg) => !ignore.has(pkg));
     (releases ? releasable : nonReleasable).push(name);
   }
