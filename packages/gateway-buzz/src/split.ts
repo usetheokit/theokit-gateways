@@ -20,7 +20,5 @@ export const BUZZ_MESSAGE_LIMIT = 4000;
  */
 export function splitForBuzz(text: string): string[] {
   if (text.length === 0) return [];
-  return chunkByGrapheme(text, { limit: BUZZ_MESSAGE_LIMIT }).filter(
-    (part) => part.length > 0,
-  );
+  return chunkByGrapheme(text, { limit: BUZZ_MESSAGE_LIMIT }).filter((part) => part.length > 0);
 }

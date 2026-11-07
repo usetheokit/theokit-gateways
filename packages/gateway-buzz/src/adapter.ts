@@ -305,8 +305,7 @@ export class BuzzAdapter extends BasePlatformAdapter {
 
 /** The default socket: Node's global `WebSocket`, which takes request headers as an option. */
 function defaultSocket(url: string, headers: Readonly<Record<string, string>>): BuzzSocket {
-  const Ctor = (globalThis as { WebSocket?: new (u: string, o: unknown) => BuzzSocket })
-    .WebSocket;
+  const Ctor = (globalThis as { WebSocket?: new (u: string, o: unknown) => BuzzSocket }).WebSocket;
   if (Ctor === undefined) throw new Error("this runtime has no global WebSocket");
   return new Ctor(url, { headers });
 }
