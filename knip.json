@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs", "tools/*.mjs"]
+    },
+    "packages/gateway-whatsapp": {
+      "entry": ["src/bridge/whatsapp-web-bridge.mjs"]
+    }
+  }
+}
