@@ -9,7 +9,7 @@ const codeLines = Array.from({ length: 400 }, (_, i) => `const v${i} = ${i}; // 
 
 describe("splitForTelegram fences", () => {
   it("returns chunks with an even count of fence lines and every code line intact", () => {
-    const text = `Intro\n\n\`\`\`ts\n${codeLines.join("\n")}\n\`\`\`\n\nOutro`;
+    const text = `Intro\n\n\`\`\`ts\n${codeLines.join("\n")}\n\`\`\`\n\nClosing`;
     expect(text.length).toBeGreaterThan(8192);
     const parts = splitForTelegram(text);
     expect(parts.length).toBeGreaterThan(2);
@@ -20,7 +20,7 @@ describe("splitForTelegram fences", () => {
     const inner = parts.flatMap((p) => p.split("\n")).filter((l) => l.startsWith("const v"));
     expect(inner).toEqual(codeLines);
     expect(parts[1]?.startsWith("```ts\n")).toBe(true);
-    expect(parts.at(-1)).toContain("Outro");
+    expect(parts.at(-1)).toContain("Closing");
   });
 
   it("does not count inline markers inside a fence when balancing", () => {
