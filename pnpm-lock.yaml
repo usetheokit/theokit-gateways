@@ -195,6 +195,36 @@ importers:
         specifier: ^4.6.6
         version: 4.6.7
 
+  packages/gateway-buzz:
+    devDependencies:
+      '@theokit/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@7.3.7(@types/node@26.6.6)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
+  packages/gateway-clickclack:
+    devDependencies:
+      '@theokit/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@7.3.7(@types/node@26.6.6)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/gateway-discord:
     devDependencies:
       '@stryker-mutator/core':
@@ -621,6 +651,10 @@ importers:
         version: 4.6.7
 
   packages/gateway-telegram:
+    dependencies:
+      '@types/node-fetch':
+        specifier: ^2.6.13
+        version: 2.6.13
     devDependencies:
       '@stryker-mutator/core':
         specifier: '10'
@@ -718,37 +752,6 @@ importers:
         specifier: ^4.6.6
         version: 4.6.7
 
-  packages/gateway-buzz:
-    devDependencies:
-      '@theokit/gateway':
-        specifier: workspace:*
-        version: link:../gateway
-      tsup:
-        specifier: ^8.5.0
-        version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1)
-      typescript:
-        specifier: 5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.1.11
-        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@7.3.7(@types/node@26.6.6)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
-
-  packages/gateway-clickclack:
-    devDependencies:
-      '@theokit/gateway':
-        specifier: workspace:*
-        version: link:../gateway
-      tsup:
-        specifier: ^8.5.0
-        version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1)
-      typescript:
-        specifier: 5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.1.11
-        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@7.3.7(@types/node@26.6.6)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
-
-
   packages/gateway-zalo-personal:
     devDependencies:
       '@theokit/gateway':
@@ -763,7 +766,6 @@ importers:
       vitest:
         specifier: ^4.1.11
         version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@7.3.7(@types/node@26.6.6)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
-
 
   tools:
     devDependencies:
@@ -2594,6 +2596,9 @@ packages:
 
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
+
+  '@types/node-fetch@2.6.13':
+    resolution: {integrity: sha512-QGpRVpzSaUs30JBSGPjOg4Uveu384erbHBoT1zeONvyCfwQxIkUshLAOqN/k9EjGviPRmWTTe6aH2qySWKTVSw==}
 
   '@types/node@12.20.55':
     resolution: {integrity: sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ==}
@@ -7286,6 +7291,11 @@ snapshots:
       iconv-lite: 0.6.3
 
   '@types/ms@2.1.0': {}
+
+  '@types/node-fetch@2.6.13':
+    dependencies:
+      '@types/node': 26.6.6
+      form-data: 4.0.6
 
   '@types/node@12.20.55': {}
 
