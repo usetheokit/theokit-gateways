@@ -10,13 +10,12 @@ import {
   channelRendering,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
+  SeenIds,
   type SendResult,
 } from "@theokit/gateway";
-
 import { type EventSubMetadata, EventSubSession } from "./eventsub.js";
 import { HelixClient } from "./helix.js";
 import { refuseAttachments } from "./refuse-attachments.js";
-import { SeenIds } from "./seen-ids.js";
 import { splitForTwitch } from "./split.js";
 import type { FetchLike, TwitchAdapterOptions, TwitchSocket } from "./types.js";
 

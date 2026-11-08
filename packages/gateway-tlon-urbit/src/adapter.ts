@@ -10,10 +10,10 @@ import {
   channelRendering,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
+  SeenIds,
   type SendResult,
 } from "@theokit/gateway";
 import { refuseAttachments } from "./refuse-attachments.js";
-import { SeenIds } from "./seen-ids.js";
 import { UrbitShipClient } from "./ship-client.js";
 import type { FetchLike, TlonUrbitAdapterOptions } from "./types.js";
 import { type ChatFact, dmPoke, normalizeShip, readChatFact, rsvpPoke } from "./wire.js";
