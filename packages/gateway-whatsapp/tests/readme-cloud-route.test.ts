@@ -18,6 +18,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WhatsAppStatusReceipt } from "../src/index.js";
 
+// Load the package source at collection time, outside every test's timeout. The route each test
+// writes imports this same module; without this the first test pays the cold transform of the
+// whole source tree inside its 5 s budget, which a loaded machine does not leave it.
+await import("../src/index.js");
+
 const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CLOUD = { accessToken: "t", phoneNumberId: "PNID", appSecret: "route-secret" } as const;
 
@@ -170,6 +175,22 @@ describe("the Cloud route documented in README.md", () => {
       release();
     }
     expect(received).toEqual(["wamid.slow"]);
+  });
+
+  it("is not affected by an earlier test whose delivery never finished", async () => {
+    // What a timed-out test leaves behind: a delivery of the same message stuck in its handler.
+    const stuck = await loadRoute(() => new Promise<void>(() => {}));
+    const { body, signature } = signedBody("wamid.retry");
+    void stuck(body, signature);
+
+    let calls = 0;
+    const onWebhook = await loadRoute(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("handler failed once");
+    });
+    const statuses = [await onWebhook(body, signature), await onWebhook(body, signature)];
+
+    expect(statuses).toEqual([503, 200]);
   });
 
   it("delivers a message again on the retry after its handler failed", async () => {
