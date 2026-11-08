@@ -10,12 +10,12 @@ import {
   channelRendering,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
+  SeenIds,
   type SendResult,
 } from "@theokit/gateway";
 
 import { normalizeLarkMessage } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
-import { SeenIds } from "./seen-ids.js";
 import { createLarkTransport } from "./transport.js";
 import type { FeishuLarkAdapterOptions, LarkApiResult, LarkTransport } from "./types.js";
 

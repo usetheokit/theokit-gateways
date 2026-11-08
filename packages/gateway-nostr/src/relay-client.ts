@@ -10,12 +10,10 @@
  */
 
 import { randomUUID } from "node:crypto";
-
+import { SeenIds } from "@theokit/gateway";
 import type { Filter } from "nostr-tools/filter";
 import type { NostrEvent } from "nostr-tools/pure";
-
 import { isEvent, messageOf, parseFrame, resubscribeFilters } from "./relay-frames.js";
-import { SeenIds } from "./seen-ids.js";
 
 const LABEL = "gateway-nostr";
 const DEFAULT_TIMEOUT_MS = 10_000;
