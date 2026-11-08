@@ -4,6 +4,11 @@
   "private": true,
   "description": "Internal: the adapter core shared by the ClickClack and Buzz gateways (REST post plus realtime WebSocket with a bot token). Bundled into them, never published.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usetheokit/theokit-gateways.git",
+    "directory": "packages/bot-realtime"
+  },
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
