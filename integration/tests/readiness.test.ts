@@ -255,6 +255,16 @@ describe("live-test readiness", () => {
         "Covered by packages/gateway/tests/text/channel-rendering.test.ts over all ten platforms, " +
         "and by packages/gateway/tests/presentation/chat-presenter-composition.test.ts, which " +
         "drives the released ChatPresenter into an adapter's sendMessage offline",
+      SeenIds:
+        "in-memory dedup set, no I/O. Used by the nostr, twitch, tlon-urbit, feishu-lark and " +
+        "synology-chat adapters, whose own suites replay duplicate events. Covered by " +
+        "packages/gateway/tests/text/seen-ids.test.ts",
+      scanFences:
+        "pure string scan, no I/O. chunkText and toDialect call it, so every chunking path is " +
+        "proven through them. Covered by packages/gateway/tests/text/fence.test.ts",
+      splitKeepingRows:
+        "pure function, no I/O. The gateway-line and gateway-sms splitters call it, and their " +
+        "suites send past the platform cap. Covered by packages/gateway/tests/text/split-rows.test.ts",
       defaultStrategy: "pure function: event -> agent id string. No transport can disagree with it",
       SessionRouter: "delegates to a strategy function; nothing crosses a network",
       BasePlatformAdapter:
