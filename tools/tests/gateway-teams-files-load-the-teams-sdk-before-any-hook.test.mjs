@@ -49,6 +49,10 @@ const PRELOADED_FILES = [
   "tests/every-refusal-says-why-in-its-message.test.ts",
   "tests/the-test-key-server-signs-tokens-the-sdk-accepts.test.ts",
   "tests/the-verifier-reads-the-sdk-validator-under-either-name.test.ts",
+  "tests/a-service-url-claim-that-differs-is-refused.test.ts",
+  "tests/a-key-microsoft-stopped-publishing-causes-no-key-set-request.test.ts",
+  "tests/the-readme-route-answers-each-verdict-with-its-status.test.ts",
+  "tests/a-key-set-with-no-usable-rsa-key-is-a-failed-read.test.ts",
 ];
 const PRELOAD_CONTROL = `${FIXTURES}/preload.fixture.ts`;
 const NO_PRELOAD_CONTROL = `${FIXTURES}/no-preload.fixture.ts`;

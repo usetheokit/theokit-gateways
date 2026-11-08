@@ -9,6 +9,10 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// Load the package source at collection time, outside every test's timeout: the route each test
+// writes imports this same module, and its cold transform must not be paid inside a 5 s budget.
+await import("../src/index.js");
+
 const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const README = join(PACKAGE_DIR, "..", "gateway", "README.md");
 type OnMessage = (m: { payload: unknown }) => Promise<void>;
