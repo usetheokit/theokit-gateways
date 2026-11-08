@@ -64,6 +64,11 @@ export interface PlatformSpec {
   readonly reachableVia?: string;
 }
 
+/** Build one `CredentialVar`; every entry of every platform has this shape. */
+function cred(name: string, what: string, where: string): CredentialVar {
+  return { name, what, where };
+}
+
 export const PLATFORMS: readonly PlatformSpec[] = [
   {
     id: "telegram",
@@ -71,19 +76,18 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-telegram",
     transport: "connection",
     credentials: [
-      {
-        name: "TELEGRAM_BOT_TOKEN",
-        what: "Bot token, `<id>:<secret>`",
-        where: "Message @BotFather → /newbot (or /token for an existing bot)",
-      },
+      cred(
+        "TELEGRAM_BOT_TOKEN",
+        "Bot token, `<id>:<secret>`",
+        "Message @BotFather → /newbot (or /token for an existing bot)",
+      ),
     ],
     target: [
-      {
-        name: "TELEGRAM_TEST_CHAT_ID",
-        what: "Numeric chat id the test may post into",
-        where:
-          "Create a throwaway group, add the bot, send it one message, then read the id from getUpdates (`pnpm --filter @theokit/gateway-integration discover:telegram`)",
-      },
+      cred(
+        "TELEGRAM_TEST_CHAT_ID",
+        "Numeric chat id the test may post into",
+        "Create a throwaway group, add the bot, send it one message, then read the id from getUpdates (`pnpm --filter @theokit/gateway-integration discover:telegram`)",
+      ),
     ],
   },
   {
@@ -92,19 +96,18 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-discord",
     transport: "connection",
     credentials: [
-      {
-        name: "DISCORD_BOT_TOKEN",
-        what: "Bot token",
-        where: "discord.com/developers/applications → your app → Bot → Reset Token",
-      },
+      cred(
+        "DISCORD_BOT_TOKEN",
+        "Bot token",
+        "discord.com/developers/applications → your app → Bot → Reset Token",
+      ),
     ],
     target: [
-      {
-        name: "DISCORD_TEST_CHANNEL_ID",
-        what: "Channel id the bot may post into",
-        where:
-          "Create a throwaway server, invite the bot with Send Messages, enable Developer Mode, right-click the channel → Copy Channel ID",
-      },
+      cred(
+        "DISCORD_TEST_CHANNEL_ID",
+        "Channel id the bot may post into",
+        "Create a throwaway server, invite the bot with Send Messages, enable Developer Mode, right-click the channel → Copy Channel ID",
+      ),
     ],
     caveat:
       "MESSAGE CONTENT is a privileged intent: enable it under Bot → Privileged Gateway Intents, or inbound arrives with empty text.",
@@ -115,23 +118,23 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-slack",
     transport: "connection",
     credentials: [
-      {
-        name: "SLACK_BOT_TOKEN",
-        what: "Bot user token, `xoxb-…`",
-        where: "api.slack.com/apps → your app → OAuth & Permissions → install to workspace",
-      },
-      {
-        name: "SLACK_APP_TOKEN",
-        what: "App-level token, `xapp-…`, scope `connections:write`",
-        where: "api.slack.com/apps → your app → Basic Information → App-Level Tokens",
-      },
+      cred(
+        "SLACK_BOT_TOKEN",
+        "Bot user token, `xoxb-…`",
+        "api.slack.com/apps → your app → OAuth & Permissions → install to workspace",
+      ),
+      cred(
+        "SLACK_APP_TOKEN",
+        "App-level token, `xapp-…`, scope `connections:write`",
+        "api.slack.com/apps → your app → Basic Information → App-Level Tokens",
+      ),
     ],
     target: [
-      {
-        name: "SLACK_TEST_CHANNEL_ID",
-        what: "Channel id, `C…`",
-        where: "Create a throwaway channel, invite the bot, then View channel details → bottom",
-      },
+      cred(
+        "SLACK_TEST_CHANNEL_ID",
+        "Channel id, `C…`",
+        "Create a throwaway channel, invite the bot, then View channel details → bottom",
+      ),
     ],
     caveat:
       "Socket Mode must be ON for inbound; without it the app token is accepted but no events arrive. " +
@@ -145,28 +148,28 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-matrix",
     transport: "connection",
     credentials: [
-      {
-        name: "MATRIX_HOMESERVER_URL",
-        what: "Homeserver base URL — provisioned, not created by hand",
-        where: "pnpm --filter @theokit/gateway-integration matrix:up",
-      },
-      {
-        name: "MATRIX_ACCESS_TOKEN",
-        what: "Bot access token — provisioned",
-        where: "pnpm --filter @theokit/gateway-integration matrix:up",
-      },
-      {
-        name: "MATRIX_USER_ID",
-        what: "Bot mxid — provisioned",
-        where: "pnpm --filter @theokit/gateway-integration matrix:up",
-      },
+      cred(
+        "MATRIX_HOMESERVER_URL",
+        "Homeserver base URL — provisioned, not created by hand",
+        "pnpm --filter @theokit/gateway-integration matrix:up",
+      ),
+      cred(
+        "MATRIX_ACCESS_TOKEN",
+        "Bot access token — provisioned",
+        "pnpm --filter @theokit/gateway-integration matrix:up",
+      ),
+      cred(
+        "MATRIX_USER_ID",
+        "Bot mxid — provisioned",
+        "pnpm --filter @theokit/gateway-integration matrix:up",
+      ),
     ],
     target: [
-      {
-        name: "MATRIX_TEST_ROOM_ID",
-        what: "Room id — provisioned",
-        where: "pnpm --filter @theokit/gateway-integration matrix:up",
-      },
+      cred(
+        "MATRIX_TEST_ROOM_ID",
+        "Room id — provisioned",
+        "pnpm --filter @theokit/gateway-integration matrix:up",
+      ),
     ],
     caveat:
       "The only platform here that needs NO credential from anyone: matrix.org answers registration " +
@@ -182,23 +185,23 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-mattermost",
     transport: "connection",
     credentials: [
-      {
-        name: "MATTERMOST_BASE_URL",
-        what: "Server base URL — provisioned, not created by hand",
-        where: "pnpm --filter @theokit/gateway-integration mattermost:up",
-      },
-      {
-        name: "MATTERMOST_ACCESS_TOKEN",
-        what: "Bot personal access token — provisioned",
-        where: "pnpm --filter @theokit/gateway-integration mattermost:up",
-      },
+      cred(
+        "MATTERMOST_BASE_URL",
+        "Server base URL — provisioned, not created by hand",
+        "pnpm --filter @theokit/gateway-integration mattermost:up",
+      ),
+      cred(
+        "MATTERMOST_ACCESS_TOKEN",
+        "Bot personal access token — provisioned",
+        "pnpm --filter @theokit/gateway-integration mattermost:up",
+      ),
     ],
     target: [
-      {
-        name: "MATTERMOST_TEST_CHANNEL_ID",
-        what: "Channel id — provisioned",
-        where: "pnpm --filter @theokit/gateway-integration mattermost:up",
-      },
+      cred(
+        "MATTERMOST_TEST_CHANNEL_ID",
+        "Channel id — provisioned",
+        "pnpm --filter @theokit/gateway-integration mattermost:up",
+      ),
     ],
     caveat:
       "Self-hosted software, so the suite boots its own server and needs no credential from anyone: " +
@@ -212,21 +215,21 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-email",
     transport: "connection",
     credentials: [
-      { name: "EMAIL_ADDRESS", what: "Mailbox the bot owns", where: "A throwaway mailbox" },
-      {
-        name: "EMAIL_PASSWORD",
-        what: "App password, never the account password",
-        where: "Gmail: myaccount.google.com/apppasswords (needs 2FA on)",
-      },
-      { name: "EMAIL_IMAP_HOST", what: "IMAP host", where: "Gmail: imap.gmail.com" },
-      { name: "EMAIL_SMTP_HOST", what: "SMTP host", where: "Gmail: smtp.gmail.com" },
+      cred("EMAIL_ADDRESS", "Mailbox the bot owns", "A throwaway mailbox"),
+      cred(
+        "EMAIL_PASSWORD",
+        "App password, never the account password",
+        "Gmail: myaccount.google.com/apppasswords (needs 2FA on)",
+      ),
+      cred("EMAIL_IMAP_HOST", "IMAP host", "Gmail: imap.gmail.com"),
+      cred("EMAIL_SMTP_HOST", "SMTP host", "Gmail: smtp.gmail.com"),
     ],
     target: [
-      {
-        name: "EMAIL_TEST_RECIPIENT",
-        what: "Address the test may write to",
-        where: "Use the bot's OWN address so the round trip needs one mailbox, not two",
-      },
+      cred(
+        "EMAIL_TEST_RECIPIENT",
+        "Address the test may write to",
+        "Use the bot's OWN address so the round trip needs one mailbox, not two",
+      ),
     ],
     caveat:
       "Delivery is not instant; inbound assertions poll with a generous timeout. The inbound " +
@@ -240,20 +243,18 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-signal",
     transport: "connection",
     credentials: [
-      {
-        name: "SIGNAL_ACCOUNT",
-        what: "The bot's Signal number in E.164 form, registered or linked to signal-cli",
-        where:
-          "`signal-cli -a <number> register` then `verify <code>`, or `signal-cli link` and scan the QR code from a phone's Signal app (Settings → Linked devices)",
-      },
+      cred(
+        "SIGNAL_ACCOUNT",
+        "The bot's Signal number in E.164 form, registered or linked to signal-cli",
+        "`signal-cli -a <number> register` then `verify <code>`, or `signal-cli link` and scan the QR code from a phone's Signal app (Settings → Linked devices)",
+      ),
     ],
     target: [
-      {
-        name: "SIGNAL_PEER",
-        what: "E.164 number of a second, throwaway Signal account the test messages and answers from",
-        where:
-          "Register it in the same signal-cli data directory as SIGNAL_ACCOUNT (`signal-cli -a <peer> register`); the suite drives both accounts, one signal-cli process each",
-      },
+      cred(
+        "SIGNAL_PEER",
+        "E.164 number of a second, throwaway Signal account the test messages and answers from",
+        "Register it in the same signal-cli data directory as SIGNAL_ACCOUNT (`signal-cli -a <peer> register`); the suite drives both accounts, one signal-cli process each",
+      ),
     ],
     caveat:
       'Needs signal-cli on PATH (the GraalVM native build, or the JVM build with a Java 25 runtime) holding the account\'s keys in its data directory. The suite skips with "signal-cli not on PATH" when the binary is missing.',
@@ -264,31 +265,28 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-google-chat",
     transport: "webhook",
     credentials: [
-      {
-        name: "GOOGLE_CHAT_SERVICE_ACCOUNT_EMAIL",
-        what: "The Chat app's service account, <name>@<project>.iam.gserviceaccount.com",
-        where: "Google Cloud console → IAM & Admin → Service Accounts",
-      },
-      {
-        name: "GOOGLE_CHAT_PRIVATE_KEY",
-        what: "The private_key field of that service account's JSON key; a \\n written as two characters is read as a line break",
-        where:
-          "Google Cloud console → IAM & Admin → Service Accounts → the account → Keys → Add key → JSON",
-      },
-      {
-        name: "GOOGLE_CHAT_AUDIENCE",
-        what: "The HTTP endpoint URL configured for the Chat app, which every inbound token names as its audience",
-        where:
-          "Google Cloud console → Google Chat API → Configuration → Connection settings → HTTP endpoint URL",
-      },
+      cred(
+        "GOOGLE_CHAT_SERVICE_ACCOUNT_EMAIL",
+        "The Chat app's service account, <name>@<project>.iam.gserviceaccount.com",
+        "Google Cloud console → IAM & Admin → Service Accounts",
+      ),
+      cred(
+        "GOOGLE_CHAT_PRIVATE_KEY",
+        "The private_key field of that service account's JSON key; a \\n written as two characters is read as a line break",
+        "Google Cloud console → IAM & Admin → Service Accounts → the account → Keys → Add key → JSON",
+      ),
+      cred(
+        "GOOGLE_CHAT_AUDIENCE",
+        "The HTTP endpoint URL configured for the Chat app, which every inbound token names as its audience",
+        "Google Cloud console → Google Chat API → Configuration → Connection settings → HTTP endpoint URL",
+      ),
     ],
     target: [
-      {
-        name: "GOOGLE_CHAT_SPACE",
-        what: "A space name, spaces/<id>, where the app is a member and someone answers the test message",
-        where:
-          "The space's URL in chat.google.com ends in its id; or the space.name of any inbound event",
-      },
+      cred(
+        "GOOGLE_CHAT_SPACE",
+        "A space name, spaces/<id>, where the app is a member and someone answers the test message",
+        "The space's URL in chat.google.com ends in its id; or the space.name of any inbound event",
+      ),
     ],
     caveat:
       "Needs a Chat app configured with an HTTP endpoint, in a Google Workspace organisation. Inbound needs INTEGRATION_PUBLIC_URL, a public HTTPS tunnel to this machine, and the app's endpoint URL must equal GOOGLE_CHAT_AUDIENCE.",
@@ -299,19 +297,18 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-imessage",
     transport: "connection",
     credentials: [
-      {
-        name: "IMESSAGE_CLI_PATH",
-        what: "Path to the imsg binary on a Mac signed in to Messages, or to a script that runs `imsg rpc` on that Mac over ssh",
-        where:
-          "Install imsg (github.com/openclaw/imsg) on macOS 14 or newer, sign in to Messages, and give the terminal Full Disk Access (System Settings → Privacy & Security)",
-      },
+      cred(
+        "IMESSAGE_CLI_PATH",
+        "Path to the imsg binary on a Mac signed in to Messages, or to a script that runs `imsg rpc` on that Mac over ssh",
+        "Install imsg (github.com/openclaw/imsg) on macOS 14 or newer, sign in to Messages, and give the terminal Full Disk Access (System Settings → Privacy & Security)",
+      ),
     ],
     target: [
-      {
-        name: "IMESSAGE_PEER_CHAT_ID",
-        what: "imsg's numeric chat id of a conversation with a second person or device, who answers the test's message",
-        where: "`imsg chats` on the Mac lists each chat with its id",
-      },
+      cred(
+        "IMESSAGE_PEER_CHAT_ID",
+        "imsg's numeric chat id of a conversation with a second person or device, who answers the test's message",
+        "`imsg chats` on the Mac lists each chat with its id",
+      ),
     ],
     caveat:
       'Needs macOS: imsg does not send or receive on Linux. The suite skips with "not macOS" anywhere else, and someone on the peer device must answer the test message.',
@@ -322,19 +319,18 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-irc",
     transport: "connection",
     credentials: [
-      {
-        name: "IRC_NICK",
-        what: "The nick the adapter registers, unregistered and at most 16 characters; the peer client takes it plus `pr`",
-        where:
-          "Choose one no one on the network holds; Libera.Chat needs no account for an unregistered nick",
-      },
+      cred(
+        "IRC_NICK",
+        "The nick the adapter registers, unregistered and at most 16 characters; the peer client takes it plus `pr`",
+        "Choose one no one on the network holds; Libera.Chat needs no account for an unregistered nick",
+      ),
     ],
     target: [
-      {
-        name: "IRC_HOST",
-        what: "The network the live suite may write to, over TLS on port 6697; the suite only posts into a channel it creates for the run",
-        where: "irc.libera.chat, or any network that accepts unregistered nicks over TLS",
-      },
+      cred(
+        "IRC_HOST",
+        "The network the live suite may write to, over TLS on port 6697; the suite only posts into a channel it creates for the run",
+        "irc.libera.chat, or any network that accepts unregistered nicks over TLS",
+      ),
     ],
     caveat:
       "The suite joins a fresh #theokit-it-<8 hex> channel, so it writes nowhere anyone reads. A network that requires SASL for new connections, or blocks this host, refuses registration.",
@@ -345,29 +341,28 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-feishu-lark",
     transport: "connection",
     credentials: [
-      {
-        name: "LARK_APP_ID",
-        what: "The custom app's App ID, `cli_` and 16 hex characters",
-        where: "Feishu or Lark developer console → your custom app → Credentials & Basic Info",
-      },
-      {
-        name: "LARK_APP_SECRET",
-        what: "The same app's App Secret",
-        where: "Feishu or Lark developer console → your custom app → Credentials & Basic Info",
-      },
+      cred(
+        "LARK_APP_ID",
+        "The custom app's App ID, `cli_` and 16 hex characters",
+        "Feishu or Lark developer console → your custom app → Credentials & Basic Info",
+      ),
+      cred(
+        "LARK_APP_SECRET",
+        "The same app's App Secret",
+        "Feishu or Lark developer console → your custom app → Credentials & Basic Info",
+      ),
     ],
     target: [
-      {
-        name: "LARK_DOMAIN",
-        what: "`feishu` for open.feishu.cn or `lark` for open.larksuite.com",
-        where: "Whichever console the app was created in",
-      },
-      {
-        name: "LARK_TEST_CHAT_ID",
-        what: "A chat the app's bot is in and the suite may write to, `oc_…`",
-        where:
-          "Add the bot to a throwaway group; the chat id is in the group settings or an event payload",
-      },
+      cred(
+        "LARK_DOMAIN",
+        "`feishu` for open.feishu.cn or `lark` for open.larksuite.com",
+        "Whichever console the app was created in",
+      ),
+      cred(
+        "LARK_TEST_CHAT_ID",
+        "A chat the app's bot is in and the suite may write to, `oc_…`",
+        "Add the bot to a throwaway group; the chat id is in the group settings or an event payload",
+      ),
     ],
     caveat:
       "The app needs the bot capability, the im:message and im:message:send_as_bot scopes, and the long-connection event mode with im.message.receive_v1 subscribed. Inbound needs a person to write in the chat, so the suite checks the outbound half and the connection.",
@@ -378,23 +373,23 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-synology-chat",
     transport: "webhook",
     credentials: [
-      {
-        name: "SYNOLOGY_CHAT_BOT_TOKEN",
-        what: "The bot's token, sent with every outgoing callback",
-        where: "Synology Chat → Integration → Bots → your bot, beside the Outgoing URL",
-      },
-      {
-        name: "SYNOLOGY_CHAT_INCOMING_URL",
-        what: "The bot's Incoming URL, `https://<nas>/webapi/entry.cgi?api=SYNO.Chat.External&method=chatbot&version=2&token=…`",
-        where: "Synology Chat → Integration → Bots → your bot",
-      },
+      cred(
+        "SYNOLOGY_CHAT_BOT_TOKEN",
+        "The bot's token, sent with every outgoing callback",
+        "Synology Chat → Integration → Bots → your bot, beside the Outgoing URL",
+      ),
+      cred(
+        "SYNOLOGY_CHAT_INCOMING_URL",
+        "The bot's Incoming URL, `https://<nas>/webapi/entry.cgi?api=SYNO.Chat.External&method=chatbot&version=2&token=…`",
+        "Synology Chat → Integration → Bots → your bot",
+      ),
     ],
     target: [
-      {
-        name: "SYNOLOGY_CHAT_TEST_USER_ID",
-        what: "The numeric user id of a throwaway account the bot may write to",
-        where: "The `user_id` of a callback that account sends the bot, or the bot's user_list",
-      },
+      cred(
+        "SYNOLOGY_CHAT_TEST_USER_ID",
+        "The numeric user id of a throwaway account the bot may write to",
+        "The `user_id` of a callback that account sends the bot, or the bot's user_list",
+      ),
     ],
     caveat:
       "Inbound is a webhook: the NAS must reach the adapter's Outgoing URL, so the round trip needs INTEGRATION_PUBLIC_URL or a NAS on the same network. The suite records whether the callback came form-encoded or as JSON, and fails if the bot's own reply calls back.",
@@ -405,38 +400,26 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-tlon-urbit",
     transport: "connection",
     credentials: [
-      {
-        name: "TLON_SHIP_URL",
-        what: "The bot ship's HTTP base URL",
-        where: "Tlon hosting shows it for the ship; a self-hosted ship serves on its own host",
-      },
-      {
-        name: "TLON_SHIP",
-        what: "The bot ship's name, `~sampel-palnet`",
-        where: "The ship's own name",
-      },
-      {
-        name: "TLON_CODE",
-        what: "The bot ship's web login code",
-        where: "`+code` in the ship's dojo, or the ship's settings on Tlon hosting",
-      },
+      cred(
+        "TLON_SHIP_URL",
+        "The bot ship's HTTP base URL",
+        "Tlon hosting shows it for the ship; a self-hosted ship serves on its own host",
+      ),
+      cred("TLON_SHIP", "The bot ship's name, `~sampel-palnet`", "The ship's own name"),
+      cred(
+        "TLON_CODE",
+        "The bot ship's web login code",
+        "`+code` in the ship's dojo, or the ship's settings on Tlon hosting",
+      ),
     ],
     target: [
-      {
-        name: "TLON_PEER_SHIP_URL",
-        what: "A second, throwaway ship's HTTP base URL, the one that DMs the bot",
-        where: "As for the bot ship",
-      },
-      {
-        name: "TLON_PEER_SHIP",
-        what: "That second ship's name",
-        where: "As for the bot ship",
-      },
-      {
-        name: "TLON_PEER_CODE",
-        what: "That second ship's web login code",
-        where: "As for the bot ship",
-      },
+      cred(
+        "TLON_PEER_SHIP_URL",
+        "A second, throwaway ship's HTTP base URL, the one that DMs the bot",
+        "As for the bot ship",
+      ),
+      cred("TLON_PEER_SHIP", "That second ship's name", "As for the bot ship"),
+      cred("TLON_PEER_CODE", "That second ship's web login code", "As for the bot ship"),
     ],
     caveat:
       "The wire shapes are read from OpenClaw's Tlon extension, not observed against a ship; the live run is what confirms them. The peer must already have a DM open with the bot, or accept the bot's invite.",
@@ -447,24 +430,23 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-twitch",
     transport: "connection",
     credentials: [
-      {
-        name: "TWITCH_ACCESS_TOKEN",
-        what: "The bot account's user access token, with user:read:chat and user:write:chat",
-        where:
-          "dev.twitch.tv console → your app → an OAuth flow (Authorization Code or Device Code) signed in as the bot account",
-      },
-      {
-        name: "TWITCH_BOT_USER_ID",
-        what: "The bot account's numeric user id",
-        where: "`user_id` in the answer of https://id.twitch.tv/oauth2/validate for the token",
-      },
+      cred(
+        "TWITCH_ACCESS_TOKEN",
+        "The bot account's user access token, with user:read:chat and user:write:chat",
+        "dev.twitch.tv console → your app → an OAuth flow (Authorization Code or Device Code) signed in as the bot account",
+      ),
+      cred(
+        "TWITCH_BOT_USER_ID",
+        "The bot account's numeric user id",
+        "`user_id` in the answer of https://id.twitch.tv/oauth2/validate for the token",
+      ),
     ],
     target: [
-      {
-        name: "TWITCH_TEST_BROADCASTER_ID",
-        what: "The numeric user id of a throwaway channel the bot may write in",
-        where: "A channel you own; its id is in the Helix Get Users answer",
-      },
+      cred(
+        "TWITCH_TEST_BROADCASTER_ID",
+        "The numeric user id of a throwaway channel the bot may write in",
+        "A channel you own; its id is in the Helix Get Users answer",
+      ),
     ],
     caveat:
       "Inbound needs someone chatting in the test channel, so the suite checks the connection, the subscription and one send. Follower-only or other channel modes can drop a bot's message, reported as twitch_message_dropped.",
@@ -475,33 +457,33 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-clickclack",
     transport: "connection",
     credentials: [
-      {
-        name: "CLICKCLACK_BASE_URL",
-        what: "Base URL of the ClickClack server",
-        where: "The operator's own ClickClack deployment",
-      },
-      {
-        name: "CLICKCLACK_TOKEN",
-        what: "A bot token (ccb_…) with bot:write and realtime:read",
-        where: "`clickclack admin bot create`",
-      },
-      {
-        name: "CLICKCLACK_WORKSPACE_ID",
-        what: "The workspace whose realtime stream is followed",
-        where: "The ClickClack workspace settings or API",
-      },
-      {
-        name: "CLICKCLACK_BOT_USER_ID",
-        what: "The bot's own user id, so its own messages are ignored",
-        where: "The output of `clickclack admin bot create`",
-      },
+      cred(
+        "CLICKCLACK_BASE_URL",
+        "Base URL of the ClickClack server",
+        "The operator's own ClickClack deployment",
+      ),
+      cred(
+        "CLICKCLACK_TOKEN",
+        "A bot token (ccb_…) with bot:write and realtime:read",
+        "`clickclack admin bot create`",
+      ),
+      cred(
+        "CLICKCLACK_WORKSPACE_ID",
+        "The workspace whose realtime stream is followed",
+        "The ClickClack workspace settings or API",
+      ),
+      cred(
+        "CLICKCLACK_BOT_USER_ID",
+        "The bot's own user id, so its own messages are ignored",
+        "The output of `clickclack admin bot create`",
+      ),
     ],
     target: [
-      {
-        name: "CLICKCLACK_TEST_CHANNEL_ID",
-        what: "A channel the bot can post in",
-        where: "The channel's id in ClickClack",
-      },
+      cred(
+        "CLICKCLACK_TEST_CHANNEL_ID",
+        "A channel the bot can post in",
+        "The channel's id in ClickClack",
+      ),
     ],
     caveat:
       "The suite sends one message, then waits up to 120 s for someone else to write in the channel, so a person must reply during the run. The wire shapes are written from ClickClack's public docs and not yet confirmed against a server.",
@@ -512,33 +494,25 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-buzz",
     transport: "connection",
     credentials: [
-      {
-        name: "BUZZ_BASE_URL",
-        what: "Base URL of the Buzz server",
-        where: "The operator's own Buzz deployment",
-      },
-      {
-        name: "BUZZ_TOKEN",
-        what: "A bot token (bz_…) with bot:write and realtime:read",
-        where: "The Buzz admin console",
-      },
-      {
-        name: "BUZZ_WORKSPACE_ID",
-        what: "The workspace whose realtime stream is followed",
-        where: "The Buzz workspace settings or API",
-      },
-      {
-        name: "BUZZ_BOT_USER_ID",
-        what: "The bot's own user id, so its own messages are ignored",
-        where: "Shown when the bot is created",
-      },
+      cred("BUZZ_BASE_URL", "Base URL of the Buzz server", "The operator's own Buzz deployment"),
+      cred(
+        "BUZZ_TOKEN",
+        "A bot token (bz_…) with bot:write and realtime:read",
+        "The Buzz admin console",
+      ),
+      cred(
+        "BUZZ_WORKSPACE_ID",
+        "The workspace whose realtime stream is followed",
+        "The Buzz workspace settings or API",
+      ),
+      cred(
+        "BUZZ_BOT_USER_ID",
+        "The bot's own user id, so its own messages are ignored",
+        "Shown when the bot is created",
+      ),
     ],
     target: [
-      {
-        name: "BUZZ_TEST_CHANNEL_ID",
-        what: "A channel the bot can post in",
-        where: "The channel's id in Buzz",
-      },
+      cred("BUZZ_TEST_CHANNEL_ID", "A channel the bot can post in", "The channel's id in Buzz"),
     ],
     caveat:
       "The suite sends one message, then waits up to 120 s for someone else to write in the channel, so a person must reply during the run. The wire shapes are an assumption, since no Buzz spec was available, and not yet confirmed against a server.",
@@ -549,28 +523,28 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-zalo-personal",
     transport: "connection",
     credentials: [
-      {
-        name: "ZALO_PERSONAL_COOKIE",
-        what: "The account's Zalo web cookie jar, as JSON",
-        where: "A `zca-js` QR login for the throwaway account, saved by the operator",
-      },
-      {
-        name: "ZALO_PERSONAL_IMEI",
-        what: "The device id the session was opened with",
-        where: "The same `zca-js` login",
-      },
-      {
-        name: "ZALO_PERSONAL_USER_AGENT",
-        what: "The user agent the session was opened with",
-        where: "The same `zca-js` login",
-      },
+      cred(
+        "ZALO_PERSONAL_COOKIE",
+        "The account's Zalo web cookie jar, as JSON",
+        "A `zca-js` QR login for the throwaway account, saved by the operator",
+      ),
+      cred(
+        "ZALO_PERSONAL_IMEI",
+        "The device id the session was opened with",
+        "The same `zca-js` login",
+      ),
+      cred(
+        "ZALO_PERSONAL_USER_AGENT",
+        "The user agent the session was opened with",
+        "The same `zca-js` login",
+      ),
     ],
     target: [
-      {
-        name: "ZALO_PERSONAL_TEST_THREAD_ID",
-        what: "The uid of a friend of the throwaway account that agrees to receive the test message",
-        where: "The friend's profile in Zalo, or the `zca-js` friends list",
-      },
+      cred(
+        "ZALO_PERSONAL_TEST_THREAD_ID",
+        "The uid of a friend of the throwaway account that agrees to receive the test message",
+        "The friend's profile in Zalo, or the `zca-js` friends list",
+      ),
     ],
     caveat:
       "Unofficial: Zalo may restrict an account that automates, so use a throwaway account. Inbound needs the friend to write, so the suite checks the login, the listener and one send. `zca-js` must be installed beside the adapter.",
@@ -581,25 +555,23 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-nostr",
     transport: "connection",
     credentials: [
-      {
-        name: "NOSTR_SECRET_KEY",
-        what: "The bot's secret key, `nsec1…` or 64 hex characters",
-        where:
-          "Generate one for the bot (`nak key generate`, or any Nostr client's new account); never reuse a personal key",
-      },
+      cred(
+        "NOSTR_SECRET_KEY",
+        "The bot's secret key, `nsec1…` or 64 hex characters",
+        "Generate one for the bot (`nak key generate`, or any Nostr client's new account); never reuse a personal key",
+      ),
     ],
     target: [
-      {
-        name: "NOSTR_RELAY_URL",
-        what: "A relay the live suite may publish to, `wss://…`, that stores kind 1059 and kind 4 for the two test keys",
-        where:
-          "A relay you run (for example `nak serve`) or a public relay that accepts unauthenticated writes",
-      },
-      {
-        name: "NOSTR_PEER_SECRET_KEY",
-        what: "A second throwaway key the suite writes from, playing the person who DMs the bot",
-        where: "Generate a second key the same way as the bot's",
-      },
+      cred(
+        "NOSTR_RELAY_URL",
+        "A relay the live suite may publish to, `wss://…`, that stores kind 1059 and kind 4 for the two test keys",
+        "A relay you run (for example `nak serve`) or a public relay that accepts unauthenticated writes",
+      ),
+      cred(
+        "NOSTR_PEER_SECRET_KEY",
+        "A second throwaway key the suite writes from, playing the person who DMs the bot",
+        "Generate a second key the same way as the bot's",
+      ),
     ],
     caveat:
       "Gift wraps are public events encrypted to the two test keys; a public relay keeps them. Use throwaway keys, and prefer a relay you run.",
@@ -611,33 +583,33 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-nextcloud-talk",
     transport: "webhook",
     credentials: [
-      {
-        name: "NEXTCLOUD_TALK_URL",
-        what: "Nextcloud server base URL — provisioned, not created by hand",
-        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
-      },
-      {
-        name: "NEXTCLOUD_TALK_BOT_SECRET",
-        what: "The bot secret, generated per run and never printed — provisioned",
-        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
-      },
-      {
-        name: "NEXTCLOUD_TALK_WEBHOOK_PORT",
-        what: "The host port the bot's webhook points at, where the suite's adapter listens — provisioned",
-        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
-      },
-      {
-        name: "NEXTCLOUD_TALK_USER_PASSWORD",
-        what: "The admin password the suite writes in the conversation with — provisioned",
-        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
-      },
+      cred(
+        "NEXTCLOUD_TALK_URL",
+        "Nextcloud server base URL — provisioned, not created by hand",
+        "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      ),
+      cred(
+        "NEXTCLOUD_TALK_BOT_SECRET",
+        "The bot secret, generated per run and never printed — provisioned",
+        "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      ),
+      cred(
+        "NEXTCLOUD_TALK_WEBHOOK_PORT",
+        "The host port the bot's webhook points at, where the suite's adapter listens — provisioned",
+        "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      ),
+      cred(
+        "NEXTCLOUD_TALK_USER_PASSWORD",
+        "The admin password the suite writes in the conversation with — provisioned",
+        "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      ),
     ],
     target: [
-      {
-        name: "NEXTCLOUD_TALK_ROOM",
-        what: "Conversation token the bot is attached to — provisioned",
-        where: "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
-      },
+      cred(
+        "NEXTCLOUD_TALK_ROOM",
+        "Conversation token the bot is attached to — provisioned",
+        "pnpm --filter @theokit/gateway-integration nextcloud-talk:up",
+      ),
     ],
     caveat:
       "Talk is self-hosted, so a server booted in Docker for the run IS the platform, as for Matrix " +
@@ -651,25 +623,24 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-line",
     transport: "webhook",
     credentials: [
-      {
-        name: "LINE_CHANNEL_SECRET",
-        what: "Channel secret, used for the inbound HMAC",
-        where: "developers.line.biz → your channel → Basic settings",
-      },
-      {
-        name: "LINE_CHANNEL_ACCESS_TOKEN",
-        what: "Long-lived channel access token",
-        where: "developers.line.biz → your channel → Messaging API → issue token",
-      },
+      cred(
+        "LINE_CHANNEL_SECRET",
+        "Channel secret, used for the inbound HMAC",
+        "developers.line.biz → your channel → Basic settings",
+      ),
+      cred(
+        "LINE_CHANNEL_ACCESS_TOKEN",
+        "Long-lived channel access token",
+        "developers.line.biz → your channel → Messaging API → issue token",
+      ),
     ],
     target: [
-      {
-        name: "LINE_TEST_USER_ID",
-        what: "User id, `U…`, of someone who has added the bot",
-        where:
-          "Only obtainable from a webhook delivery — see the caveat. Adding the bot as a friend is " +
+      cred(
+        "LINE_TEST_USER_ID",
+        "User id, `U…`, of someone who has added the bot",
+        "Only obtainable from a webhook delivery — see the caveat. Adding the bot as a friend is " +
           "not enough on its own, because nothing in the console shows the id.",
-      },
+      ),
     ],
     caveat:
       "AUTH IS VERIFIED; OUTBOUND IS NOT, and the reason is the platform rather than the code. " +
@@ -689,28 +660,24 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-teams",
     transport: "webhook",
     credentials: [
-      {
-        name: "TEAMS_CLIENT_ID",
-        what: "App (client) id",
-        where: "Azure Portal → App registrations → your app",
-      },
-      {
-        name: "TEAMS_CLIENT_SECRET",
-        what: "Client secret",
-        where: "Azure Portal → App registrations → Certificates & secrets",
-      },
-      {
-        name: "TEAMS_TENANT_ID",
-        what: "Directory (tenant) id",
-        where: "Azure Portal → App registrations → Overview",
-      },
+      cred("TEAMS_CLIENT_ID", "App (client) id", "Azure Portal → App registrations → your app"),
+      cred(
+        "TEAMS_CLIENT_SECRET",
+        "Client secret",
+        "Azure Portal → App registrations → Certificates & secrets",
+      ),
+      cred(
+        "TEAMS_TENANT_ID",
+        "Directory (tenant) id",
+        "Azure Portal → App registrations → Overview",
+      ),
     ],
     target: [
-      {
-        name: "TEAMS_TEST_CONVERSATION_ID",
-        what: "Conversation id to post into",
-        where: "Captured from an inbound activity once the bot is installed in a test team",
-      },
+      cred(
+        "TEAMS_TEST_CONVERSATION_ID",
+        "Conversation id to post into",
+        "Captured from an inbound activity once the bot is installed in a test team",
+      ),
     ],
     caveat:
       "Needs an Azure Bot resource with a messaging endpoint. Inbound requires a public HTTPS URL.",
@@ -721,23 +688,23 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-whatsapp",
     transport: "webhook",
     credentials: [
-      {
-        name: "WHATSAPP_ACCESS_TOKEN",
-        what: "Cloud API access token",
-        where: "developers.facebook.com → your app → WhatsApp → API Setup",
-      },
-      {
-        name: "WHATSAPP_PHONE_NUMBER_ID",
-        what: "Phone number id (not the phone number)",
-        where: "Same API Setup page",
-      },
+      cred(
+        "WHATSAPP_ACCESS_TOKEN",
+        "Cloud API access token",
+        "developers.facebook.com → your app → WhatsApp → API Setup",
+      ),
+      cred(
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "Phone number id (not the phone number)",
+        "Same API Setup page",
+      ),
     ],
     target: [
-      {
-        name: "WHATSAPP_TEST_RECIPIENT",
-        what: "E.164 number allowed to receive test messages",
-        where: "Must be added as a recipient in API Setup while the app is in development mode",
-      },
+      cred(
+        "WHATSAPP_TEST_RECIPIENT",
+        "E.164 number allowed to receive test messages",
+        "Must be added as a recipient in API Setup while the app is in development mode",
+      ),
     ],
     caveat:
       "Outside the 24-hour customer service window only approved TEMPLATES send — a free-form text will be rejected by Meta, not by this code. Only the Cloud API backend runs here. The other two — `web`, which drives a browser, and `baileys`, which holds a socket — both pair through a QR scan a human must perform, so neither can run unattended. What that costs is stated rather than hidden: the live suite proves nothing about either, and the manual procedure in `packages/gateway-whatsapp/BAILEYS.md` is the only check they have.",
@@ -748,33 +715,33 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     pkg: "@theokit/gateway-sms",
     transport: "webhook",
     credentials: [
-      {
-        name: "SMS_BACKEND",
-        what: "Which provider to exercise: twilio | plivo | vonage",
-        where: "Your choice; the provider-specific vars below follow from it",
-      },
-      {
-        name: "SMS_ACCOUNT_ID",
-        what: "Twilio Account SID / Plivo Auth ID / Vonage API key",
-        where: "The provider console dashboard",
-      },
-      {
-        name: "SMS_AUTH_TOKEN",
-        what: "Twilio Auth Token / Plivo Auth Token / Vonage API secret",
-        where: "The provider console dashboard",
-      },
-      {
-        name: "SMS_FROM_NUMBER",
-        what: "E.164 sender number you own",
-        where: "The provider console → phone numbers",
-      },
+      cred(
+        "SMS_BACKEND",
+        "Which provider to exercise: twilio | plivo | vonage",
+        "Your choice; the provider-specific vars below follow from it",
+      ),
+      cred(
+        "SMS_ACCOUNT_ID",
+        "Twilio Account SID / Plivo Auth ID / Vonage API key",
+        "The provider console dashboard",
+      ),
+      cred(
+        "SMS_AUTH_TOKEN",
+        "Twilio Auth Token / Plivo Auth Token / Vonage API secret",
+        "The provider console dashboard",
+      ),
+      cred(
+        "SMS_FROM_NUMBER",
+        "E.164 sender number you own",
+        "The provider console → phone numbers",
+      ),
     ],
     target: [
-      {
-        name: "SMS_TEST_RECIPIENT",
-        what: "E.164 number the test may text",
-        where: "On a trial account this must be a VERIFIED number",
-      },
+      cred(
+        "SMS_TEST_RECIPIENT",
+        "E.164 number the test may text",
+        "On a trial account this must be a VERIFIED number",
+      ),
     ],
     caveat: "Every outbound message costs real money. Inbound requires a public HTTPS webhook URL.",
   },
