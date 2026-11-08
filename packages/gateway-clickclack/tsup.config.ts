@@ -12,4 +12,5 @@ export default defineConfig({
   target: "node22",
   platform: "node",
   external: ["@theokit/gateway"],
+  noExternal: ["@theokit/gateway-bot-realtime"],
 });

@@ -4,7 +4,7 @@
  * @public
  */
 
-import { chunkByGrapheme } from "@theokit/gateway";
+import { splitText } from "@theokit/gateway-bot-realtime";
 
 /**
  * The most characters one message is cut to. ClickClack documents no hard limit that this package
@@ -19,8 +19,5 @@ export const CLICKCLACK_MESSAGE_LIMIT = 4000;
  * @public
  */
 export function splitForClickClack(text: string): string[] {
-  if (text.length === 0) return [];
-  return chunkByGrapheme(text, { limit: CLICKCLACK_MESSAGE_LIMIT }).filter(
-    (part) => part.length > 0,
-  );
+  return splitText(text, CLICKCLACK_MESSAGE_LIMIT);
 }
