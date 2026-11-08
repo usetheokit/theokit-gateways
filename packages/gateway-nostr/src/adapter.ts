@@ -10,6 +10,7 @@ import {
   channelRendering,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
+  SeenIds,
   type SendResult,
 } from "@theokit/gateway";
 import { makeAuthEvent } from "nostr-tools/nip42";
@@ -28,7 +29,6 @@ import { parseNostrSecretKey } from "./keys.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import { type NostrPublishResult, NostrRelayClient } from "./relay-client.js";
 import { messageOf } from "./relay-frames.js";
-import { SeenIds } from "./seen-ids.js";
 import type { NostrAdapterOptions, NostrRelayLike } from "./types.js";
 
 const LABEL = "gateway-nostr";

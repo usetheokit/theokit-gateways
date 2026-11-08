@@ -10,12 +10,12 @@ import {
   channelRendering,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
+  SeenIds,
   type SendResult,
 } from "@theokit/gateway";
 
 import { type ChatAnswer, SynologyChatClient } from "./client.js";
 import { refuseAttachments } from "./refuse-attachments.js";
-import { SeenIds } from "./seen-ids.js";
 import { tokensMatch } from "./token.js";
 import {
   type FetchLike,

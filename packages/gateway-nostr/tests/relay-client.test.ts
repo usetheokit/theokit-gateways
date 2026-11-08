@@ -1,7 +1,7 @@
+import { SeenIds } from "@theokit/gateway";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NostrRelayClient, NostrRelayError } from "../src/relay-client.js";
-import { SeenIds } from "../src/seen-ids.js";
 import { A, B, FakeRelays, note, signAuth, subId, wrapAt } from "./fake-relay.js";
 
 let relays: FakeRelays;
