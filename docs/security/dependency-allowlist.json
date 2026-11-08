@@ -1,0 +1,19 @@
+{
+  "adr": "docs/adr/0010-extract-zip-advisories-wait-for-puppeteer.md",
+  "entries": [
+    {
+      "ghsa": "GHSA-jmr9-qjv8-65gv",
+      "package": "extract-zip",
+      "path": "packages/gateway-whatsapp > whatsapp-web.js > puppeteer > @puppeteer/browsers > extract-zip",
+      "added": "2026-11-07",
+      "sunset": "2027-02-04"
+    },
+    {
+      "ghsa": "GHSA-7pqw-9j4j-h8q3",
+      "package": "extract-zip",
+      "path": "packages/gateway-whatsapp > whatsapp-web.js > puppeteer > @puppeteer/browsers > extract-zip",
+      "added": "2026-11-07",
+      "sunset": "2027-02-04"
+    }
+  ]
+}

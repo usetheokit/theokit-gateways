@@ -270,6 +270,32 @@ describe("LineAdapter.dispatchWebhookBody (inbound)", () => {
     }
   });
 
+  it("a message: null / source: null event is skipped without throwing; the rest of the batch dispatches", async () => {
+    const adapter = new LineAdapter({ channelSecret: "s", channelAccessToken: "t" });
+    installMockClient(adapter, makeMockClient());
+    const received: MessageEvent[] = [];
+    adapter.onInbound(async (ev) => {
+      received.push(ev);
+    });
+    const good = {
+      type: "message",
+      source: { type: "user", userId: "U-a" },
+      message: { type: "text", id: "m-1", text: "hi" },
+    };
+    const nullMessage = { type: "message", source: { type: "user", userId: "U-a" }, message: null };
+    const nullSource = {
+      type: "message",
+      source: null,
+      message: { type: "text", id: "m-2", text: "x" },
+    };
+    await expect(
+      adapter.dispatchWebhookBody(
+        makeEnv([good, nullMessage, nullSource, good] as unknown as LineWebhookEvent[]),
+      ),
+    ).resolves.toBe("ok");
+    expect(received).toHaveLength(2);
+  });
+
   it("EC-4: ignores non-message events", async () => {
     const adapter = new LineAdapter({ channelSecret: "s", channelAccessToken: "t" });
     installMockClient(adapter, makeMockClient());

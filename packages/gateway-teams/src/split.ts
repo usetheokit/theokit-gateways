@@ -37,5 +37,6 @@ export function splitForTeams(text: string): string[] {
     surrogateGuard: true,
     stripLeading: /^\s+/,
     trimParts: true,
+    keepTableRows: true,
   });
 }

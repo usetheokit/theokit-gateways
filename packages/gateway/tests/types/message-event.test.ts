@@ -167,6 +167,22 @@ describe("MessageEvent (T1.1)", () => {
           return `irc:${e.irc.nick}`;
         case "nextcloud_talk":
           return `nextcloud_talk:${e.nextcloud_talk.roomToken}`;
+        case "nostr":
+          return `ns:${e.nostr.pubkey}`;
+        case "feishu_lark":
+          return `fl:${e.feishu_lark.messageId}`;
+        case "synology_chat":
+          return `sc:${e.synology_chat.postId}`;
+        case "tlon_urbit":
+          return `tu:${e.tlon_urbit.messageId}`;
+        case "twitch":
+          return `tw:${e.twitch.messageId}`;
+        case "zalo_personal":
+          return `zp:${e.zalo_personal.messageId}`;
+        case "clickclack":
+          return `cc:${e.clickclack.messageId}`;
+        case "buzz":
+          return `bz:${e.buzz.messageId}`;
         default: {
           const _exhaustive: never = e;
           throw new Error(`unhandled platform: ${JSON.stringify(_exhaustive)}`);

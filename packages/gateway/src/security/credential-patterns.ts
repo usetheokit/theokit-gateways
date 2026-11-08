@@ -96,8 +96,45 @@ export const CREDENTIAL_SHAPES: {
         /(?<![A-Za-z0-9~])[A-Za-z0-9]{3}\d[A-Za-z0-9]?~[A-Za-z0-9._~-]{30,}(?![A-Za-z0-9._~-])/g,
       alsoMatches: "an Entra-style secret is the only common value with a tilde in that position",
     },
+    {
+      field: "gateway-nostr `secretKey` (nsec1 form)",
+      pattern: /(?<![a-z0-9])nsec1[02-9ac-hj-np-z]{58}(?![a-z0-9])/g,
+      alsoMatches: "nothing plausible — `nsec1` is NIP-19's prefix for a secret key",
+    },
   ],
   uncovered: [
+    {
+      field: "gateway-buzz `token`",
+      why: "a Buzz bot token with no fixed shape this package could confirm. It travels only in Authorization headers, which the adapter never logs.",
+    },
+    {
+      field: "gateway-clickclack `token`",
+      why: "a ClickClack bot token (`ccb_` prefix) or session token with no fixed shape for the latter. It travels only in Authorization headers, which the adapter never logs.",
+    },
+    {
+      field: "gateway-zalo-personal `credentials`",
+      why: "a Zalo web session: a cookie jar, an IMEI-like device id and a user agent. The cookie has no prefix or fixed shape to recognise. It travels only to the Zalo library, which the adapter never logs.",
+    },
+    {
+      field: "gateway-twitch `accessToken`",
+      why: "30 lowercase alphanumerics with no prefix, the shape of many ids and hashes in a log. It travels only in Authorization headers, which the adapter never logs.",
+    },
+    {
+      field: "gateway-tlon-urbit `code`",
+      why: "a +code is four dash-joined phonemic syllable words, the same shape as an Urbit ship name such as ~sampel-palnet-sampel-palnet, which the logs exist to show. It travels only in the /~/login body, which the adapter never logs.",
+    },
+    {
+      field: "gateway-synology-chat `botToken` and `incomingUrl`",
+      why: "a bot token is a random string the NAS generates with no prefix, and the Incoming URL carries its own token as a query parameter of an ordinary entry.cgi URL. Neither has a shape to claim without eating ordinary ids and URLs; the adapter never logs the URL, and refuses a callback token before reading it.",
+    },
+    {
+      field: "gateway-feishu-lark `appSecret`",
+      why: "32 alphanumerics with no prefix, the shape of many tokens and hashes; it travels only in the body of the tenant-token request, which the adapter never logs.",
+    },
+    {
+      field: "gateway-nostr `secretKey` (64-hex form)",
+      why: "64 hex characters is also every Nostr public key and event id, which the logs exist to show, and a sha256 digest. The nsec1 spelling of the same key is masked above.",
+    },
     {
       field: "gateway-sms `authToken` (Twilio), gateway-line `channelSecret`",
       why: "32 lowercase hex characters, which is also an md5 digest, a dashless UUID and half a git tree hash. Masking it would eat the correlation id a developer reads the log to find.",

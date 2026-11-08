@@ -10,6 +10,13 @@ import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.
 
 const MIDDLEWARE = "@microsoft/teams.apps/dist/middleware/index.js";
 
+// The cold import of the package (its transforms and the packages it pulls in) costs 100 to 200 ms
+// idle and seconds under load, and each test re-imports it after `vi.resetModules()` inside vitest's
+// 5 s budget. Importing it once at module scope, which no test budget covers, leaves the tests only
+// the warm re-import. This does not load the Teams SDK: the package imports it lazily, and the
+// tests below assert exactly that, each behind its own `vi.doMock`.
+await import("../src/index.js");
+
 describe("the Teams SDK load", () => {
   let ks: KeyServer | undefined;
 

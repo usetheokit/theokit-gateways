@@ -15,8 +15,17 @@
 
 import type { MessageEvent as GatewayMessageEvent, TelegramMessageEvent } from "@theokit/gateway";
 import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "@theokit/gateway";
-import { Bot, type Context, GrammyError, HttpError } from "grammy";
+import { Bot, type Context, GrammyError } from "grammy";
 import { buildEvent } from "./parse-inbound.js";
+import { readVoice } from "./read-voice.js";
+import { refuseAttachments } from "./refuse-attachments.js";
+import {
+  hasAttachments,
+  mapFormat,
+  mapSendError,
+  parseModeOptions,
+  sendPhotos,
+} from "./send-photos.js";
 import { splitForTelegram } from "./split.js";
 
 export interface TelegramAdapterOptions {
@@ -108,8 +117,9 @@ export class TelegramAdapter extends BasePlatformAdapter {
     }
   }
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: validation + parse_mode mapping + thread option + chunk loop + error mapping are all single-responsibility branches inline; splitting hurts readability more than the score.
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: photo dispatch (send-photos.ts) + validation + parse_mode mapping + thread option + chunk loop + error mapping are all single-responsibility branches inline; splitting hurts readability more than the score.
   override async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    if (hasAttachments(out)) return sendPhotos(this.bot.api, out);
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "text is empty" } };
     }
@@ -141,19 +151,28 @@ export class TelegramAdapter extends BasePlatformAdapter {
     return { ok: true, ...(lastId !== undefined ? { messageId: lastId } : {}) };
   }
 
+  /** Telegram sends each image of `out.attachments` through `sendPhoto` (B-674). */
+  override readonly supportsAttachments = true;
+
   /** Telegram edits a sent message's text through `editMessageText`. */
   override readonly supportsEdit = true;
 
   /**
    * Replace the text of a message this bot sent, through `editMessageText`.
    *
-   * Refuses, with no request, empty text, a message id that is not a safe positive integer, and
-   * a non-numeric channel, in that order; the first and last are `sendMessage`'s own checks. A text `splitForTelegram` would cut in
-   * two is refused as `edit_too_long`: an edit replaces one message. Telegram's "message is not
-   * modified" refusal is answered as a success, because the message already shows the text; a
-   * caller that treated it as a failure would send the same text again as a second message.
+   * Refuses, with no request, an outbound carrying attachments (`attachments_unsupported`: no
+   * Telegram edit adds an image), empty text, a message id that is not a safe positive integer,
+   * and a non-numeric channel, in that order; empty text and the channel are `sendMessage`'s own
+   * checks. A text `splitForTelegram` would cut in two is refused as `edit_too_long`: an edit
+   * replaces one message. Telegram's "message is not modified" refusal is answered as a success,
+   * because the message already shows the text; a caller that treated it as a failure would send
+   * the same text again as a second message.
    */
   override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.editText(messageId, out);
+  }
+
+  private async editText(messageId: string, out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "text is empty" } };
     }
@@ -217,7 +236,24 @@ export class TelegramAdapter extends BasePlatformAdapter {
     }
     const event = normalizeEvent(ctx);
     if (event === undefined) return;
-    await this.dispatchEvent(event);
+    await this.dispatchEvent(await this.withVoice(ctx, event));
+  }
+
+  /**
+   * The event with the voice note's audio when the message has one (B-715, ADR D1).
+   *
+   * An unreadable voice leaves the event as it was and writes the reason to stderr: the message is
+   * delivered either way, as it was before voice notes were read.
+   */
+  private async withVoice(
+    ctx: Context,
+    event: TelegramMessageEvent,
+  ): Promise<TelegramMessageEvent> {
+    if (ctx.message?.voice === undefined) return event;
+    const read = await readVoice(ctx, this.bot.token);
+    if ("audio" in read) return { ...event, audio: read.audio };
+    process.stderr.write(`[telegram] voice not read: ${read.reason}\n`);
+    return event;
   }
 
   /**
@@ -275,20 +311,6 @@ function normalizeEvent(ctx: Context): TelegramMessageEvent | undefined {
   return buildEvent(chat, msg, ctx.from, ctx);
 }
 
-function mapFormat(
-  format: "plain" | "markdown" | "html" | undefined,
-): "Markdown" | "HTML" | undefined {
-  if (format === "markdown") return "Markdown";
-  if (format === "html") return "HTML";
-  return undefined;
-}
-
-/** The `parse_mode` option for a declared format, or no option. */
-function parseModeOptions(format: OutboundMessage["format"]): { parse_mode?: "Markdown" | "HTML" } {
-  const parseMode = mapFormat(format);
-  return parseMode !== undefined ? { parse_mode: parseMode } : {};
-}
-
 /**
  * The numeric id `editMessageText` takes, or `undefined` for one Telegram cannot have issued.
  *
@@ -326,27 +348,4 @@ function editPartsRefusal(partCount: number): SendResult {
     };
   }
   return { ok: false, error: { code: "empty_text", message: "text reduced to zero parts" } };
-}
-
-function mapSendError(err: unknown): SendResult {
-  if (err instanceof GrammyError) {
-    const description = err.description.toLowerCase();
-    if (description.includes("rate limit") || err.error_code === 429) {
-      return { ok: false, error: { code: "rate_limited", message: err.description } };
-    }
-    if (description.includes("forbidden") || err.error_code === 403) {
-      return { ok: false, error: { code: "no_permission", message: err.description } };
-    }
-    if (description.includes("parse")) {
-      return { ok: false, error: { code: "markdown_error", message: err.description } };
-    }
-    return {
-      ok: false,
-      error: { code: `telegram_${err.error_code}`, message: err.description },
-    };
-  }
-  if (err instanceof HttpError) {
-    return { ok: false, error: { code: "network_error", message: err.message } };
-  }
-  return { ok: false, error: { code: "unknown", message: (err as Error).message } };
 }

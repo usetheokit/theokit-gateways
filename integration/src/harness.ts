@@ -8,9 +8,9 @@
  * variable that was missing, not a vague "not configured".
  */
 
-import { describe } from "vitest";
+import { describe, it } from "vitest";
 
-import { liveRunEnabled, missingFor } from "./credentials.js";
+import { incompleteFor, liveRunEnabled, missingFor } from "./credentials.js";
 import type { PlatformSpec } from "./platforms.js";
 
 export interface LiveSuiteOptions {
@@ -24,6 +24,12 @@ export interface LiveSuiteOptions {
    * read-only suites, and they light up as soon as the credential exists.
    */
   readonly sends?: boolean;
+  /**
+   * Fail, naming the missing variables, when only SOME of the platform's variables are set, instead
+   * of skipping as if none were (EC-19). Default `false`, so the suites written before it keep
+   * their skip.
+   */
+  readonly failWhenIncomplete?: boolean;
 }
 
 /**
@@ -43,6 +49,17 @@ export function describeLive(
       `${spec.label} — ${name} [skipped: set INTEGRATION_LIVE=1 to talk to real APIs]`,
       body,
     );
+    return;
+  }
+  const incomplete = opts.failWhenIncomplete === true ? incompleteFor(spec) : [];
+  if (incomplete.length > 0) {
+    describe(`${spec.label} — ${name}`, () => {
+      it("has every variable it needs", () => {
+        throw new Error(
+          `${spec.label}: some live variables are set and these are missing: ${incomplete.join(", ")}`,
+        );
+      });
+    });
     return;
   }
   const missing = missingFor(spec, { includeTarget: opts.sends ?? true });

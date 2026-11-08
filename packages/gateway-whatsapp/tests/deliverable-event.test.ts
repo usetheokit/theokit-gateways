@@ -487,7 +487,10 @@ describe("the foreign phone number id on the single-message and backend-hosted p
       received.push(event.id);
     });
     const backend = adapter.getBackend() as WhatsAppCloudBackend;
-    const post = async (wamid: string, phoneNumberId: string): Promise<boolean> => {
+    const post = async (
+      wamid: string,
+      phoneNumberId: string,
+    ): Promise<boolean | "unreadable_body"> => {
       const body = JSON.stringify(
         envelopeJson([{ from: "5511999999999", id: wamid, body: "hello" }], phoneNumberId),
       );
@@ -517,7 +520,10 @@ describe("a signed batch through WhatsAppAdapter reaches the handler that accept
         { from: "5511999999999", id: "wamid.3", body: "three" },
       ]),
     );
-  const postSigned = (adapter: WhatsAppAdapter, body: string): Promise<boolean> => {
+  const postSigned = (
+    adapter: WhatsAppAdapter,
+    body: string,
+  ): Promise<boolean | "unreadable_body"> => {
     const hex = createHmac("sha256", CLOUD.appSecret).update(body).digest("hex");
     return (adapter.getBackend() as WhatsAppCloudBackend).handleWebhookPayload(
       body,

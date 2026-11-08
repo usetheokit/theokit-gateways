@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.2
+
+### Patch Changes
+
+- 0c0328d: Tests now load against `nodemailer@9.1.1`: the vitest config inlines `mailparser`, whose ESM build imports `nodemailer/lib/addressparser` as a directory that Node's ESM resolver rejects when its nodemailer dependency is 9.x. The declared `nodemailer` range is unchanged. No runtime change.
+- 3f1788d: Send an image from a gateway handler, and refuse it wherever a platform cannot show one.
+
+  `@theokit/gateway` exports `OutboundAttachment` (`kind: "image"`, `mediaType`, `data`, optional
+  `filename`). `OutboundMessage` gains an optional `attachments` list, `ctx.reply(text, { attachments })`
+  carries it to the adapter (an empty list is left out), and `BasePlatformAdapter` declares
+  `supportsAttachments`, `false` by default. `DeliveryRouter.send` takes the same `attachments`
+  field. The runner and the router refuse an outbound carrying attachments as
+  `attachments_unsupported`, with no `sendMessage` call, when the adapter does not declare
+  `supportsAttachments`.
+
+  `@theokit/gateway-telegram` reports `supportsAttachments: true` and sends each image through
+  `sendPhoto`, the text as the first photo's caption up to 1024 UTF-16 units and after the photos
+  when longer. A non-image kind is refused as `attachments_unsupported`; a missing image, more
+  than 10 images or an image over 10 MiB as `invalid_attachment`; all with no request.
+
+  Every other adapter, and every adapter's `editMessage`, refuses an outbound carrying attachments
+  with `attachments_unsupported` and makes no platform call, instead of sending the text and
+  dropping the image.
+
+  The runner's auto-reply to a blocking `pre_inbound` hook no longer discards a `sendMessage` that
+  throws: the error reaches the `on_error` hooks with the event and is written to stderr, redacted,
+  as a handler error is. Dispatch still does not throw.
+
 ## 0.3.1
 
 ### Patch Changes

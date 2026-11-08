@@ -231,3 +231,19 @@ describe("TeamsAdapter.editMessage", () => {
     expect(result.error?.code).toBe("unknown");
   });
 });
+
+describe("TeamsAdapter.editMessage attachments (B-674)", () => {
+  it("refuses an edit that carries an image with no platform call", async () => {
+    const { adapter, updateActivity, activities } = await connected("updateActivity");
+
+    const result = await adapter.editMessage("a1", {
+      ...out("hello"),
+      attachments: [{ kind: "image", mediaType: "image/png", data: new Uint8Array([1]) }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("attachments_unsupported");
+    expect(updateActivity).toHaveBeenCalledTimes(0);
+    expect(activities).toHaveBeenCalledTimes(0);
+  });
+});

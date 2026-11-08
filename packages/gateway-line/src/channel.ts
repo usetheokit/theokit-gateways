@@ -8,9 +8,10 @@
  */
 
 import { LineAdapter } from "./adapter.js";
+import { isEnvelope } from "./envelope.js";
 import { ConfigurationError } from "./errors.js";
 import { verifyLineSignature } from "./signature.js";
-import type { LineAdapterOptions, LineWebhookEnvelope } from "./types.js";
+import type { LineAdapterOptions } from "./types.js";
 
 const SIGNATURE_HEADER = "x-line-signature";
 
@@ -69,15 +70,6 @@ function headerValue(
     if (key.toLowerCase() === name) return value;
   }
   return undefined;
-}
-
-/** A LINE webhook envelope: an object whose `events` is an array of objects. */
-function isEnvelope(payload: unknown): payload is LineWebhookEnvelope {
-  if (typeof payload !== "object" || payload === null) return false;
-  const events = (payload as { events?: unknown }).events;
-  return (
-    Array.isArray(events) && events.every((event) => typeof event === "object" && event !== null)
-  );
 }
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally, D4). */

@@ -95,3 +95,16 @@ parts before it are already in the room.
 | `invalid_room` | `channel.id` is not a room token (letters and digits only) |
 | `empty_text` | the text is empty |
 | `not_connected` | `connect()` has not succeeded |
+
+## Verification
+
+On 2026-11-05, the offline package suite passed (66 tests), including a signed inbound
+webhook routed through `GatewayRunner` to a signed outbound reply. Package typechecking
+also passed. This verifies the gateway reply path without platform code in the application.
+It does not verify a live TheoClaw model reply.
+
+A real-account send-and-receive run was not performed in that environment: Docker was
+unavailable and no real-account credentials were supplied. To run the existing live suite,
+follow `integration/scripts/bootstrap-nextcloud-talk.ts` and run
+`pnpm --filter @theokit/gateway-integration exec vitest run tests/nextcloud-talk`.
+Record the date and observed receive and reply results after that run succeeds.

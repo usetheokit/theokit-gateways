@@ -41,7 +41,8 @@ import { EmailAdapter, type EmailMessageEvent } from "@theokit/gateway-email";
 import { afterAll, expect, it } from "vitest";
 
 import { optional, required, runMarker } from "../../src/credentials.js";
-import { describeLive, describeLiveInbound, waitFor } from "../../src/harness.js";
+import { waitForEmail } from "../../src/email-delivery.js";
+import { describeLive, describeLiveInbound } from "../../src/harness.js";
 import { platformById } from "../../src/platforms.js";
 
 const EMAIL = platformById("email");
@@ -232,20 +233,9 @@ describeLiveInbound(EMAIL, "inbound round trip", () => {
         text: `${marker} inbound probe`,
       });
 
-      // Delivery is usually seconds, but "usually" is not a contract.
-      await waitFor(() => inbox.find((line) => line.includes(marker)), {
-        timeoutMs: 120_000,
-        intervalMs: 2_000,
-        label: `an inbound email containing ${marker}`,
-      });
+      // Start measuring after SMTP accepts the probe.
+      await waitForEmail(inbox, marker);
     }
-    // 420s = connect (~110s, see the file header) + delivery + the 120s poll,
-    // with room for Gmail's login latency, which was measured at 38.2s and
-    // 73.6s minutes apart on the same mailbox.
-    //
-    // This budget was first raised from 180s "until issue #11 lands". #11 has
-    // landed and the number stays, because the premise was wrong: the cost is
-    // Gmail's IMAP, not our backlog. Lowering it now would only make the suite
-    // fail on a slow login.
-  }, 420_000);
+    // Allow five minutes for delivery plus room for IMAP login and SMTP setup.
+  }, 600_000);
 });

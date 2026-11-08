@@ -10,6 +10,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+// Loaded at collection, outside any test's budget: the first verified request used to pay the SDK middleware's first import inside its own 5 s (B-545).
+import "@microsoft/teams.apps/dist/middleware/index.js";
 
 /** The refusal message for one genuine token at a cold start, after `prepare` breaks the read. */
 async function coldStartRefusal(ks: KeyServer, prepare: () => void): Promise<string> {

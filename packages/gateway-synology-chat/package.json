@@ -1,0 +1,78 @@
+{
+  "name": "@theokit/gateway-synology-chat",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Synology Chat platform adapter for @theokit/gateway: a bot callback listener and the incoming-URL chatbot API.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usetheokit/theokit-gateways.git",
+    "directory": "packages/gateway-synology-chat"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@theokit/gateway": ">=0.12.0 <1.0.0",
+    "express": "^4.18.0 || ^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@theokit/gateway": "workspace:*",
+    "@types/express": "^5.0.6",
+    "express": "^5.2.1",
+    "tsup": "^8.5.0",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.11"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "bugs": {
+    "url": "https://github.com/usetheokit/theokit-gateways/issues"
+  },
+  "homepage": "https://github.com/usetheokit/theokit-gateways/tree/main/packages/gateway-synology-chat#readme",
+  "keywords": [
+    "theokit",
+    "gateway",
+    "synology",
+    "synology-chat",
+    "webhook",
+    "platform",
+    "adapter"
+  ]
+}

@@ -394,6 +394,44 @@ describe("GatewayRunner (T1.3)", () => {
     expect(seen.map((c) => c.outbound.text)).toEqual(["rate-limited"]);
   });
 
+  it("EC-D failure path: an auto-reply whose sendMessage rejects reaches on_error and a redacted log", async () => {
+    // A sendMessage that throws is a programmer error (the contract is to answer { ok: false }), and
+    // the auto-reply used to discard it: post_outbound fires only after the send resolves, so a
+    // misconfigured adapter's blocked-sender reply failed with no hook event and no log line.
+    const writes: string[] = [];
+    vi.spyOn(process.stderr, "write").mockImplementation((s: string | Uint8Array) => {
+      writes.push(typeof s === "string" ? s : Buffer.from(s).toString("utf8"));
+      return true;
+    });
+    const a = new MockAdapter("telegram");
+    vi.spyOn(a, "sendMessage").mockRejectedValue(
+      new Error("send blew up bearer sk-abc123def456ghi789jkl"),
+    );
+    const reported: Array<{ id: unknown; message: unknown }> = [];
+    const runner = new GatewayRunner({
+      adapters: [a],
+      handler: async () => {},
+      hooks: [
+        { name: "deny", pre_inbound: () => ({ block: true, message: "rate-limited" }) },
+        {
+          name: "sentry",
+          on_error: (ctx) => void reported.push({ id: ctx.event?.id, message: ctx.error?.message }),
+        },
+      ],
+    });
+    await runner.start();
+    const event = tg();
+    await expect(a.emit(event)).resolves.toBeUndefined();
+    await runner.stop();
+
+    expect(reported, "the rejected auto-reply never reached on_error").toEqual([
+      { id: event.id, message: "send blew up bearer sk-abc123def456ghi789jkl" },
+    ]);
+    const combined = writes.join("");
+    expect(combined).toContain("auto-reply error");
+    expect(combined).not.toContain("sk-abc123def456ghi789jkl");
+  });
+
   it("a reply with no adapter for the platform still reports the failure to post_outbound", async () => {
     // The runner answers `no_adapter` without ever reaching a transport. An audit
     // hook counting deliveries has to see that attempt too, or the count silently

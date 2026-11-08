@@ -52,7 +52,7 @@ against `nodemailer <=9.0.0`.
 
 `@theokit/gateway-email` declared `nodemailer ^8.0.0` as a peer. The whole of `^8` is inside the
 vulnerable range, so a consumer following our range got a vulnerable nodemailer and one who wanted a
-safe one got a peer conflict. The peer is now `^9.0.1`; nodemailer 9 keeps `createTransport`,
+safe one got a peer conflict. The peer was `^9.0.1`, and is now `^10.0.6` (the advisory later reached `<=10.0.5`); nodemailer keeps `createTransport`,
 `sendMail`, `verify` and `close`, which is the entire surface this adapter uses, and the adapter's
 95 tests pass against it.
 

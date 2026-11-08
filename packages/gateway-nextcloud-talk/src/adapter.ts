@@ -15,6 +15,7 @@ import {
 } from "@theokit/gateway";
 
 import { type TalkWebhookBody, talkBodyToMessageEvent } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { talkSignature, verifyTalkSignature } from "./signature.js";
 import { splitForTalk } from "./split.js";
 import type { FetchLike, NextcloudTalkAdapterOptions } from "./types.js";
@@ -122,6 +123,10 @@ export class NextcloudTalkAdapter extends BasePlatformAdapter implements Nextclo
    * `referenceId` of the first message, which Talk echoes back on the messages it stores.
    */
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }

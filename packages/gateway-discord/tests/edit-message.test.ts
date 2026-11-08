@@ -209,3 +209,31 @@ describe("DiscordAdapter.editMessage", () => {
     expect(result.error?.code).toBe("unknown");
   });
 });
+
+describe("DiscordAdapter.editMessage attachments (B-674)", () => {
+  let adapter: DiscordAdapter;
+
+  beforeEach(() => {
+    adapter = new DiscordAdapter({ token: "fake-token" });
+  });
+
+  afterEach(async () => {
+    await adapter.disconnect();
+    vi.restoreAllMocks();
+  });
+
+  it("refuses an edit that carries an image with no platform call", async () => {
+    const patch = vi.fn(async () => ({ id: "m1" }));
+    vi.spyOn(adapter.getBot().rest, "patch").mockImplementation(patch as never);
+
+    const result = await adapter.editMessage("m1", {
+      channel: CHANNEL,
+      text: "hello",
+      attachments: [{ kind: "image", mediaType: "image/png", data: new Uint8Array([1]) }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("attachments_unsupported");
+    expect(patch).toHaveBeenCalledTimes(0);
+  });
+});

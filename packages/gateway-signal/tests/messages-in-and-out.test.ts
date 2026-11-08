@@ -103,6 +103,9 @@ describe("inbound", () => {
     const events = received(adapter);
 
     child.emitLine("INFO  ReceiveHelper - Starting receiving messages");
+    child.emitLine("null");
+    child.emitLine("42");
+    child.emitLine("[]");
     child.receive({
       sourceUuid: "uuid-ana",
       timestamp: 9,
@@ -354,4 +357,32 @@ describe("concurrency", () => {
     expect(settled).toBe(3);
     expect(results.every((r) => r.error?.code === "disconnected")).toBe(true);
   });
+});
+
+it("replies through deliver using only the gateway interface", async () => {
+  const { adapter, child } = await connected();
+  adapter.onInbound(async (event) => {
+    const result = await adapter.sendMessage({
+      channel: event.channel,
+      text: `reply: ${event.text}`,
+    });
+    expect(result.ok).toBe(true);
+  });
+  const delivery = adapter.deliver({
+    id: "u:1",
+    platform: "signal",
+    sender: { id: "u" },
+    channel: { id: "+5511988887777", type: "dm" },
+    text: "hello",
+    receivedAt: 0,
+    signal: { timestamp: 1, raw: {} },
+  });
+  await until(() => child.last("send") !== undefined, "reply");
+  expect(child.last("send")?.params).toEqual({
+    recipient: ["+5511988887777"],
+    message: "reply: hello",
+  });
+  child.answer(child.last("send")?.id as number, { timestamp: 2 });
+  await expect(delivery).resolves.toBe("ok");
+  await adapter.disconnect();
 });

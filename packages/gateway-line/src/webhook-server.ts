@@ -11,9 +11,9 @@ import { listenerLifecycle, loadPeer, rawBodyCapture } from "@theokit/gateway";
 import type { Express, Request, Response } from "express";
 import type { LineAdapter } from "./adapter.js";
 
+import { isEnvelope } from "./envelope.js";
 import { ConfigurationError } from "./errors.js";
 import { verifyLineSignature } from "./signature.js";
-import type { LineWebhookEnvelope } from "./types.js";
 
 export interface WebhookServerOptions {
   readonly adapter: LineAdapter;
@@ -51,15 +51,15 @@ function handlerFactory(adapter: LineAdapter) {
       res.status(401).type("text/plain").send("invalid signature");
       return;
     }
-    let envelope: LineWebhookEnvelope;
+    let envelope: unknown;
     try {
-      envelope = JSON.parse(rawBody) as LineWebhookEnvelope;
+      envelope = JSON.parse(rawBody);
     } catch {
       res.status(400).type("text/plain").send("invalid JSON body");
       return;
     }
-    if (!Array.isArray(envelope.events)) {
-      res.status(400).type("text/plain").send("missing 'events' array");
+    if (!isEnvelope(envelope)) {
+      res.status(400).type("text/plain").send("missing 'events' array of objects");
       return;
     }
     // Answered before dispatch, on purpose: LINE retries a webhook it did not see a 200 for,

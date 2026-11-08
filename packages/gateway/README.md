@@ -16,8 +16,8 @@ pnpm add @theokit/gateway-discord discord.js
 
 ## How each adapter treats `OutboundMessage.format`
 
-**All ten honour it** — they read the field and let it decide what the platform receives. What they can DO with it differs by platform, and a consumer should not have
-to read ten packages to learn which — so the classes are stated here.
+**Every adapter honours it** — each reads the field and lets it decide what the platform receives. What they can DO with it differs by platform, and a consumer should not have
+to read every package to learn which — so the classes are stated here.
 
 | Platform | What it does with `format` |
 |---|---|
@@ -73,8 +73,8 @@ presenter per turn; it keeps state between `present()` calls.
 |---|---|---|
 | whatsapp | `**b**` to `*b*`, `*i*` or `_i_` to `_i_`, `~~s~~` to `~s~`, `` `c` `` to ` ```c``` ` | `plain` |
 | slack | `**b**` to `*b*`, `*i*` or `_i_` to `_i_`, `~~s~~` to `~s~`, `` `c` `` kept | `markdown` |
-| discord, mattermost, teams | unchanged | `markdown` |
-| telegram, matrix, email, line, sms | the markers removed, their content kept | `plain` |
+| discord, mattermost, teams, signal, nextcloud_talk | unchanged | `markdown` |
+| telegram, matrix, email, line, sms, imessage, google_chat, irc, nostr, feishu_lark, synology_chat, tlon_urbit, twitch | the markers removed, their content kept | `plain` |
 
 - Only the four inline markers are translated: bold, italic, strikethrough and inline code.
   Headings, links, lists and block quotes reach every platform unchanged.
@@ -92,6 +92,80 @@ presenter per turn; it keeps state between `present()` calls.
   the presenter fall back to markdown.
 - `@theokit/presenter` is your dependency, not this package's: `@theokit/gateway` does not depend
   on it.
+
+## Sending an image
+
+`ctx.reply` takes an optional `attachments` list of images, each an `OutboundAttachment`: its
+bytes (`data`, a `Uint8Array`), their `mediaType`, and an optional `filename`. The runner carries
+the list to the adapter's `sendMessage` as `OutboundMessage.attachments`, by reference, and leaves
+an empty list out. `post_outbound` hooks see the same outbound, image bytes included. Do not change
+the bytes or the list until the reply's promise settles: Telegram reads each image only when its
+turn comes. `DeliveryRouter.send` takes the same `attachments` field for a scheduled delivery.
+
+Only Telegram sends images today. Code that holds the adapter reads `supportsAttachments` before
+attaching: every other adapter reports `false` and refuses an outbound carrying attachments with
+`attachments_unsupported`, making no platform call, so an image is never dropped in silence. An
+edit carrying attachments is refused the same way on every adapter, Telegram included.
+`BasePlatformAdapter`, `OutboundAttachment` and `SendResult` come from `@theokit/gateway`.
+
+```typescript
+async function sendChart(
+  adapter: BasePlatformAdapter,
+  channel: OutboundMessage["channel"],
+  chart: OutboundAttachment,
+): Promise<SendResult> {
+  // No image send on this platform: say so in text instead.
+  if (!adapter.supportsAttachments) {
+    const text = "The chart is ready, but this chat cannot show images.";
+    return adapter.sendMessage({ channel, text });
+  }
+  return adapter.sendMessage({ channel, text: "Here is the chart.", attachments: [chart] });
+}
+```
+
+The runner and the router answer `attachments_unsupported` themselves, with no `sendMessage` call,
+when the adapter does not declare `supportsAttachments`, so an adapter that ignores the field
+cannot drop the image and report success. A handler, which receives no adapter, branches on that
+code:
+
+```typescript
+const sent = await ctx.reply("Here is the chart.", { attachments: [chart] });
+if (sent.error?.code === "attachments_unsupported") {
+  await ctx.reply("The chart is ready, but this chat cannot show images.");
+}
+```
+
+| Code | When |
+|---|---|
+| `attachments_unsupported` | the adapter cannot send attachments, the outbound is an edit, or (Telegram) an attachment's `kind` is neither `image` nor `audio` |
+| `invalid_attachment` | Telegram only: `attachments` is not a list, holds more than 10 attachments, an entry has no bytes, an image is over 10 MiB, or an audio clip is over 50 MiB or its `mediaType` is not `audio/*` |
+
+## Voice notes and spoken replies
+
+An inbound event may carry `audio`, an `InboundAudio`: the voice note's bytes (`data`, a
+`Uint8Array`), their `mediaType` (such as `audio/ogg`) and `durationSeconds`, a whole number the
+platform reported (0 when it reported none). The field is optional and absent on every message
+without a voice note. Only the Telegram adapter fills it today, and only for updates it polls: a
+voice arriving through a webhook is not read. A voice the adapter could not read leaves `audio`
+absent and writes one stderr line naming the reason, so an empty `text` with no `audio` can mean
+either; the message is delivered in both cases. The bytes reach `post_inbound` hooks by reference.
+
+To answer with speech, attach an audio clip: `{ kind: "audio", mediaType: "audio/ogg", data }`.
+`OutboundAttachment` is a union of the image and the audio member, told apart by `kind`; code
+that switches on `kind` exhaustively gains a case. Every adapter but Telegram refuses an audio
+attachment as it refuses an image, with `attachments_unsupported` and no platform call.
+
+```typescript
+const runner = new GatewayRunner({
+  adapters: [adapter],
+  handler: async (event, ctx) => {
+    if (event.audio === undefined) return;
+    const text = await transcribe(event.audio.data, event.audio.mediaType);
+    const speech = await synthesize(await answer(text));
+    await ctx.reply(text, { attachments: [{ kind: "audio", mediaType: "audio/ogg", data: speech }] });
+  },
+});
+```
 
 ## Editing a sent message
 
@@ -227,6 +301,7 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
   `GatewayConfigurationError` coded `missing_required_config` that names the keys, and reports a
   configuration error thrown by `create` the same way. Any other error propagates. It performs no
   network call.
+- `createChannels` also returns `channels`: each built adapter paired with the descriptor that built it, in the order of `adapters`.
 - `connectFailure` defaults to `"rollback"`: one failed connect disconnects the adapters that did
   connect and rejects `start()`, as before. Under `"isolate"`, `start()` resolves even when every
   adapter failed, so check `connected` before you rely on the runner.
@@ -241,8 +316,9 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
   runner you build from adapters you constructed yourself is not checked, so give it one adapter
   per platform: with two of one platform the later one sends the earlier one's replies, and the
   earlier one is connected but never disconnected.
-- Under `"isolate"`, and under `"rollback"` until the first failure, `start()` waits for every
-  connect, so a connect that never settles blocks it.
+- `start()` waits for every connect under both `connectFailure` modes, so a connect that never
+  settles blocks it. Under `"rollback"` that holds after a failure too: a failing start rejects
+  only once its slowest connect settles.
 - A webhook channel's request reaches your HTTP route; route it by platform to the descriptor's
   `webhook.verify(adapter, { rawBody, headers })`, then parse the body and pass it to
   `webhook.ingest(adapter, payload)`, which answers `"delivered"`, `"malformed"` or
@@ -288,19 +364,32 @@ here). Both halves exist now, and the wiring needs three things that are easy to
 import { handleChannelWebhook } from "theokit/server/agent";
 import { route } from "theokit/server/define";
 import { whatsapp, whatsappSubscribe } from "theokit/server/webhook";
-import { normalizeInboundMessages, parseWebhookPayload } from "@theokit/gateway-whatsapp";
+import { parseWebhookPayload, WhatsAppAdapter } from "@theokit/gateway-whatsapp";
+
+// The adapter applies the sender allowlist and the group rule, and drops a message addressed to
+// another phone number of the same Meta app. `normalizeInboundMessages` alone applies none of them.
+const adapter = WhatsAppAdapter.fromCloud(
+  {
+    accessToken: process.env.WHATSAPP_ACCESS_TOKEN!,
+    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID!,
+    appSecret: process.env.META_APP_SECRET!,
+  },
+  { allowedSenders: process.env.WHATSAPP_ALLOWED },
+);
+
+async function onMessage({ payload }: { payload: unknown }): Promise<void> {
+  const envelope = parseWebhookPayload(payload);
+  if (envelope === null) return; // not a shape we know — answer normally
+  for (const event of adapter.toDeliverableEvents(envelope)) {
+    console.log(`${event.from}: ${event.text}`);
+  }
+}
 
 const handle = ({ request }: { request: Request }) =>
   handleChannelWebhook(request, new URL(request.url).pathname, {
     validators: { whatsapp: whatsapp({ appSecret: process.env.META_APP_SECRET! }) },
     subscribe: { whatsapp: whatsappSubscribe({ verifyToken: process.env.META_VERIFY_TOKEN! }) },
-    onMessage: async ({ payload }) => {
-      const envelope = parseWebhookPayload(payload);
-      if (envelope === null) return; // not a shape we know — answer normally
-      for (const event of normalizeInboundMessages(envelope)) {
-        console.log(`${event.from}: ${event.text}`);
-      }
-    },
+    onMessage,
   });
 
 // BOTH verbs, and `.csrf(false)` on each.
@@ -339,7 +428,7 @@ the raw body, the headers and the URL, and `ChannelMessage` provides none of the
 own `createWebhookServer` rather than this seam.
 Every other adapter exports its translation under its own name — `gateway-line` has
 `lineEventToMessageEvent`, `gateway-whatsapp` composes `parseWebhookPayload` with
-`normalizeInboundMessages` — each with its own signature: read the one you are using rather than
+`WhatsAppAdapter.toDeliverableEvents` — each with its own signature: read the one you are using rather than
 assuming this one's.
 
 Adapters whose transport is a long-lived connection rather than a webhook own that transport and do

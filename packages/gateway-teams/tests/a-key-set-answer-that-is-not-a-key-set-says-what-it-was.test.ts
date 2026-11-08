@@ -125,6 +125,17 @@ describe("a key-set answer that is not a key set", () => {
     expect(res).toEqual(unavailable("/keys: the document is over 8388608 bytes)"));
   });
 
+  it("reads 1000 keys at the measured Bot Framework bytes per key", async () => {
+    // 876,002 bytes / 251 keys on 2026-10-11, rounded up per key.
+    const bytesPerKey = Math.ceil(876_002 / 251);
+    const res = await coldStart((ks) => {
+      const keys = Array.from({ length: 1000 }, () => ks.publishedJwks()[0]);
+      ks.answerNextRaw(200, documentOfSize(keys, 1000 * bytesPerKey));
+    });
+
+    expect(res).toEqual(accepted);
+  });
+
   it("reads a document of exactly 8 MiB", async () => {
     const res = await coldStart((ks) =>
       ks.answerNextRaw(200, documentOfSize(ks.publishedJwks(), MAX_KEY_SET_BYTES)),

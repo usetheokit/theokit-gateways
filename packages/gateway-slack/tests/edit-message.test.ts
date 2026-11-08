@@ -157,3 +157,19 @@ describe("SlackAdapter.editMessage", () => {
     },
   );
 });
+
+describe("SlackAdapter.editMessage attachments (B-674)", () => {
+  it("refuses an edit that carries an image with no platform call", async () => {
+    const adapter = await connected();
+
+    const result = await adapter.editMessage("111.222", {
+      ...out("hello"),
+      attachments: [{ kind: "image", mediaType: "image/png", data: new Uint8Array([1]) }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("attachments_unsupported");
+    expect(updateMock).toHaveBeenCalledTimes(0);
+    expect(postMessageMock).toHaveBeenCalledTimes(0);
+  });
+});

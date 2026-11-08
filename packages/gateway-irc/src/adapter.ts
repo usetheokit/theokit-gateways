@@ -19,6 +19,7 @@ import {
 
 import { type IrcLine, ircLower, nickOf, parseIrcLine } from "./line.js";
 import { privmsgToMessageEvent } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { Registration, type RegistrationOptions } from "./registration.js";
 import { splitForIrc } from "./split.js";
 import type { IrcAdapterOptions, SocketFactory } from "./types.js";
@@ -99,6 +100,10 @@ export class IrcAdapter extends BasePlatformAdapter {
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }

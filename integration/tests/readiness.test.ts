@@ -286,6 +286,16 @@ describe("live-test readiness", () => {
         "unit cannot see. Covered by packages/gateway/tests/channel/channel-descriptor.test.ts, " +
         "and driven offline end to end through tests/unit/fixtures/channel-wiring/descriptor-wired.ts by " +
         "tests/unit/channel-wiring.test.ts",
+      SeenIds:
+        "an in-memory bounded set of message ids, no I/O. Every adapter that dedupes inbound " +
+        "messages uses it, so the adapter suites exercise it; unit coverage is in " +
+        "packages/gateway/tests/text",
+      scanFences:
+        "pure string scan for code-fence regions, no I/O. Used by the splitters, which the " +
+        "adapter suites drive past their caps; covered by packages/gateway/tests/text",
+      splitKeepingRows:
+        "pure function that splits text without breaking table rows, no I/O. Covered by " +
+        "packages/gateway/tests/text; nothing about it depends on a platform",
     };
 
     const { readdir, readFile } = await import("node:fs/promises");

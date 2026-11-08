@@ -1,5 +1,6 @@
 /**
- * `splitForSMS` — grapheme-cluster-safe multipart segmentation (D393, EC-7).
+ * `splitForSMS` — grapheme-cluster-safe multipart segmentation (D393, EC-7), keeping table rows
+ * whole.
  *
  * Concatenated SMS (UDH) on modern carriers reassemble at the recipient,
  * but each TCP/IP-layer chunk is one billed message. We segment at
@@ -7,16 +8,18 @@
  * prefixed with `(i/N) ` to allow manual reordering when carriers
  * deliver out of sequence (EC-7).
  *
- * Thin wrapper over core `chunkByGrapheme` (roadmap M1) — single-sources the
- * `Intl.Segmenter` grapheme walk so emoji (🇧🇷) and combining sequences are
- * never severed. The `(i/N) ` prefix (and its reserved width) stays here since
- * it is SMS-specific. Output is byte-identical to the previous implementation
- * (pinned by `tests/split.test.ts`).
+ * A text within the limit goes through core `chunkByGrapheme` as before. A longer one is cut at
+ * the last grapheme boundary within each part, which is where `chunkByGrapheme`'s greedy walk
+ * ends a part, so emoji (🇧🇷) and combining sequences are never severed and text with no table
+ * row splits exactly as it did (pinned by `tests/split-no-table-baseline.test.ts` and the
+ * equivalence test in `tests/split-tables.test.ts`). A cut that falls inside a Markdown table row
+ * which fits in a part moves back to the start of that row (B-556). The rule is core
+ * `splitKeepingRows`, shared with gateway-line. The `(i/N) ` prefix (and its reserved width) stays here since it is SMS-specific.
  *
  * @internal
  */
 
-import { chunkByGrapheme } from "@theokit/gateway";
+import { chunkByGrapheme, splitKeepingRows } from "@theokit/gateway";
 
 /**
  * Width of `"(i/total) "` when `i` has as many digits as `total` — the widest
@@ -30,6 +33,14 @@ import { chunkByGrapheme } from "@theokit/gateway";
  */
 function prefixWidthFor(total: number): number {
   return 2 * String(total).length + 4;
+}
+
+/** One fixed-point pass: the parts of `text` with `partLimit` left beside the prefix. */
+function partsFor(text: string, limit: number, partLimit: number): string[] {
+  if (text.length <= limit) return chunkByGrapheme(text, { limit, partLimit });
+  // The core's RangeError for a limit of 0, 1.5 or NaN, with the message it had before.
+  chunkByGrapheme("", { limit, partLimit });
+  return splitKeepingRows(text, partLimit);
 }
 
 export function splitForSMS(text: string, limit = 1600): string[] {
@@ -46,7 +57,7 @@ export function splitForSMS(text: string, limit = 1600): string[] {
         `limit ${limit} is too small to carry an SMS part: the "(i/N) " prefix alone needs ${reserved} chars`,
       );
     }
-    const parts = chunkByGrapheme(text, { limit, partLimit });
+    const parts = partsFor(text, limit, partLimit);
     if (parts.length <= 1) return parts; // short-circuit / single part: skip prefix
     const needed = prefixWidthFor(parts.length);
     if (needed <= reserved) {
