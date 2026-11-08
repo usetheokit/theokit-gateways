@@ -17,7 +17,7 @@ import { required, runMarker } from "../../src/credentials.js";
 import { describeLive } from "../../src/harness.js";
 import { platformById } from "../../src/platforms.js";
 
-const ZALO = platformById("zalo_personal");
+const ZALO = platformById("zalo-personal");
 
 describeLive(
   ZALO,

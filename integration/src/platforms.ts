@@ -330,7 +330,7 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     undefined,
   ),
   platform(
-    "zalo_personal",
+    "zalo-personal",
     "Zalo Personal",
     "connection",
     [
