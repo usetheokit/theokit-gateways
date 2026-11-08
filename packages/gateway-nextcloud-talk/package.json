@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-nextcloud-talk",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Nextcloud Talk platform adapter for @theokit/gateway: verifies Talk's signed bot webhooks and posts as a bot.",
   "license": "Apache-2.0",
   "repository": {

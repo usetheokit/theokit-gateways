@@ -1,5 +1,162 @@
 # Changelog
 
+## 0.14.0
+
+### Minor Changes
+
+- 458c34c: Wire channels from descriptors, and keep the channels that connect when another cannot.
+
+  `@theokit/gateway` exports `createChannels` and the types `ChannelDescriptor`,
+  `ChannelConfigField`, `ChannelWebhook`, `WebhookRequest`, `IngestResult`, `ChannelEntry`,
+  `ChannelRejection` and `CreateChannelsResult`. `createChannels(entries)` builds an adapter per
+  entry and returns `{ adapters, rejected }`: an entry whose required field is absent, `null` or
+  `""` is rejected with a `GatewayConfigurationError` coded `missing_required_config` naming the
+  keys, and a configuration error thrown by the descriptor's `create` is rejected the same way. Any
+  other error propagates. It connects nothing and makes no network call.
+
+  `GatewayRunner` accepts `connectFailure: "rollback" | "isolate"` (exported as `ConnectFailure`),
+  and `StartResult` is exported.
+  The default, `"rollback"`, is unchanged: one failed connect disconnects the adapters that did
+  connect and rejects `start()`. Under `"isolate"`, `start()` connects every adapter, wires inbound
+  only for the ones that connected, and reports the rest with a redacted reason.
+
+  `start()` now resolves a `StartResult` (`{ connected, failed }`) instead of `void`, under both
+  values. This is a type change: code that awaits `start()` and ignores the value is unaffected,
+  but a structural type declaring `start(): Promise<void>` that a `GatewayRunner` is assigned to
+  fails with TS2322, and a subclass overriding `start()` with that signature fails with TS2416.
+
+  `@theokit/gateway-telegram` exports `telegramChannel`, a socket channel whose config has a
+  required, secret `token` and an optional `allowedUsers`, and a `ConfigurationError` (a
+  `GatewayConfigurationError` with the `gateway-telegram` prefix). Called directly,
+  `telegramChannel.create` refuses a token that is not a string or is empty, and an `allowedUsers`
+  that is not an array of strings; through `createChannels`, an absent or empty token is rejected
+  first, as `missing_required_config`.
+
+  `@theokit/gateway-line` exports `lineChannel`, a webhook channel whose `webhook.verify` checks the
+  `x-line-signature` header against the raw body and whose `webhook.ingest` dispatches a verified
+  payload through `dispatchWebhookBody`, so a reply uses the cached reply token, or answers
+  `"malformed"` without dispatching. It answers `"no_handler"` (a member of `IngestResult`) when the
+  payload holds a text message for the handler and none is subscribed: before the runner started,
+  after it stopped, or when LINE's connect failed under `"isolate"`. Before, such a request answered
+  `"delivered"`, a route acknowledged it, and LINE did not redeliver the lost message.
+  `lineChannel.create` checks field types before the adapter's constructor.
+
+  `LineAdapter.dispatchWebhookBody` now resolves `"ok" | "no_handler"` instead of `void`. It answers
+  `"no_handler"`, dispatching nothing and caching no reply token, for a batch holding a text message
+  that passes the mention guard while no handler is subscribed; an empty or follow-only batch still
+  answers `"ok"`. It reads the handler once per batch, so a handler that unsubscribes while handling
+  one event still receives the rest of the batch. Code that ignores the value is unaffected; a
+  subclass overriding the method with `Promise<void>` fails with TS2416. `createWebhookServer` is
+  unchanged and still answers 200 before it dispatches.
+
+  Both descriptors are typed locally and import nothing `@theokit/gateway` 0.9.0 lacks, so the peer
+  range stays `>=0.9.0 <1.0.0`.
+
+- e009dc3: Pair each platform with the rendering `ChatPresenter` needs.
+
+  `@theokit/gateway` exports `channelRendering(platform)` and the type `ChannelRendering`, a
+  `{ translate, format }` pair to spread into `@theokit/presenter`'s `ChatPresenter` options.
+  whatsapp and slack get single-character emphasis (`*bold*`, `_italic_`, `~strike~`), discord,
+  mattermost and teams keep markdown, and telegram, matrix, email, line and sms get the four inline
+  markers removed with `format: "plain"`. Before this, the presenter's defaults put `**bold**` on
+  the wire as characters on matrix and email, and handed telegram and slack a bold spelled for
+  another dialect.
+
+  Only bold, italic, strikethrough and inline code are translated. Headings, links, lists and block
+  quotes pass through, and fenced code blocks are not handled yet: the inline-code rule rewrites
+  their backticks. A platform the table does not know throws a `RangeError`. `toDialect` is
+  unchanged, and `@theokit/gateway` still does not depend on `@theokit/presenter`.
+
+- 67e0b78: Make `nostr`, `feishu_lark`, `synology_chat`, `tlon_urbit` and `twitch` first-party platforms.
+
+  `@theokit/gateway` gains the five keys in `PlatformEventRegistry`, the `NostrMessageEvent`,
+  `FeishuLarkMessageEvent`, `SynologyChatMessageEvent`, `TlonUrbitMessageEvent` and
+  `TwitchMessageEvent` types, and a `channelRendering` row for each (`plain`, markers removed).
+  `PlatformName` grows by five members. Code that lists every platform in a
+  `Record<PlatformName, …>` or in a switch with a `never` default must add the five, and a package
+  that registered one of these keys through module augmentation now collides with the first-party
+  one (TS2717) and should drop it. The ten event types added since 0.11.0 are now declared in one
+  module beside the registry; every name is still exported from the package entry as before.
+
+- 3f1788d: Send an image from a gateway handler, and refuse it wherever a platform cannot show one.
+
+  `@theokit/gateway` exports `OutboundAttachment` (`kind: "image"`, `mediaType`, `data`, optional
+  `filename`). `OutboundMessage` gains an optional `attachments` list, `ctx.reply(text, { attachments })`
+  carries it to the adapter (an empty list is left out), and `BasePlatformAdapter` declares
+  `supportsAttachments`, `false` by default. `DeliveryRouter.send` takes the same `attachments`
+  field. The runner and the router refuse an outbound carrying attachments as
+  `attachments_unsupported`, with no `sendMessage` call, when the adapter does not declare
+  `supportsAttachments`.
+
+  `@theokit/gateway-telegram` reports `supportsAttachments: true` and sends each image through
+  `sendPhoto`, the text as the first photo's caption up to 1024 UTF-16 units and after the photos
+  when longer. A non-image kind is refused as `attachments_unsupported`; a missing image, more
+  than 10 images or an image over 10 MiB as `invalid_attachment`; all with no request.
+
+  Every other adapter, and every adapter's `editMessage`, refuses an outbound carrying attachments
+  with `attachments_unsupported` and makes no platform call, instead of sending the text and
+  dropping the image.
+
+  The runner's auto-reply to a blocking `pre_inbound` hook no longer discards a `sendMessage` that
+  throws: the error reaches the `on_error` hooks with the event and is written to stderr, redacted,
+  as a handler error is. Dispatch still does not throw.
+
+- 782e448: Carry voice in both directions. The inbound event gains an optional `audio` field, an
+  `InboundAudio` with the voice note's bytes, media type and duration in seconds, and
+  `OutboundAttachment` gains an `audio` member beside `image`. The Telegram adapter reads a polled
+  voice note through `getFile` and a download bounded at 20 MiB and 30 seconds, delivering the
+  message without `audio` and one stderr line when it cannot, and sends an audio attachment through
+  `sendVoice` with the reply text as its caption. Every other adapter refuses audio as it refuses an
+  image. Code that switches exhaustively on `OutboundAttachment["kind"]` gains a case.
+- 48b1b04: Make `buzz` a first-party platform.
+
+  `@theokit/gateway` gains the `buzz` key in `PlatformEventRegistry`, the `BuzzMessageEvent`
+  type and a `channelRendering` row (`plain`, markers removed). `PlatformName` grows by one member.
+  Code that lists every platform in a `Record<PlatformName, …>` or in a switch with a `never` default
+  must add it.
+
+- 1b27d5d: Make `clickclack` a first-party platform.
+
+  `@theokit/gateway` gains the `clickclack` key in `PlatformEventRegistry`, the `ClickClackMessageEvent`
+  type and a `channelRendering` row (`plain`, markers removed). `PlatformName` grows by one member.
+  Code that lists every platform in a `Record<PlatformName, …>` or in a switch with a `never` default
+  must add it.
+
+- baadf93: Make `zalo_personal` a first-party platform.
+
+  `@theokit/gateway` gains the `zalo_personal` key in `PlatformEventRegistry`, the
+  `ZaloPersonalMessageEvent` type and a `channelRendering` row (`plain`, markers removed).
+  `PlatformName` grows by one member. Code that lists every platform in a `Record<PlatformName, …>`
+  or in a switch with a `never` default must add it.
+
+- e980fb8: `@theokit/gateway` exports `SeenIds` (a bounded set of delivered ids) and `splitKeepingRows` (a
+  grapheme-safe split that keeps Markdown table rows whole). The SMS and LINE adapters import
+  `splitKeepingRows` instead of carrying copies; their peer floor is now `>=0.13.0`.
+- 17c0713: Keep Markdown table rows whole when Discord, Slack, Teams, Telegram, WhatsApp and Mattermost split a long reply. A cut that fell inside a table row now moves back to the start of that row when the row fits in a part, so each row reaches the platform byte-identical. `chunkText` gains the opt-in `keepTableRows` option; text with no table row splits into the same chunks as before.
+
+### Patch Changes
+
+- e9be726: Keep Markdown table rows intact through translation and splitting.
+
+  `channelRendering(platform).translate` and `toDialect` now rewrite a table row (a line whose first
+  non-blank character is `|`) one cell at a time. Before, an emphasis span could open in one cell
+  and close in the next, so `| 2 x *a | b* y |` lost both stars on the ten platforms that rewrite
+  markers. Text where no span crosses a row's pipe translates exactly as before. A lone `\r` counts
+  as a line ending, as in GFM. Inline code that holds an unescaped pipe inside a row is split at
+  that pipe, as GFM splits the cell, so its backticks no longer pair and the platforms that strip
+  markers now keep them.
+
+  `splitForLine` and `splitForSMS` no longer cut a table row in two at a part
+  boundary. When a cut would fall inside a row that fits in one part, the part ends before that row
+  and the row starts the next part. A row longer than a part is still cut by length. Every
+  character is kept, and every part stays within its limit (with the `(i/N) ` prefix counted on
+  SMS, whose numbering follows the new part count) except a single grapheme longer than the limit,
+  which is emitted whole as its own part, as before. Text with no table row splits exactly as
+  before. Two rows that each fill a part exactly arrive as three parts, the second holding only the
+  line ending between them.
+
+  No export, signature, dependency or peer range changes.
+
 ## 0.12.0
 
 ### Minor Changes
