@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.3.2
+
+### Patch Changes
+
+- 3f1788d: Send an image from a gateway handler, and refuse it wherever a platform cannot show one.
+
+  `@theokit/gateway` exports `OutboundAttachment` (`kind: "image"`, `mediaType`, `data`, optional
+  `filename`). `OutboundMessage` gains an optional `attachments` list, `ctx.reply(text, { attachments })`
+  carries it to the adapter (an empty list is left out), and `BasePlatformAdapter` declares
+  `supportsAttachments`, `false` by default. `DeliveryRouter.send` takes the same `attachments`
+  field. The runner and the router refuse an outbound carrying attachments as
+  `attachments_unsupported`, with no `sendMessage` call, when the adapter does not declare
+  `supportsAttachments`.
+
+  `@theokit/gateway-telegram` reports `supportsAttachments: true` and sends each image through
+  `sendPhoto`, the text as the first photo's caption up to 1024 UTF-16 units and after the photos
+  when longer. A non-image kind is refused as `attachments_unsupported`; a missing image, more
+  than 10 images or an image over 10 MiB as `invalid_attachment`; all with no request.
+
+  Every other adapter, and every adapter's `editMessage`, refuses an outbound carrying attachments
+  with `attachments_unsupported` and makes no platform call, instead of sending the text and
+  dropping the image.
+
+  The runner's auto-reply to a blocking `pre_inbound` hook no longer discards a `sendMessage` that
+  throws: the error reaches the `on_error` hooks with the event and is written to stderr, redacted,
+  as a handler error is. Dispatch still does not throw.
+
+- e980fb8: `@theokit/gateway` exports `SeenIds` (a bounded set of delivered ids) and `splitKeepingRows` (a
+  grapheme-safe split that keeps Markdown table rows whole). The SMS and LINE adapters import
+  `splitKeepingRows` instead of carrying copies; their peer floor is now `>=0.13.0`.
+- e9be726: Keep Markdown table rows intact through translation and splitting.
+
+  `channelRendering(platform).translate` and `toDialect` now rewrite a table row (a line whose first
+  non-blank character is `|`) one cell at a time. Before, an emphasis span could open in one cell
+  and close in the next, so `| 2 x *a | b* y |` lost both stars on the ten platforms that rewrite
+  markers. Text where no span crosses a row's pipe translates exactly as before. A lone `\r` counts
+  as a line ending, as in GFM. Inline code that holds an unescaped pipe inside a row is split at
+  that pipe, as GFM splits the cell, so its backticks no longer pair and the platforms that strip
+  markers now keep them.
+
+  `splitForLine` and `splitForSMS` no longer cut a table row in two at a part
+  boundary. When a cut would fall inside a row that fits in one part, the part ends before that row
+  and the row starts the next part. A row longer than a part is still cut by length. Every
+  character is kept, and every part stays within its limit (with the `(i/N) ` prefix counted on
+  SMS, whose numbering follows the new part count) except a single grapheme longer than the limit,
+  which is emitted whole as its own part, as before. Text with no table row splits exactly as
+  before. Two rows that each fill a part exactly arrive as three parts, the second holding only the
+  line ending between them.
+
+  No export, signature, dependency or peer range changes.
+
 ## 0.3.1
 
 ### Patch Changes

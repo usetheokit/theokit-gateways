@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- 4850c43: `WhatsAppCloudBackend.handleWebhookPayload` now resolves `"unreadable_body"` (not `false`) for a
+  signed body that is not JSON or that `parseWebhookPayload` refuses, so a route can answer it
+  differently from a bad signature (`false`, 401). The return type widens from `boolean` to
+  `boolean | "unreadable_body"`; the package is 0.x, so this is a minor bump. A route that tested
+  `!ok` and answered 401 now answers 200 for such a body, which stops Meta's useless redeliveries.
+
+### Patch Changes
+
+- 3f1788d: Send an image from a gateway handler, and refuse it wherever a platform cannot show one.
+
+  `@theokit/gateway` exports `OutboundAttachment` (`kind: "image"`, `mediaType`, `data`, optional
+  `filename`). `OutboundMessage` gains an optional `attachments` list, `ctx.reply(text, { attachments })`
+  carries it to the adapter (an empty list is left out), and `BasePlatformAdapter` declares
+  `supportsAttachments`, `false` by default. `DeliveryRouter.send` takes the same `attachments`
+  field. The runner and the router refuse an outbound carrying attachments as
+  `attachments_unsupported`, with no `sendMessage` call, when the adapter does not declare
+  `supportsAttachments`.
+
+  `@theokit/gateway-telegram` reports `supportsAttachments: true` and sends each image through
+  `sendPhoto`, the text as the first photo's caption up to 1024 UTF-16 units and after the photos
+  when longer. A non-image kind is refused as `attachments_unsupported`; a missing image, more
+  than 10 images or an image over 10 MiB as `invalid_attachment`; all with no request.
+
+  Every other adapter, and every adapter's `editMessage`, refuses an outbound carrying attachments
+  with `attachments_unsupported` and makes no platform call, instead of sending the text and
+  dropping the image.
+
+  The runner's auto-reply to a blocking `pre_inbound` hook no longer discards a `sendMessage` that
+  throws: the error reaches the `on_error` hooks with the event and is written to stderr, redacted,
+  as a handler error is. Dispatch still does not throw.
+
+- 17c0713: Keep Markdown table rows whole when Discord, Slack, Teams, Telegram, WhatsApp and Mattermost split a long reply. A cut that fell inside a table row now moves back to the start of that row when the row fits in a part, so each row reaches the platform byte-identical. `chunkText` gains the opt-in `keepTableRows` option; text with no table row splits into the same chunks as before.
+
 ## 0.5.0
 
 ### Minor Changes
