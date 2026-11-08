@@ -1,0 +1,37 @@
+{
+  "name": "@theokit/gateway-bot-realtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Internal: the adapter core shared by the ClickClack and Buzz gateways (REST post plus realtime WebSocket with a bot token). Bundled into them, never published.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@theokit/gateway": "workspace:*",
+    "tsup": "^8.5.0",
+    "typescript": "5.9.3"
+  }
+}
