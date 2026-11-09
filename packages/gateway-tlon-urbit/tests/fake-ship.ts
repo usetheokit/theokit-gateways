@@ -128,7 +128,13 @@ export class FakeShip {
   }
 
   private onPut(channel: Channel, body: string): Response {
-    for (const action of JSON.parse(body) as ChannelAction[]) {
+    const actions = JSON.parse(body) as ChannelAction[];
+    // A real ship's Eyre parses a channel action's `ship` as a bare @p: `~bot` is refused with a 400
+    // "invalid channel json" (observed on vere 4.6, 2026-11-09), and nothing in the request runs.
+    if (actions.some((action) => "ship" in action && String(action.ship).startsWith("~"))) {
+      return new Response("invalid channel json", { status: 400 });
+    }
+    for (const action of actions) {
       this.actions.push({ channel: channel.id, action });
       if (action.action === "subscribe") {
         this.frame(channel, { id: action.id, response: "subscribe", ok: "ok" });
