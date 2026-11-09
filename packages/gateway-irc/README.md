@@ -84,3 +84,15 @@ exported for callers that need the same cut.
 | `empty_text` | the text is empty, or holds only line breaks |
 | `invalid_target` | `channel.id` holds a space, a comma or a line break, starts with `:`, or is too long to leave room for any text in a 512-byte command |
 | `not_connected` | `connect()` has not succeeded, or the connection closed |
+
+## Verification status
+
+On 2026-11-05, offline tests cover registration, parsing, message splitting, and channel/DM
+receive-and-reply through `GatewayRunner`, including out-of-band `deliver()` and handler errors.
+The runner example above keeps IRC protocol handling inside this package; a TheoClaw handler
+can supply its response through `ctx.reply()` in the same way.
+
+A real-account send-and-receive run and a live TheoClaw reply have **not been verified** in this
+sandbox: no IRC account credentials or running TheoClaw instance were supplied. Before claiming
+live parity, record the run date, network, account (never its password), channel or DM target,
+inbound message, and observed reply from an independent IRC client.
