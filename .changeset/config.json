@@ -11,7 +11,6 @@
     "@theokit/gateway-nostr",
     "@theokit/gateway-feishu-lark",
     "@theokit/gateway-synology-chat",
-    "@theokit/gateway-tlon-urbit",
     "@theokit/gateway-twitch",
     "@theokit/gateway-zalo-personal",
     "@theokit/gateway-clickclack",
