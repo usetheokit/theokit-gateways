@@ -239,15 +239,6 @@ describe("live-test readiness", () => {
       chunkText:
         "pure function, no I/O. The splitting it performs IS proven over the wire, by the five adapter suites that send past their platform's cap",
       chunkByGrapheme: "pure function, same reasoning as chunkText",
-      scanFences:
-        "pure function, no I/O: finds fenced code regions in a string. Called by chunkText, whose " +
-        "splitting is proven over the wire by the adapter suites; unit-covered by packages/gateway/tests/text/fence.test.ts",
-      splitKeepingRows:
-        "pure function, no I/O: splits text on table-row boundaries. Used by the LINE and SMS " +
-        "adapters' split.ts; unit-covered by packages/gateway/tests/text/split-rows.test.ts",
-      SeenIds:
-        "in-memory duplicate-id set, no I/O. Used by the nostr, twitch, feishu-lark, synology-chat " +
-        "and tlon-urbit adapters to drop redelivered events; unit-covered by packages/gateway/tests/text/seen-ids.test.ts",
       toDialect:
         "pure function, no I/O — and unlike chunkText its work is NOT proven over the wire here, " +
         "because no adapter in this package calls it. That is deliberate and documented in " +
