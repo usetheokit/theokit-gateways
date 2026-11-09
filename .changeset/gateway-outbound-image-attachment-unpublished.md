@@ -2,7 +2,6 @@
 "@theokit/gateway-feishu-lark": patch
 "@theokit/gateway-nostr": patch
 "@theokit/gateway-synology-chat": patch
-"@theokit/gateway-tlon-urbit": patch
 "@theokit/gateway-twitch": patch
 ---
 
