@@ -11,5 +11,6 @@ backoff, replaces a channel the ship dropped, logs in again when the session exp
 `TlonAuthError` when the code is refused. Checked against two real comets on vere 4.6 on
 2026-11-09: a DM one ship's adapter sent reached the bot's adapter, and the bot's reply came back.
 Comet names, which join their halves with `--`, are accepted, and channel actions name the ship
-without its `~`, which Eyre requires. It depends on `@urbit/aura` and requires `@theokit/gateway`
-0.12.0 or later.
+without its `~`, which Eyre requires. An outbound that carries attachments is refused with
+`attachments_unsupported`, making no ship call. It depends on `@urbit/aura` and requires
+`@theokit/gateway` 0.13.0 or later, whose `SeenIds` it imports.
