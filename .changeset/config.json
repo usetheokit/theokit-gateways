@@ -13,6 +13,7 @@
     "@theokit/gateway-synology-chat",
     "@theokit/gateway-twitch",
     "@theokit/gateway-zalo-personal",
+    "@theokit/gateway-zalo",
     "@theokit/gateway-clickclack",
     "@theokit/gateway-buzz"
   ],
