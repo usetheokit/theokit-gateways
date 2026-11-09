@@ -59,6 +59,8 @@ interface PendingPoke {
 /** The client of one ship session. */
 export class UrbitShipClient {
   private readonly baseUrl: string;
+  /** The bot ship as a channel action names it: the @p without its `~`. */
+  private readonly channelShip: string;
   private readonly timeoutMs: number;
   private cookie: string | undefined;
   private channelUrl: string | undefined;
@@ -76,6 +78,8 @@ export class UrbitShipClient {
 
   constructor(private readonly opts: ShipClientOptions) {
     this.baseUrl = opts.shipUrl.replace(/\/+$/, "");
+    // Eyre reads a channel action's ship as a bare @p and refuses `~bot` with a 400 "invalid channel json".
+    this.channelShip = opts.ship.trim().replace(/^~/, "");
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
@@ -122,7 +126,9 @@ export class UrbitShipClient {
       };
       this.pokes.set(id, { timer, settle });
     });
-    const status = await this.put([{ id, action: "poke", ship: this.opts.ship, app, mark, json }]);
+    const status = await this.put([
+      { id, action: "poke", ship: this.channelShip, app, mark, json },
+    ]);
     if (status !== undefined) {
       this.pokes.get(id)?.settle({ ok: false, code: "tlon_poke_failed", message: status });
     }
@@ -181,7 +187,7 @@ export class UrbitShipClient {
       this.subscribed = resolve;
     });
     const refused = await this.put([
-      { id, action: "subscribe", ship: this.opts.ship, app: "chat", path: "/v3" },
+      { id, action: "subscribe", ship: this.channelShip, app: "chat", path: "/v3" },
     ]);
     if (refused !== undefined) throw new Error(`subscribe was refused: ${refused}`);
     const status = await this.openStream(channel);
@@ -239,7 +245,7 @@ export class UrbitShipClient {
   private resubscribe(): void {
     const id = this.actionId();
     this.subscriptionId = id;
-    this.put([{ id, action: "subscribe", ship: this.opts.ship, app: "chat", path: "/v3" }])
+    this.put([{ id, action: "subscribe", ship: this.channelShip, app: "chat", path: "/v3" }])
       .then((refused) => {
         if (refused !== undefined) {
           process.stderr.write(`[gateway-tlon-urbit] resubscribe refused: ${refused}\n`);
