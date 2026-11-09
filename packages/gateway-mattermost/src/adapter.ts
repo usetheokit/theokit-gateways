@@ -22,6 +22,7 @@ import {
 import { ConfigurationError } from "./errors.js";
 import { shouldRespond } from "./filters.js";
 import { mapChannelType, normalizeMattermostType, postToMessageEvent } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { MATTERMOST_MAX_POST, splitForEscapedMattermost, splitForMattermost } from "./split.js";
 import type { MattermostAdapterOptions, MattermostPost } from "./types.js";
 
@@ -81,6 +82,10 @@ export class MattermostAdapter extends BasePlatformAdapter {
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }
@@ -122,6 +127,10 @@ export class MattermostAdapter extends BasePlatformAdapter {
    * with no request, so an edit is refused for exactly the texts a send delivers as several posts.
    */
   override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.editText(messageId, out);
+  }
+
+  private async editText(messageId: string, out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }
@@ -212,7 +221,28 @@ export class MattermostAdapter extends BasePlatformAdapter {
   override async deliver(
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
+    if (!this.passesMentionGate(event)) return "ok";
     return this.runHandler(this.inboundHandler, event);
+  }
+
+  /**
+   * The same `shouldRespond` gate the websocket path applies, run on an out-of-band event.
+   *
+   * Needs the bot identity from a live connection and the raw post on the event; when either is
+   * missing there is nothing to judge by, so the event passes as it did before.
+   */
+  private passesMentionGate(event: GatewayMessageEvent): boolean {
+    const handle = this.handle;
+    const mm = (event as { mattermost?: { raw?: MattermostPost } }).mattermost;
+    if (handle === undefined || mm?.raw === undefined) return true;
+    return shouldRespond({
+      post: mm.raw,
+      channelType:
+        event.channel.type === "thread" ? "thread" : event.channel.type === "dm" ? "dm" : "group",
+      botUserId: handle.botUserId,
+      botUsername: handle.botUsername,
+      requireMention: this.opts.requireMention ?? true,
+    });
   }
 }
 

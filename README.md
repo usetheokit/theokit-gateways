@@ -18,6 +18,14 @@ Multi-channel gateway packages for the Theo ecosystem, extracted from `theokit-s
 | `@theokit/gateway-imessage` | iMessage (imsg JSON-RPC, macOS) | **none** — no Mac signed in to Messages here; the live suite is written and has never run |
 | `@theokit/gateway-irc` | IRC (line protocol over TLS) | partial — send and receive on Libera.Chat over TLS (2026-10-22); the split, refusal and empty-text paths are not asserted live |
 | `@theokit/gateway-nextcloud-talk` | Nextcloud Talk (bot webhook + bot API) | **full** — send and receive, against Nextcloud 31 with Talk in Docker |
+| `@theokit/gateway-feishu-lark` | Feishu / Lark (open platform long connection + IM API) | unverified — no live run yet; the live suite needs a custom app on Feishu or Lark |
+| `@theokit/gateway-synology-chat` | Synology Chat (bot outgoing callback + Incoming URL) | unverified — no live run yet; the live suite needs a NAS with Synology Chat and a bot |
+| `@theokit/gateway-tlon-urbit` | Tlon / Urbit (ship HTTP channel + `chat` app pokes) | unverified — no live run yet; the wire shapes are read from OpenClaw and the live suite needs a ship |
+| `@theokit/gateway-twitch` | Twitch chat (EventSub WebSocket + Helix Send Chat Message) | unverified — no live run yet; the live suite needs a bot account token and a test channel |
+| `@theokit/gateway-zalo-personal` | Zalo Personal (unofficial web session through `zca-js`) | unverified — no live run yet; the live suite needs a throwaway Zalo account's session and a friend to message |
+| `@theokit/gateway-clickclack` | ClickClack (bot token: REST send + realtime WebSocket) | unverified — no live run yet; the wire shapes are written from ClickClack's public docs and the live suite needs a server, a bot token and a channel |
+| `@theokit/gateway-buzz` | Buzz (bot token: REST send + realtime WebSocket) | unverified — no live run yet; the wire shapes are an assumption (no Buzz spec was available) and the live suite needs a Buzz server, a bot token and a channel |
+| `@theokit/gateway-nostr` | Nostr (NIP-17 and NIP-04 direct messages over relay WebSockets) | unverified — no live run yet; the live suite needs a relay and two keys |
 | `@theokit/gateway-line` | LINE Messaging API | **full** — send and receive |
 | `@theokit/gateway-whatsapp` | WhatsApp (Meta Cloud API + whatsapp-web.js + Baileys) | partial — the Cloud API send is accepted by Meta, delivery and inbound not asserted here; the two unofficial backends reach a pairing QR and have never been paired here |
 | `@theokit/gateway-teams` | Microsoft Teams | **none** — no credentials; four tests written, never executed |

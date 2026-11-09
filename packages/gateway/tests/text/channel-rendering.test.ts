@@ -30,6 +30,14 @@ const ALL_PLATFORMS = [
   "google_chat",
   "irc",
   "nextcloud_talk",
+  "nostr",
+  "feishu_lark",
+  "synology_chat",
+  "tlon_urbit",
+  "twitch",
+  "zalo_personal",
+  "clickclack",
+  "buzz",
 ] as const satisfies readonly PlatformName[];
 
 // `PlatformName` is a derived type with no runtime list, so the list above is checked against it
@@ -55,6 +63,14 @@ const PLAIN: readonly PlatformName[] = [
   "imessage",
   "google_chat",
   "irc",
+  "nostr",
+  "feishu_lark",
+  "synology_chat",
+  "tlon_urbit",
+  "twitch",
+  "zalo_personal",
+  "clickclack",
+  "buzz",
 ];
 
 describe("channelRendering", () => {
@@ -150,6 +166,13 @@ describe("channelRendering", () => {
     for (const platform of ALL_PLATFORMS) {
       expect(channelRendering(platform).translate("**unpaired"), platform).toBe("**unpaired");
     }
+  });
+
+  it("sends twitch plain text with the bold markers dropped", () => {
+    const rendering = channelRendering("twitch");
+
+    expect(rendering.format).toBe("plain");
+    expect(rendering.translate("**hi** there")).toBe("hi there");
   });
 
   it("keeps markers inside inline code", () => {

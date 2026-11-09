@@ -306,3 +306,20 @@ describe("MatrixAdapter.editMessage", () => {
     await adapter.disconnect();
   });
 });
+
+describe("MatrixAdapter.editMessage attachments (B-674)", () => {
+  it("refuses an edit that carries an image with no platform call", async () => {
+    const { adapter, fake } = await connected();
+
+    const result = await adapter.editMessage("$orig:server", {
+      ...out("hello"),
+      attachments: [{ kind: "image", mediaType: "image/png", data: new Uint8Array([1]) }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("attachments_unsupported");
+    expect(fake.sendMessage).toHaveBeenCalledTimes(0);
+    expect(fake.sendTextMessage).toHaveBeenCalledTimes(0);
+    await adapter.disconnect();
+  });
+});

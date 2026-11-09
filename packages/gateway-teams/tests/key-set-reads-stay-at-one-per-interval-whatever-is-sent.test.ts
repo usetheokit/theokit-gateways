@@ -3,7 +3,7 @@
  * fresh kids, listed kids with a bad signature, the configured tenant or a foreign one (B-420).
  */
 
-import { generateKeyPairSync, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +11,8 @@ import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest, OTHER_TENANT, TENANT } from "./helpers/claim-fixtures.js";
 import { INSTALLED_SDK_LINE } from "./helpers/installed-sdk.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+// Loaded at collection, outside the test's budget: the first verified request used to pay the SDK middleware's first import inside it (B-533).
+import "@microsoft/teams.apps/dist/middleware/index.js";
 
 describe("key-set reads", () => {
   let ks: KeyServer | undefined;
@@ -31,7 +33,6 @@ describe("key-set reads", () => {
       cloud: ks.cloud,
     });
     const kids = ks.publishedKids();
-    const stray = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
     const entra = (tid: string) => ({ iss: `${ks?.cloud.loginEndpoint}/${tid}/v2.0`, tid });
 
     const results = [];
@@ -41,7 +42,7 @@ describe("key-set reads", () => {
       const claims = [{ tid: TENANT }, entra(TENANT), entra(OTHER_TENANT), entra(randomUUID())][
         i % 4
       ] as Record<string, unknown>;
-      results.push(await verify(activityRequest(ks.signToken(claims, { kid, key: stray }))));
+      results.push(await verify(activityRequest(ks.forgeToken(claims, { kid }))));
     }
 
     expect(results.every((r) => !r.ok)).toBe(true);

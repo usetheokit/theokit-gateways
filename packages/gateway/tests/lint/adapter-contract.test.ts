@@ -53,6 +53,7 @@ const PACKAGES_DIR = join(__dirname, "..", "..", "..");
 const CREDENTIAL_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["gateway-discord", ["token"]],
   ["gateway-email", ["password"]],
+  ["gateway-feishu-lark", ["appSecret"]],
   ["gateway-line", ["channelAccessToken", "channelSecret"]],
   ["gateway-matrix", ["accessToken"]],
   ["gateway-mattermost", ["accessToken"]],
@@ -64,9 +65,16 @@ const CREDENTIAL_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["gateway-google-chat", ["privateKey"]],
   ["gateway-irc", ["password", "saslPassword"]],
   ["gateway-nextcloud-talk", ["secret"]],
+  ["gateway-nostr", ["secretKey"]],
   ["gateway-sms", ["authToken", "apiSecret", "signatureSecret"]],
+  ["gateway-synology-chat", ["botToken", "incomingUrl"]],
   ["gateway-teams", ["clientSecret"]],
   ["gateway-telegram", ["token"]],
+  ["gateway-tlon-urbit", ["code"]],
+  ["gateway-twitch", ["accessToken"]],
+  ["gateway-zalo-personal", ["credentials"]],
+  ["gateway-clickclack", ["token"]],
+  ["gateway-buzz", ["token"]],
   ["gateway-whatsapp", ["accessToken", "appSecret"]],
 ]);
 
@@ -99,6 +107,18 @@ async function credentialFaults(pkg: string, fields: readonly string[]): Promise
     faults.push(...docblockFaults(pkg, field, doc));
   }
   return faults;
+}
+
+/**
+ * ClickClack and Buzz share one adapter core, `packages/bot-realtime`, bundled into each. A
+ * package whose `adapter.ts` imports it carries that core's source too, so the contract is read
+ * where the code now lives.
+ */
+const SHARED_CORE_IMPORT = "@theokit/gateway-bot-realtime";
+async function withSharedCore(source: string): Promise<string> {
+  if (!source.includes(SHARED_CORE_IMPORT)) return source;
+  const core = await readFile(join(PACKAGES_DIR, "bot-realtime", "src", "adapter.ts"), "utf8");
+  return `${core}\n${source}`;
 }
 
 /** Every `gateway-*` package on disk that ships a `src/` — the gate's own universe. */
@@ -173,7 +193,7 @@ async function adapterSources(): Promise<Array<{ pkg: string; source: string }>>
     if (!entry.isDirectory() || !entry.name.startsWith("gateway-")) continue;
     const path = join(PACKAGES_DIR, entry.name, "src", "adapter.ts");
     try {
-      out.push({ pkg: entry.name, source: await readFile(path, "utf8") });
+      out.push({ pkg: entry.name, source: await withSharedCore(await readFile(path, "utf8")) });
     } catch {
       // A gateway-* package without src/adapter.ts is not an adapter package.
     }
@@ -247,6 +267,9 @@ async function adapterSourceFiles(): Promise<Array<{ path: string; source: strin
       out.push({ path: `${pkg}/${relative(root, full)}`, source: await readFile(full, "utf8") });
     }
   }
+  // The shared core is read once, as its own file: ClickClack and Buzz declare none of their own.
+  const core = join(PACKAGES_DIR, "bot-realtime", "src", "adapter.ts");
+  out.push({ path: "bot-realtime/adapter.ts", source: await readFile(core, "utf8") });
   return out.sort((a, b) => a.path.localeCompare(b.path));
 }
 
@@ -268,7 +291,7 @@ async function adapterPackageSources(): Promise<Array<{ pkg: string; source: str
       if (!file.isFile() || !file.name.endsWith(".ts")) continue;
       parts.push(await readFile(join(file.parentPath, file.name), "utf8"));
     }
-    out.push({ pkg, source: parts.join("\n") });
+    out.push({ pkg, source: await withSharedCore(parts.join("\n")) });
   }
   return out;
 }
@@ -294,7 +317,7 @@ function withoutComments(source: string): string {
  */
 function emptyTextGuardVerdict(source: string): string | undefined {
   const code = withoutComments(source);
-  const start = code.indexOf("sendMessage(out: OutboundMessage)");
+  const start = code.search(/(?:sendMessage|sendText)\(out: OutboundMessage\)/);
   if (start === -1) return undefined;
   const body = code.slice(start, start + 800);
   const emptyAt = body.indexOf("empty_text");
@@ -315,9 +338,10 @@ async function adaptersIgnoringFormat(): Promise<{ ignoring: string[]; examined:
   let examined = 0;
   for (const pkg of await adapterPackages()) {
     if (NO_RICH_TEXT.has(pkg)) continue;
-    const source = await readFile(join(PACKAGES_DIR, pkg, "src", "adapter.ts"), "utf8").catch(
+    const raw = await readFile(join(PACKAGES_DIR, pkg, "src", "adapter.ts"), "utf8").catch(
       () => undefined,
     );
+    const source = raw === undefined ? undefined : await withSharedCore(raw);
     if (source === undefined) {
       ignoring.push(`${pkg}: no adapter.ts`);
       continue;
@@ -375,8 +399,8 @@ describe("cross-adapter contract", () => {
         if (!guarded) offenders.push(`${path}: ${found[0].slice(0, 24)}…`);
       }
     }
-    // Counted, not guessed: 22 implementations across the fifteen adapters and WhatsApp's three
-    // backends. A looser scan finds 24 — the extra two are the `WhatsAppBackend` interface's own
+    // Counted, not guessed: 27 implementations across the twenty adapters and WhatsApp's three
+    // backends. A looser scan finds 29 — the extra two are the `WhatsAppBackend` interface's own
     // declarations, which end in `;` and correctly have no body to guard.
     //
     // The floor exists because the first version of this regex used `[^)]*` and matched ZERO:
@@ -386,7 +410,7 @@ describe("cross-adapter contract", () => {
     // comment used to carry — that adding an adapter makes someone look here — was false:
     // an eighteenth declaration slid past in silence. Exact is the friction, in both
     // directions, and updating one number is the whole cost of adding an adapter.
-    expect(declarations).toBe(22);
+    expect(declarations).toBe(29);
     expect(offenders).toEqual([]);
   });
 
@@ -474,11 +498,11 @@ describe("cross-adapter contract", () => {
         if (!works) offenders.push(`${path}: connect() invokes nothing`);
       }
     }
-    // Exact, and counted rather than guessed: 21 connect bodies across the fifteen adapters and
+    // Exact, and counted rather than guessed: 26 connect bodies across the twenty adapters and
     // WhatsApp's three backends. A floor only fires when the count DROPS, which catches the regex
     // breaking but not a new adapter slipping in unchecked — and this file has already shipped
     // both failure modes.
-    expect(bodies).toBe(21);
+    expect(bodies).toBe(28);
     expect(offenders).toEqual([]);
   });
 
@@ -579,7 +603,7 @@ describe("cross-adapter contract", () => {
     // reads the field, or the gate read nothing. Without this assertion a rename of `src/` or a
     // path change would turn the gate green by making it blind — the vacuous pass the credential
     // gate in this file documents having survived once already.
-    expect(examined, "packages examined — a gate that reads nothing reports no offenders").toBe(15);
+    expect(examined, "packages examined — a gate that reads nothing reports no offenders").toBe(23);
 
     expect(ignoring, "adapters that never read the `format` their own contract declares").toEqual(
       [],

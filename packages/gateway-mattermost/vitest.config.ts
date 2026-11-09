@@ -9,5 +9,7 @@ export default defineConfig({
     maxWorkers: Math.max(2, cpus().length - 4),
     include: ["tests/**/*.test.ts"],
     environment: "node",
+    // Preserve Node's CommonJS namespace shape for the real-client regression test.
+    deps: { interopDefault: false },
   },
 });

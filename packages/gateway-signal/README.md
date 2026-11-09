@@ -68,3 +68,15 @@ that want the same conversion.
 | signal-cli ended or `disconnect()` ran while the send was pending | `disconnected` |
 
 A successful send returns the Signal timestamp of the message as `messageId`.
+
+## Live verification status
+
+2026-11-05: no real-account send/receive run was performed in the factory sandbox:
+`signal-cli` and a registered Signal account were unavailable. Offline tests cover
+receive normalization, outbound JSON-RPC, and replying through `deliver()`; they
+are not evidence of TheoClaw or real-account operation.
+
+To verify with an account, run the GatewayRunner example above using a registered
+or linked number, send it a unique message from a second account, and confirm the
+reply on that device. Record the UTC date, signal-cli version, and redacted
+send/receive outcome here after performing that check.

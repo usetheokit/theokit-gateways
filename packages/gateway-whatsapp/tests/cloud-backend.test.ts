@@ -258,14 +258,16 @@ describe("WhatsAppCloudBackend — a throwing handler", () => {
     stderr.mockRestore();
   });
 
-  it("answers false on a signed body that is not JSON, instead of rejecting", async () => {
+  it(`answers "unreadable_body" on a signed body that is not JSON, instead of rejecting`, async () => {
     // `handleWebhookPayload` documents true/false; a throw is outside its contract, and the route
     // that called it has no reason to expect one.
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const b = makeBackend();
     const notJson = "this is not json";
 
-    await expect(b.handleWebhookPayload(notJson, signedHeader(notJson))).resolves.toBe(false);
+    await expect(b.handleWebhookPayload(notJson, signedHeader(notJson))).resolves.toBe(
+      "unreadable_body",
+    );
     stderr.mockRestore();
   });
 });

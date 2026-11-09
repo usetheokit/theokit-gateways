@@ -43,8 +43,14 @@ interface MattermostModule {
 
 async function loadMattermost(): Promise<MattermostModule> {
   try {
-    const mod = await import("@mattermost/client");
-    return mod as unknown as MattermostModule;
+    const mod = (await import("@mattermost/client")) as unknown as Partial<MattermostModule> & {
+      default?: MattermostModule;
+    };
+    // Node's CommonJS namespace does not expose the SDK's getter-defined exports.
+    return {
+      Client4: mod.Client4 ?? mod.default?.Client4,
+      WebSocketClient: mod.WebSocketClient ?? mod.default?.WebSocketClient,
+    } as MattermostModule;
   } catch {
     throw new SDKNotInstalledError("@mattermost/client");
   }

@@ -19,6 +19,7 @@ const BOUNDARIES = {
   boundaries: ["\n\n", "\n"],
   lastResort: "window",
   stripLeading: /^\n+/,
+  keepTableRows: true,
 } as const;
 
 /**

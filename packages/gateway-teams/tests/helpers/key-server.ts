@@ -120,6 +120,13 @@ export interface KeyServer {
   /** Sign with a fresh key pair the server never publishes, under the published `kid`. */
   otherKeySign(claims: Record<string, unknown>): string;
   /**
+   * A forgery under `kid`: the header and payload {@link KeyServer.signToken} writes for `claims`,
+   * and a fixed signature no key produced, so it costs no RSA operation. Use it where the
+   * signature only has to be wrong; use `signToken` with `key` for a signature by a specific
+   * wrong key.
+   */
+  forgeToken(claims: Record<string, unknown>, opts: { readonly kid: string }): string;
+  /**
    * Publish a new key beside the current ones, as Microsoft does when it rotates, and sign with it
    * from now on. Returns the new key's `kid`.
    */
@@ -164,11 +171,22 @@ function buildClaims(
   return merged;
 }
 
+/** The header and payload segments of an RS256 token under `kid`. */
+function rs256SigningInput(kid: string, payload: Record<string, unknown>): string {
+  return `${base64url({ alg: "RS256", typ: "JWT", kid })}.${base64url(payload)}`;
+}
+
 function signWith(key: KeyObject, kid: string, payload: Record<string, unknown>): string {
-  const input = `${base64url({ alg: "RS256", typ: "JWT", kid })}.${base64url(payload)}`;
+  const input = rs256SigningInput(kid, payload);
   const signature = sign("sha256", Buffer.from(input), key).toString("base64url");
   return `${input}.${signature}`;
 }
+
+/**
+ * 256 bytes, the length of an RS256 signature under a 2048-bit key, that no private key produced:
+ * it verifies under none of them.
+ */
+const FORGED_SIGNATURE = Buffer.alloc(256, 0x5a).toString("base64url");
 
 /** A token whose header names `alg` but whose signature no RS256 key produced. */
 function forgeWith(
@@ -371,6 +389,8 @@ export async function startKeyServer(opts: KeyServerOptions = {}): Promise<KeySe
       const key = tenantKey ?? current;
       return signWith(key.privateKey, key.kid, buildClaims(cloud, claims, 600));
     },
+    forgeToken: (claims, { kid }) =>
+      `${rs256SigningInput(kid, buildClaims(cloud, claims, 600))}.${FORGED_SIGNATURE}`,
     otherKeySign: (claims) => {
       unpublished ??= unusedKeyPair().privateKey;
       return signWith(unpublished, current.kid, buildClaims(cloud, claims, 600));

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MattermostAdapter, parsePostFromWS } from "../src/adapter.js";
 import type { MattermostClientHandle, WSMessage } from "../src/client.js";
 import { ConfigurationError } from "../src/errors.js";
+import { postToMessageEvent } from "../src/normalize.js";
 import type { MattermostChannel, MattermostPost, MattermostUser } from "../src/types.js";
 
 interface MockHandle extends MattermostClientHandle {
@@ -454,5 +455,42 @@ describe("MattermostAdapter — the format the caller declared", () => {
     expect(messages.length).toBe(2);
     for (const message of messages) expect(message.length).toBeLessThanOrEqual(16_383);
     expect(messages.join("")).toBe("\\*a".repeat(8000));
+  });
+});
+
+describe("MattermostAdapter.deliver — the requireMention gate", () => {
+  const post: MattermostPost = {
+    id: "p9",
+    user_id: "u-alice",
+    channel_id: "c-open",
+    root_id: "",
+    message: "no mention here",
+    create_at: 1700000000,
+  };
+  const channels = { "c-open": { id: "c-open", team_id: "t-1", type: "O" } };
+  async function run(p: MattermostPost, requireMention?: boolean) {
+    const adapter = new MattermostAdapter({
+      baseUrl: "https://x.com",
+      accessToken: "tok",
+      ...(requireMention === undefined ? {} : { requireMention }),
+    });
+    installMockHandle(adapter, makeMockHandle({ channels }));
+    const seen: MessageEvent[] = [];
+    adapter.onInbound(async (e) => {
+      seen.push(e);
+    });
+    const event = postToMessageEvent(p, channels["c-open"], "alice");
+    await adapter.deliver(event);
+    return seen;
+  }
+
+  it("drops an unmentioned channel post", async () => {
+    expect(await run(post)).toHaveLength(0);
+  });
+  it("delivers a mentioned post", async () => {
+    expect(await run({ ...post, message: "hi @theo" })).toHaveLength(1);
+  });
+  it("delivers everything when requireMention is false", async () => {
+    expect(await run(post, false)).toHaveLength(1);
   });
 });

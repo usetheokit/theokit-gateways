@@ -38,6 +38,7 @@ const BOUNDARIES = {
   boundaries: ["\n\n", "\n", " "],
   lastResort: "last-boundary",
   stripLeading: /^\s+/,
+  keepTableRows: true,
 } as const;
 
 /**

@@ -5,13 +5,13 @@
  * key (the SDK's key client keeps a key for 10 minutes) (B-420).
  */
 
-import { generateKeyPairSync } from "node:crypto";
-
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { teamsActivityVerifier } from "../src/index.js";
 import { activityRequest } from "./helpers/claim-fixtures.js";
-import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
+import { CLIENT_ID, type KeyServer, startKeyServer, unusedKeyPair } from "./helpers/key-server.js";
+// Loaded at collection, outside any test's budget: the first verified request used to pay the SDK middleware's first import inside its own 5 s (B-545).
+import "@microsoft/teams.apps/dist/middleware/index.js";
 
 /** The SDK key client's cache age: `jwks-rsa`'s default `cacheMaxAge`. */
 const SDK_KEY_CACHE_AGE_MS = 600_000;
@@ -35,7 +35,7 @@ describe("a key Microsoft stopped publishing", () => {
     ks.rotate();
     ks.retire(retired);
     vi.advanceTimersByTime(SDK_KEY_CACHE_AGE_MS + 1);
-    const stray = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
+    const stray = unusedKeyPair().privateKey;
     const before = ks.hits();
 
     const results = [];

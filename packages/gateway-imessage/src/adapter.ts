@@ -21,6 +21,7 @@ import {
 import { mapSendError } from "./errors.js";
 import { JsonRpcLineClient, type RpcNotification, type RpcOutcome } from "./json-rpc.js";
 import { type IMessageRow, imessageRowToMessageEvent } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import type { ChildLike, IMessageAdapterOptions, SpawnLike } from "./types.js";
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
@@ -89,6 +90,10 @@ export class IMessageAdapter extends BasePlatformAdapter {
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }

@@ -128,7 +128,7 @@ describe("a key set an hour old", () => {
     const onRejection = (reason: unknown) => rejections.push(reason);
     process.on("unhandledRejection", onRejection);
     try {
-      // A response whose status getter throws escapes every catch in the read, so the read rejects.
+      // A throwing response getter exercises the unexpected-failure path in the read.
       const fetched = vi.fn(async () => ({
         get ok(): boolean {
           throw new RangeError("status unreadable");
@@ -151,6 +151,8 @@ describe("a key set an hour old", () => {
         }),
       ]);
       expect(rejections).toEqual([]);
+      expect((await verify(activityRequest(ks!.signToken({})))).ok).toBe(true);
+      expect(fetched).toHaveBeenCalledTimes(1);
     } finally {
       vi.unstubAllGlobals();
       process.off("unhandledRejection", onRejection);

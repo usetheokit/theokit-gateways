@@ -82,3 +82,17 @@ version that carries everything the packages use. It is installable from the mom
   repository and not yet on npm.
 - If the release runs both in one cut anyway, the install check on its pull request is the gate
   that says so, and it should be read as this decision, not overridden.
+
+## Amendment (2026-10-23): the second batch of new adapters
+
+`@theokit/gateway-nostr`, `@theokit/gateway-feishu-lark`, `@theokit/gateway-synology-chat`,
+`@theokit/gateway-tlon-urbit` and `@theokit/gateway-twitch` are first releases under the same
+decision, for the same reason: each declares `"@theokit/gateway": ">=0.12.0 <1.0.0"`, and 0.11.0
+has none of their keys, so `readonly platform = "<key>" as const` does not typecheck against its
+`PlatformName`, and its `channelRendering` table has no row for them.
+
+They are held back the same way: listed in `.changeset/config.json` `ignore`, `"private": true` at
+`0.0.0`, and each with a changeset naming only its own package. One difference: what the core gains
+for all five platforms is one core-only changeset, `gateway-batch-2-platforms.md`, rather than one
+`platform-<package>.md` per platform, because the five keys were added in one change (that batch's
+plan, ADR D2). The second cut is the one described above, for these five as for the first five.

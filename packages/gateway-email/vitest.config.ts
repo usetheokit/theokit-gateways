@@ -9,5 +9,8 @@ export default defineConfig({
     maxWorkers: Math.max(2, cpus().length - 4),
     include: ["tests/**/*.test.ts"],
     environment: "node",
+    // mailparser's ESM build imports `nodemailer/lib/addressparser` as a directory, which Node's ESM
+    // resolver rejects once its nodemailer dependency is 9.x. Inlining lets Vite resolve it.
+    server: { deps: { inline: [/mailparser/] } },
   },
 });

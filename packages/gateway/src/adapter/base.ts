@@ -13,6 +13,35 @@
 
 import type { MessageEvent as GatewayMessageEvent, PlatformName } from "../types/message-event.js";
 
+/**
+ * An image an outbound message carries: its bytes and their media type (B-674).
+ *
+ * The bytes travel by reference: the runner does not copy them on the way to the adapter. The
+ * caller must not change `data` or the list until the send's promise settles: an adapter that
+ * sends several attachments reads each one only when its turn comes.
+ */
+interface OutboundImageAttachment {
+  readonly kind: "image";
+  /** The media type of `data`, such as `image/png`. */
+  readonly mediaType: string;
+  readonly data: Uint8Array;
+  /** A file name the platform may show; optional. */
+  readonly filename?: string;
+}
+
+/** An audio clip an outbound message carries, such as a spoken reply (B-715). Same rules as an image. */
+interface OutboundAudioAttachment {
+  readonly kind: "audio";
+  /** The media type of `data`, such as `audio/ogg`. */
+  readonly mediaType: string;
+  readonly data: Uint8Array;
+  /** A file name the platform may show; optional. */
+  readonly filename?: string;
+}
+
+/** An attachment an outbound message carries, told apart by `kind`. */
+export type OutboundAttachment = OutboundImageAttachment | OutboundAudioAttachment;
+
 /** Outbound message shape — what `sendMessage` accepts. */
 export interface OutboundMessage {
   readonly channel: {
@@ -25,6 +54,11 @@ export interface OutboundMessage {
   readonly format?: "plain" | "markdown" | "html";
   /** Optional reply target. */
   readonly replyTo?: string;
+  /**
+   * Images to send with the text. An adapter whose {@link BasePlatformAdapter.supportsAttachments}
+   * is `false` refuses a non-empty list with `attachments_unsupported`; it never drops it.
+   */
+  readonly attachments?: ReadonlyArray<OutboundAttachment>;
 }
 
 /** Send result — adapters return this instead of throwing on platform errors. */
@@ -48,13 +82,19 @@ export interface SendResult {
  *   (rate-limit, 4xx, network). Programmer errors (missing config) MAY throw.
  * - `onInbound(handler)` returns an unsubscribe function. EC-H: calling
  *   `onInbound` twice replaces the previous handler — does NOT stack.
- * - `sendMessage` with empty text returns `{ ok: false, code: "empty_text" }`.
+ * - `sendMessage` with empty text and no attachments returns `{ ok: false, code: "empty_text" }`.
+ *   An adapter that refuses attachments answers `attachments_unsupported` first, and one that
+ *   sends them (Telegram) accepts empty text with an image.
  * - `supportsEdit` says whether the adapter has an edit call. It is `false` unless the adapter
  *   overrides it, and it MUST NOT change with `connect()`. `true` does not promise that every
  *   edit is accepted: an adapter whose injected client lacks the edit call (Matrix) still answers
  *   `edit_unsupported`, which a caller handles like any other refusal.
  * - `editMessage` returns a `SendResult` and never throws on platform errors. The default refuses
  *   with `edit_unsupported` and makes no platform call.
+ * - `supportsAttachments` says whether `sendMessage` can send `out.attachments`. It is `false`
+ *   unless the adapter overrides it, and it MUST NOT change with `connect()`. An adapter that
+ *   does not support them refuses a non-empty list with `attachments_unsupported` and makes no
+ *   platform call; an edit carrying an attachment is refused the same way.
  * - Edits are not ordered by the adapter. Two edits of one message id in flight at once reach the
  *   platform in either order, so a caller awaits each edit before the next, or keeps one in flight
  *   and coalesces to the latest text.
@@ -140,6 +180,15 @@ export abstract class BasePlatformAdapter {
    * edit-capable adapter can override it with `true`.
    */
   readonly supportsEdit: boolean = false;
+
+  /**
+   * Whether {@link sendMessage} can send the images of `out.attachments` (B-674).
+   *
+   * Read it before attaching: on `false`, the adapter refuses a non-empty list with
+   * `attachments_unsupported`. Set at construction, never changed by `connect()`. Annotated as
+   * `boolean` so that an adapter that sends images can override it with `true`.
+   */
+  readonly supportsAttachments: boolean = false;
 
   /**
    * Replace the text of a message this adapter sent, keeping its id.

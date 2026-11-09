@@ -30,7 +30,13 @@
  * @public
  */
 
-import type { BasePlatformAdapter, OutboundMessage, SendResult } from "../adapter/base.js";
+import type {
+  BasePlatformAdapter,
+  OutboundAttachment,
+  OutboundMessage,
+  SendResult,
+} from "../adapter/base.js";
+import { attachmentsOf, refuseUnsupportedAttachments } from "../delivery/attachments.js";
 import { GatewayLifecycleError } from "../errors/lifecycle-error.js";
 import { HookExecutor } from "../hooks/executor.js";
 import type { GatewayHook } from "../hooks/types.js";
@@ -40,7 +46,14 @@ import type { MessageEvent as GatewayMessageEvent, PlatformName } from "../types
 /** Per-event context passed to the user handler. */
 export interface GatewayContext {
   /** Send a reply to the originating channel (auto-routed by `event.platform`). */
-  reply(text: string, opts?: { format?: "plain" | "markdown" | "html" }): Promise<SendResult>;
+  reply(
+    text: string,
+    opts?: {
+      format?: "plain" | "markdown" | "html";
+      /** Images to send with the text; an empty list is left out (B-674). */
+      attachments?: ReadonlyArray<OutboundAttachment>;
+    },
+  ): Promise<SendResult>;
   /** The triggering event. */
   readonly event: GatewayMessageEvent;
 }
@@ -141,7 +154,6 @@ async function releaseAdapters(
  * @public
  */
 export class GatewayRunner {
-  private readonly adaptersByPlatform = new Map<PlatformName, BasePlatformAdapter>();
   private readonly hookExecutor: HookExecutor;
   private readonly inflight = new Set<Promise<void>>();
   private readonly unsubs: Array<() => void> = [];
@@ -153,7 +165,6 @@ export class GatewayRunner {
   private stopped = false;
 
   constructor(private readonly opts: GatewayRunnerOptions) {
-    for (const a of opts.adapters) this.adaptersByPlatform.set(a.platform, a);
     this.hookExecutor = new HookExecutor(opts.hooks ?? []);
   }
 
@@ -304,7 +315,7 @@ export class GatewayRunner {
       // currently running (dogfood-2026-05-21 bug). Wrap the dispatch
       // promise in `inflight` synchronously so `stop()` still drains it.
       const unsub = a.onInbound(async (event) => {
-        const p = this.dispatch(event);
+        const p = this.dispatch(event, a);
         this.inflight.add(p);
         p.finally(() => this.inflight.delete(p));
         // Resolve immediately so the platform's event loop continues to
@@ -358,7 +369,7 @@ export class GatewayRunner {
       }
     }
 
-    await releaseAdapters([...this.adaptersByPlatform.values()], "stopping the runner");
+    await releaseAdapters([...new Set(this.opts.adapters)], "stopping the runner");
   }
 
   /**
@@ -372,14 +383,19 @@ export class GatewayRunner {
   }
 
   /** @internal */
-  private async dispatch(event: GatewayMessageEvent): Promise<void> {
-    const ctx = this.buildContext(event);
+  private async dispatch(event: GatewayMessageEvent, adapter: BasePlatformAdapter): Promise<void> {
+    const ctx = this.buildContext(event, adapter);
 
     // 1. pre_inbound hooks (EC-D auto-reply on block+message).
     const decision = await this.hookExecutor.firePreInbound({ event });
     if (decision.block === true) {
       if (decision.message !== undefined && decision.message.length > 0) {
-        await ctx.reply(decision.message).catch(() => undefined);
+        // Reported as a handler error is (EC-F): post_outbound never fires for a rejected send.
+        await ctx.reply(decision.message).catch(async (err) => {
+          const error = err as Error;
+          await this.hookExecutor.fireOnError({ event, error });
+          process.stderr.write(`[gateway] auto-reply error: ${redactSecrets(error.message)}\n`);
+        });
       }
       return;
     }
@@ -434,14 +450,15 @@ export class GatewayRunner {
   }
 
   /** EC-G: per-event ctx whose reply routes to the matching adapter. */
-  private buildContext(event: GatewayMessageEvent): GatewayContext {
+  private buildContext(event: GatewayMessageEvent, adapter: BasePlatformAdapter): GatewayContext {
     return {
       event,
       reply: async (text, opts) =>
-        this.deliver(event, {
+        this.deliver(event, adapter, {
           channel: event.channel,
           text,
           ...(opts?.format !== undefined ? { format: opts.format } : {}),
+          ...attachmentsOf(opts?.attachments),
         }),
     };
   }
@@ -454,6 +471,10 @@ export class GatewayRunner {
    * adapter for the platform. An audit hook that counted only the deliveries
    * which reached a transport would omit precisely the ones that went nowhere.
    *
+   * An outbound with attachments for an adapter that does not declare `supportsAttachments` is
+   * refused here as `attachments_unsupported`, with no `sendMessage` call, so an adapter that
+   * ignores the field cannot drop the image and report success (B-674).
+   *
    * `post_outbound` observes; it does not intercept. The adapter's `SendResult`
    * is returned to the caller unchanged, and `HookExecutor` already contains a
    * throwing hook, so a broken observer cannot turn a delivered reply into a
@@ -463,13 +484,15 @@ export class GatewayRunner {
    */
   private async deliver(
     event: GatewayMessageEvent,
+    adapter: BasePlatformAdapter | undefined,
     outbound: OutboundMessage,
   ): Promise<SendResult> {
-    const adapter = this.adaptersByPlatform.get(event.platform);
+    // The receiving adapter answers, but only for its own platform's events.
+    const target = adapter?.platform === event.platform ? adapter : undefined;
     const result: SendResult =
-      adapter === undefined
+      target === undefined
         ? { ok: false, error: { code: "no_adapter", message: `no adapter for ${event.platform}` } }
-        : await adapter.sendMessage(outbound);
+        : (refuseUnsupportedAttachments(target, outbound) ?? (await target.sendMessage(outbound)));
     await this.hookExecutor.firePostOutbound({ event, outbound, result });
     return result;
   }

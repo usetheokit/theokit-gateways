@@ -42,6 +42,7 @@ import {
 
 import { mapSlackError } from "./errors.js";
 import { type BoltMessageBody, normalizeSlackEvent } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { splitForSlack } from "./split.js";
 
 /** Construction options for {@link SlackAdapter}. */
@@ -187,6 +188,10 @@ export class SlackAdapter extends BasePlatformAdapter {
   }
 
   override async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     // Input first, transport second — the order the other nine adapters use and the one the
     // contract states without a condition. Checking the connection first made the same empty-text
     // call answer `not_connected` here and `empty_text` everywhere else, so a caller branching on
@@ -221,6 +226,10 @@ export class SlackAdapter extends BasePlatformAdapter {
    * `chat.update` takes no `mrkdwn` argument, so the text is sent as it is for every format.
    */
   override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.editText(messageId, out);
+  }
+
+  private async editText(messageId: string, out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "text is empty" } };
     }
@@ -276,7 +285,22 @@ export class SlackAdapter extends BasePlatformAdapter {
   override async deliver(
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
+    if (!this.passesMentionGate(event)) return "ok";
     return this.runHandler(this.handler, event);
+  }
+
+  /**
+   * The Socket Mode path's `requireMention` gate, applied to a pre-built event so `deliver()` and
+   * the socket path cannot disagree. A public-channel message (`group`, and `channel_type:
+   * "channel"` when the raw body says so) without `<@bot>` is dropped; a DM or thread passes.
+   */
+  private passesMentionGate(event: GatewayMessageEvent): boolean {
+    if (!(this.opts.requireMention ?? true)) return true;
+    if (event.channel.type !== "group" || this.botUserId === undefined) return true;
+    const raw = event.platform === "slack" ? event.slack.raw : undefined;
+    const channelType = (raw as BoltMessageBody | undefined)?.event?.channel_type;
+    if (channelType !== undefined && channelType !== "channel") return true;
+    return event.text.includes(`<@${this.botUserId}>`);
   }
 }
 

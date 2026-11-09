@@ -389,6 +389,55 @@ describe("SlackAdapter — onInbound (D276 / EC-H)", () => {
   });
 });
 
+describe("SlackAdapter — deliver() applies the requireMention gate (B-527)", () => {
+  const mk = (text: string, channel_type = "channel") => ({
+    id: "e1",
+    platform: "slack" as const,
+    sender: { id: "U1" },
+    channel: { id: "C1", type: "group" as const },
+    text,
+    receivedAt: 1,
+    slack: {
+      teamId: "T",
+      channelId: "C1",
+      userId: "U1",
+      ts: "100.1",
+      raw: {
+        team_id: "T",
+        event: { type: "message", channel: "C1", ts: "100.1", channel_type, text },
+      },
+    },
+  });
+
+  it("drops an unmentioned public-channel event but passes a mentioned one", async () => {
+    const a = new SlackAdapter({ botToken: "xoxb-x", appToken: "xapp-x" });
+    await a.connect();
+    const handler = vi.fn(async () => undefined);
+    a.onInbound(handler);
+    const bot = (a as unknown as { botUserId?: string }).botUserId;
+    expect(bot).toBeTruthy();
+    expect(await a.deliver(mk("hello") as never)).toBe("ok");
+    expect(handler).not.toHaveBeenCalled();
+    await a.deliver(mk(`<@${bot}> hi`) as never);
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it("passes everything when requireMention=false, and private channels", async () => {
+    const a = new SlackAdapter({ botToken: "xoxb-x", appToken: "xapp-x", requireMention: false });
+    await a.connect();
+    const handler = vi.fn(async () => undefined);
+    a.onInbound(handler);
+    await a.deliver(mk("hello") as never);
+    expect(handler).toHaveBeenCalledOnce();
+    const b = new SlackAdapter({ botToken: "xoxb-x", appToken: "xapp-x" });
+    await b.connect();
+    const h2 = vi.fn(async () => undefined);
+    b.onInbound(h2);
+    await b.deliver(mk("hello", "group") as never);
+    expect(h2).toHaveBeenCalledOnce();
+  });
+});
+
 describe("SlackAdapter — teardown races connect (#31)", () => {
   it("stops a half-connected App when disconnect races an in-flight connect", async () => {
     // The leak #31 describes. `disconnect()` guarded on `!this.connected`, but

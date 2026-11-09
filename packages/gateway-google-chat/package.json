@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-google-chat",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Google Chat platform adapter for @theokit/gateway: verifies Chat's signed requests and replies through the Chat REST API.",
   "license": "Apache-2.0",
   "repository": {

@@ -206,18 +206,18 @@ describe("the Cloud backend given a signed body it cannot read", () => {
     return `sha256=${crypto.createHmac("sha256", APP_SECRET).update(body).digest("hex")}`;
   }
 
-  it("answers false and writes one stderr line for a null entry, instead of rejecting", async () => {
+  it(`answers "unreadable_body" and writes one stderr line for a null entry, instead of rejecting`, async () => {
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const { backend } = backendWithHandler();
     const body = JSON.stringify(envelope([null]));
 
-    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe(false);
+    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe("unreadable_body");
     expect(stderr.mock.calls.map(([line]) => String(line))).toEqual([
       expect.stringContaining("[whatsapp-cloud] signed webhook body has a shape"),
     ]);
   });
 
-  it("answers false for a numeric phone_number_id, instead of rejecting with a TypeError", async () => {
+  it(`answers "unreadable_body" for a numeric phone_number_id, instead of rejecting with a TypeError`, async () => {
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const { backend, received } = backendWithHandler();
     const body = JSON.stringify(
@@ -226,11 +226,11 @@ describe("the Cloud backend given a signed body it cannot read", () => {
       ]),
     );
 
-    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe(false);
+    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe("unreadable_body");
     expect(received).toEqual([]);
   });
 
-  it("answers false for a body whose contact name is a number, delivering nothing", async () => {
+  it(`answers "unreadable_body" for a body whose contact name is a number, delivering nothing`, async () => {
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const { backend, received } = backendWithHandler();
     const body = JSON.stringify(
@@ -243,11 +243,11 @@ describe("the Cloud backend given a signed body it cannot read", () => {
       ]),
     );
 
-    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe(false);
+    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe("unreadable_body");
     expect(received).toEqual([]);
   });
 
-  it("answers false for a batch whose good message sits beside a malformed entry, delivering none", async () => {
+  it(`answers "unreadable_body" for a batch whose good message sits beside a malformed entry, delivering none`, async () => {
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const { backend, received } = backendWithHandler();
     const good = change({
@@ -258,7 +258,20 @@ describe("the Cloud backend given a signed body it cannot read", () => {
     });
     const body = JSON.stringify(envelope([good, { id: "biz-2" }]));
 
-    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe(false);
+    await expect(backend.handleWebhookPayload(body, signed(body))).resolves.toBe("unreadable_body");
+    expect(received).toEqual([]);
+  });
+
+  it('tells a bad signature (false) from a signed body the parser refuses ("unreadable_body")', async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const { backend, received } = backendWithHandler();
+    const body = JSON.stringify(envelope([null]));
+
+    const bad = await backend.handleWebhookPayload(body, `sha256=${"0".repeat(64)}`);
+    const refused = await backend.handleWebhookPayload(body, signed(body));
+
+    expect(bad).toBe(false);
+    expect(refused).toBe("unreadable_body");
     expect(received).toEqual([]);
   });
 });

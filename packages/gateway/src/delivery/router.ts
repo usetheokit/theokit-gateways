@@ -9,8 +9,9 @@
  * @public
  */
 
-import type { BasePlatformAdapter, SendResult } from "../adapter/base.js";
+import type { BasePlatformAdapter, OutboundAttachment, SendResult } from "../adapter/base.js";
 import type { PlatformName } from "../types/message-event.js";
+import { attachmentsOf, refuseUnsupportedAttachments } from "./attachments.js";
 
 /** Target for an outbound delivery. */
 export interface DeliveryTarget {
@@ -27,6 +28,8 @@ export interface DeliveryRequest extends DeliveryTarget {
   readonly text: string;
   readonly format?: "plain" | "markdown" | "html";
   readonly replyTo?: string;
+  /** Images to send with the text; an empty list is left out (B-674). */
+  readonly attachments?: ReadonlyArray<OutboundAttachment>;
 }
 
 /**
@@ -36,6 +39,8 @@ export interface DeliveryRequest extends DeliveryTarget {
  * - `register` is last-writer-wins by platform.
  * - `send` with unknown platform returns `{ ok: false, code: "no_adapter" }`.
  * - `send` never throws on platform errors (delegates to adapter's SendResult).
+ * - `send` with attachments refuses with `attachments_unsupported`, calling no `sendMessage`, when
+ *   the adapter does not declare `supportsAttachments`.
  *
  * @public
  */
@@ -54,11 +59,13 @@ export class DeliveryRouter {
         error: { code: "no_adapter", message: `no adapter for platform "${req.platform}"` },
       };
     }
-    return adapter.sendMessage({
+    const outbound = {
       channel: req.channel,
       text: req.text,
       ...(req.format !== undefined ? { format: req.format } : {}),
       ...(req.replyTo !== undefined ? { replyTo: req.replyTo } : {}),
-    });
+      ...attachmentsOf(req.attachments),
+    };
+    return refuseUnsupportedAttachments(adapter, outbound) ?? adapter.sendMessage(outbound);
   }
 }

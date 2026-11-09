@@ -19,6 +19,7 @@ import {
 
 import { JsonRpcLineClient, type RpcNotification, type RpcOutcome } from "./json-rpc.js";
 import { GROUP_PREFIX, type SignalEnvelope, signalEnvelopeToMessageEvent } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { toTextStyle } from "./text-style.js";
 import type { ChildLike, SignalAdapterOptions, SpawnLike } from "./types.js";
 
@@ -67,17 +68,27 @@ export class SignalAdapter extends BasePlatformAdapter {
     if (this.connected) return true;
     // A second caller while the first is still waiting for listGroups shares its answer instead
     // of starting a second signal-cli, which would be left running and deliver every message twice.
-    this.connecting ??= this.openSession().finally(() => {
-      this.connecting = undefined;
+    if (this.connecting !== undefined) return this.connecting;
+    const attempt = this.openSession().finally(() => {
+      // Only clear what is still ours: disconnect() clears the slot and a later connect() may
+      // already hold its own attempt there.
+      if (this.connecting === attempt) this.connecting = undefined;
     });
-    return this.connecting;
+    this.connecting = attempt;
+    return attempt;
   }
 
   async disconnect(): Promise<void> {
+    // The overtaken attempt answers false to its own callers; a later connect() starts fresh.
+    this.connecting = undefined;
     this.endChild();
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
     }

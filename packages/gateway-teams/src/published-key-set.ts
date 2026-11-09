@@ -33,7 +33,7 @@ const KEY_SET_READ_TIMEOUT_MS = 10_000;
 
 /**
  * The largest key-set document the verifier reads. Measured 2026-10-11, the live Bot Framework set
- * was 876,002 bytes listing 251 keys, about 3.5 KB a key: a 1 MiB cap sat at 84% of it, and crossing
+ * was 876,002 bytes listing 251 keys, about 3.5 KB a key: the document occupied 84% of the old 1 MiB cap, and crossing
  * a cap refuses every new key. 8 MiB is about ten times that document and holds
  * {@link MAX_KEYS_PER_SET} keys of that size; the cap still bounds what an endpoint can make the
  * verifier buffer.
@@ -252,9 +252,8 @@ export function keySet(label: string, url: string): PublishedKeySet {
       const now = performance.now();
       const listed = held?.get(kid);
       if (listed !== undefined) {
-        // Nothing awaits the background read. `read` already keeps what it throws, so this
-        // `.catch` never runs; it is here because a floated promise carries its own handler
-        // (the cross-adapter contract in packages/gateway/tests/lint/adapter-contract.test.ts).
+        // Keep an explicit rejection handler at the background boundary, even though `read`
+        // handles expected failures, so an unexpected rejection preserves the last good copy.
         if (now - readAt >= KEY_SET_MAX_AGE_MS) void currentRead(now)?.catch(keepThrown);
         return listed;
       }

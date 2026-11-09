@@ -8,10 +8,10 @@
  * The probe below declares neither member, so every assertion reads the base default and not a
  * value the probe supplied.
  *
- * The second block reads the fifteen adapters' sources and holds which of them can edit. The core
- * cannot import its own dependents, and a test in each of the nine non-edit packages would call a
+ * The second block reads every adapter's source and holds which of them can edit. The core
+ * cannot import its own dependents, and a test in each package that cannot edit would call a
  * base member that the floor of their core peer range may not have; a source scan holds the
- * six-of-fifteen split without either cost. It proves the declarations are present, not that the
+ * split between the six that can edit and the rest without either cost. It proves the declarations are present, not that the
  * edits work: each edit-capable package's `tests/edit-message.test.ts` proves that.
  *
  * @internal
@@ -131,10 +131,13 @@ const DECLARES_SUPPORTS_EDIT = /^\s+override readonly supportsEdit = true;/m;
 const OVERRIDES_EDIT_MESSAGE = /^\s+override async editMessage\(/m;
 
 describe("which adapters can edit", () => {
-  it("reads the fifteen adapter sources", async () => {
+  it("reads every adapter source", async () => {
     expect((await adapterSources()).map(({ pkg }) => pkg)).toEqual([
+      "gateway-buzz",
+      "gateway-clickclack",
       "gateway-discord",
       "gateway-email",
+      "gateway-feishu-lark",
       "gateway-google-chat",
       "gateway-imessage",
       "gateway-irc",
@@ -142,12 +145,17 @@ describe("which adapters can edit", () => {
       "gateway-matrix",
       "gateway-mattermost",
       "gateway-nextcloud-talk",
+      "gateway-nostr",
       "gateway-signal",
       "gateway-slack",
       "gateway-sms",
+      "gateway-synology-chat",
       "gateway-teams",
       "gateway-telegram",
+      "gateway-tlon-urbit",
+      "gateway-twitch",
       "gateway-whatsapp",
+      "gateway-zalo-personal",
     ]);
   });
 

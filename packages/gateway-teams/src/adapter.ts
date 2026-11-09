@@ -20,10 +20,11 @@ import {
   type OutboundMessage,
   type SendResult,
 } from "@theokit/gateway";
-
+import { activityFormat } from "./activity-format.js";
 import { mapTeamsError } from "./errors.js";
 import { NO_RECIPIENT_WARNING, readBotMention } from "./mention-gate.js";
 import { normalizeTeamsActivity } from "./normalize.js";
+import { refuseAttachments } from "./refuse-attachments.js";
 import { splitForTeams } from "./split.js";
 import type { TeamsAdapterOptions } from "./types.js";
 
@@ -252,6 +253,10 @@ export class TeamsAdapter extends BasePlatformAdapter {
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.sendText(out);
+  }
+
+  private async sendText(out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return {
         ok: false,
@@ -293,6 +298,10 @@ export class TeamsAdapter extends BasePlatformAdapter {
    * not retried as plain text: one request, one answer.
    */
   override async editMessage(messageId: string, out: OutboundMessage): Promise<SendResult> {
+    return refuseAttachments(out) ?? this.editText(messageId, out);
+  }
+
+  private async editText(messageId: string, out: OutboundMessage): Promise<SendResult> {
     if (out.text.length === 0) {
       return { ok: false, error: { code: "empty_text", message: "Empty text rejected." } };
     }
@@ -474,22 +483,6 @@ async function updateActivity(
     return;
   }
   await conversations.activities(conversationId).update(activityId, activity);
-}
-
-/**
- * The `textFormat` fragment for a declared format, or nothing.
- *
- * A named function rather than a spread ternary inside the activity literal: `sendMessage` was
- * already at its cognitive-complexity limit, and a branch buried in an object literal is the
- * kind a reader skims past.
- */
-function activityFormat(format: OutboundMessage["format"]): { textFormat?: "markdown" | "xml" } {
-  // Teams has TWO markup types and they are not interchangeable. Declaring `html` as markdown
-  // — which the first version did — makes the tags render literally AND emphasises any `*` or
-  // `_` in the payload, so the caller gets the opposite of both intentions. Caught in review.
-  if (format === "markdown") return { textFormat: "markdown" };
-  if (format === "html") return { textFormat: "xml" };
-  return {};
 }
 
 /**

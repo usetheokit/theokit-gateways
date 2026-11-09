@@ -106,6 +106,23 @@ export function missingFor(spec: PlatformSpec, opts: { includeTarget?: boolean }
   return vars.map((c) => c.name).filter((n) => !has(n));
 }
 
+/**
+ * The variables this platform still needs when SOME of them are set, or none when all or none are.
+ *
+ * A half-configured platform is a mistake to report, not a reason to skip: a skip reads as "nothing
+ * to run here" and hides the variable someone forgot (EC-19).
+ *
+ * @param isSet whether a variable is set; defaults to {@link has}
+ */
+export function incompleteFor(
+  spec: PlatformSpec,
+  isSet: (name: string) => boolean = has,
+): string[] {
+  const names = [...spec.credentials, ...spec.target].map((c) => c.name);
+  const missing = names.filter((name) => !isSet(name));
+  return missing.length === names.length ? [] : missing;
+}
+
 /** Live suites are opt-in: they send real messages and cost real money. */
 export function liveRunEnabled(): boolean {
   return has("INTEGRATION_LIVE") && required("INTEGRATION_LIVE") !== "0";

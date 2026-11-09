@@ -9,7 +9,8 @@ import type { WhatsAppMessageEvent } from "@theokit/gateway";
 
 import type { WhatsAppInboundEvent } from "./backend-types.js";
 import { ConfigurationError } from "./errors.js";
-import { decideInbound, type InboundRules, isForAnotherNumber } from "./inbound-rules.js";
+import { isForAnotherNumber } from "./foreign-number.js";
+import { decideInbound, type InboundRules } from "./inbound-rules.js";
 
 /**
  * The event the agent receives for `inbound`, or `undefined` when it is addressed to another number

@@ -169,6 +169,17 @@ describe("the refusals", () => {
     expect(() => script.releasePath(dir)).toThrow(/broken\.md.*front matter/);
   });
 
+  it("refuses a malformed front matter line naming the file and the line", async () => {
+    const script = await loadScript();
+    for (const line of ["@theokit/gateway: minor", "not a release line", '"@theokit/gateway"']) {
+      const files = { "bad-line.md": changeset(line) };
+      const dir = changesetDir({ ...ONLY_IGNORED, files });
+      expect(() => script.releasePath(dir)).toThrow(script.ReleasePathError);
+      expect(() => script.releasePath(dir)).toThrow(/bad-line\.md.*malformed front matter line/);
+      expect(() => script.releasePath(dir)).toThrow(line);
+    }
+  });
+
   it("refuses an unknown bump naming the file", async () => {
     const files = { "odd.md": changeset('"@theokit/gateway": huge') };
     const script = await loadScript();

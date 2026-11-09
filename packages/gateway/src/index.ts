@@ -3,6 +3,7 @@
 // Adapter contract
 export {
   BasePlatformAdapter,
+  type OutboundAttachment,
   type OutboundMessage,
   type SendResult,
 } from "./adapter/base.js";
@@ -15,6 +16,7 @@ export type {
   WebhookRequest,
 } from "./channel/channel-descriptor.js";
 export {
+  type BuiltChannel,
   type ChannelEntry,
   type ChannelRejection,
   type CreateChannelsResult,
@@ -75,28 +77,42 @@ export {
   chunkText,
 } from "./text/chunk.js";
 export { toDialect } from "./text/dialect.js";
+export { type FenceRegion, scanFences } from "./text/fence.js";
+export { SeenIds } from "./text/seen-ids.js";
+export { splitKeepingRows } from "./text/split-rows.js";
 // Types
 export type {
   BaseMessageEvent,
   DiscordMessageEvent,
   EmailMessageEvent,
-  GoogleChatMessageEvent,
-  IMessageMessageEvent,
-  IrcMessageEvent,
+  InboundAudio,
   LineMessageEvent,
   MatrixMessageEvent,
   MattermostMessageEvent,
   MessageEvent,
-  NextcloudTalkMessageEvent,
   PlatformEventRegistry,
   PlatformName,
-  SignalMessageEvent,
   SlackMessageEvent,
   SMSMessageEvent,
   TeamsMessageEvent,
   TelegramMessageEvent,
   WhatsAppMessageEvent,
 } from "./types/message-event.js";
+export type {
+  BuzzMessageEvent,
+  ClickClackMessageEvent,
+  FeishuLarkMessageEvent,
+  GoogleChatMessageEvent,
+  IMessageMessageEvent,
+  IrcMessageEvent,
+  NextcloudTalkMessageEvent,
+  NostrMessageEvent,
+  SignalMessageEvent,
+  SynologyChatMessageEvent,
+  TlonUrbitMessageEvent,
+  TwitchMessageEvent,
+  ZaloPersonalMessageEvent,
+} from "./types/platform-events.js";
 
 // The shared half of an Express webhook server — see `webhook/express-server.ts` for why it lives
 // here and why it does not make express a dependency of the core (#89).
