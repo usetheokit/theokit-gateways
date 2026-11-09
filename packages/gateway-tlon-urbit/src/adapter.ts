@@ -19,7 +19,8 @@ import type { FetchLike, TlonUrbitAdapterOptions } from "./types.js";
 import { type ChatFact, dmPoke, normalizeShip, readChatFact, rsvpPoke } from "./wire.js";
 
 const LABEL = "gateway-tlon-urbit";
-const SHIP = /^~[a-z]+(-[a-z]+)*$/;
+// A comet's name joins its two halves with a double dash (`~haplut--hallug`), so a run of one or two dashes.
+const SHIP = /^~[a-z]+(--?[a-z]+)*$/;
 
 /**
  * Tlon adapter for one bot ship.

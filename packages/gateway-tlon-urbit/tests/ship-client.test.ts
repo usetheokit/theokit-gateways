@@ -49,7 +49,7 @@ describe("UrbitShipClient.open", () => {
     expect(ship.logins).toEqual(["password=lidlut-tabwed-pillex-ridrup"]);
     expect(ship.subscriptions()[0]?.action).toMatchObject({
       action: "subscribe",
-      ship: "~bot",
+      ship: "bot",
       app: "chat",
       path: "/v3",
     });

@@ -61,6 +61,15 @@ describe("TlonUrbitAdapter inbound", () => {
     expect(event.tlon_urbit).toMatchObject({ ship: "~zod", messageId: "~zod/170.141.184" });
   });
 
+  it("turns a DM from a comet, whose name has a double dash, into an event", async () => {
+    const { ship, seen } = await connected();
+    const comet = "~tirrun-nocpub-lapmut-haplut--hallug-lopsev-tophus-binzod";
+    ship.fact(essayFact({ from: comet, id: `${comet}/170.141.184`, text: "hello" }));
+    await until(() => seen.length === 1, "one event");
+
+    expect(seen[0]?.channel).toEqual({ id: comet, type: "dm" });
+  });
+
   it("produces no event for an essay the bot's own ship wrote", async () => {
     const { ship, seen } = await connected();
     ship.fact(essayFact({ from: "~zod", id: "~bot/1", text: "my reply", author: "~bot" }));
@@ -75,7 +84,7 @@ describe("TlonUrbitAdapter inbound", () => {
     await drain();
 
     expect(seen).toEqual([]);
-    expect(ship.subscriptions()[0]?.action.ship).toBe("~zod");
+    expect(ship.subscriptions()[0]?.action.ship).toBe("zod");
   });
 
   it("produces no event for a group DM (club), whose author the sender declares", async () => {
@@ -184,7 +193,7 @@ describe("TlonUrbitAdapter.sendMessage", () => {
     const poke = ship.pokes()[0];
     expect(poke).toMatchObject({
       action: "poke",
-      ship: "~bot",
+      ship: "bot",
       app: "chat",
       mark: "chat-dm-action",
     });
@@ -198,6 +207,17 @@ describe("TlonUrbitAdapter.sendMessage", () => {
     });
     expect(result.ok).toBe(true);
     expect(result.messageId).toMatch(/^~bot\//);
+  });
+
+  it("answers a comet, whose name has a double dash", async () => {
+    const { adapter, ship } = await connected();
+    const result = await adapter.sendMessage({
+      channel: { id: "~tirrun-nocpub-lapmut-haplut--hallug-lopsev-tophus-binzod", type: "dm" },
+      text: "x",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(ship.pokes()).toHaveLength(1);
   });
 
   it("refuses a channel id that is not a ship before poking", async () => {
