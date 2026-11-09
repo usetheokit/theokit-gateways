@@ -155,6 +155,7 @@ describe("which adapters can edit", () => {
       "gateway-tlon-urbit",
       "gateway-twitch",
       "gateway-whatsapp",
+      "gateway-zalo",
       "gateway-zalo-personal",
     ]);
   });
