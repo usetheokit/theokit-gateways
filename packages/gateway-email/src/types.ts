@@ -13,6 +13,22 @@
  */
 export const __emailTypesMarker: unique symbol = Symbol("email-types");
 
+/** Where the adapter has read up to: the next UID to dispatch, within one UIDVALIDITY. */
+export interface EmailCursor {
+  readonly uidValidity: number;
+  readonly uid: number;
+}
+
+/**
+ * Persistence seam for the cursor (#348). Without one the cursor lives in memory for the life of
+ * the adapter, so a process restart takes a fresh baseline and mail that arrived while it was
+ * down is not dispatched.
+ */
+export interface EmailCursorStore {
+  load(): EmailCursor | undefined | Promise<EmailCursor | undefined>;
+  save(cursor: EmailCursor): void | Promise<void>;
+}
+
 /** Adapter options. */
 export interface EmailAdapterOptions {
   /** Email address the bot listens on (also the From: of outbound). */
@@ -44,6 +60,11 @@ export interface EmailAdapterOptions {
   readonly pollIntervalMs?: number;
   /** Max body chars before truncation (EC-2). Default 50000 (~12k tokens). */
   readonly maxBodyChars?: number;
+  /**
+   * Persist the `{uidValidity, uid}` cursor. A first connect with no cursor (or a changed
+   * UIDVALIDITY) baselines at the mailbox's UIDNEXT and dispatches nothing older.
+   */
+  readonly cursorStore?: EmailCursorStore;
   /** Test seam — inject fake IMAP client. @internal */
   readonly __imapFactory?: (cfg: unknown) => unknown;
   /** Test seam — inject fake SMTP client. @internal */
