@@ -16,6 +16,7 @@
     "@theokit/gateway-zalo",
     "@theokit/gateway-wechat",
     "@theokit/gateway-wecom",
+    "@theokit/gateway-yuanbao",
     "@theokit/gateway-raft",
     "@theokit/gateway-clickclack",
     "@theokit/gateway-buzz"

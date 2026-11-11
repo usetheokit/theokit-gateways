@@ -40,6 +40,7 @@ import type {
   TwitchMessageEvent,
   WeChatMessageEvent,
   WeComMessageEvent,
+  YuanbaoMessageEvent,
   ZaloMessageEvent,
   ZaloPersonalMessageEvent,
 } from "./platform-events.js";
@@ -346,6 +347,7 @@ export interface PlatformEventRegistry {
   zalo: ZaloMessageEvent;
   wechat: WeChatMessageEvent;
   wecom: WeComMessageEvent;
+  yuanbao: YuanbaoMessageEvent;
   raft: RaftMessageEvent;
   clickclack: ClickClackMessageEvent;
   buzz: BuzzMessageEvent;
