@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- 00af16f: `BasePlatformAdapter` gains `react(channelId, messageId, emoji)`, which adds an emoji reaction to an inbound message. The default resolves `react_unsupported`; the Discord, Slack, Telegram and Matrix adapters implement it.
+
+### Patch Changes
+
+- 6515a19: Direct messages now reach the agent: the client enables the `Channel` partial, without which discord.js drops `messageCreate` for uncached DM channels.
+
 ## 0.5.0
 
 ### Minor Changes

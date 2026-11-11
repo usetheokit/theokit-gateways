@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.15.0
+
+### Minor Changes
+
+- 00af16f: `BasePlatformAdapter` gains `react(channelId, messageId, emoji)`, which adds an emoji reaction to an inbound message. The default resolves `react_unsupported`; the Discord, Slack, Telegram and Matrix adapters implement it.
+- db894a4: Make `raft` a first-party platform.
+
+  `@theokit/gateway` gains the `raft` key in `PlatformEventRegistry`, the `RaftMessageEvent` type
+  and a `channelRendering` row (`plain`, markers removed). `PlatformName` grows by one member. Code
+  that lists every platform in a `Record<PlatformName, …>` or in a switch with a `never` default must
+  add it.
+
+- 3efe7e7: Make `wechat` a first-party platform.
+
+  `@theokit/gateway` gains the `wechat` key in `PlatformEventRegistry`, the `WeChatMessageEvent` type
+  and a `channelRendering` row (`plain`, markers removed). `PlatformName` grows by one member. Code
+  that lists every platform in a `Record<PlatformName, …>` or in a switch with a `never` default must
+  add it.
+
+- 5980e00: Make `wecom` a first-party platform.
+
+  `@theokit/gateway` gains the `wecom` key in `PlatformEventRegistry`, the `WeComMessageEvent` type
+  and a `channelRendering` row (`plain`, markers removed). `PlatformName` grows by one member. Code
+  that lists every platform in a `Record<PlatformName, …>` or in a switch with a `never` default must
+  add it.
+
+- d7ed3ab: Make `yuanbao` a first-party platform.
+
+  `@theokit/gateway` gains the `yuanbao` key in `PlatformEventRegistry`, the `YuanbaoMessageEvent`
+  type and a `channelRendering` row (`plain`, markers removed). `PlatformName` grows by one member.
+  Code that lists every platform in a `Record<PlatformName, …>` or in a switch with a `never`
+  default must add it.
+
+- 6555723: Make `zalo` a first-party platform.
+
+  `@theokit/gateway` gains the `zalo` key in `PlatformEventRegistry`, the `ZaloMessageEvent` type and
+  a `channelRendering` row (`plain`, markers removed). `PlatformName` grows by one member. Code that
+  lists every platform in a `Record<PlatformName, …>` or in a switch with a `never` default must add
+  it.
+
+- 00733b8: `@theokit/gateway` exports `WeixinAdapterBase` and `parseFlatXml`: the token, send and dispatch flow and the XML reader that the WeChat and WeCom adapters used to carry a copy each. The WeChat and WeCom adapters now extend the base.
+
+### Patch Changes
+
+- bac158b: Keep the outbound checks and the inbound handler wiring in `BasePlatformAdapter`.
+
+  `BasePlatformAdapter` gains protected `refuseUnsendable`, `outboundText`, `subscribe`, `deliverInbound`
+  and `dispatchOnce`, so the `empty_text`, `not_connected` and `invalid_channel` checks, the
+  markdown translation, the handler slot and the dedup-then-dispatch step exist once instead of in
+  the adapters. Every adapter answers the same codes and messages as before.
+
 ## 0.14.0
 
 ### Minor Changes
