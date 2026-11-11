@@ -1,7 +1,6 @@
 {
   "name": "@theokit/gateway-x",
   "version": "0.0.0",
-  "private": true,
   "description": "X (Twitter) adapter for @theokit/gateway: mentions of the bot account in, public replies out, over the X API v2.",
   "license": "Apache-2.0",
   "repository": {
