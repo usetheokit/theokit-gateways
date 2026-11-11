@@ -724,3 +724,33 @@ describe("MatrixAdapter — markup the homeserver refuses", () => {
     expect(res.error?.code).toBe("permission_denied");
   });
 });
+
+describe("MatrixAdapter connect() failure classes", () => {
+  const make = (err: Error) => {
+    const client = makeMockClient();
+    client.failWhoamiWith = err;
+    return new MatrixAdapter({
+      homeserverUrl: "https://matrix.example.org",
+      accessToken: "t",
+      userId: "@bot:example.org",
+      __clientFactory: () => client,
+    });
+  };
+
+  it("rejects (retryable) when the homeserver is unreachable", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    await expect(make(new TypeError("fetch failed")).connect()).rejects.toThrow("fetch failed");
+  });
+
+  it("rejects (retryable) on a 5xx", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const err = Object.assign(new Error("bad gateway"), { httpStatus: 502 });
+    await expect(make(err).connect()).rejects.toThrow("bad gateway");
+  });
+
+  it("returns false on a 401", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const err = Object.assign(new Error("nope"), { httpStatus: 401 });
+    expect(await make(err).connect()).toBe(false);
+  });
+});

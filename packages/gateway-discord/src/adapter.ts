@@ -19,6 +19,7 @@ import {
   Events,
   GatewayIntentBits,
   type Message,
+  Partials,
   Routes,
 } from "discord.js";
 import { refuseAttachments } from "./refuse-attachments.js";
@@ -87,7 +88,9 @@ export class DiscordAdapter extends BasePlatformAdapter {
         "[discord] WARN — intents:[] passed; bot will not receive message content. Pass at least [Guilds, GuildMessages, MessageContent] (EC-C).\n",
       );
     }
-    this.client = new Client({ intents });
+    // DMs arrive on a channel discord.js has not cached; without the Channel
+    // partial it drops their messageCreate, so DMs never reach the agent.
+    this.client = new Client({ intents, partials: [Partials.Channel] });
     this.client.on(Events.MessageCreate, async (msg) => this.handleInbound(msg));
     this.client.on(Events.Error, (err) => {
       process.stderr.write(`[discord] client error: ${err.message}\n`);
@@ -211,6 +214,33 @@ export class DiscordAdapter extends BasePlatformAdapter {
       return mapSendError(err);
     }
     return { ok: true, messageId };
+  }
+
+  override async react(channelId: string, messageId: string, emoji: string): Promise<SendResult> {
+    if (channelId.length === 0 || messageId.length === 0 || emoji.length === 0) {
+      return {
+        ok: false,
+        error: { code: "invalid_reaction", message: "channel, message id and emoji are required" },
+      };
+    }
+    try {
+      await this.client.rest.put(
+        Routes.channelMessageOwnReaction(channelId, messageId, encodeURIComponent(emoji)),
+      );
+    } catch (err) {
+      return mapSendError(err);
+    }
+    return { ok: true, messageId };
+  }
+
+  /** Discord shows "<bot> is typing" for 10 s per call; the runner renews it. */
+  override async startTyping(channelId: string): Promise<void> {
+    if (channelId.length === 0 || !this.connected) return;
+    try {
+      await this.client.rest.post(Routes.channelTyping(channelId));
+    } catch {
+      /* cosmetic — swallow */
+    }
   }
 
   override onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {

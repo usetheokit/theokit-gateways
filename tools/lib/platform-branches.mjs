@@ -49,6 +49,11 @@ export const PLATFORM_NAMES = Object.freeze([
   "tlon_urbit",
   "twitch",
   "zalo_personal",
+  "zalo",
+  "wechat",
+  "wecom",
+  "yuanbao",
+  "raft",
   "clickclack",
   "buzz",
 ]);

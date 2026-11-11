@@ -35,46 +35,47 @@ function tableOfLength(minLength: number): string {
   return lines.join("\n");
 }
 
-/** Mean time of one call of `fn`, repeating it until `budgetMs` has passed. */
-function timePerCall(fn: () => unknown, budgetMs: number): number {
-  let calls = 0;
-  const start = performance.now();
-  do {
-    fn();
-    calls += 1;
-  } while (performance.now() - start < budgetMs);
-  return (performance.now() - start) / calls;
+/**
+ * CPU time (user + system, ms) one call of `fn` used. CPU time, not wall-clock: a descheduled
+ * process stops accruing it, so a loaded host moves it far less than it moves `performance.now()`.
+ */
+function timePerCall(fn: () => unknown): number {
+  const before = process.cpuUsage();
+  fn();
+  const used = process.cpuUsage(before);
+  return (used.user + used.system) / 1000;
 }
 
 /**
- * Fastest time of new over fastest time of old, across `pairs` interleaved timings after one
+ * Fastest time of new over fastest time of old, across interleaved single-call timings after one
  * warm-up call of each. Load and GC pauses only add time, so the fastest timing of each function
  * is the one least moved by them. A median of ratios does not work here: the two splitters do
  * about the same work, so the true ratio is near 1.0, and review round 1 measured single-pair
  * ratios from 0.5 to 1.9 at a load average of 5 to 17.
  */
-function fastestRatio(oldFn: () => unknown, newFn: () => unknown, pairs: number): number {
+function fastestRatio(oldFn: () => unknown, newFn: () => unknown, windowMs: number): number {
   let oldBest = Number.POSITIVE_INFINITY;
   let newBest = Number.POSITIVE_INFINITY;
+  const start = performance.now();
   oldFn();
   newFn();
-  for (let k = 0; k < pairs; k += 1) {
-    oldBest = Math.min(oldBest, timePerCall(oldFn, 500));
-    newBest = Math.min(newBest, timePerCall(newFn, 500));
+  // Single calls, interleaved, for as long as the window lasts (at least one pair): more
+  // samples is what finds an undisturbed one under load, and the window keeps the test inside
+  // vitest's default 5 s timeout.
+  for (let k = 0; k < 1 || performance.now() - start < windowMs; k += 1) {
+    oldBest = Math.min(oldBest, timePerCall(oldFn));
+    newBest = Math.min(newBest, timePerCall(newFn));
   }
   return newBest / oldBest;
 }
 
 describe("splitForTalk timing against the 688c322 splitter", () => {
-  // One call of either splitter took about 150 ms on this table in review round 1, so five pairs
-  // of 500 ms budgets take about 5 s, past vitest's 5000 ms default; the 120 s budget is the
-  // plan's (panel round 2, N4 and C5) and is slack here, not need.
-  it("stays within 1.5x on a 1,000,000-character table", { timeout: 120_000 }, () => {
+  it("stays within 1.5x on a 1,000,000-character table", () => {
     const text = tableOfLength(1_000_000);
     const ratio = fastestRatio(
       () => splitWithoutRowRule(text),
       () => splitForTalk(text),
-      5,
+      2_500,
     );
     expect(ratio).toBeLessThanOrEqual(1.5);
   });

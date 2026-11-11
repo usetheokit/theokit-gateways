@@ -216,6 +216,77 @@ export interface ZaloPersonalMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** Zalo Official Account event variant (B-364), a `user_send_text` webhook event. */
+export interface ZaloMessageEvent extends BaseMessageEvent {
+  readonly platform: "zalo";
+  readonly zalo: {
+    /** The message's `msg_id`. */
+    readonly messageId: string;
+    /** The sender's user id for this OA; the send target for a reply. */
+    readonly userId: string;
+    /** The Official Account's id (the event's `recipient.id`). */
+    readonly oaId: string;
+    /** The webhook event — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
+/** WeChat Official Account event variant, a text message pushed to the server URL. */
+export interface WeChatMessageEvent extends BaseMessageEvent {
+  readonly platform: "wechat";
+  readonly wechat: {
+    /** The message's `MsgId`. */
+    readonly messageId: string;
+    /** The sender's OpenID for this account; the send target for a reply. */
+    readonly openId: string;
+    /** The Official Account's original id (the message's `ToUserName`). */
+    readonly accountId: string;
+    /** The parsed XML fields — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
+/** Raft event variant, one wake delivered by the Raft CLI wake bridge. */
+export interface RaftMessageEvent extends BaseMessageEvent {
+  readonly platform: "raft";
+  readonly raft: {
+    /** The wake's id. */
+    readonly messageId: string;
+    /** Who woke the agent in Raft. */
+    readonly senderId: string;
+    /** The parsed wake line — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
+/** WeCom (企业微信) self-built application event variant, a text message pushed to the callback URL. */
+export interface WeComMessageEvent extends BaseMessageEvent {
+  readonly platform: "wecom";
+  readonly wecom: {
+    /** The message's `MsgId`. */
+    readonly messageId: string;
+    /** The sender's WeCom user id; the send target for a reply. */
+    readonly userId: string;
+    /** The corp id (the message's `ToUserName`). */
+    readonly corpId: string;
+    /** The parsed XML fields — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
+/** Yuanbao (元宝) bot event variant, a text message pushed to the signed callback URL. */
+export interface YuanbaoMessageEvent extends BaseMessageEvent {
+  readonly platform: "yuanbao";
+  readonly yuanbao: {
+    /** The message's id. */
+    readonly messageId: string;
+    /** The sender's Yuanbao user id; the send target for a reply. */
+    readonly userId: string;
+    /** The callback body — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** Twitch event variant (B-363), a `channel.chat.message` EventSub notification. */
 export interface TwitchMessageEvent extends BaseMessageEvent {
   readonly platform: "twitch";

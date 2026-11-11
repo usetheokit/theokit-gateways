@@ -225,6 +225,13 @@ describe("live-test readiness", () => {
     // That exact mistake was made once in this repository and caught only
     // because the check was run against a deliberately broken input.
     const NOT_DRIVEN_LIVE: Record<string, string> = {
+      WeixinAdapterBase:
+        "the shared flow of the WeChat and WeCom adapters. Both have their own unit suites that " +
+        "drive it end to end against a faked fetch; a live run needs a real Official Account or " +
+        "WeCom application",
+      parseFlatXml:
+        "pure string -> record, no I/O. Covered by tests/weixin-xml.test.ts and by both adapters' " +
+        "webhook tests",
       maskShapes:
         "pure string -> string, no I/O. What a live run could add is whether a REAL credential " +
         "matches the shape, and no live test may carry one — the tests use synthetic values built " +

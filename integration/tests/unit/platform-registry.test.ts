@@ -87,6 +87,11 @@ const ROUTES: Routes = {
   twitch: (event) => `tw:${event.twitch.messageId}`,
   clickclack: (event) => `cc:${event.clickclack.messageId}`,
   buzz: (event) => `bz:${event.buzz.messageId}`,
+  zalo: (event) => `za:${event.zalo.messageId}`,
+  wechat: (event) => `wx:${event.wechat.messageId}`,
+  wecom: (event) => `wc:${event.wecom.messageId}`,
+  yuanbao: (event) => `yb:${event.yuanbao.messageId}`,
+  raft: (event) => `rf:${event.raft.messageId}`,
   zalo_personal: (event) => `zp:${event.zalo_personal.messageId}`,
   acmechat: (event) => `ac:${event.acmechat.senderUuid}`,
 };

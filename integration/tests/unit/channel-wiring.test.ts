@@ -95,6 +95,7 @@ function stubTelegramApi(wiring: ChannelWiring, observed: Observed): void {
   bot.api.config.use(async (_prev, method, payload) => {
     observed.telegram.push(method);
     if (method === "getMe") return { ok: true, result: GET_ME } as never;
+    if (method === "sendChatAction") return { ok: true, result: true } as never;
     if (method === "sendMessage") {
       const chatId = (payload as { chat_id: number }).chat_id;
       const result = {

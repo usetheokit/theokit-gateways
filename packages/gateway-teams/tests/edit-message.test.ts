@@ -247,3 +247,11 @@ describe("TeamsAdapter.editMessage attachments (B-674)", () => {
     expect(activities).toHaveBeenCalledTimes(0);
   });
 });
+
+describe("TeamsAdapter.startTyping", () => {
+  it("sends a typing activity to the conversation", async () => {
+    const { adapter, app } = await connected();
+    await adapter.startTyping(CONVERSATION);
+    expect(app.send).toHaveBeenCalledWith(CONVERSATION, { type: "typing" });
+  });
+});

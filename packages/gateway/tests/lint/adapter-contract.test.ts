@@ -72,6 +72,11 @@ const CREDENTIAL_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["gateway-telegram", ["token"]],
   ["gateway-tlon-urbit", ["code"]],
   ["gateway-twitch", ["accessToken"]],
+  ["gateway-zalo", ["accessToken", "oaSecretKey"]],
+  ["gateway-wechat", ["appSecret", "token"]],
+  ["gateway-wecom", ["corpSecret", "token", "encodingAesKey"]],
+  ["gateway-yuanbao", ["appSecret", "callbackSecret"]],
+  ["gateway-raft", []],
   ["gateway-zalo-personal", ["credentials"]],
   ["gateway-clickclack", ["token"]],
   ["gateway-buzz", ["token"]],
@@ -114,11 +119,24 @@ async function credentialFaults(pkg: string, fields: readonly string[]): Promise
  * package whose `adapter.ts` imports it carries that core's source too, so the contract is read
  * where the code now lives.
  */
+const WEIXIN_BASE_NAME = "WeixinAdapterBase";
+const WEIXIN_BASE_PATH = join(PACKAGES_DIR, "gateway", "src", "adapter", "weixin-base.ts");
+const BASE_PATH = join(PACKAGES_DIR, "gateway", "src", "adapter", "base.ts");
+const BASE_HELPER_CALL = /this\.(?:subscribe|dispatchOnce|outboundText|refuseUnsendable)\(/;
 const SHARED_CORE_IMPORT = "@theokit/gateway-bot-realtime";
 async function withSharedCore(source: string): Promise<string> {
-  if (!source.includes(SHARED_CORE_IMPORT)) return source;
+  let out = source;
+  // WeChat and WeCom extend `WeixinAdapterBase` in `@theokit/gateway`; its flow is theirs.
+  if (source.includes(WEIXIN_BASE_NAME))
+    out = `${await readFile(WEIXIN_BASE_PATH, "utf8")}\n${out}`;
+  // The base adapter's helpers (`subscribe`, `dispatchOnce`, `outboundText`, `refuseUnsendable`) hold
+  // the steps an adapter calls instead of copying; that source is read after the adapter's own.
+  if (BASE_HELPER_CALL.test(out)) {
+    out = `${out}\n${await readFile(BASE_PATH, "utf8")}`;
+  }
+  if (!source.includes(SHARED_CORE_IMPORT)) return out;
   const core = await readFile(join(PACKAGES_DIR, "bot-realtime", "src", "adapter.ts"), "utf8");
-  return `${core}\n${source}`;
+  return `${core}\n${out}`;
 }
 
 /** Every `gateway-*` package on disk that ships a `src/` — the gate's own universe. */
@@ -270,6 +288,8 @@ async function adapterSourceFiles(): Promise<Array<{ path: string; source: strin
   // The shared core is read once, as its own file: ClickClack and Buzz declare none of their own.
   const core = join(PACKAGES_DIR, "bot-realtime", "src", "adapter.ts");
   out.push({ path: "bot-realtime/adapter.ts", source: await readFile(core, "utf8") });
+  // WeChat and WeCom declare no connect / unsubscribe of their own either; the base does, once.
+  out.push({ path: "gateway/weixin-base.ts", source: await readFile(WEIXIN_BASE_PATH, "utf8") });
   return out.sort((a, b) => a.path.localeCompare(b.path));
 }
 
@@ -320,8 +340,11 @@ function emptyTextGuardVerdict(source: string): string | undefined {
   const start = code.search(/(?:sendMessage|sendText)\(out: OutboundMessage\)/);
   if (start === -1) return undefined;
   const body = code.slice(start, start + 800);
-  const emptyAt = body.indexOf("empty_text");
-  const guardAt = body.search(/this\.connected|this\.\w+ === undefined/);
+  // `refuseUnsendable` is the base adapter's one copy of the checks, which it makes in this order.
+  const viaHelper = body.includes("this.refuseUnsendable(");
+  const checks = viaHelper ? code.slice(code.indexOf("protected refuseUnsendable(")) : body;
+  const emptyAt = checks.indexOf("empty_text");
+  const guardAt = checks.search(/this\.connected|check\.connected|this\.\w+ === undefined/);
   if (emptyAt === -1) return "no empty_text guard";
   if (guardAt !== -1 && guardAt < emptyAt) return "state guard precedes empty_text";
   return undefined;
@@ -370,6 +393,19 @@ async function declaredSplitter(pkg: string): Promise<string | undefined> {
   return /export function (split\w+)/.exec(split)?.[1];
 }
 
+/**
+ * Whether an `onInbound` body guards its unsubscribe on handler identity: through the base adapter's
+ * `subscribe` (whose guard the package-level test below reads), or with its own check on the field
+ * it stores the handler in.
+ */
+function isGuardedUnsubscribe(body: string, stored: string | undefined): boolean {
+  if (/return\s+this\.subscribe\(handler\)\s*;/.test(body)) return true;
+  return (
+    stored !== undefined &&
+    new RegExp(`if\\s*\\(\\s*this\\.${stored}\\s*===\\s*handler\\s*\\)`).test(body)
+  );
+}
+
 describe("cross-adapter contract", () => {
   it("identity-guards EVERY handler unsubscribe, in every file that declares one", async () => {
     // Per-declaration, not per-package. The package-level version of this check passed
@@ -393,9 +429,7 @@ describe("cross-adapter contract", () => {
         // assumed, so the guard is checked against the SAME field and a sibling's guard on a
         // different one cannot stand in for it.
         const stored = /this\.(\w+)\s*=\s*handler\s*;/.exec(body)?.[1];
-        const guarded =
-          stored !== undefined &&
-          new RegExp(`if\\s*\\(\\s*this\\.${stored}\\s*===\\s*handler\\s*\\)`).test(body);
+        const guarded = isGuardedUnsubscribe(body, stored);
         if (!guarded) offenders.push(`${path}: ${found[0].slice(0, 24)}…`);
       }
     }
@@ -410,7 +444,7 @@ describe("cross-adapter contract", () => {
     // comment used to carry — that adding an adapter makes someone look here — was false:
     // an eighteenth declaration slid past in silence. Exact is the friction, in both
     // directions, and updating one number is the whole cost of adding an adapter.
-    expect(declarations).toBe(29);
+    expect(declarations).toBe(33);
     expect(offenders).toEqual([]);
   });
 
@@ -440,7 +474,7 @@ describe("cross-adapter contract", () => {
       // excused was the one adapter carrying the defect, which is what an exemption written
       // from a reading of the code rather than a test of it will eventually always be.
       const guarded =
-        /if\s*\(\s*this\.(inboundH|h)andler\s*===\s*handler\s*\)\s*\{?\s*this\.\1andler\s*=\s*undefined\s*;/.test(
+        /if\s*\(\s*this\.(inboundH|subscribedH|h)andler\s*===\s*handler\s*\)\s*\{?\s*this\.\1andler\s*=\s*undefined\s*;/.test(
           code,
         );
       if (!guarded) offenders.push(pkg);
@@ -502,7 +536,7 @@ describe("cross-adapter contract", () => {
     // WhatsApp's three backends. A floor only fires when the count DROPS, which catches the regex
     // breaking but not a new adapter slipping in unchecked — and this file has already shipped
     // both failure modes.
-    expect(bodies).toBe(28);
+    expect(bodies).toBe(32);
     expect(offenders).toEqual([]);
   });
 
@@ -603,7 +637,7 @@ describe("cross-adapter contract", () => {
     // reads the field, or the gate read nothing. Without this assertion a rename of `src/` or a
     // path change would turn the gate green by making it blind — the vacuous pass the credential
     // gate in this file documents having survived once already.
-    expect(examined, "packages examined — a gate that reads nothing reports no offenders").toBe(23);
+    expect(examined, "packages examined — a gate that reads nothing reports no offenders").toBe(28);
 
     expect(ignoring, "adapters that never read the `format` their own contract declares").toEqual(
       [],

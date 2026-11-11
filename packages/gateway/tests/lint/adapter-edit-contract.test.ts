@@ -146,6 +146,7 @@ describe("which adapters can edit", () => {
       "gateway-mattermost",
       "gateway-nextcloud-talk",
       "gateway-nostr",
+      "gateway-raft",
       "gateway-signal",
       "gateway-slack",
       "gateway-sms",
@@ -154,7 +155,11 @@ describe("which adapters can edit", () => {
       "gateway-telegram",
       "gateway-tlon-urbit",
       "gateway-twitch",
+      "gateway-wechat",
+      "gateway-wecom",
       "gateway-whatsapp",
+      "gateway-yuanbao",
+      "gateway-zalo",
       "gateway-zalo-personal",
     ]);
   });

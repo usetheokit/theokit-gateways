@@ -208,6 +208,31 @@ export class TelegramAdapter extends BasePlatformAdapter {
     return { ok: true, messageId };
   }
 
+  override async react(channelId: string, messageId: string, emoji: string): Promise<SendResult> {
+    const chatId = Number(channelId);
+    const id = parseMessageId(messageId);
+    if (Number.isNaN(chatId) || id === undefined || emoji.length === 0) {
+      return {
+        ok: false,
+        error: {
+          code: "invalid_reaction",
+          message: "numeric channel, message id and emoji needed",
+        },
+      };
+    }
+    try {
+      // The emoji must be one of Telegram's allowed reactions; the API refuses others.
+      await this.bot.api.setMessageReaction(chatId, id, [
+        { type: "emoji", emoji } as unknown as Parameters<
+          typeof this.bot.api.setMessageReaction
+        >[2][number],
+      ]);
+    } catch (err) {
+      return mapSendError(err);
+    }
+    return { ok: true, messageId };
+  }
+
   override onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
     // EC-H: replace previous handler (do not stack).
     this.handler = handler;

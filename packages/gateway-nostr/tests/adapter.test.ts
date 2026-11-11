@@ -3,7 +3,7 @@ import type { Filter } from "nostr-tools/filter";
 import { encrypt, getConversationKey } from "nostr-tools/nip44";
 import { createRumor, createSeal, createWrap } from "nostr-tools/nip59";
 import { finalizeEvent, generateSecretKey, getPublicKey, type NostrEvent } from "nostr-tools/pure";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { NostrAdapter } from "../src/adapter.js";
 import { openGiftWrap, openNip04, sealDirectMessage, sealNip04 } from "../src/dm.js";
@@ -259,18 +259,26 @@ describe("NostrAdapter inbound", () => {
     expect(seen).toHaveLength(1);
   });
 
-  it("delivers 20 concurrent wraps 20 times, and the same 20 again 0 times", async () => {
-    const client = new FakeClient(new FakeStore());
-    const adapter = makeAdapter(client);
-    const seen = recording(adapter);
-    await adapter.connect();
-    const wraps = Array.from({ length: 20 }, (_, i) => giftFromPeer(`m${i}`));
-    await Promise.all(wraps.map(async (wrap) => client.push(wrap)));
-    await until(() => seen.length === 20, "20 events");
-    await Promise.all(wraps.map(async (wrap) => client.push(wrap)));
-    await drain();
+  // Signing and encrypting 20 wraps is the slow part on a loaded host, so it is setup (a hook with
+  // its own timeout), not part of the test's 5 s budget.
+  describe("with 20 prepared wraps", () => {
+    let wraps: NostrEvent[] = [];
+    beforeAll(() => {
+      wraps = Array.from({ length: 20 }, (_, i) => giftFromPeer(`m${i}`));
+    });
 
-    expect(seen).toHaveLength(20);
+    it("delivers 20 concurrent wraps 20 times, and the same 20 again 0 times", async () => {
+      const client = new FakeClient(new FakeStore());
+      const adapter = makeAdapter(client);
+      const seen = recording(adapter);
+      await adapter.connect();
+      await Promise.all(wraps.map(async (wrap) => client.push(wrap)));
+      await until(() => seen.length === 20, "20 events");
+      await Promise.all(wraps.map(async (wrap) => client.push(wrap)));
+      await drain();
+
+      expect(seen).toHaveLength(20);
+    });
   });
 
   it("subscribes to kind 1059 from at least two days before ignoreBefore, and kind 4 from it", async () => {

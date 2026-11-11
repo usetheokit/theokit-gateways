@@ -7,6 +7,14 @@ export {
   type OutboundMessage,
   type SendResult,
 } from "./adapter/base.js";
+export {
+  WeixinAdapterBase,
+  type WeixinAdapterConfig,
+  type WeixinFetch,
+  type WeixinSendRequest,
+  type WeixinWebhookAnswer,
+} from "./adapter/weixin-base.js";
+export { parseFlatXml } from "./adapter/weixin-xml.js";
 // Channels described as data (B-018)
 export type {
   ChannelConfigField,
@@ -54,6 +62,7 @@ export {
   type GatewayHandler,
   GatewayRunner,
   type GatewayRunnerOptions,
+  type ReconnectPolicy,
   type StartResult,
 } from "./runner/gateway-runner.js";
 export type { CoveredShape, UncoveredShape } from "./security/credential-patterns.js";
@@ -107,10 +116,15 @@ export type {
   IrcMessageEvent,
   NextcloudTalkMessageEvent,
   NostrMessageEvent,
+  RaftMessageEvent,
   SignalMessageEvent,
   SynologyChatMessageEvent,
   TlonUrbitMessageEvent,
   TwitchMessageEvent,
+  WeChatMessageEvent,
+  WeComMessageEvent,
+  YuanbaoMessageEvent,
+  ZaloMessageEvent,
   ZaloPersonalMessageEvent,
 } from "./types/platform-events.js";
 

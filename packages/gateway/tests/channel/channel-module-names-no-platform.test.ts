@@ -39,6 +39,11 @@ const PLATFORM_NAMES = [
   "twitch",
   "zalo_personal",
   "zalo-personal",
+  "zalo",
+  "wechat",
+  "wecom",
+  "yuanbao",
+  "raft",
   "clickclack",
   "buzz",
 ] as const;

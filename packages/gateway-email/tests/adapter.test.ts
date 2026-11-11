@@ -76,8 +76,14 @@ class FakeImap implements IImapClient {
   seen = new Set<number>();
   markSeenError?: Error;
   // eslint-disable-next-line @typescript-eslint/require-await
-  async fetchUnseen(): Promise<FetchedMessage[]> {
-    return this.queue.filter((m) => !this.seen.has(m.uid));
+  async fetchUnseen(sinceUid?: number): Promise<FetchedMessage[]> {
+    return this.queue.filter((m) => !this.seen.has(m.uid) && m.uid >= (sinceUid ?? 0));
+  }
+  uidValidity = 1;
+  uidNext = 1;
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async mailboxStatus(): Promise<{ uidValidity: number; uidNext: number }> {
+    return { uidValidity: this.uidValidity, uidNext: this.uidNext };
   }
   /** One entry per markSeen call — proves batching, not just correctness. */
   markSeenCalls: number[][] = [];
@@ -768,6 +774,88 @@ describe("EmailAdapter", () => {
 
       expect(received).toHaveLength(1);
       await adapter.disconnect();
+    });
+
+    describe("baseline cursor (#348)", () => {
+      const msg = (uid: number): FetchedMessage => ({
+        uid,
+        source: rfc5322({ from: "alice@x.com", messageId: `b${uid}@x.com` }),
+        headers: new Map(),
+      });
+
+      it("first connect with 3 unseen dispatches 0; a later message dispatches 1", async () => {
+        const { adapter, imap } = mk();
+        for (const uid of [1, 2, 3]) imap.push(msg(uid));
+        imap.uidNext = 4;
+        const received: string[] = [];
+        adapter.onInbound(async (e) => {
+          received.push(e.text);
+        });
+        await adapter.connect();
+        await adapter._drainNow();
+        expect(received).toHaveLength(0);
+
+        imap.push(msg(4));
+        await adapter._drainNow();
+        expect(received).toHaveLength(1);
+        await adapter.disconnect();
+      });
+
+      it("a restart dispatches nothing already past the persisted cursor", async () => {
+        let saved: { uidValidity: number; uid: number } | undefined;
+        const cursorStore = {
+          load: () => saved,
+          save: (c: { uidValidity: number; uid: number }) => {
+            saved = c;
+          },
+        };
+        const first = mk({ cursorStore });
+        first.imap.uidNext = 4;
+        await first.adapter.connect();
+        first.imap.push(msg(4));
+        first.adapter.onInbound(async () => {});
+        await first.adapter._drainNow();
+        await first.adapter.disconnect();
+        expect(saved).toEqual({ uidValidity: 1, uid: 5 });
+
+        const second = mk({ cursorStore });
+        second.imap.uidNext = 6;
+        second.imap.push(msg(4));
+        second.imap.push(msg(5));
+        const received: string[] = [];
+        second.adapter.onInbound(async (e) => {
+          received.push(e.text);
+        });
+        await second.adapter.connect();
+        await second.adapter._drainNow();
+        // uid 5 arrived while down: dispatched; uid 4 is past the cursor: not.
+        expect(received).toHaveLength(1);
+        await second.adapter.disconnect();
+      });
+
+      it("resets the cursor when UIDVALIDITY changes", async () => {
+        let saved: { uidValidity: number; uid: number } | undefined = { uidValidity: 1, uid: 2 };
+        const { adapter, imap } = mk({
+          cursorStore: {
+            load: () => saved,
+            save: (c: { uidValidity: number; uid: number }) => {
+              saved = c;
+            },
+          },
+        });
+        imap.uidValidity = 2;
+        imap.uidNext = 10;
+        imap.push(msg(5));
+        const received: string[] = [];
+        adapter.onInbound(async (e) => {
+          received.push(e.text);
+        });
+        await adapter.connect();
+        await adapter._drainNow();
+        expect(received).toHaveLength(0);
+        expect(saved).toEqual({ uidValidity: 2, uid: 10 });
+        await adapter.disconnect();
+      });
     });
 
     it("flags a dropped own-address message too, so it stops being refetched", async () => {

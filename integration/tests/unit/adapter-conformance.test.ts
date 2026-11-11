@@ -36,6 +36,7 @@ import { MatrixAdapter } from "@theokit/gateway-matrix";
 import { MattermostAdapter } from "@theokit/gateway-mattermost";
 import { NextcloudTalkAdapter } from "@theokit/gateway-nextcloud-talk";
 import { NostrAdapter } from "@theokit/gateway-nostr";
+import { RaftAdapter } from "@theokit/gateway-raft";
 import { SignalAdapter } from "@theokit/gateway-signal";
 import { SlackAdapter } from "@theokit/gateway-slack";
 import { SMSAdapter } from "@theokit/gateway-sms";
@@ -44,6 +45,10 @@ import { TeamsAdapter } from "@theokit/gateway-teams";
 import { TelegramAdapter } from "@theokit/gateway-telegram";
 import { TlonUrbitAdapter } from "@theokit/gateway-tlon-urbit";
 import { TwitchAdapter } from "@theokit/gateway-twitch";
+import { WeChatAdapter } from "@theokit/gateway-wechat";
+import { WeComAdapter } from "@theokit/gateway-wecom";
+import { YuanbaoAdapter } from "@theokit/gateway-yuanbao";
+import { ZaloAdapter } from "@theokit/gateway-zalo";
 import { ZaloPersonalAdapter } from "@theokit/gateway-zalo-personal";
 import { describe, expect, it } from "vitest";
 
@@ -197,6 +202,30 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
         workspaceId: "w",
         botUserId: "b",
       }),
+  },
+  { platform: "raft", make: () => new RaftAdapter({ command: "raft-not-installed" }) },
+  {
+    platform: "wechat",
+    make: () => new WeChatAdapter({ appId: "a", appSecret: "s", token: "t" }),
+  },
+  {
+    platform: "wecom",
+    make: () =>
+      new WeComAdapter({
+        corpId: "c",
+        corpSecret: "s",
+        agentId: 1,
+        token: "t",
+        encodingAesKey: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
+      }),
+  },
+  {
+    platform: "yuanbao",
+    make: () => new YuanbaoAdapter({ appId: "a", appSecret: "s", callbackSecret: "c" }),
+  },
+  {
+    platform: "zalo",
+    make: () => new ZaloAdapter({ appId: "a", oaSecretKey: "s", accessToken: "t" }),
   },
   {
     platform: "zalo_personal",

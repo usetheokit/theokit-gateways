@@ -33,10 +33,15 @@ import type {
   IrcMessageEvent,
   NextcloudTalkMessageEvent,
   NostrMessageEvent,
+  RaftMessageEvent,
   SignalMessageEvent,
   SynologyChatMessageEvent,
   TlonUrbitMessageEvent,
   TwitchMessageEvent,
+  WeChatMessageEvent,
+  WeComMessageEvent,
+  YuanbaoMessageEvent,
+  ZaloMessageEvent,
   ZaloPersonalMessageEvent,
 } from "./platform-events.js";
 
@@ -339,6 +344,11 @@ export interface PlatformEventRegistry {
   tlon_urbit: TlonUrbitMessageEvent;
   twitch: TwitchMessageEvent;
   zalo_personal: ZaloPersonalMessageEvent;
+  zalo: ZaloMessageEvent;
+  wechat: WeChatMessageEvent;
+  wecom: WeComMessageEvent;
+  yuanbao: YuanbaoMessageEvent;
+  raft: RaftMessageEvent;
   clickclack: ClickClackMessageEvent;
   buzz: BuzzMessageEvent;
 }
