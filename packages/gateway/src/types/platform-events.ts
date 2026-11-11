@@ -274,6 +274,19 @@ export interface WeComMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** QQ Bot event variant, a C2C (direct) text message pushed to the signed webhook. */
+export interface QQMessageEvent extends BaseMessageEvent {
+  readonly platform: "qq";
+  readonly qq: {
+    /** The message's id; a reply is sent as a passive reply to it. */
+    readonly messageId: string;
+    /** The sender's `user_openid`; the send target for a reply. */
+    readonly userOpenId: string;
+    /** The webhook payload — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** Yuanbao (元宝) bot event variant, a text message pushed to the signed callback URL. */
 export interface YuanbaoMessageEvent extends BaseMessageEvent {
   readonly platform: "yuanbao";

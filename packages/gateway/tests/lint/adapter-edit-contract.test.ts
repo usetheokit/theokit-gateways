@@ -146,6 +146,7 @@ describe("which adapters can edit", () => {
       "gateway-mattermost",
       "gateway-nextcloud-talk",
       "gateway-nostr",
+      "gateway-qq",
       "gateway-raft",
       "gateway-signal",
       "gateway-slack",

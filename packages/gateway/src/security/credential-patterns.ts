@@ -104,6 +104,10 @@ export const CREDENTIAL_SHAPES: {
   ],
   uncovered: [
     {
+      field: "gateway-qq `appSecret`",
+      why: "a QQ Bot AppSecret, an opaque 32-character string with no prefix or fixed shape. It travels only to the access-token endpoint and into the webhook signature derivation; the adapter never logs it.",
+    },
+    {
       field: "gateway-x `clientSecret`, `refreshToken`, `bearerToken`",
       why: "an X OAuth 2.0 client secret, a rotating refresh token and an app bearer token, opaque strings with no fixed prefix. They travel only to the X API in Authorization headers and the token request body, which the adapter never logs.",
     },
