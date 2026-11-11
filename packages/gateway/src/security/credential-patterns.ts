@@ -104,6 +104,10 @@ export const CREDENTIAL_SHAPES: {
   ],
   uncovered: [
     {
+      field: "gateway-x `clientSecret`, `refreshToken`, `bearerToken`",
+      why: "an X OAuth 2.0 client secret, a rotating refresh token and an app bearer token, opaque strings with no fixed prefix. They travel only to the X API in Authorization headers and the token request body, which the adapter never logs.",
+    },
+    {
       field: "gateway-buzz `token`",
       why: "a Buzz bot token with no fixed shape this package could confirm. It travels only in Authorization headers, which the adapter never logs.",
     },

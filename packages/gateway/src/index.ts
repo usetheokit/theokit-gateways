@@ -123,6 +123,8 @@ export type {
   TwitchMessageEvent,
   WeChatMessageEvent,
   WeComMessageEvent,
+  XMessageEvent,
+  XThreadTweet,
   YuanbaoMessageEvent,
   ZaloMessageEvent,
   ZaloPersonalMessageEvent,

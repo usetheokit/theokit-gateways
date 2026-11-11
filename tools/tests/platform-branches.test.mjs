@@ -83,7 +83,7 @@ describe("countPlatformBranches", () => {
   it("counts a platform-only adapter method call", () => {
     expect(count("a.dispatchWebhookBody(e);")).toBe(1);
     expect(count("const s = a.getChannelSecret();")).toBe(1);
-    expect(count("a.getBot().on('x', h);")).toBe(1);
+    expect(count("a.getBot().on('ready', h);")).toBe(1);
   });
 
   it("counts a comparison against a platform name in any quote style and either operand order", () => {
@@ -217,6 +217,6 @@ describe("countPlatformBranches", () => {
 
   it("keeps its platform list equal to PlatformName", () => {
     expect([...PLATFORM_NAMES].sort()).toEqual(platformNameUnion());
-    expect(PLATFORM_NAMES).toHaveLength(28);
+    expect(PLATFORM_NAMES).toHaveLength(29);
   });
 });

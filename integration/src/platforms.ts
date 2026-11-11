@@ -390,6 +390,23 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     undefined,
   ),
   platform(
+    "x",
+    "X",
+    "connection",
+    [
+      "X_USER_ID :: The bot account's numeric user id :: GET /2/users/by/username/{username}",
+      "X_USERNAME :: The bot account's handle :: The bot account's profile",
+      "X_CLIENT_ID :: The OAuth 2.0 client id of the developer app :: developer.x.com → the app's Keys and tokens page",
+      "X_CLIENT_SECRET :: The OAuth 2.0 client secret (confidential client) :: The same page",
+      "X_REFRESH_TOKEN :: A refresh token of the bot account, scopes tweet.read tweet.write users.read offline.access :: The OAuth 2.0 authorization-code flow with PKCE, run once as the bot",
+    ],
+    [
+      "X_ALLOWED_USERNAME :: The handle of an account that will mention the bot during the run :: Any X account you control",
+    ],
+    "X rotates the refresh token on every refresh, so a token used once by the suite is spent unless the run persists the new one. The suite waits up to 120 s for the allowed account to mention the bot, so a person must do that during the run; the reply is a real public post.",
+    undefined,
+  ),
+  platform(
     "yuanbao",
     "Yuanbao",
     "webhook",
