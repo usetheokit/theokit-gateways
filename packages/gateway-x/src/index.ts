@@ -1,5 +1,4 @@
-export { XAdapter } from "./adapter.js";
-export { splitForX, X_POST_LIMIT } from "./split.js";
+export { splitForX, X_POST_LIMIT, XAdapter } from "./adapter.js";
 export type {
   XAdapterOptions,
   XFetch,

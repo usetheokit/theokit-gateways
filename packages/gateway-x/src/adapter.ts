@@ -8,6 +8,7 @@
 import {
   BasePlatformAdapter,
   channelRendering,
+  chunkByGrapheme,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
   type SendResult,
@@ -17,13 +18,19 @@ import {
 import { XAccessPolicy } from "./allow.js";
 import { XApi, type XPage } from "./api.js";
 import { refuseAttachments } from "./refuse-attachments.js";
-import { splitForX } from "./split.js";
 import type { XAdapterOptions, XTweet, XUser } from "./types.js";
 
+/** The most characters one post carries here (the standard, non-premium limit). */
+export const X_POST_LIMIT = 280;
 const LABEL = "gateway-x";
 const DEFAULT_POLL_MS = 60_000;
 const DEFAULT_DEPTH = 5;
 const MEMORY = 1000;
+
+/** Split `text` into posts of at most 280 characters, never inside a grapheme. @public */
+export function splitForX(text: string): string[] {
+  return chunkByGrapheme(text, { limit: X_POST_LIMIT }).filter((part) => part !== "");
+}
 
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

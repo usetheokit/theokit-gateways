@@ -7,6 +7,7 @@
 
 import {
   BasePlatformAdapter,
+  chunkByGrapheme,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
   SeenIds,
@@ -15,9 +16,10 @@ import {
 
 import { refuseAttachments } from "./refuse-attachments.js";
 import { signQQ, verifyQQSignature } from "./signature.js";
-import { splitForQQ } from "./split.js";
 import type { QQAdapterOptions, QQFetch, QQWebhookPayload } from "./types.js";
 
+/** The most characters one message carries here. */
+export const QQ_MESSAGE_LIMIT = 2000;
 const LABEL = "gateway-qq";
 const DEFAULT_API = "https://api.sgroup.qq.com";
 const DEFAULT_TOKEN_URL = "https://bots.qq.com/app/getAppAccessToken";
@@ -47,6 +49,11 @@ const defaultFetch: QQFetch = async (url, init) => {
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   return { status: res.status, text: () => res.text() };
 };
+
+/** Split `text` into messages of at most 2000 characters, never inside a grapheme. @public */
+export function splitForQQ(text: string): string[] {
+  return chunkByGrapheme(text, { limit: QQ_MESSAGE_LIMIT }).filter((part) => part !== "");
+}
 
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
