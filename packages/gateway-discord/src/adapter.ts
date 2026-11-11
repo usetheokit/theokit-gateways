@@ -216,6 +216,23 @@ export class DiscordAdapter extends BasePlatformAdapter {
     return { ok: true, messageId };
   }
 
+  override async react(channelId: string, messageId: string, emoji: string): Promise<SendResult> {
+    if (channelId.length === 0 || messageId.length === 0 || emoji.length === 0) {
+      return {
+        ok: false,
+        error: { code: "invalid_reaction", message: "channel, message id and emoji are required" },
+      };
+    }
+    try {
+      await this.client.rest.put(
+        Routes.channelMessageOwnReaction(channelId, messageId, encodeURIComponent(emoji)),
+      );
+    } catch (err) {
+      return mapSendError(err);
+    }
+    return { ok: true, messageId };
+  }
+
   override onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
     // EC-H: replace previous handler.
     this.handler = handler;

@@ -236,6 +236,37 @@ export class MatrixAdapter extends BasePlatformAdapter {
     return { ok: true, messageId };
   }
 
+  override async react(channelId: string, messageId: string, emoji: string): Promise<SendResult> {
+    if (channelId.length === 0 || messageId.length === 0 || emoji.length === 0) {
+      return {
+        ok: false,
+        error: { code: "invalid_reaction", message: "room, event id and emoji are required" },
+      };
+    }
+    const client = this.client;
+    if (client === undefined) {
+      return {
+        ok: false,
+        error: { code: "not_connected", message: "MatrixAdapter.connect() not called" },
+      };
+    }
+    if (client.sendEvent === undefined) {
+      return {
+        ok: false,
+        error: { code: "react_unsupported", message: "matrix client has no sendEvent" },
+      };
+    }
+    try {
+      const roomId = await this.aliasCache.resolve(client, channelId);
+      await client.sendEvent(roomId, "m.reaction", {
+        "m.relates_to": { rel_type: "m.annotation", event_id: messageId, key: emoji },
+      });
+    } catch (err) {
+      return mapMatrixError(err);
+    }
+    return { ok: true, messageId };
+  }
+
   /**
    * Send `out`, letting the caller's declared `format` decide the shape.
    *

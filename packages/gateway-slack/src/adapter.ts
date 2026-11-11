@@ -73,6 +73,15 @@ export interface SlackAdapterOptions {
   readonly logLevel?: "debug" | "info" | "warn" | "error";
 }
 
+/** Slack reaction names for the unicode emoji an acknowledgement most often uses. */
+const SLACK_EMOJI_NAMES: Readonly<Record<string, string>> = {
+  "👀": "eyes",
+  "👍": "+1",
+  "✅": "white_check_mark",
+  "❤️": "heart",
+  "🎉": "tada",
+};
+
 /**
  * Slack gateway adapter over Socket Mode — the bot dials out, so inbound needs no public URL.
  *
@@ -246,6 +255,30 @@ export class SlackAdapter extends BasePlatformAdapter {
         channel: out.channel.id,
         ts: messageId,
         text: parts[0] as string,
+      });
+    } catch (err) {
+      return mapSlackError(err);
+    }
+    return { ok: true, messageId };
+  }
+
+  override async react(channelId: string, messageId: string, emoji: string): Promise<SendResult> {
+    const name = emoji.replace(/^:|:$/g, "");
+    if (channelId.length === 0 || messageId.length === 0 || name.length === 0) {
+      return {
+        ok: false,
+        error: { code: "invalid_reaction", message: "channel, message id and emoji are required" },
+      };
+    }
+    if (this.app === undefined || !this.connected) {
+      return { ok: false, error: { code: "not_connected", message: "adapter not connected" } };
+    }
+    try {
+      // Slack names reactions (`eyes`), not unicode: a unicode emoji needs its short name.
+      await this.app.client.reactions.add({
+        channel: channelId,
+        timestamp: messageId,
+        name: SLACK_EMOJI_NAMES[name] ?? name,
       });
     } catch (err) {
       return mapSlackError(err);

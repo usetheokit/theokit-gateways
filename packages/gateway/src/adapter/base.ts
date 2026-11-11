@@ -212,6 +212,26 @@ export abstract class BasePlatformAdapter {
     };
   }
 
+  /**
+   * React to an inbound message with an emoji (for example 👀 as an acknowledgement).
+   *
+   * Returns `{ ok: true, messageId }` on success and a `SendResult` error otherwise; it never
+   * throws on platform errors. `channelId` is the channel the message is in and `messageId` the
+   * id the inbound event carried.
+   *
+   * Default: resolves `{ ok: false, error: { code: "react_unsupported" } }` and makes no
+   * platform call.
+   */
+  async react(_channelId: string, _messageId: string, _emoji: string): Promise<SendResult> {
+    return {
+      ok: false,
+      error: {
+        code: "react_unsupported",
+        message: `${this.platform} adapter cannot react to a message`,
+      },
+    };
+  }
+
   /** Lifecycle: emit a typing indicator. Default: noop. */
   async startTyping(_channelId: string): Promise<void> {
     /* override */

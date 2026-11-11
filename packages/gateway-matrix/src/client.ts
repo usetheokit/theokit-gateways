@@ -19,6 +19,12 @@ export interface MatrixSdkClient extends MatrixClientLike {
    * convenience one.
    */
   sendMessage?(roomId: string, content: Record<string, unknown>): Promise<{ event_id: string }>;
+  /** Send a room event of `eventType` (used for `m.reaction`). */
+  sendEvent?(
+    roomId: string,
+    eventType: string,
+    content: Record<string, unknown>,
+  ): Promise<{ event_id: string }>;
   getRoomIdForAlias(alias: string): Promise<{ room_id: string }>;
   getRoom(roomId: string): MatrixRoomLike | null;
   isRoomEncrypted?(roomId: string): boolean;
