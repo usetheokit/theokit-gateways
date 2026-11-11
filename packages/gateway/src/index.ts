@@ -107,6 +107,7 @@ export type {
   IrcMessageEvent,
   NextcloudTalkMessageEvent,
   NostrMessageEvent,
+  RaftMessageEvent,
   SignalMessageEvent,
   SynologyChatMessageEvent,
   TlonUrbitMessageEvent,

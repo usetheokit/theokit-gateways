@@ -360,6 +360,19 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     undefined,
   ),
   platform(
+    "raft",
+    "Raft",
+    "connection",
+    [
+      "RAFT_CLI_PATH :: Path to the Raft CLI, logged in to a Raft account :: Install the CLI (openclaw plugins install @openclaw/raft documents the Raft side) and log in",
+    ],
+    [
+      "RAFT_TEST_CONVERSATION :: The conversation the suite replies to :: The `conversation` (or `from`) of one wake the CLI prints",
+    ],
+    "The wire contract of the CLI (wake lines, reply command) is an assumption. Receiving needs someone to wake the agent from Raft while the suite waits.",
+    undefined,
+  ),
+  platform(
     "zalo-personal",
     "Zalo Personal",
     "connection",
