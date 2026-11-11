@@ -287,6 +287,19 @@ export interface YuanbaoMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** QQ Bot event variant, a `C2C_MESSAGE_CREATE` pushed to the signed callback URL. */
+export interface QQMessageEvent extends BaseMessageEvent {
+  readonly platform: "qq";
+  readonly qq: {
+    /** The message's id; pass it as `msg_id` to answer passively. */
+    readonly messageId: string;
+    /** The sender's `user_openid`; the send target for a reply. */
+    readonly userOpenid: string;
+    /** The dispatch payload — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** Twitch event variant (B-363), a `channel.chat.message` EventSub notification. */
 export interface TwitchMessageEvent extends BaseMessageEvent {
   readonly platform: "twitch";

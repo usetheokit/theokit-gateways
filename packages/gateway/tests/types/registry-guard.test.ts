@@ -94,6 +94,7 @@ type FirstParty =
   | "wechat"
   | "wecom"
   | "yuanbao"
+  | "qq"
   | "raft";
 
 describe("PlatformEventRegistry — what may join the union", () => {

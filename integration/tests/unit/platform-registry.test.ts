@@ -90,6 +90,7 @@ const ROUTES: Routes = {
   zalo: (event) => `za:${event.zalo.messageId}`,
   wechat: (event) => `wx:${event.wechat.messageId}`,
   wecom: (event) => `wc:${event.wecom.messageId}`,
+  qq: (event) => `qq:${event.qq.messageId}`,
   yuanbao: (event) => `yb:${event.yuanbao.messageId}`,
   raft: (event) => `rf:${event.raft.messageId}`,
   zalo_personal: (event) => `zp:${event.zalo_personal.messageId}`,

@@ -128,6 +128,10 @@ export const CREDENTIAL_SHAPES: {
       why: "a Yuanbao bot AppSecret and the callback signing secret, both opaque strings with no prefix or fixed shape. The app secret travels only to the access-token endpoint and the callback secret only into the signature check; the adapter never logs either.",
     },
     {
+      field: "gateway-qq `clientSecret`",
+      why: "a QQ Bot AppSecret, an opaque string with no prefix or fixed shape. It travels only to the access-token endpoint and into the callback signing key; the adapter never logs it.",
+    },
+    {
       field: "gateway-zalo-personal `credentials`",
       why: "a Zalo web session: a cookie jar, an IMEI-like device id and a user agent. The cookie has no prefix or fixed shape to recognise. It travels only to the Zalo library, which the adapter never logs.",
     },

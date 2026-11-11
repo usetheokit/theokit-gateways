@@ -390,6 +390,20 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     undefined,
   ),
   platform(
+    "qq",
+    "QQ Bot",
+    "webhook",
+    [
+      "QQ_APP_ID :: The QQ bot's AppID :: The QQ Open Platform (q.qq.com) → the bot's development settings",
+      "QQ_CLIENT_SECRET :: The bot's AppSecret, exchanged for an access token and used as the callback signing key :: The same page",
+    ],
+    [
+      "QQ_TEST_USER :: The user_openid of someone who has messaged the bot :: The `author.user_openid` of a callback body",
+    ],
+    "Inbound needs a public HTTPS callback URL registered with the QQ Open Platform, so the suite checks the token exchange and one send. A bot can answer a user only after the user has messaged it, and a sandbox bot only users on its test list.",
+    undefined,
+  ),
+  platform(
     "yuanbao",
     "Yuanbao",
     "webhook",
