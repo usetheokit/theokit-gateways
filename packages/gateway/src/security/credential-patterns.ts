@@ -120,6 +120,10 @@ export const CREDENTIAL_SHAPES: {
       why: "a WeChat Official Account AppSecret (32 hex characters, indistinguishable from any other hex string) and the server-URL verification token (a string the operator chooses). The secret travels only to the access-token endpoint and the token only into the signature check; the adapter never logs either.",
     },
     {
+      field: "gateway-wecom `corpSecret`, `token`, `encodingAesKey`",
+      why: "a WeCom application Secret (43 URL-safe base64 characters, indistinguishable from other opaque strings), the callback Token (a string the operator chooses) and the EncodingAESKey (43 base64 characters). The secret travels only to the access-token endpoint, the token into the signature check and the key into the decryption; the adapter never logs any of them.",
+    },
+    {
       field: "gateway-zalo-personal `credentials`",
       why: "a Zalo web session: a cookie jar, an IMEI-like device id and a user agent. The cookie has no prefix or fixed shape to recognise. It travels only to the Zalo library, which the adapter never logs.",
     },

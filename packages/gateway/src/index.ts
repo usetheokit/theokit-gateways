@@ -113,6 +113,7 @@ export type {
   TlonUrbitMessageEvent,
   TwitchMessageEvent,
   WeChatMessageEvent,
+  WeComMessageEvent,
   ZaloMessageEvent,
   ZaloPersonalMessageEvent,
 } from "./types/platform-events.js";
