@@ -107,6 +107,8 @@ const SLACK_EMOJI_NAMES: Readonly<Record<string, string>> = {
 export class SlackAdapter extends BasePlatformAdapter {
   readonly platform = "slack" as const;
   private app: BoltApp | undefined;
+  /** Thread (or message) ts of the last inbound message per channel, for the typing status. */
+  private readonly threadByChannel = new Map<string, string>();
   private connected = false;
   private botUserId: string | undefined;
   private handler?: (event: GatewayMessageEvent) => Promise<void>;
@@ -301,6 +303,33 @@ export class SlackAdapter extends BasePlatformAdapter {
     return { ok: true, messageId };
   }
 
+  /**
+   * Slack has no typing call for a bot. The nearest is `assistant.threads.setStatus`, which works in
+   * an assistant thread, so the status goes to the thread of the last message seen in the channel.
+   * Outside one the call fails and is swallowed; `stopTyping` clears the status.
+   */
+  override async startTyping(channelId: string): Promise<void> {
+    await this.setThreadStatus(channelId, "is typing…");
+  }
+
+  override async stopTyping(channelId: string): Promise<void> {
+    await this.setThreadStatus(channelId, "");
+  }
+
+  private async setThreadStatus(channelId: string, status: string): Promise<void> {
+    const threadTs = this.threadByChannel.get(channelId);
+    if (this.app === undefined || !this.connected || threadTs === undefined) return;
+    try {
+      await this.app.client.assistant.threads.setStatus({
+        channel_id: channelId,
+        thread_ts: threadTs,
+        status,
+      });
+    } catch {
+      /* cosmetic — swallow */
+    }
+  }
+
   override onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
     // D276 / EC-H: second call replaces previous.
     this.handler = handler;
@@ -309,12 +338,24 @@ export class SlackAdapter extends BasePlatformAdapter {
     };
   }
 
+  private rememberThread(event: GatewayMessageEvent): void {
+    if (event.platform !== "slack") return;
+    const ts = event.slack.threadTs ?? event.slack.ts;
+    this.threadByChannel.delete(event.channel.id);
+    this.threadByChannel.set(event.channel.id, ts);
+    if (this.threadByChannel.size > 1000) {
+      const oldest = this.threadByChannel.keys().next().value;
+      if (oldest !== undefined) this.threadByChannel.delete(oldest);
+    }
+  }
+
   private async handleMessage(args: { body: unknown }): Promise<void> {
     if (this.handler === undefined) return;
     const event = normalizeSlackEvent(args.body as BoltMessageBody, this.botUserId, {
       requireMention: this.opts.requireMention ?? true,
     });
     if (event === undefined) return;
+    this.rememberThread(event);
     try {
       await this.handler(event);
     } catch (err) {
@@ -334,6 +375,7 @@ export class SlackAdapter extends BasePlatformAdapter {
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
     if (!this.passesMentionGate(event)) return "ok";
+    this.rememberThread(event);
     return this.runHandler(this.handler, event);
   }
 

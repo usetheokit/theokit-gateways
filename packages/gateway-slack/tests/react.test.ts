@@ -2,6 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const statusMock = vi.fn(async (_args: Record<string, unknown>) => ({ ok: true }));
 const addMock = vi.fn(async (_args: Record<string, unknown>) => ({ ok: true }));
 
 vi.mock("@slack/bolt", () => {
@@ -10,6 +11,7 @@ vi.mock("@slack/bolt", () => {
       auth: { test: async () => ({ user_id: "UBOT1234" }) },
       chat: { postMessage: async () => ({ ts: "1.2" }) },
       reactions: { add: addMock },
+      assistant: { threads: { setStatus: statusMock } },
     };
     event = vi.fn();
     start = async () => undefined;
@@ -57,5 +59,34 @@ describe("SlackAdapter.react", () => {
     const adapter = fresh();
     await adapter.connect();
     expect((await adapter.react("C1", "", "👀")).error?.code).toBe("invalid_reaction");
+  });
+});
+
+describe("SlackAdapter typing", () => {
+  it("sets the status on the last message's thread and clears it", async () => {
+    const adapter = fresh();
+    await adapter.connect();
+    await adapter.startTyping("D1");
+    expect(statusMock).not.toHaveBeenCalled();
+    adapter.onInbound(async () => undefined);
+    await (adapter as unknown as { handleMessage(a: unknown): Promise<void> }).handleMessage({
+      body: {
+        team_id: "T1",
+        event: {
+          type: "message",
+          channel: "D1",
+          user: "U1",
+          text: "hi",
+          ts: "1.2",
+          channel_type: "im",
+        },
+      },
+    });
+    await adapter.startTyping("D1");
+    await adapter.stopTyping("D1");
+    expect(statusMock.mock.calls.map((c) => c[0])).toEqual([
+      { channel_id: "D1", thread_ts: "1.2", status: "is typing…" },
+      { channel_id: "D1", thread_ts: "1.2", status: "" },
+    ]);
   });
 });

@@ -5,10 +5,12 @@ import { describe, expect, it, vi } from "vitest";
 import { MatrixAdapter } from "../src/adapter.js";
 
 function build(withSendEvent = true) {
+  const sendTyping = vi.fn(async (..._a: unknown[]) => ({}));
   const sendEvent = vi.fn(async (..._a: unknown[]) => ({ event_id: "$r:server" }));
   const getRoomIdForAlias = vi.fn(async (alias: string) => ({ room_id: `!r-${alias}:server` }));
   const client = {
     ...(withSendEvent ? { sendEvent } : {}),
+    sendTyping,
     sendTextMessage: async () => ({ event_id: "$t" }),
     getRoomIdForAlias,
     on: () => undefined,
@@ -25,7 +27,7 @@ function build(withSendEvent = true) {
     userId: "@bot:example.org",
     __clientFactory: () => client as never,
   });
-  return { adapter, sendEvent, getRoomIdForAlias };
+  return { adapter, sendTyping, sendEvent, getRoomIdForAlias };
 }
 
 describe("MatrixAdapter.react", () => {
@@ -60,5 +62,16 @@ describe("MatrixAdapter.react", () => {
   it("answers not_connected before connect", async () => {
     const { adapter } = build();
     expect((await adapter.react("!room:server", "$ev", "👀")).error?.code).toBe("not_connected");
+  });
+});
+
+describe("MatrixAdapter typing", () => {
+  it("sets and clears the typing notice on the resolved room", async () => {
+    const { adapter, sendTyping } = build();
+    await adapter.connect();
+    await adapter.startTyping("!room:server");
+    await adapter.stopTyping("!room:server");
+    expect(sendTyping).toHaveBeenNthCalledWith(1, "!room:server", true, 10_000);
+    expect(sendTyping).toHaveBeenNthCalledWith(2, "!room:server", false, 10_000);
   });
 });
