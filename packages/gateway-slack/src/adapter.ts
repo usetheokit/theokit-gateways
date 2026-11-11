@@ -74,6 +74,30 @@ export interface SlackAdapterOptions {
 }
 
 /**
+ * Slack reaction names for common unicode emoji, keyed without the U+FE0F variation selector.
+ *
+ * Slack takes a name (`eyes`), never the character. An emoji missing here is sent as given, so
+ * pass its Slack name (`"hourglass"` or `":hourglass:"`) for anything outside this list.
+ */
+const SLACK_EMOJI_NAMES: Readonly<Record<string, string>> = {
+  "👀": "eyes",
+  "👍": "+1",
+  "👎": "-1",
+  "✅": "white_check_mark",
+  "❌": "x",
+  "❤": "heart",
+  "🎉": "tada",
+  "🙏": "pray",
+  "🔥": "fire",
+  "😄": "smile",
+  "🤔": "thinking_face",
+  "⏳": "hourglass_flowing_sand",
+  "⚠": "warning",
+  "💯": "100",
+  "🚀": "rocket",
+};
+
+/**
  * Slack gateway adapter over Socket Mode — the bot dials out, so inbound needs no public URL.
  *
  * Needs BOTH tokens: a bot token (`xoxb-`) to act, and an app-level token (`xapp-`, scope
@@ -246,6 +270,30 @@ export class SlackAdapter extends BasePlatformAdapter {
         channel: out.channel.id,
         ts: messageId,
         text: parts[0] as string,
+      });
+    } catch (err) {
+      return mapSlackError(err);
+    }
+    return { ok: true, messageId };
+  }
+
+  override async react(channelId: string, messageId: string, emoji: string): Promise<SendResult> {
+    const name = emoji.replace(/^:|:$/g, "");
+    if (channelId.length === 0 || messageId.length === 0 || name.length === 0) {
+      return {
+        ok: false,
+        error: { code: "invalid_reaction", message: "channel, message id and emoji are required" },
+      };
+    }
+    if (this.app === undefined || !this.connected) {
+      return { ok: false, error: { code: "not_connected", message: "adapter not connected" } };
+    }
+    try {
+      // Slack names reactions (`eyes`), not unicode: a unicode emoji needs its short name.
+      await this.app.client.reactions.add({
+        channel: channelId,
+        timestamp: messageId,
+        name: SLACK_EMOJI_NAMES[name.replaceAll("\uFE0F", "")] ?? name,
       });
     } catch (err) {
       return mapSlackError(err);

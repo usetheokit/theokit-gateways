@@ -74,4 +74,11 @@ describe("BasePlatformAdapter (T1.2)", () => {
     await a.emit(ev());
     expect(calls).toEqual(["second"]);
   });
+
+  it("react resolves react_unsupported by default, without throwing", async () => {
+    const a = new MockAdapter();
+    const r = await a.react("c", "1", "👀");
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe("react_unsupported");
+  });
 });
