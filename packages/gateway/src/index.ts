@@ -62,6 +62,7 @@ export {
   type GatewayHandler,
   GatewayRunner,
   type GatewayRunnerOptions,
+  type ReconnectPolicy,
   type StartResult,
 } from "./runner/gateway-runner.js";
 export type { CoveredShape, UncoveredShape } from "./security/credential-patterns.js";

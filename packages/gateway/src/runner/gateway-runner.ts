@@ -85,6 +85,34 @@ export interface GatewayRunnerOptions {
    * @public
    */
   readonly connectFailure?: ConnectFailure;
+  /**
+   * Retry, in the background, an adapter whose `connect()` threw a transient error under
+   * `connectFailure: "isolate"` (network refused, DNS, 5xx), with exponential backoff and a log
+   * line per attempt. An adapter that connects on a retry is wired for inbound and joins
+   * `connected`. A `connect()` that resolves `false`, or throws a credential error (HTTP 401/403,
+   * `M_UNKNOWN_TOKEN`, `M_FORBIDDEN`, "unauthorized"), is terminal: it is reported once and not
+   * retried. Off unless set; ignored under `"rollback"`.
+   *
+   * @public
+   */
+  readonly reconnect?: ReconnectPolicy;
+}
+
+/**
+ * Backoff for `GatewayRunnerOptions.reconnect`. The delay before attempt n is
+ * `min(initialDelayMs * factor^(n-1), maxDelayMs)`.
+ *
+ * @public
+ */
+export interface ReconnectPolicy {
+  /** Delay before the first retry. Default 1000ms. */
+  readonly initialDelayMs?: number;
+  /** Cap on the delay between attempts. Default 60_000ms. */
+  readonly maxDelayMs?: number;
+  /** Multiplier per attempt. Default 2. */
+  readonly factor?: number;
+  /** Give up after this many retries. Default: keep trying until `stop()`. */
+  readonly maxAttempts?: number;
 }
 
 /**
@@ -113,6 +141,8 @@ const DEFAULT_COMMAND_PREFIXES: ReadonlyArray<string> = ["/"];
 interface ConnectOutcome {
   readonly connected: BasePlatformAdapter[];
   readonly failed: StartResult["failed"][number][];
+  /** Adapters whose connect threw a transient error, for the reconnect policy. */
+  readonly retryable: BasePlatformAdapter[];
 }
 
 function connectFailureReason(outcome: PromiseSettledResult<boolean>): string {
@@ -120,6 +150,18 @@ function connectFailureReason(outcome: PromiseSettledResult<boolean>): string {
   const message = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
   // A connect error can echo the credential it was given.
   return redactSecrets(message);
+}
+
+/** A credential refusal will fail identically on every retry, so it is never retried. */
+function isTerminalConnectError(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const e = err as Record<string, unknown>;
+  for (const key of ["status", "statusCode", "httpStatus"]) {
+    if (e[key] === 401 || e[key] === 403) return true;
+  }
+  if (e.errcode === "M_UNKNOWN_TOKEN" || e.errcode === "M_FORBIDDEN") return true;
+  const message = typeof e.message === "string" ? e.message : "";
+  return /\b(401|403)\b|unauthori[sz]ed|forbidden|invalid (access )?token/i.test(message);
 }
 
 /**
@@ -163,6 +205,7 @@ export class GatewayRunner {
   /** The start that has not settled yet, shared by every overlapping `start()` call. */
   private startInFlight: Promise<StartResult> | undefined;
   private stopped = false;
+  private readonly retryTimers = new Set<NodeJS.Timeout>();
 
   constructor(private readonly opts: GatewayRunnerOptions) {
     this.hookExecutor = new HookExecutor(opts.hooks ?? []);
@@ -250,7 +293,70 @@ export class GatewayRunner {
       connected: result.connected.map((a) => a.platform),
       failed: result.failed,
     };
+    for (const adapter of result.retryable) this.scheduleReconnect(adapter, 1);
     return this.startResult;
+  }
+
+  /** Retry one adapter after its backoff delay; reschedules itself until it connects or gives up. */
+  private scheduleReconnect(adapter: BasePlatformAdapter, attempt: number): void {
+    const policy = this.opts.reconnect;
+    if (policy === undefined || this.stopped) return;
+    if (policy.maxAttempts !== undefined && attempt > policy.maxAttempts) {
+      process.stderr.write(
+        `[gateway] adapter "${adapter.platform}" gave up reconnecting after ${policy.maxAttempts} attempts\n`,
+      );
+      return;
+    }
+    const delay = Math.min(
+      (policy.initialDelayMs ?? 1000) * (policy.factor ?? 2) ** (attempt - 1),
+      policy.maxDelayMs ?? 60_000,
+    );
+    const timer = setTimeout(() => {
+      this.retryTimers.delete(timer);
+      void this.reconnectOnce(adapter, attempt);
+    }, delay);
+    this.retryTimers.add(timer);
+    process.stderr.write(
+      `[gateway] adapter "${adapter.platform}" reconnect attempt ${attempt} in ${delay}ms\n`,
+    );
+  }
+
+  private async reconnectOnce(adapter: BasePlatformAdapter, attempt: number): Promise<void> {
+    if (this.stopped) return;
+    try {
+      if (await adapter.connect()) {
+        if (this.stopped) {
+          await releaseAdapters([adapter], "releasing a reconnect that stop() overtook");
+          return;
+        }
+        this.wireInbound([adapter]);
+        const prev = this.startResult ?? { connected: [], failed: [] };
+        this.startResult = {
+          connected: [...prev.connected, adapter.platform],
+          failed: prev.failed.filter((f) => f.platform !== adapter.platform),
+        };
+        process.stderr.write(
+          `[gateway] adapter "${adapter.platform}" connected on attempt ${attempt}\n`,
+        );
+        return;
+      }
+      process.stderr.write(
+        `[gateway] adapter "${adapter.platform}" refused to connect; not retrying\n`,
+      );
+      return;
+    } catch (err) {
+      const reason = connectFailureReason({ status: "rejected", reason: err });
+      if (isTerminalConnectError(err)) {
+        process.stderr.write(
+          `[gateway] adapter "${adapter.platform}" credentials rejected: ${reason}; not retrying\n`,
+        );
+        return;
+      }
+      process.stderr.write(
+        `[gateway] adapter "${adapter.platform}" reconnect attempt ${attempt} failed: ${reason}\n`,
+      );
+    }
+    this.scheduleReconnect(adapter, attempt + 1);
   }
 
   /**
@@ -286,7 +392,7 @@ export class GatewayRunner {
       await releaseAdapters(connected, "rolling back a failed start");
       throw failures[0];
     }
-    return { connected: [...adapters], failed: [] };
+    return { connected: [...adapters], failed: [], retryable: [] };
   }
 
   /**
@@ -299,12 +405,18 @@ export class GatewayRunner {
     const settled = await Promise.allSettled(adapters.map(async (a) => a.connect()));
     const connected: BasePlatformAdapter[] = [];
     const failed: StartResult["failed"][number][] = [];
+    const retryable: BasePlatformAdapter[] = [];
     settled.forEach((outcome, i) => {
       const adapter = adapters[i] as BasePlatformAdapter;
       if (outcome.status === "fulfilled" && outcome.value) connected.push(adapter);
-      else failed.push({ platform: adapter.platform, reason: connectFailureReason(outcome) });
+      else {
+        failed.push({ platform: adapter.platform, reason: connectFailureReason(outcome) });
+        if (outcome.status === "rejected" && !isTerminalConnectError(outcome.reason)) {
+          retryable.push(adapter);
+        }
+      }
     });
-    return { connected, failed };
+    return { connected, failed, retryable };
   }
 
   private wireInbound(adapters: ReadonlyArray<BasePlatformAdapter>): void {
@@ -347,6 +459,8 @@ export class GatewayRunner {
       }
     }
     this.unsubs.length = 0;
+    for (const t of this.retryTimers) clearTimeout(t);
+    this.retryTimers.clear();
 
     const drainMs = this.opts.drainTimeoutMs ?? DEFAULT_DRAIN_MS;
     if (this.inflight.size > 0) {
