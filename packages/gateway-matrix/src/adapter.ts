@@ -114,7 +114,17 @@ export class MatrixAdapter extends BasePlatformAdapter {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[gateway-matrix] connect failed: ${msg}\n`);
-      return false;
+      // A credential refusal is final: `false` tells the runner not to retry. Anything else (the
+      // homeserver is down, DNS, 5xx) is thrown so a runner with a reconnect policy retries it.
+      const rest = err as MatrixRestError | null;
+      if (
+        rest?.httpStatus === 401 ||
+        rest?.httpStatus === 403 ||
+        rest?.errcode === "M_UNKNOWN_TOKEN"
+      ) {
+        return false;
+      }
+      throw err;
     }
   }
 

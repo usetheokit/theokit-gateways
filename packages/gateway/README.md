@@ -302,6 +302,12 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
   configuration error thrown by `create` the same way. Any other error propagates. It performs no
   network call.
 - `createChannels` also returns `channels`: each built adapter paired with the descriptor that built it, in the order of `adapters`.
+- `reconnect: { initialDelayMs, maxDelayMs, factor, maxAttempts }` retries an adapter whose
+  `connect()` threw a transient error (refused connection, DNS, 5xx) with exponential backoff and a
+  stderr line per attempt. It is off unless set, and takes effect only with
+  `connectFailure: "isolate"` (under `"rollback"` the start still rejects). A `connect()` that
+  returns `false`, or throws a 401/403 credential error, is reported once and never retried.
+  `start()` called again afterwards returns the updated `connected` and `failed`.
 - `connectFailure` defaults to `"rollback"`: one failed connect disconnects the adapters that did
   connect and rejects `start()`, as before. Under `"isolate"`, `start()` resolves even when every
   adapter failed, so check `connected` before you rely on the runner.
