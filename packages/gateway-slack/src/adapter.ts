@@ -73,13 +73,28 @@ export interface SlackAdapterOptions {
   readonly logLevel?: "debug" | "info" | "warn" | "error";
 }
 
-/** Slack reaction names for the unicode emoji an acknowledgement most often uses. */
+/**
+ * Slack reaction names for common unicode emoji, keyed without the U+FE0F variation selector.
+ *
+ * Slack takes a name (`eyes`), never the character. An emoji missing here is sent as given, so
+ * pass its Slack name (`"hourglass"` or `":hourglass:"`) for anything outside this list.
+ */
 const SLACK_EMOJI_NAMES: Readonly<Record<string, string>> = {
   "👀": "eyes",
   "👍": "+1",
+  "👎": "-1",
   "✅": "white_check_mark",
-  "❤️": "heart",
+  "❌": "x",
+  "❤": "heart",
   "🎉": "tada",
+  "🙏": "pray",
+  "🔥": "fire",
+  "😄": "smile",
+  "🤔": "thinking_face",
+  "⏳": "hourglass_flowing_sand",
+  "⚠": "warning",
+  "💯": "100",
+  "🚀": "rocket",
 };
 
 /**
@@ -278,7 +293,7 @@ export class SlackAdapter extends BasePlatformAdapter {
       await this.app.client.reactions.add({
         channel: channelId,
         timestamp: messageId,
-        name: SLACK_EMOJI_NAMES[name] ?? name,
+        name: SLACK_EMOJI_NAMES[name.replaceAll("\uFE0F", "")] ?? name,
       });
     } catch (err) {
       return mapSlackError(err);
