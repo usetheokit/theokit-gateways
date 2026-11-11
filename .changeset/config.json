@@ -8,20 +8,11 @@
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": [
-    "@theokit/gateway-nostr",
-    "@theokit/gateway-feishu-lark",
     "@theokit/gateway-synology-chat",
     "@theokit/gateway-twitch",
     "@theokit/gateway-zalo-personal",
     "@theokit/gateway-zalo",
-    "@theokit/gateway-wechat",
-    "@theokit/gateway-wecom",
-    "@theokit/gateway-yuanbao",
-    "@theokit/gateway-qq",
-    "@theokit/gateway-x",
-    "@theokit/gateway-raft",
-    "@theokit/gateway-clickclack",
-    "@theokit/gateway-buzz"
+    "@theokit/gateway-yuanbao"
   ],
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
     "onlyUpdatePeerDependentsWhenOutOfRange": true

@@ -1,8 +1,6 @@
 ---
 "@theokit/gateway-feishu-lark": patch
 "@theokit/gateway-nostr": patch
-"@theokit/gateway-synology-chat": patch
-"@theokit/gateway-twitch": patch
 ---
 
 Refuse an outbound that carries images with `attachments_unsupported`, making no platform call,
