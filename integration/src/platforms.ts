@@ -330,6 +330,81 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     undefined,
   ),
   platform(
+    "zalo",
+    "Zalo Official Account",
+    "webhook",
+    [
+      "ZALO_APP_ID :: The Zalo app id :: developers.zalo.me → your app",
+      "ZALO_OA_SECRET_KEY :: The OA secret key, used for the inbound signature :: developers.zalo.me → your app → Official Account → Webhook",
+      "ZALO_OA_ACCESS_TOKEN :: An OA access token (it expires) :: developers.zalo.me → your app → Official Account → Access token",
+    ],
+    [
+      "ZALO_TEST_USER_ID :: The OA-scoped user id of a follower who messaged the OA in the last 48 hours :: The `sender.id` of one webhook delivery, or the OA's follower list API",
+    ],
+    "Inbound needs a public HTTPS webhook, so the suite checks the token and one send. Zalo refuses a send to a user outside the 48-hour reply window (zalo_send_failed). The access token expires.",
+    undefined,
+  ),
+  platform(
+    "wechat",
+    "WeChat Official Account",
+    "webhook",
+    [
+      "WECHAT_APP_ID :: The Official Account AppID :: mp.weixin.qq.com → Settings and Development → Basic Configuration (or a test account at mp.weixin.qq.com/debug/cgi-bin/sandboxinfo)",
+      "WECHAT_APP_SECRET :: The AppSecret, exchanged for an access token :: The same page",
+      "WECHAT_TOKEN :: The server-URL verification token you chose, used for the inbound signature :: Basic Configuration → Server Configuration",
+    ],
+    [
+      "WECHAT_TEST_OPENID :: The OpenID of a follower who messaged the account in the last 48 hours :: The `FromUserName` of one webhook delivery, or the follower list API",
+    ],
+    "Inbound needs a public HTTPS server URL, so the suite checks the token exchange and one send. WeChat refuses a customer-service send to a user outside the 48-hour window (wechat_send_failed). The account's IP allow-list must include the machine running the suite.",
+    undefined,
+  ),
+  platform(
+    "raft",
+    "Raft",
+    "connection",
+    [
+      "RAFT_CLI_PATH :: Path to the Raft CLI, logged in to a Raft account :: Install the CLI (openclaw plugins install @openclaw/raft documents the Raft side) and log in",
+    ],
+    [
+      "RAFT_TEST_CONVERSATION :: The conversation the suite replies to :: The `conversation` (or `from`) of one wake the CLI prints",
+    ],
+    "The wire contract of the CLI (wake lines, reply command) is an assumption. Receiving needs someone to wake the agent from Raft while the suite waits.",
+    undefined,
+  ),
+  platform(
+    "wecom",
+    "WeCom",
+    "webhook",
+    [
+      "WECOM_CORP_ID :: The WeCom corp id :: work.weixin.qq.com admin console → My Enterprise → Enterprise Info",
+      "WECOM_CORP_SECRET :: The self-built application's Secret, exchanged for an access token :: Application Management → the application's page",
+      "WECOM_AGENT_ID :: The application's AgentId :: The same page",
+      "WECOM_TOKEN :: The callback Token you chose, used for the inbound signature :: The application's Receive Messages → API Receiving settings",
+      "WECOM_ENCODING_AES_KEY :: The callback EncodingAESKey that decrypts inbound messages :: The same settings",
+    ],
+    [
+      "WECOM_TEST_USER :: The WeCom user id of a member inside the application's visible range :: Admin console → Contacts",
+    ],
+    "Inbound needs a public HTTPS callback URL, so the suite checks the token exchange and one send. WeCom refuses a send from an IP outside the application's trusted-IP list (wecom_send_failed, errcode 60020).",
+    undefined,
+  ),
+  platform(
+    "yuanbao",
+    "Yuanbao",
+    "webhook",
+    [
+      "YUANBAO_APP_ID :: The Yuanbao bot's app id :: The Yuanbao bot console → the bot's credentials page",
+      "YUANBAO_APP_SECRET :: The bot's app secret, exchanged for an access token :: The same page",
+      "YUANBAO_CALLBACK_SECRET :: The callback signing secret, used for the inbound signature :: The bot's event callback settings",
+    ],
+    [
+      "YUANBAO_TEST_USER :: The Yuanbao user id of someone who has messaged the bot :: The bot console or a callback body",
+    ],
+    "Inbound needs a public HTTPS callback URL, so the suite checks the token exchange and one send. The wire shapes (endpoints, signature, payload) are an assumption: no Yuanbao bot spec was available.",
+    undefined,
+  ),
+  platform(
     "zalo-personal",
     "Zalo Personal",
     "connection",

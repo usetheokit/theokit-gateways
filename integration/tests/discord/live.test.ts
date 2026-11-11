@@ -135,6 +135,34 @@ describeLive(DISCORD, "outbound", () => {
   }, 45_000);
 });
 
+describeLive(DISCORD, "reaction", () => {
+  it("adds 👀 to a real message, visible in the message's reactions", async () => {
+    const token = required("DISCORD_BOT_TOKEN");
+    const channelId = required("DISCORD_TEST_CHANNEL_ID");
+    const adapter = new DiscordAdapter({ token });
+    try {
+      await adapter.connect();
+      const posted = await postAs(token, channelId, `${runMarker()} react probe`);
+      expect(posted.ok, `HTTP ${posted.status}`).toBe(true);
+      const messageId = posted.body.id as string;
+
+      const result = await adapter.react(channelId, messageId, "👀");
+      expect(result.ok, JSON.stringify(result.error)).toBe(true);
+
+      const res = await fetch(
+        `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
+        { headers: { authorization: `Bot ${token}`, "user-agent": USER_AGENT } },
+      );
+      const message = (await res.json()) as {
+        reactions?: { emoji: { name: string }; me: boolean }[];
+      };
+      expect(message.reactions?.some((r) => r.emoji.name === "👀" && r.me)).toBe(true);
+    } finally {
+      await adapter.disconnect();
+    }
+  }, 60_000);
+});
+
 describeLiveInbound(DISCORD, "inbound round trip", () => {
   it("receives a message over the gateway, WITH its content", async () => {
     // Two things are asserted, and the second is the point. That an event

@@ -14,4 +14,4 @@ export { extractAddr, isAllowedSender, isAutomatedSender } from "./filters.js";
 export { type NormalizeOptions, normalizeEmail } from "./normalize.js";
 export { SeenUidSet } from "./seen-uids.js";
 export { type ThreadContext, ThreadStore } from "./thread-store.js";
-export type { EmailAdapterOptions } from "./types.js";
+export type { EmailAdapterOptions, EmailCursor, EmailCursorStore } from "./types.js";

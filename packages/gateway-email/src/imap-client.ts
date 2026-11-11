@@ -28,13 +28,23 @@ export interface FetchedMessage {
   readonly headers: Map<string, string>;
 }
 
+export interface MailboxStatus {
+  readonly uidValidity: number;
+  readonly uidNext: number;
+}
+
 export interface IImapClient {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   /** Capability check — does the server advertise IDLE? */
   supportsIdle(): boolean;
-  /** Fetch all UNSEEN messages once. Used for poll + post-IDLE-event drain. */
-  fetchUnseen(): Promise<FetchedMessage[]>;
+  /** The open mailbox's UIDVALIDITY and UIDNEXT: the baseline a first connect records (#348). */
+  mailboxStatus(): Promise<MailboxStatus>;
+  /**
+   * Fetch UNSEEN messages once, only those with `uid >= sinceUid` when given. Used for poll +
+   * post-IDLE-event drain.
+   */
+  fetchUnseen(sinceUid?: number): Promise<FetchedMessage[]>;
   /**
    * Set `\Seen` on the server for a whole batch, so `fetchUnseen()` stops
    * returning them.
@@ -76,6 +86,13 @@ export class ImapClient implements IImapClient {
     await this.client.mailboxOpen("INBOX");
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async mailboxStatus(): Promise<MailboxStatus> {
+    const box = this.client?.mailbox;
+    if (box === undefined || box === false) throw new Error("no mailbox open");
+    return { uidValidity: Number(box.uidValidity), uidNext: box.uidNext };
+  }
+
   supportsIdle(): boolean {
     if (this.client === undefined) return false;
     const caps = (this.client as unknown as { capabilities?: { has?: (s: string) => boolean } })
@@ -84,10 +101,11 @@ export class ImapClient implements IImapClient {
   }
 
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: shape-mapping function — imapflow can hand headers as Map OR Buffer depending on protocol path; this is the single normalization site.
-  async fetchUnseen(): Promise<FetchedMessage[]> {
+  async fetchUnseen(sinceUid?: number): Promise<FetchedMessage[]> {
     if (this.client === undefined) return [];
     const out: FetchedMessage[] = [];
-    for await (const raw of this.client.fetch({ seen: false }, {
+    const query = sinceUid === undefined ? { seen: false } : { seen: false, uid: `${sinceUid}:*` };
+    for await (const raw of this.client.fetch(query, {
       uid: true,
       source: true,
       headers: true,

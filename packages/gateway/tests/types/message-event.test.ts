@@ -177,6 +177,16 @@ describe("MessageEvent (T1.1)", () => {
           return `tu:${e.tlon_urbit.messageId}`;
         case "twitch":
           return `tw:${e.twitch.messageId}`;
+        case "raft":
+          return `rf:${e.raft.messageId}`;
+        case "wechat":
+          return `wx:${e.wechat.messageId}`;
+        case "yuanbao":
+          return `yb:${e.yuanbao.messageId}`;
+        case "wecom":
+          return `wc:${e.wecom.messageId}`;
+        case "zalo":
+          return `za:${e.zalo.messageId}`;
         case "zalo_personal":
           return `zp:${e.zalo_personal.messageId}`;
         case "clickclack":

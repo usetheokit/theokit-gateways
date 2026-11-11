@@ -105,26 +105,17 @@ export class NostrAdapter extends BasePlatformAdapter {
   }
 
   private async sendText(out: OutboundMessage): Promise<SendResult> {
-    if (out.text.length === 0) {
-      return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
-    }
-    if (!this.connected) {
-      return {
-        ok: false,
-        error: { code: "not_connected", message: "NostrAdapter.connect() has not succeeded" },
-      };
-    }
     const recipient = out.channel.id;
-    if (!PUBLIC_KEY.test(recipient)) {
-      return {
-        ok: false,
-        error: {
-          code: "invalid_channel",
-          message: "channel.id must be the recipient's public key, 64 lowercase hex characters",
-        },
-      };
-    }
-    const text = this.textFor(out);
+    const refused = this.refuseUnsendable(out, {
+      className: "NostrAdapter",
+      connected: this.connected,
+      channel: {
+        valid: (id) => PUBLIC_KEY.test(id),
+        message: "channel.id must be the recipient's public key, 64 lowercase hex characters",
+      },
+    });
+    if (refused !== undefined) return refused;
+    const text = this.outboundText(out);
     if (this.schemeOf.get(recipient) === NIP04_KIND) {
       const event = sealNip04(this.secretKey, recipient, text);
       return toSendResult(await this.client.publish(event), event.id);
@@ -156,7 +147,7 @@ export class NostrAdapter extends BasePlatformAdapter {
   }
 
   /** The text to send: markdown loses its markers, html goes as is with one warning. */
-  private textFor(out: OutboundMessage): string {
+  protected override outboundText(out: OutboundMessage): string {
     if (out.format === "markdown") return channelRendering(this.platform).translate(out.text);
     if (out.format === "html" && !this.warnedAboutHtml) {
       this.warnedAboutHtml = true;
@@ -168,7 +159,7 @@ export class NostrAdapter extends BasePlatformAdapter {
   }
 
   private async openSession(): Promise<boolean> {
-    const ok = await withDeadline(this.subscribe(), CONNECT_TIMEOUT_MS);
+    const ok = await withDeadline(this.subscribeRelays(), CONNECT_TIMEOUT_MS);
     if (!ok) {
       process.stderr.write(
         `[${LABEL}] no relay answered the subscription within ${CONNECT_TIMEOUT_MS} ms\n`,
@@ -180,7 +171,7 @@ export class NostrAdapter extends BasePlatformAdapter {
     return true;
   }
 
-  private async subscribe(): Promise<boolean> {
+  private async subscribeRelays(): Promise<boolean> {
     await this.client.open();
     return this.client.subscribe(
       [

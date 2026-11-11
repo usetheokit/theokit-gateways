@@ -24,7 +24,7 @@ import { refuseAttachments } from "./refuse-attachments.js";
 import { SeenUidSet } from "./seen-uids.js";
 import { type ISmtpClient, SmtpClient, type SmtpSendOptions } from "./smtp-client.js";
 import { type ThreadContext, ThreadStore } from "./thread-store.js";
-import type { EmailAdapterOptions } from "./types.js";
+import type { EmailAdapterOptions, EmailCursor } from "./types.js";
 
 const DEFAULT_POLL_INTERVAL_MS = 15_000;
 
@@ -77,6 +77,8 @@ export class EmailAdapter extends BasePlatformAdapter {
   // EC-4: serialize concurrent _dispatchInbound calls.
   private dispatchQueue: Promise<void> = Promise.resolve();
   private pollTimer: NodeJS.Timeout | undefined;
+  /** In-memory cursor (#348); mirrored to `options.cursorStore` when one is given. */
+  private cursor: EmailCursor | undefined;
 
   constructor(opts: EmailAdapterOptions) {
     super();
@@ -127,17 +129,18 @@ export class EmailAdapter extends BasePlatformAdapter {
             });
       await this.smtp.verify();
       await this.imap.connect();
+      await this._establishCursor(this.imap);
 
-      // Start inbound dispatch loop — IDLE if supported, poll otherwise.
+      // Start inbound dispatch loop — IDLE if supported, poll otherwise. `connect()` resolves
+      // once the baseline is set; nothing is dispatched from inside it (#348).
       if (this.imap.supportsIdle()) {
         await this.imap.startIdle(() => {
           void this._drainUnseen().catch(reportDrainFailure);
         });
-        // Drain anything already UNSEEN before IDLE started.
-        await this._drainUnseen();
+        // Mail that arrived between the baseline and IDLE starting.
+        void this._drainUnseen().catch(reportDrainFailure);
       } else {
         // Polling fallback.
-        await this._drainUnseen();
         const intervalMs = this.options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
         this.pollTimer = setInterval(() => {
           void this._drainUnseen().catch(reportDrainFailure);
@@ -230,23 +233,55 @@ export class EmailAdapter extends BasePlatformAdapter {
     };
   }
 
-  /** @internal — drain UNSEEN once and dispatch each. */
+  /**
+   * Load the cursor, and baseline it at the mailbox's UIDNEXT when there is none or its
+   * UIDVALIDITY no longer matches (the UIDs it counted are gone). Existing mail is not dispatched.
+   */
+  private async _establishCursor(imap: IImapClient): Promise<void> {
+    const store = this.options.cursorStore;
+    const status = await imap.mailboxStatus();
+    const known = this.cursor ?? (await store?.load());
+    if (known !== undefined && known.uidValidity === status.uidValidity) {
+      this.cursor = known;
+      return;
+    }
+    this.cursor = { uidValidity: status.uidValidity, uid: status.uidNext };
+    await store?.save(this.cursor);
+  }
+
+  /** @internal — drain UNSEEN past the cursor once and dispatch each. */
   private async _drainUnseen(): Promise<void> {
-    if (this.imap === undefined) return;
+    if (this.imap === undefined || this.cursor === undefined) return;
+    const since = this.cursor.uid;
     let messages: FetchedMessage[] = [];
     try {
-      messages = await this.imap.fetchUnseen();
+      messages = await this.imap.fetchUnseen(since);
     } catch (err) {
       console.error("[email] fetchUnseen failed:", err instanceof Error ? err.message : err);
       return;
     }
+    // `N:*` always includes the last message even when it is below N.
+    messages = messages.filter((m) => m.uid >= since);
     for (const msg of messages) {
       this._dispatchInbound(msg.uid, msg.source, msg.headers);
     }
+    await this._advanceCursor(messages);
     // Chain the flush behind this batch's dispatches rather than awaiting them
     // here: `connect()` calls this, and blocking it on a large backlog is the
     // slow-connect problem, not something to make worse.
     this.dispatchQueue = this.dispatchQueue.then(() => this._flushSeen());
+  }
+
+  private async _advanceCursor(messages: readonly FetchedMessage[]): Promise<void> {
+    if (this.cursor === undefined || messages.length === 0) return;
+    const next = Math.max(...messages.map((m) => m.uid)) + 1;
+    if (next <= this.cursor.uid) return;
+    this.cursor = { uidValidity: this.cursor.uidValidity, uid: next };
+    try {
+      await this.options.cursorStore?.save(this.cursor);
+    } catch (err) {
+      console.error("[email] could not save cursor:", err instanceof Error ? err.message : err);
+    }
   }
 
   /**

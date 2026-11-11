@@ -15,6 +15,7 @@ import {
 import { AliasCache } from "./alias.js";
 import { loadMatrixSdk, type MatrixSdkClient } from "./client.js";
 import { ConfigurationError } from "./errors.js";
+import { subscribeToInvites } from "./invite.js";
 import { matrixEventToMessageEvent } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import { replaceContent } from "./replace-content.js";
@@ -29,6 +30,7 @@ export class MatrixAdapter extends BasePlatformAdapter {
   private readonly opts: MatrixAdapterOptions;
   private client: MatrixSdkClient | undefined;
   private subscription: TimelineSubscription | undefined;
+  private unsubscribeInvites: (() => void) | undefined;
   private inboundHandler: ((event: GatewayMessageEvent) => Promise<void>) | undefined;
   private readonly aliasCache = new AliasCache();
   private connected = false;
@@ -114,7 +116,17 @@ export class MatrixAdapter extends BasePlatformAdapter {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[gateway-matrix] connect failed: ${msg}\n`);
-      return false;
+      // A credential refusal is final: `false` tells the runner not to retry. Anything else (the
+      // homeserver is down, DNS, 5xx) is thrown so a runner with a reconnect policy retries it.
+      const rest = err as MatrixRestError | null;
+      if (
+        rest?.httpStatus === 401 ||
+        rest?.httpStatus === 403 ||
+        rest?.errcode === "M_UNKNOWN_TOKEN"
+      ) {
+        return false;
+      }
+      throw err;
     }
   }
 
@@ -133,6 +145,8 @@ export class MatrixAdapter extends BasePlatformAdapter {
     this.tearingDown = true;
     this.subscription?.unsubscribe();
     this.subscription = undefined;
+    this.unsubscribeInvites?.();
+    this.unsubscribeInvites = undefined;
     this.client?.stopClient();
     this.client = undefined;
     this.connected = false;
@@ -230,6 +244,57 @@ export class MatrixAdapter extends BasePlatformAdapter {
       }
       this.warnFormatUnsupported(out.format);
       await client.sendMessage(roomId, replaceContent(messageId, out));
+    } catch (err) {
+      return mapMatrixError(err);
+    }
+    return { ok: true, messageId };
+  }
+
+  /** Matrix expires a typing notice after its timeout; the runner renews it while the turn runs. */
+  override async startTyping(channelId: string): Promise<void> {
+    await this.setTyping(channelId, true);
+  }
+
+  override async stopTyping(channelId: string): Promise<void> {
+    await this.setTyping(channelId, false);
+  }
+
+  private async setTyping(channelId: string, typing: boolean): Promise<void> {
+    const client = this.client;
+    if (channelId.length === 0 || client?.sendTyping === undefined) return;
+    try {
+      const roomId = await this.aliasCache.resolve(client, channelId);
+      await client.sendTyping(roomId, typing, 10_000);
+    } catch {
+      /* cosmetic — swallow */
+    }
+  }
+
+  override async react(channelId: string, messageId: string, emoji: string): Promise<SendResult> {
+    if (channelId.length === 0 || messageId.length === 0 || emoji.length === 0) {
+      return {
+        ok: false,
+        error: { code: "invalid_reaction", message: "room, event id and emoji are required" },
+      };
+    }
+    const client = this.client;
+    if (client === undefined) {
+      return {
+        ok: false,
+        error: { code: "not_connected", message: "MatrixAdapter.connect() not called" },
+      };
+    }
+    if (client.sendEvent === undefined) {
+      return {
+        ok: false,
+        error: { code: "react_unsupported", message: "matrix client has no sendEvent" },
+      };
+    }
+    try {
+      const roomId = await this.aliasCache.resolve(client, channelId);
+      await client.sendEvent(roomId, "m.reaction", {
+        "m.relates_to": { rel_type: "m.annotation", event_id: messageId, key: emoji },
+      });
     } catch (err) {
       return mapMatrixError(err);
     }
@@ -338,6 +403,14 @@ export class MatrixAdapter extends BasePlatformAdapter {
       botUserId: this.opts.userId,
       freshnessWindowMs: this.opts.freshnessWindowMs ?? DEFAULT_FRESHNESS_MS,
     };
+    const acceptInvite = this.opts.acceptInvite;
+    if (acceptInvite !== undefined && client.joinRoom !== undefined) {
+      this.unsubscribeInvites?.();
+      this.unsubscribeInvites = subscribeToInvites(
+        client as unknown as Parameters<typeof subscribeToInvites>[0],
+        { botUserId: this.opts.userId, acceptInvite },
+      );
+    }
     this.subscription = subscribeToTimeline(
       client,
       (ev: MatrixEventLike, room: MatrixRoomLike) => {

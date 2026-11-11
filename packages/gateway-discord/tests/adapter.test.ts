@@ -7,7 +7,7 @@
  * 2026-08-17, and it pointed at a path that had already stopped existing.
  */
 
-import { Events, GatewayIntentBits } from "discord.js";
+import { Events, GatewayIntentBits, Partials } from "discord.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_DISCORD_INTENTS, DiscordAdapter } from "../src/adapter.js";
@@ -36,6 +36,12 @@ describe("DiscordAdapter (T6.1)", () => {
   afterEach(async () => {
     await adapter.disconnect();
     vi.restoreAllMocks();
+  });
+
+  it("enables the Channel partial so DMs reach messageCreate", () => {
+    const client = (adapter as unknown as { client: { options: { partials?: unknown[] } } }).client;
+    expect(DEFAULT_DISCORD_INTENTS).toContain(GatewayIntentBits.DirectMessages);
+    expect(client.options.partials).toContain(Partials.Channel);
   });
 
   it("platform is 'discord'", () => {
