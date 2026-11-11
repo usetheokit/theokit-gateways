@@ -136,6 +136,26 @@ export interface StartResult {
 }
 
 const DEFAULT_DRAIN_MS = 10_000;
+
+/** Typing indicators last 5-10 s on the platforms that expire them; renew inside that. */
+const TYPING_RENEW_MS = 4_000;
+
+/**
+ * Show a typing indicator on `channelId` until the returned function is awaited. The indicator is
+ * cosmetic: a failing adapter never fails the turn, and the renewal timer never keeps the process alive.
+ */
+function keepTyping(adapter: BasePlatformAdapter, channelId: string): () => Promise<void> {
+  const swallow = (p: Promise<void>): Promise<void> => p.catch(() => undefined);
+  const start = (): Promise<void> =>
+    swallow(Promise.resolve().then(() => adapter.startTyping(channelId)));
+  void start();
+  const timer = setInterval(() => void start(), TYPING_RENEW_MS);
+  timer.unref();
+  return async () => {
+    clearInterval(timer);
+    await swallow(Promise.resolve().then(() => adapter.stopTyping(channelId)));
+  };
+}
 const DEFAULT_COMMAND_PREFIXES: ReadonlyArray<string> = ["/"];
 
 interface ConnectOutcome {
@@ -528,11 +548,14 @@ export class GatewayRunner {
     // CALLER level (start()'s onInbound wrapper) so grammy/discord.js are
     // not serialized — see D192 (2026-05-21 dogfood discovery).
     const work = (async () => {
+      const stopTyping = keepTyping(adapter, event.channel.id);
       try {
         await handler(event, ctx);
       } catch (err) {
         await this.hookExecutor.fireOnError({ event, error: err as Error });
         process.stderr.write(`[gateway] handler error: ${redactSecrets((err as Error).message)}\n`);
+      } finally {
+        await stopTyping();
       }
     })();
     this.inflight.add(work);

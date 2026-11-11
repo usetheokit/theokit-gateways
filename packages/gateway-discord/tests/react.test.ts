@@ -26,3 +26,16 @@ describe("DiscordAdapter.react", () => {
     expect(put).not.toHaveBeenCalled();
   });
 });
+
+describe("DiscordAdapter.startTyping", () => {
+  it("posts the channel typing route once connected, and swallows failure", async () => {
+    const adapter = new DiscordAdapter({ token: "fake-token" });
+    const post = vi.fn(async () => undefined);
+    vi.spyOn(adapter.getBot().rest, "post").mockImplementation(post as never);
+    (adapter as unknown as { connected: boolean }).connected = true;
+    await adapter.startTyping("c1");
+    expect(post).toHaveBeenCalledWith(Routes.channelTyping("c1"));
+    post.mockRejectedValueOnce(new Error("x"));
+    await expect(adapter.startTyping("c1")).resolves.toBeUndefined();
+  });
+});

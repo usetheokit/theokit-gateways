@@ -233,6 +233,16 @@ export class DiscordAdapter extends BasePlatformAdapter {
     return { ok: true, messageId };
   }
 
+  /** Discord shows "<bot> is typing" for 10 s per call; the runner renews it. */
+  override async startTyping(channelId: string): Promise<void> {
+    if (channelId.length === 0 || !this.connected) return;
+    try {
+      await this.client.rest.post(Routes.channelTyping(channelId));
+    } catch {
+      /* cosmetic — swallow */
+    }
+  }
+
   override onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
     // EC-H: replace previous handler.
     this.handler = handler;

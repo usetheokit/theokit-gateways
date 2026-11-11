@@ -246,6 +246,26 @@ export class MatrixAdapter extends BasePlatformAdapter {
     return { ok: true, messageId };
   }
 
+  /** Matrix expires a typing notice after its timeout; the runner renews it while the turn runs. */
+  override async startTyping(channelId: string): Promise<void> {
+    await this.setTyping(channelId, true);
+  }
+
+  override async stopTyping(channelId: string): Promise<void> {
+    await this.setTyping(channelId, false);
+  }
+
+  private async setTyping(channelId: string, typing: boolean): Promise<void> {
+    const client = this.client;
+    if (channelId.length === 0 || client?.sendTyping === undefined) return;
+    try {
+      const roomId = await this.aliasCache.resolve(client, channelId);
+      await client.sendTyping(roomId, typing, 10_000);
+    } catch {
+      /* cosmetic — swallow */
+    }
+  }
+
   override async react(channelId: string, messageId: string, emoji: string): Promise<SendResult> {
     if (channelId.length === 0 || messageId.length === 0 || emoji.length === 0) {
       return {

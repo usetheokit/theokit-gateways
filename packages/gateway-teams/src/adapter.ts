@@ -35,7 +35,7 @@ interface TeamsAppLike {
   stop(): Promise<void>;
   send(
     conversationId: string,
-    activity: { type: "message"; text: string },
+    activity: { type: "message"; text: string } | { type: "typing" },
   ): Promise<{ id: string }>;
   on(name: "activity", cb: (event: unknown) => void | Promise<void>): void;
   on(name: string, cb: (event: unknown) => void | Promise<void>): void;
@@ -283,6 +283,16 @@ export class TeamsAdapter extends BasePlatformAdapter {
       lastActivityId = sent.messageId ?? lastActivityId;
     }
     return lastActivityId !== undefined ? { ok: true, messageId: lastActivityId } : { ok: true };
+  }
+
+  /** Teams shows a typing activity for a few seconds; the runner renews it while the turn runs. */
+  override async startTyping(channelId: string): Promise<void> {
+    if (channelId.length === 0 || !this.connected || this.app === undefined) return;
+    try {
+      await this.app.send(channelId, { type: "typing" });
+    } catch {
+      /* cosmetic — swallow */
+    }
   }
 
   /** Teams edits a sent activity's text through the conversations REST client. */

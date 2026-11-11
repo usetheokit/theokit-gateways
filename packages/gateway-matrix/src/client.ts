@@ -25,6 +25,8 @@ export interface MatrixSdkClient extends MatrixClientLike {
     eventType: string,
     content: Record<string, unknown>,
   ): Promise<{ event_id: string }>;
+  /** `PUT /rooms/{roomId}/typing/{userId}`; present on matrix-js-sdk's client. */
+  sendTyping?(roomId: string, isTyping: boolean, timeoutMs: number): Promise<unknown>;
   getRoomIdForAlias(alias: string): Promise<{ room_id: string }>;
   getRoom(roomId: string): MatrixRoomLike | null;
   isRoomEncrypted?(roomId: string): boolean;
