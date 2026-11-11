@@ -37,6 +37,7 @@ const ALL_PLATFORMS = [
   "twitch",
   "zalo_personal",
   "zalo",
+  "wechat",
   "clickclack",
   "buzz",
 ] as const satisfies readonly PlatformName[];
@@ -71,6 +72,7 @@ const PLAIN: readonly PlatformName[] = [
   "twitch",
   "zalo_personal",
   "zalo",
+  "wechat",
   "clickclack",
   "buzz",
 ];

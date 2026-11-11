@@ -154,6 +154,7 @@ describe("which adapters can edit", () => {
       "gateway-telegram",
       "gateway-tlon-urbit",
       "gateway-twitch",
+      "gateway-wechat",
       "gateway-whatsapp",
       "gateway-zalo",
       "gateway-zalo-personal",

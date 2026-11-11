@@ -111,6 +111,7 @@ export type {
   SynologyChatMessageEvent,
   TlonUrbitMessageEvent,
   TwitchMessageEvent,
+  WeChatMessageEvent,
   ZaloMessageEvent,
   ZaloPersonalMessageEvent,
 } from "./types/platform-events.js";

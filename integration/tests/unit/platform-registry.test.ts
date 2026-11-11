@@ -88,6 +88,7 @@ const ROUTES: Routes = {
   clickclack: (event) => `cc:${event.clickclack.messageId}`,
   buzz: (event) => `bz:${event.buzz.messageId}`,
   zalo: (event) => `za:${event.zalo.messageId}`,
+  wechat: (event) => `wx:${event.wechat.messageId}`,
   zalo_personal: (event) => `zp:${event.zalo_personal.messageId}`,
   acmechat: (event) => `ac:${event.acmechat.senderUuid}`,
 };

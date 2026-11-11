@@ -40,6 +40,7 @@ const PLATFORM_NAMES = [
   "zalo_personal",
   "zalo-personal",
   "zalo",
+  "wechat",
   "clickclack",
   "buzz",
 ] as const;

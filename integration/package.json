@@ -49,6 +49,7 @@
     "@theokit/gateway-tlon-urbit": "workspace:*",
     "@theokit/gateway-twitch": "workspace:*",
     "@theokit/gateway-whatsapp": "workspace:*",
+    "@theokit/gateway-wechat": "workspace:*",
     "@theokit/gateway-zalo": "workspace:*",
     "@theokit/gateway-zalo-personal": "workspace:*",
     "@types/express": "^5.0.6",

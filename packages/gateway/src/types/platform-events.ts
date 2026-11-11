@@ -231,6 +231,21 @@ export interface ZaloMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** WeChat Official Account event variant, a text message pushed to the server URL. */
+export interface WeChatMessageEvent extends BaseMessageEvent {
+  readonly platform: "wechat";
+  readonly wechat: {
+    /** The message's `MsgId`. */
+    readonly messageId: string;
+    /** The sender's OpenID for this account; the send target for a reply. */
+    readonly openId: string;
+    /** The Official Account's original id (the message's `ToUserName`). */
+    readonly accountId: string;
+    /** The parsed XML fields — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** Twitch event variant (B-363), a `channel.chat.message` EventSub notification. */
 export interface TwitchMessageEvent extends BaseMessageEvent {
   readonly platform: "twitch";
