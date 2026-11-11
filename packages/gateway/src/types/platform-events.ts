@@ -246,6 +246,19 @@ export interface WeChatMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** Raft event variant, one wake delivered by the Raft CLI wake bridge. */
+export interface RaftMessageEvent extends BaseMessageEvent {
+  readonly platform: "raft";
+  readonly raft: {
+    /** The wake's id. */
+    readonly messageId: string;
+    /** Who woke the agent in Raft. */
+    readonly senderId: string;
+    /** The parsed wake line — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** Twitch event variant (B-363), a `channel.chat.message` EventSub notification. */
 export interface TwitchMessageEvent extends BaseMessageEvent {
   readonly platform: "twitch";
