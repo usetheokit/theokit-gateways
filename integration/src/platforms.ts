@@ -373,6 +373,20 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     undefined,
   ),
   platform(
+    "qq",
+    "QQ Bot",
+    "connection",
+    [
+      "QQ_APP_ID :: The QQ Bot AppID :: q.qq.com → your bot → Development settings",
+      "QQ_APP_SECRET :: The bot's AppSecret (ClientSecret), exchanged for an access token :: The same page",
+    ],
+    [
+      "QQ_TEST_OPENID :: The user_openid of a QQ user who messaged the bot :: The `author.user_openid` of one C2C_MESSAGE_CREATE event",
+    ],
+    "Receiving needs a QQ user to message the bot while the suite waits (the bot's sandbox member list must include them). A passive reply must cite the inbound message id and is refused after 5 minutes (qq_send_failed).",
+    undefined,
+  ),
+  platform(
     "zalo-personal",
     "Zalo Personal",
     "connection",

@@ -246,6 +246,21 @@ export interface WeChatMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** QQ Bot event variant, a C2C (direct) or group @-mention message from the QQ Bot gateway. */
+export interface QQMessageEvent extends BaseMessageEvent {
+  readonly platform: "qq";
+  readonly qq: {
+    /** The message's id; the `msg_id` a passive reply cites. */
+    readonly messageId: string;
+    /** The sender's openid (`user_openid` in a DM, `member_openid` in a group). */
+    readonly senderId: string;
+    /** `"c2c"` for a direct message, `"group"` for a group @-mention. */
+    readonly scene: "c2c" | "group";
+    /** The dispatched `d` payload — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** Raft event variant, one wake delivered by the Raft CLI wake bridge. */
 export interface RaftMessageEvent extends BaseMessageEvent {
   readonly platform: "raft";

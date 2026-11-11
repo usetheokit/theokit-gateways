@@ -52,6 +52,7 @@ export const PLATFORM_NAMES = Object.freeze([
   "zalo",
   "wechat",
   "raft",
+  "qq",
   "clickclack",
   "buzz",
 ]);

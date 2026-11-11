@@ -16,6 +16,7 @@
     "@theokit/gateway-zalo",
     "@theokit/gateway-wechat",
     "@theokit/gateway-raft",
+    "@theokit/gateway-qq",
     "@theokit/gateway-clickclack",
     "@theokit/gateway-buzz"
   ],
