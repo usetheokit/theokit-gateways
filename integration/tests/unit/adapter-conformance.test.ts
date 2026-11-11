@@ -36,6 +36,7 @@ import { MatrixAdapter } from "@theokit/gateway-matrix";
 import { MattermostAdapter } from "@theokit/gateway-mattermost";
 import { NextcloudTalkAdapter } from "@theokit/gateway-nextcloud-talk";
 import { NostrAdapter } from "@theokit/gateway-nostr";
+import { QQAdapter } from "@theokit/gateway-qq";
 import { RaftAdapter } from "@theokit/gateway-raft";
 import { SignalAdapter } from "@theokit/gateway-signal";
 import { SlackAdapter } from "@theokit/gateway-slack";
@@ -232,6 +233,10 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
         allowFrom: ["alice"],
         pollIntervalMs: 0,
       }),
+  },
+  {
+    platform: "qq",
+    make: () => new QQAdapter({ appId: "a", appSecret: "s" }),
   },
   {
     platform: "yuanbao",

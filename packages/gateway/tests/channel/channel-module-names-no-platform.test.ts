@@ -44,6 +44,7 @@ const PLATFORM_NAMES = [
   "wecom",
   "yuanbao",
   "x",
+  "qq",
   "raft",
   "clickclack",
   "buzz",
