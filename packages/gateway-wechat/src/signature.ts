@@ -10,8 +10,9 @@ import crypto from "node:crypto";
 const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 export function computeWeChatSignature(token: string, timestamp: string, nonce: string): string {
-  return crypto
-    .createHash("sha1") // NOSONAR: SHA-1 is mandated by the platform callback protocol
+  // SHA-1 is mandated by the platform callback protocol; Sonar reports it on the `return` line.
+  return crypto // NOSONAR
+    .createHash("sha1")
     .update([token, timestamp, nonce].sort(byCodeUnit).join(""), "utf8")
     .digest("hex");
 }
