@@ -7,9 +7,9 @@
 
 import {
   BasePlatformAdapter,
-  channelRendering,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
+  SeenIds,
   type SendResult,
 } from "@theokit/gateway";
 
@@ -60,10 +60,9 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
   readonly platform = "yuanbao" as const;
   private readonly opts: YuanbaoAdapterOptions;
   private readonly doFetch: YuanbaoFetch;
-  private handler: ((event: GatewayMessageEvent) => Promise<void>) | undefined;
   private connected = false;
   private accessToken: { value: string; expiresAt: number } | undefined;
-  private readonly seen = new Set<string>();
+  private readonly seen = new SeenIds();
 
   /** @throws Error when `appId`, `appSecret` or `callbackSecret` is empty */
   constructor(opts: YuanbaoAdapterOptions) {
@@ -99,24 +98,15 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
   }
 
   private async sendText(out: OutboundMessage): Promise<SendResult> {
-    if (out.text.length === 0) {
-      return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
-    }
-    if (!this.connected) {
-      return {
-        ok: false,
-        error: { code: "not_connected", message: "YuanbaoAdapter.connect() has not succeeded" },
-      };
-    }
-    if (out.channel.id === "") {
-      return {
-        ok: false,
-        error: { code: "invalid_channel", message: "channel.id must be a Yuanbao user id" },
-      };
-    }
+    const refused = this.refuseUnsendable(out, {
+      className: "YuanbaoAdapter",
+      connected: this.connected,
+      channel: { valid: (id) => id !== "", message: "channel.id must be a Yuanbao user id" },
+    });
+    if (refused !== undefined) return refused;
     let messageId = "";
     try {
-      for (const text of splitForYuanbao(this.textFor(out))) {
+      for (const text of splitForYuanbao(this.outboundText(out))) {
         const token = await this.token(false);
         const body = await this.call("POST", "/open-apis/message/send", token, {
           receive_id: out.channel.id,
@@ -141,17 +131,14 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
   }
 
   onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
-    this.handler = handler;
-    return () => {
-      if (this.handler === handler) this.handler = undefined;
-    };
+    return this.subscribe(handler);
   }
 
   /** Deliver an event that arrived out of band, through `runHandler`. */
   override async deliver(
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
-    return this.runHandler(this.handler, event);
+    return this.deliverInbound(event);
   }
 
   /**
@@ -176,26 +163,9 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     }
     const event = toMessageEvent(payload);
     if (event === undefined) return { status: 200, reason: "not a text message" };
-    if (this.seen.has(event.id)) return { status: 200, reason: "duplicate" };
-    if (this.handler === undefined) return { status: 503, reason: "no handler subscribed" };
-    this.remember(event.id);
-    const outcome = await this.runHandler(this.handler, event);
-    if (outcome === "handler_threw") process.stderr.write(`[${LABEL}] handler threw\n`);
+    const outcome = await this.dispatchOnce(this.seen, event, LABEL);
+    if (outcome === "no_handler") return { status: 503, reason: "no handler subscribed" };
     return { status: 200, reason: outcome };
-  }
-
-  private remember(id: string): void {
-    this.seen.add(id);
-    if (this.seen.size > 1000) {
-      const oldest = this.seen.values().next().value;
-      if (oldest !== undefined) this.seen.delete(oldest);
-    }
-  }
-
-  private textFor(out: OutboundMessage): string {
-    return out.format === "markdown"
-      ? channelRendering(this.platform).translate(out.text)
-      : out.text;
   }
 
   private async token(force: boolean): Promise<string> {

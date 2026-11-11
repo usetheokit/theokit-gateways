@@ -91,16 +91,12 @@ export class FeishuLarkAdapter extends BasePlatformAdapter {
   }
 
   private async sendText(out: OutboundMessage): Promise<SendResult> {
-    if (out.text.length === 0) {
-      return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
-    }
-    if (!this.connected) {
-      return {
-        ok: false,
-        error: { code: "not_connected", message: "FeishuLarkAdapter.connect() has not succeeded" },
-      };
-    }
-    const text = this.textFor(out);
+    const refused = this.refuseUnsendable(out, {
+      className: "FeishuLarkAdapter",
+      connected: this.connected,
+    });
+    if (refused !== undefined) return refused;
+    const text = this.outboundText(out);
     const call =
       out.replyTo === undefined
         ? this.transport.createMessage(out.channel.id, text)
@@ -129,7 +125,7 @@ export class FeishuLarkAdapter extends BasePlatformAdapter {
   }
 
   /** The text to send: markdown loses its markers, html goes as is with one warning. */
-  private textFor(out: OutboundMessage): string {
+  protected override outboundText(out: OutboundMessage): string {
     if (out.format === "markdown") return channelRendering(this.platform).translate(out.text);
     if (out.format === "html" && !this.warnedAboutHtml) {
       this.warnedAboutHtml = true;
