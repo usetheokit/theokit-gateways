@@ -121,12 +121,19 @@ async function credentialFaults(pkg: string, fields: readonly string[]): Promise
  */
 const WEIXIN_BASE_NAME = "WeixinAdapterBase";
 const WEIXIN_BASE_PATH = join(PACKAGES_DIR, "gateway", "src", "adapter", "weixin-base.ts");
+const BASE_PATH = join(PACKAGES_DIR, "gateway", "src", "adapter", "base.ts");
+const BASE_HELPER_CALL = /this\.(?:subscribe|dispatchOnce|outboundText|refuseUnsendable)\(/;
 const SHARED_CORE_IMPORT = "@theokit/gateway-bot-realtime";
 async function withSharedCore(source: string): Promise<string> {
   let out = source;
   // WeChat and WeCom extend `WeixinAdapterBase` in `@theokit/gateway`; its flow is theirs.
   if (source.includes(WEIXIN_BASE_NAME))
     out = `${await readFile(WEIXIN_BASE_PATH, "utf8")}\n${out}`;
+  // The base adapter's helpers (`subscribe`, `dispatchOnce`, `outboundText`, `refuseUnsendable`) hold
+  // the steps an adapter calls instead of copying; that source is read after the adapter's own.
+  if (BASE_HELPER_CALL.test(out)) {
+    out = `${out}\n${await readFile(BASE_PATH, "utf8")}`;
+  }
   if (!source.includes(SHARED_CORE_IMPORT)) return out;
   const core = await readFile(join(PACKAGES_DIR, "bot-realtime", "src", "adapter.ts"), "utf8");
   return `${core}\n${out}`;
@@ -333,8 +340,11 @@ function emptyTextGuardVerdict(source: string): string | undefined {
   const start = code.search(/(?:sendMessage|sendText)\(out: OutboundMessage\)/);
   if (start === -1) return undefined;
   const body = code.slice(start, start + 800);
-  const emptyAt = body.indexOf("empty_text");
-  const guardAt = body.search(/this\.connected|this\.\w+ === undefined/);
+  // `refuseUnsendable` is the base adapter's one copy of the checks, which it makes in this order.
+  const viaHelper = body.includes("this.refuseUnsendable(");
+  const checks = viaHelper ? code.slice(code.indexOf("protected refuseUnsendable(")) : body;
+  const emptyAt = checks.indexOf("empty_text");
+  const guardAt = checks.search(/this\.connected|check\.connected|this\.\w+ === undefined/);
   if (emptyAt === -1) return "no empty_text guard";
   if (guardAt !== -1 && guardAt < emptyAt) return "state guard precedes empty_text";
   return undefined;
@@ -383,6 +393,19 @@ async function declaredSplitter(pkg: string): Promise<string | undefined> {
   return /export function (split\w+)/.exec(split)?.[1];
 }
 
+/**
+ * Whether an `onInbound` body guards its unsubscribe on handler identity: through the base adapter's
+ * `subscribe` (whose guard the package-level test below reads), or with its own check on the field
+ * it stores the handler in.
+ */
+function isGuardedUnsubscribe(body: string, stored: string | undefined): boolean {
+  if (/return\s+this\.subscribe\(handler\)\s*;/.test(body)) return true;
+  return (
+    stored !== undefined &&
+    new RegExp(`if\\s*\\(\\s*this\\.${stored}\\s*===\\s*handler\\s*\\)`).test(body)
+  );
+}
+
 describe("cross-adapter contract", () => {
   it("identity-guards EVERY handler unsubscribe, in every file that declares one", async () => {
     // Per-declaration, not per-package. The package-level version of this check passed
@@ -406,9 +429,7 @@ describe("cross-adapter contract", () => {
         // assumed, so the guard is checked against the SAME field and a sibling's guard on a
         // different one cannot stand in for it.
         const stored = /this\.(\w+)\s*=\s*handler\s*;/.exec(body)?.[1];
-        const guarded =
-          stored !== undefined &&
-          new RegExp(`if\\s*\\(\\s*this\\.${stored}\\s*===\\s*handler\\s*\\)`).test(body);
+        const guarded = isGuardedUnsubscribe(body, stored);
         if (!guarded) offenders.push(`${path}: ${found[0].slice(0, 24)}…`);
       }
     }
@@ -453,7 +474,7 @@ describe("cross-adapter contract", () => {
       // excused was the one adapter carrying the defect, which is what an exemption written
       // from a reading of the code rather than a test of it will eventually always be.
       const guarded =
-        /if\s*\(\s*this\.(inboundH|h)andler\s*===\s*handler\s*\)\s*\{?\s*this\.\1andler\s*=\s*undefined\s*;/.test(
+        /if\s*\(\s*this\.(inboundH|subscribedH|h)andler\s*===\s*handler\s*\)\s*\{?\s*this\.\1andler\s*=\s*undefined\s*;/.test(
           code,
         );
       if (!guarded) offenders.push(pkg);

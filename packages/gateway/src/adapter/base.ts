@@ -11,6 +11,8 @@
  * (`TelegramAdapter`, `DiscordAdapter`, ...).
  */
 
+import { channelRendering } from "../text/channel-rendering.js";
+import type { SeenIds } from "../text/seen-ids.js";
 import type { MessageEvent as GatewayMessageEvent, PlatformName } from "../types/message-event.js";
 
 /**
@@ -170,6 +172,76 @@ export abstract class BasePlatformAdapter {
       return "handler_threw";
     }
     return "ok";
+  }
+
+  /** The handler {@link subscribe} holds; `undefined` while nobody is subscribed. */
+  protected subscribedHandler: ((event: GatewayMessageEvent) => Promise<void>) | undefined;
+
+  /** The body of {@link onInbound}: replace the handler, and unsubscribe only if it is still the one held. */
+  protected subscribe(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
+    this.subscribedHandler = handler;
+    return () => {
+      if (this.subscribedHandler === handler) this.subscribedHandler = undefined;
+    };
+  }
+
+  /** The body of {@link deliver} for an adapter that subscribed through {@link subscribe}. */
+  protected deliverInbound(
+    event: GatewayMessageEvent,
+  ): Promise<"ok" | "no_handler" | "handler_threw"> {
+    return this.runHandler(this.subscribedHandler, event);
+  }
+
+  /**
+   * Dispatch a webhook event once: `duplicate` when `seen` holds its id, `no_handler` when nobody
+   * subscribed (the id is then NOT remembered, so a redelivery is handled), otherwise remember the
+   * id and run the handler. A handler's throw is also logged under `label`.
+   */
+  protected async dispatchOnce(
+    seen: SeenIds,
+    event: GatewayMessageEvent,
+    label: string,
+  ): Promise<"ok" | "no_handler" | "handler_threw" | "duplicate"> {
+    if (seen.has(event.id)) return "duplicate";
+    if (this.subscribedHandler === undefined) return "no_handler";
+    seen.add(event.id);
+    const outcome = await this.runHandler(this.subscribedHandler, event);
+    if (outcome === "handler_threw") process.stderr.write(`[${label}] handler threw\n`);
+    return outcome;
+  }
+
+  /** `out.text`, translated to the platform's markup when `out.format` is `markdown`. */
+  protected outboundText(out: OutboundMessage): string {
+    return out.format === "markdown"
+      ? channelRendering(this.platform).translate(out.text)
+      : out.text;
+  }
+
+  /**
+   * The local checks every text-only `sendMessage` makes before a request, in this order:
+   * `empty_text`, `not_connected`, then `invalid_channel` when `channel.valid` rejects the id.
+   * Returns the refusal, or `undefined` when the message may be sent.
+   */
+  protected refuseUnsendable(
+    out: OutboundMessage,
+    check: {
+      readonly className: string;
+      readonly connected: boolean;
+      readonly channel?: { readonly valid: (id: string) => boolean; readonly message: string };
+    },
+  ): SendResult | undefined {
+    const refuse = (code: string, message: string): SendResult => ({
+      ok: false,
+      error: { code, message },
+    });
+    if (out.text.length === 0) return refuse("empty_text", "outbound text is empty");
+    if (!check.connected) {
+      return refuse("not_connected", `${check.className}.connect() has not succeeded`);
+    }
+    if (check.channel !== undefined && !check.channel.valid(out.channel.id)) {
+      return refuse("invalid_channel", check.channel.message);
+    }
+    return undefined;
   }
 
   /**

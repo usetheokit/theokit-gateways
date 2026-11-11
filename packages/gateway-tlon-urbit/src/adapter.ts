@@ -87,26 +87,17 @@ export class TlonUrbitAdapter extends BasePlatformAdapter {
   }
 
   private async sendText(out: OutboundMessage): Promise<SendResult> {
-    if (out.text.length === 0) {
-      return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
-    }
-    if (!this.connected) {
-      return {
-        ok: false,
-        error: { code: "not_connected", message: "TlonUrbitAdapter.connect() has not succeeded" },
-      };
-    }
+    const refused = this.refuseUnsendable(out, {
+      className: "TlonUrbitAdapter",
+      connected: this.connected,
+      channel: {
+        valid: (id) => SHIP.test(normalizeShip(id)),
+        message: `channel.id must be a ship name, ~sampel-palnet, got ${JSON.stringify(out.channel.id)}`,
+      },
+    });
+    if (refused !== undefined) return refused;
     const recipient = normalizeShip(out.channel.id);
-    if (!SHIP.test(recipient)) {
-      return {
-        ok: false,
-        error: {
-          code: "invalid_channel",
-          message: `channel.id must be a ship name, ~sampel-palnet, got ${JSON.stringify(out.channel.id)}`,
-        },
-      };
-    }
-    const poke = dmPoke(this.ship, recipient, this.textFor(out), Date.now(), this.lastSentAt);
+    const poke = dmPoke(this.ship, recipient, this.outboundText(out), Date.now(), this.lastSentAt);
     this.lastSentAt = poke.sentAt;
     const result = await this.client.poke("chat", "chat-dm-action", poke.json);
     if (result.ok) return { ok: true, messageId: poke.messageId };
@@ -140,7 +131,7 @@ export class TlonUrbitAdapter extends BasePlatformAdapter {
   }
 
   /** The text to send: markdown loses its markers, html goes as is with one warning. */
-  private textFor(out: OutboundMessage): string {
+  protected override outboundText(out: OutboundMessage): string {
     if (out.format === "markdown") return channelRendering(this.platform).translate(out.text);
     if (out.format === "html" && !this.warnedAboutHtml) {
       this.warnedAboutHtml = true;

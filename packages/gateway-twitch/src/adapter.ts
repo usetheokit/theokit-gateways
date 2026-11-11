@@ -107,25 +107,16 @@ export class TwitchAdapter extends BasePlatformAdapter {
   }
 
   private async sendText(out: OutboundMessage): Promise<SendResult> {
-    if (out.text.length === 0) {
-      return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
-    }
-    if (!this.connected) {
-      return {
-        ok: false,
-        error: { code: "not_connected", message: "TwitchAdapter.connect() has not succeeded" },
-      };
-    }
-    if (!USER_ID.test(out.channel.id)) {
-      return {
-        ok: false,
-        error: {
-          code: "invalid_channel",
-          message: `channel.id must be the broadcaster's numeric user id, got ${JSON.stringify(out.channel.id)}`,
-        },
-      };
-    }
-    const parts = splitForTwitch(this.textFor(out));
+    const refused = this.refuseUnsendable(out, {
+      className: "TwitchAdapter",
+      connected: this.connected,
+      channel: {
+        valid: (id) => USER_ID.test(id),
+        message: `channel.id must be the broadcaster's numeric user id, got ${JSON.stringify(out.channel.id)}`,
+      },
+    });
+    if (refused !== undefined) return refused;
+    const parts = splitForTwitch(this.outboundText(out));
     const answer = await withTimeout(SEND_TIMEOUT_MS, (signal) =>
       this.sendParts(out, parts, signal),
     );
@@ -179,7 +170,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
   }
 
   /** The text to send: markdown loses its markers, html goes as is with one warning. */
-  private textFor(out: OutboundMessage): string {
+  protected override outboundText(out: OutboundMessage): string {
     if (out.format === "markdown") return channelRendering(this.platform).translate(out.text);
     if (out.format === "html" && !this.warnedAboutHtml) {
       this.warnedAboutHtml = true;

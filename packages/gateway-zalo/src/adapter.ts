@@ -6,9 +6,9 @@
 
 import {
   BasePlatformAdapter,
-  channelRendering,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
+  SeenIds,
   type SendResult,
 } from "@theokit/gateway";
 
@@ -44,9 +44,8 @@ export class ZaloAdapter extends BasePlatformAdapter {
   readonly platform = "zalo" as const;
   private readonly opts: ZaloAdapterOptions;
   private readonly doFetch: ZaloFetch;
-  private handler: ((event: GatewayMessageEvent) => Promise<void>) | undefined;
   private connected = false;
-  private readonly seen = new Set<string>();
+  private readonly seen = new SeenIds();
 
   /** @throws Error when `appId`, `oaSecretKey` or `accessToken` is empty */
   constructor(opts: ZaloAdapterOptions) {
@@ -84,24 +83,15 @@ export class ZaloAdapter extends BasePlatformAdapter {
   }
 
   private async sendText(out: OutboundMessage): Promise<SendResult> {
-    if (out.text.length === 0) {
-      return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
-    }
-    if (!this.connected) {
-      return {
-        ok: false,
-        error: { code: "not_connected", message: "ZaloAdapter.connect() has not succeeded" },
-      };
-    }
-    if (out.channel.id === "") {
-      return {
-        ok: false,
-        error: { code: "invalid_channel", message: "channel.id must be a Zalo user id" },
-      };
-    }
+    const refused = this.refuseUnsendable(out, {
+      className: "ZaloAdapter",
+      connected: this.connected,
+      channel: { valid: (id) => id !== "", message: "channel.id must be a Zalo user id" },
+    });
+    if (refused !== undefined) return refused;
     let messageId = "";
     try {
-      for (const text of splitForZalo(this.textFor(out))) {
+      for (const text of splitForZalo(this.outboundText(out))) {
         const body = await this.call("POST", "/v3.0/oa/message/cs", {
           recipient: { user_id: out.channel.id },
           message: { text },
@@ -124,17 +114,14 @@ export class ZaloAdapter extends BasePlatformAdapter {
   }
 
   onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
-    this.handler = handler;
-    return () => {
-      if (this.handler === handler) this.handler = undefined;
-    };
+    return this.subscribe(handler);
   }
 
   /** Deliver an event that arrived out of band, through `runHandler`. */
   override async deliver(
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
-    return this.runHandler(this.handler, event);
+    return this.deliverInbound(event);
   }
 
   /** The values a webhook route needs to verify a request itself. */
@@ -160,10 +147,8 @@ export class ZaloAdapter extends BasePlatformAdapter {
     const skipped = this.skipReason(payload);
     if (skipped !== undefined) return { status: 200, reason: skipped };
     const event = toMessageEvent(payload) as GatewayMessageEvent;
-    if (this.handler === undefined) return { status: 503, reason: "no handler subscribed" };
-    this.remember(event.id);
-    const outcome = await this.runHandler(this.handler, event);
-    if (outcome === "handler_threw") process.stderr.write(`[${LABEL}] handler threw\n`);
+    const outcome = await this.dispatchOnce(this.seen, event, LABEL);
+    if (outcome === "no_handler") return { status: 503, reason: "no handler subscribed" };
     return { status: 200, reason: outcome };
   }
 
@@ -172,23 +157,7 @@ export class ZaloAdapter extends BasePlatformAdapter {
     if (payload.app_id !== undefined && payload.app_id !== this.opts.appId) {
       return "event is for another app";
     }
-    const event = toMessageEvent(payload);
-    if (event === undefined) return "not a text message";
-    return this.seen.has(event.id) ? "duplicate" : undefined;
-  }
-
-  private remember(id: string): void {
-    this.seen.add(id);
-    if (this.seen.size > 1000) {
-      const oldest = this.seen.values().next().value;
-      if (oldest !== undefined) this.seen.delete(oldest);
-    }
-  }
-
-  private textFor(out: OutboundMessage): string {
-    return out.format === "markdown"
-      ? channelRendering(this.platform).translate(out.text)
-      : out.text;
+    return toMessageEvent(payload) === undefined ? "not a text message" : undefined;
   }
 
   private async call(method: "GET" | "POST", path: string, payload?: unknown) {

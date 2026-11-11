@@ -6,7 +6,7 @@
  * @public
  */
 
-import { channelRendering } from "../text/channel-rendering.js";
+import { SeenIds } from "../text/seen-ids.js";
 import type { MessageEvent as GatewayMessageEvent } from "../types/message-event.js";
 import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "./base.js";
 import { parseFlatXml } from "./weixin-xml.js";
@@ -83,10 +83,9 @@ function weixinAck(reason: string): WeixinWebhookAnswer {
 export abstract class WeixinAdapterBase extends BasePlatformAdapter {
   private readonly cfg: WeixinAdapterConfig;
   private readonly doFetch: WeixinFetch;
-  private handler: ((event: GatewayMessageEvent) => Promise<void>) | undefined;
   private connected = false;
   private accessToken: { value: string; expiresAt: number } | undefined;
-  private readonly seen = new Set<string>();
+  private readonly seen = new SeenIds();
 
   constructor(cfg: WeixinAdapterConfig) {
     super();
@@ -148,7 +147,7 @@ export abstract class WeixinAdapterBase extends BasePlatformAdapter {
   private async sendParts(out: OutboundMessage): Promise<SendResult> {
     const failed = `${this.platform}_send_failed`;
     try {
-      for (const content of this.split(this.textFor(out))) {
+      for (const content of this.split(this.outboundText(out))) {
         const token = await this.token(false);
         const req = this.sendRequest(token, out.channel.id, content);
         const body = await this.call("POST", req.path, req.payload);
@@ -170,17 +169,14 @@ export abstract class WeixinAdapterBase extends BasePlatformAdapter {
   }
 
   onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
-    this.handler = handler;
-    return () => {
-      if (this.handler === handler) this.handler = undefined;
-    };
+    return this.subscribe(handler);
   }
 
   /** Deliver an event that arrived out of band, through `runHandler`. */
   override async deliver(
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
-    return this.runHandler(this.handler, event);
+    return this.deliverInbound(event);
   }
 
   /** Turn a plain (decrypted) XML body into one event, dispatch it and answer the webhook. */
@@ -188,28 +184,9 @@ export abstract class WeixinAdapterBase extends BasePlatformAdapter {
     const event = this.toEvent(parseFlatXml(xml));
     if (event === "skip") return weixinAck("not a text message");
     if (event === undefined) return { status: 400, body: "", reason: "incomplete" };
-    if (this.seen.has(event.id)) return weixinAck("duplicate");
-    if (this.handler === undefined) {
-      return { status: 503, body: "", reason: "no handler subscribed" };
-    }
-    this.remember(event.id);
-    const outcome = await this.runHandler(this.handler, event);
-    if (outcome === "handler_threw") process.stderr.write(`[${this.cfg.label}] handler threw\n`);
+    const outcome = await this.dispatchOnce(this.seen, event, this.cfg.label);
+    if (outcome === "no_handler") return { status: 503, body: "", reason: "no handler subscribed" };
     return weixinAck(outcome);
-  }
-
-  private remember(id: string): void {
-    this.seen.add(id);
-    if (this.seen.size > 1000) {
-      const oldest = this.seen.values().next().value;
-      if (oldest !== undefined) this.seen.delete(oldest);
-    }
-  }
-
-  private textFor(out: OutboundMessage): string {
-    return out.format === "markdown"
-      ? channelRendering(this.platform).translate(out.text)
-      : out.text;
   }
 
   private async token(force: boolean): Promise<string> {

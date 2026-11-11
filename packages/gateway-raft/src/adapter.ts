@@ -13,7 +13,6 @@ import { spawn as nodeSpawn } from "node:child_process";
 
 import {
   BasePlatformAdapter,
-  channelRendering,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
   type SendResult,
@@ -125,24 +124,13 @@ export class RaftAdapter extends BasePlatformAdapter {
   }
 
   private async sendText(out: OutboundMessage): Promise<SendResult> {
-    if (out.text.length === 0) {
-      return { ok: false, error: { code: "empty_text", message: "outbound text is empty" } };
-    }
-    if (!this.connected) {
-      return {
-        ok: false,
-        error: { code: "not_connected", message: "RaftAdapter.connect() has not succeeded" },
-      };
-    }
-    if (out.channel.id === "") {
-      return {
-        ok: false,
-        error: { code: "invalid_channel", message: "channel.id must be a Raft conversation id" },
-      };
-    }
-    const text =
-      out.format === "markdown" ? channelRendering(this.platform).translate(out.text) : out.text;
-    return this.reply(out.channel.id, text);
+    const refused = this.refuseUnsendable(out, {
+      className: "RaftAdapter",
+      connected: this.connected,
+      channel: { valid: (id) => id !== "", message: "channel.id must be a Raft conversation id" },
+    });
+    if (refused !== undefined) return refused;
+    return this.reply(out.channel.id, this.outboundText(out));
   }
 
   private reply(conversation: string, text: string): Promise<SendResult> {
