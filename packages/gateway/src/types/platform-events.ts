@@ -259,6 +259,21 @@ export interface RaftMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** WeCom (企业微信) self-built application event variant, a text message pushed to the callback URL. */
+export interface WeComMessageEvent extends BaseMessageEvent {
+  readonly platform: "wecom";
+  readonly wecom: {
+    /** The message's `MsgId`. */
+    readonly messageId: string;
+    /** The sender's WeCom user id; the send target for a reply. */
+    readonly userId: string;
+    /** The corp id (the message's `ToUserName`). */
+    readonly corpId: string;
+    /** The parsed XML fields — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** Twitch event variant (B-363), a `channel.chat.message` EventSub notification. */
 export interface TwitchMessageEvent extends BaseMessageEvent {
   readonly platform: "twitch";

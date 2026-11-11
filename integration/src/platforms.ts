@@ -373,6 +373,23 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     undefined,
   ),
   platform(
+    "wecom",
+    "WeCom",
+    "webhook",
+    [
+      "WECOM_CORP_ID :: The WeCom corp id :: work.weixin.qq.com admin console → My Enterprise → Enterprise Info",
+      "WECOM_CORP_SECRET :: The self-built application's Secret, exchanged for an access token :: Application Management → the application's page",
+      "WECOM_AGENT_ID :: The application's AgentId :: The same page",
+      "WECOM_TOKEN :: The callback Token you chose, used for the inbound signature :: The application's Receive Messages → API Receiving settings",
+      "WECOM_ENCODING_AES_KEY :: The callback EncodingAESKey that decrypts inbound messages :: The same settings",
+    ],
+    [
+      "WECOM_TEST_USER :: The WeCom user id of a member inside the application's visible range :: Admin console → Contacts",
+    ],
+    "Inbound needs a public HTTPS callback URL, so the suite checks the token exchange and one send. WeCom refuses a send from an IP outside the application's trusted-IP list (wecom_send_failed, errcode 60020).",
+    undefined,
+  ),
+  platform(
     "zalo-personal",
     "Zalo Personal",
     "connection",
