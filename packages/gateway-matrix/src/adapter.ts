@@ -15,6 +15,7 @@ import {
 import { AliasCache } from "./alias.js";
 import { loadMatrixSdk, type MatrixSdkClient } from "./client.js";
 import { ConfigurationError } from "./errors.js";
+import { subscribeToInvites } from "./invite.js";
 import { matrixEventToMessageEvent } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import { replaceContent } from "./replace-content.js";
@@ -29,6 +30,7 @@ export class MatrixAdapter extends BasePlatformAdapter {
   private readonly opts: MatrixAdapterOptions;
   private client: MatrixSdkClient | undefined;
   private subscription: TimelineSubscription | undefined;
+  private unsubscribeInvites: (() => void) | undefined;
   private inboundHandler: ((event: GatewayMessageEvent) => Promise<void>) | undefined;
   private readonly aliasCache = new AliasCache();
   private connected = false;
@@ -143,6 +145,8 @@ export class MatrixAdapter extends BasePlatformAdapter {
     this.tearingDown = true;
     this.subscription?.unsubscribe();
     this.subscription = undefined;
+    this.unsubscribeInvites?.();
+    this.unsubscribeInvites = undefined;
     this.client?.stopClient();
     this.client = undefined;
     this.connected = false;
@@ -399,6 +403,14 @@ export class MatrixAdapter extends BasePlatformAdapter {
       botUserId: this.opts.userId,
       freshnessWindowMs: this.opts.freshnessWindowMs ?? DEFAULT_FRESHNESS_MS,
     };
+    const acceptInvite = this.opts.acceptInvite;
+    if (acceptInvite !== undefined && client.joinRoom !== undefined) {
+      this.unsubscribeInvites?.();
+      this.unsubscribeInvites = subscribeToInvites(
+        client as unknown as Parameters<typeof subscribeToInvites>[0],
+        { botUserId: this.opts.userId, acceptInvite },
+      );
+    }
     this.subscription = subscribeToTimeline(
       client,
       (ev: MatrixEventLike, room: MatrixRoomLike) => {

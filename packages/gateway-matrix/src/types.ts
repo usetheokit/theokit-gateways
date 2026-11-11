@@ -34,6 +34,12 @@ export interface MatrixAdapterOptions {
    */
   readonly requireMention?: boolean;
   /**
+   * Decide whether to join a room the bot is invited to. Called with the inviter's user id and the
+   * room id; return `true` to join. Without it the bot joins nothing, and an invite stays pending,
+   * so a stranger cannot pull the bot into a room. A host applies its owner and allowlist rules here.
+   */
+  readonly acceptInvite?: (inviter: string, roomId: string) => boolean | Promise<boolean>;
+  /**
    * Test seam — inject a client instead of building one from the SDK.
    *
    * Mirrors `__imapFactory` in gateway-email and `__appFactory` in
