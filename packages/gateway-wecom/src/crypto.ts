@@ -9,6 +9,9 @@
 
 import crypto from "node:crypto";
 
+/** Byte-order comparison, as the platform spec sorts (not locale-aware). */
+const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
 export function computeWeComSignature(
   token: string,
   timestamp: string,
@@ -16,8 +19,8 @@ export function computeWeComSignature(
   encrypted: string,
 ): string {
   return crypto
-    .createHash("sha1")
-    .update([token, timestamp, nonce, encrypted].sort().join(""), "utf8")
+    .createHash("sha1") // NOSONAR: SHA-1 is mandated by the platform callback protocol
+    .update([token, timestamp, nonce, encrypted].sort(byCodeUnit).join(""), "utf8")
     .digest("hex");
 }
 
@@ -73,7 +76,7 @@ export function encryptWeCom(encodingAesKey: string, message: string, corpId: st
   len.writeUInt32BE(body.length);
   const raw = Buffer.concat([crypto.randomBytes(16), len, body, Buffer.from(corpId, "utf8")]);
   const pad = 32 - (raw.length % 32);
-  const cipher = crypto.createCipheriv("aes-256-cbc", key, key.subarray(0, 16));
+  const cipher = crypto.createCipheriv("aes-256-cbc", key, key.subarray(0, 16)); // NOSONAR: CBC with key-derived IV is mandated by the WeCom protocol
   cipher.setAutoPadding(false);
   const padded = Buffer.concat([raw, Buffer.alloc(pad, pad)]);
   return Buffer.concat([cipher.update(padded), cipher.final()]).toString("base64");
