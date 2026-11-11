@@ -7,6 +7,14 @@ export {
   type OutboundMessage,
   type SendResult,
 } from "./adapter/base.js";
+export {
+  WeixinAdapterBase,
+  type WeixinAdapterConfig,
+  type WeixinFetch,
+  type WeixinSendRequest,
+  type WeixinWebhookAnswer,
+} from "./adapter/weixin-base.js";
+export { parseFlatXml } from "./adapter/weixin-xml.js";
 // Channels described as data (B-018)
 export type {
   ChannelConfigField,

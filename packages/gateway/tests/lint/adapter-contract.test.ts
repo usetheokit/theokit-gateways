@@ -118,11 +118,17 @@ async function credentialFaults(pkg: string, fields: readonly string[]): Promise
  * package whose `adapter.ts` imports it carries that core's source too, so the contract is read
  * where the code now lives.
  */
+const WEIXIN_BASE_NAME = "WeixinAdapterBase";
+const WEIXIN_BASE_PATH = join(PACKAGES_DIR, "gateway", "src", "adapter", "weixin-base.ts");
 const SHARED_CORE_IMPORT = "@theokit/gateway-bot-realtime";
 async function withSharedCore(source: string): Promise<string> {
-  if (!source.includes(SHARED_CORE_IMPORT)) return source;
+  let out = source;
+  // WeChat and WeCom extend `WeixinAdapterBase` in `@theokit/gateway`; its flow is theirs.
+  if (source.includes(WEIXIN_BASE_NAME))
+    out = `${await readFile(WEIXIN_BASE_PATH, "utf8")}\n${out}`;
+  if (!source.includes(SHARED_CORE_IMPORT)) return out;
   const core = await readFile(join(PACKAGES_DIR, "bot-realtime", "src", "adapter.ts"), "utf8");
-  return `${core}\n${source}`;
+  return `${core}\n${out}`;
 }
 
 /** Every `gateway-*` package on disk that ships a `src/` — the gate's own universe. */
@@ -274,6 +280,8 @@ async function adapterSourceFiles(): Promise<Array<{ path: string; source: strin
   // The shared core is read once, as its own file: ClickClack and Buzz declare none of their own.
   const core = join(PACKAGES_DIR, "bot-realtime", "src", "adapter.ts");
   out.push({ path: "bot-realtime/adapter.ts", source: await readFile(core, "utf8") });
+  // WeChat and WeCom declare no connect / unsubscribe of their own either; the base does, once.
+  out.push({ path: "gateway/weixin-base.ts", source: await readFile(WEIXIN_BASE_PATH, "utf8") });
   return out.sort((a, b) => a.path.localeCompare(b.path));
 }
 
@@ -414,7 +422,7 @@ describe("cross-adapter contract", () => {
     // comment used to carry — that adding an adapter makes someone look here — was false:
     // an eighteenth declaration slid past in silence. Exact is the friction, in both
     // directions, and updating one number is the whole cost of adding an adapter.
-    expect(declarations).toBe(33);
+    expect(declarations).toBe(32);
     expect(offenders).toEqual([]);
   });
 
@@ -506,7 +514,7 @@ describe("cross-adapter contract", () => {
     // WhatsApp's three backends. A floor only fires when the count DROPS, which catches the regex
     // breaking but not a new adapter slipping in unchecked — and this file has already shipped
     // both failure modes.
-    expect(bodies).toBe(32);
+    expect(bodies).toBe(31);
     expect(offenders).toEqual([]);
   });
 
