@@ -37,13 +37,18 @@ describe("reconnect policy", () => {
     const r = runner(adapter);
     const res = await r.start();
     expect(res.failed).toHaveLength(1);
+    expect(res.connected).toEqual([]);
     await vi.advanceTimersByTimeAsync(100); // attempt 1
     await vi.advanceTimersByTimeAsync(200); // attempt 2
     expect(adapter.connectCount).toBe(3);
     await vi.advanceTimersByTimeAsync(200); // attempt 3 (capped) connects
     expect(adapter.connectCount).toBe(4);
+    const after = await r.start();
+    expect(after.failed).toEqual([]);
+    expect(after.connected).toEqual(["matrix"]);
     const logs = err.mock.calls.map((c) => String(c[0])).join("");
     expect(logs).toContain("reconnect attempt 2");
+    expect(adapter.connectCount).toBe(4);
     expect(logs).toContain("connected on attempt 3");
     await r.stop();
     err.mockRestore();

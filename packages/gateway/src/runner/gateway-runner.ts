@@ -161,7 +161,9 @@ function isTerminalConnectError(err: unknown): boolean {
   }
   if (e.errcode === "M_UNKNOWN_TOKEN" || e.errcode === "M_FORBIDDEN") return true;
   const message = typeof e.message === "string" ? e.message : "";
-  return /\b(401|403)\b|unauthori[sz]ed|forbidden|invalid (access )?token/i.test(message);
+  return /\b(?:http|status(?: code)?)\s*:?\s*(?:401|403)\b|unauthori[sz]ed|forbidden/i.test(
+    message,
+  );
 }
 
 /**
@@ -315,6 +317,8 @@ export class GatewayRunner {
       this.retryTimers.delete(timer);
       void this.reconnectOnce(adapter, attempt);
     }, delay);
+    // A pending retry must not keep the process alive on its own; `stop()` clears it anyway.
+    timer.unref();
     this.retryTimers.add(timer);
     process.stderr.write(
       `[gateway] adapter "${adapter.platform}" reconnect attempt ${attempt} in ${delay}ms\n`,
