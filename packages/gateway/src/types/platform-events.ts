@@ -274,6 +274,19 @@ export interface WeComMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** Yuanbao (元宝) bot event variant, a text message pushed to the signed callback URL. */
+export interface YuanbaoMessageEvent extends BaseMessageEvent {
+  readonly platform: "yuanbao";
+  readonly yuanbao: {
+    /** The message's id. */
+    readonly messageId: string;
+    /** The sender's Yuanbao user id; the send target for a reply. */
+    readonly userId: string;
+    /** The callback body — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** Twitch event variant (B-363), a `channel.chat.message` EventSub notification. */
 export interface TwitchMessageEvent extends BaseMessageEvent {
   readonly platform: "twitch";

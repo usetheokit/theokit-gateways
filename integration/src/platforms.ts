@@ -390,6 +390,21 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     undefined,
   ),
   platform(
+    "yuanbao",
+    "Yuanbao",
+    "webhook",
+    [
+      "YUANBAO_APP_ID :: The Yuanbao bot's app id :: The Yuanbao bot console → the bot's credentials page",
+      "YUANBAO_APP_SECRET :: The bot's app secret, exchanged for an access token :: The same page",
+      "YUANBAO_CALLBACK_SECRET :: The callback signing secret, used for the inbound signature :: The bot's event callback settings",
+    ],
+    [
+      "YUANBAO_TEST_USER :: The Yuanbao user id of someone who has messaged the bot :: The bot console or a callback body",
+    ],
+    "Inbound needs a public HTTPS callback URL, so the suite checks the token exchange and one send. The wire shapes (endpoints, signature, payload) are an assumption: no Yuanbao bot spec was available.",
+    undefined,
+  ),
+  platform(
     "zalo-personal",
     "Zalo Personal",
     "connection",

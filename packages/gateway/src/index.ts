@@ -122,6 +122,7 @@ export type {
   TwitchMessageEvent,
   WeChatMessageEvent,
   WeComMessageEvent,
+  YuanbaoMessageEvent,
   ZaloMessageEvent,
   ZaloPersonalMessageEvent,
 } from "./types/platform-events.js";
