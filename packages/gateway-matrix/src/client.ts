@@ -28,6 +28,9 @@ export interface MatrixSdkClient extends MatrixClientLike {
   /** `PUT /rooms/{roomId}/typing/{userId}`; present on matrix-js-sdk's client. */
   sendTyping?(roomId: string, isTyping: boolean, timeoutMs: number): Promise<unknown>;
   getRoomIdForAlias(alias: string): Promise<{ room_id: string }>;
+  /** Join a room (used to accept an invite). */
+  joinRoom?(roomId: string): Promise<unknown>;
+  getRooms?(): import("./invite.js").InviteRoomLike[];
   getRoom(roomId: string): MatrixRoomLike | null;
   isRoomEncrypted?(roomId: string): boolean;
   /** Best-effort current user id; matrix-js-sdk returns `string | null`. */
