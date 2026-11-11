@@ -4,11 +4,10 @@
  * @public
  */
 
+import type { WeixinFetch } from "@theokit/gateway";
+
 /** A `fetch`-shaped function; the adapter's only network seam. @public */
-export type WeComFetch = (
-  url: string,
-  init: { method: string; headers: Record<string, string>; body?: string },
-) => Promise<{ status: number; text(): Promise<string> }>;
+export type WeComFetch = WeixinFetch;
 
 /** Credentials and seams for `WeComAdapter`. @public */
 export interface WeComAdapterOptions {
