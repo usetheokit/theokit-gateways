@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- fab6127: Join room and DM invites. A new `acceptInvite(inviter, roomId)` option decides which invites the
+  bot joins, both live ones and those pending at start; without it nothing is joined, so a stranger
+  cannot pull the bot into a room.
+- 00af16f: `BasePlatformAdapter` gains `react(channelId, messageId, emoji)`, which adds an emoji reaction to an inbound message. The default resolves `react_unsupported`; the Discord, Slack, Telegram and Matrix adapters implement it.
+
 ## 0.5.0
 
 ### Minor Changes
