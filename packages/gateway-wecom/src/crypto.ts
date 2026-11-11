@@ -18,8 +18,9 @@ export function computeWeComSignature(
   nonce: string,
   encrypted: string,
 ): string {
-  return crypto
-    .createHash("sha1") // NOSONAR: SHA-1 is mandated by the platform callback protocol
+  // SHA-1 is mandated by the platform callback protocol; Sonar reports it on the `return` line.
+  return crypto // NOSONAR
+    .createHash("sha1")
     .update([token, timestamp, nonce, encrypted].sort(byCodeUnit).join(""), "utf8")
     .digest("hex");
 }
