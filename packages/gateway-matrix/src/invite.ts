@@ -67,7 +67,9 @@ export async function handleInvite(
 export function subscribeToInvites(client: InviteClientLike, opts: InviteOpts): () => void {
   const seen = new Set<string>();
   const run = (inviter: string, roomId: string): void => {
-    void handleInvite(client, opts, inviter, roomId, seen);
+    void handleInvite(client, opts, inviter, roomId, seen).catch((err: unknown) => {
+      warn(`invite handling failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
   };
   const onMember = (event: InviteEventLike, member: InviteMemberLike): void => {
     if (member.userId !== opts.botUserId || member.membership !== "invite") return;
