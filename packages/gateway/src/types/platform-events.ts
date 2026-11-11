@@ -274,6 +274,21 @@ export interface WeComMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** QQ Bot event variant, a `C2C_MESSAGE_CREATE` or `GROUP_AT_MESSAGE_CREATE` dispatch. */
+export interface QQMessageEvent extends BaseMessageEvent {
+  readonly platform: "qq";
+  readonly qq: {
+    /** The message's `id`; pass it as `replyTo` to answer it as a passive reply. */
+    readonly messageId: string;
+    /** The sender's `user_openid` (direct message) or `member_openid` (group). */
+    readonly openId: string;
+    /** The group's `group_openid`; empty for a direct message. */
+    readonly groupOpenId: string;
+    /** The dispatch's `d` object — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** Twitch event variant (B-363), a `channel.chat.message` EventSub notification. */
 export interface TwitchMessageEvent extends BaseMessageEvent {
   readonly platform: "twitch";

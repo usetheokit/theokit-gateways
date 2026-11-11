@@ -33,6 +33,7 @@ import type {
   IrcMessageEvent,
   NextcloudTalkMessageEvent,
   NostrMessageEvent,
+  QQMessageEvent,
   RaftMessageEvent,
   SignalMessageEvent,
   SynologyChatMessageEvent,
@@ -346,6 +347,7 @@ export interface PlatformEventRegistry {
   zalo: ZaloMessageEvent;
   wechat: WeChatMessageEvent;
   wecom: WeComMessageEvent;
+  qq: QQMessageEvent;
   raft: RaftMessageEvent;
   clickclack: ClickClackMessageEvent;
   buzz: BuzzMessageEvent;

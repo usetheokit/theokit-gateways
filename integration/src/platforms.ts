@@ -390,6 +390,20 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     undefined,
   ),
   platform(
+    "qq",
+    "QQ Bot",
+    "connection",
+    [
+      "QQ_APP_ID :: The bot's AppID :: q.qq.com → the bot → Development Settings",
+      "QQ_CLIENT_SECRET :: The bot's AppSecret, exchanged for an access token :: The same page",
+    ],
+    [
+      "QQ_TEST_USER_OPENID :: The user_openid of a QQ user who has added the bot :: Printed in the `qq` event of a message that user sends the bot",
+    ],
+    "The suite connects to the gateway and sends one message. QQ allows an active (non-reply) direct message only within a small monthly quota, and a bot outside the sandbox must be published. The wire shapes are written from QQ's public docs and not yet confirmed against a live bot.",
+    undefined,
+  ),
+  platform(
     "zalo-personal",
     "Zalo Personal",
     "connection",

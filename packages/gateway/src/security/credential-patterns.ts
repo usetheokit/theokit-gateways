@@ -124,6 +124,10 @@ export const CREDENTIAL_SHAPES: {
       why: "a WeCom application Secret (43 URL-safe base64 characters, indistinguishable from other opaque strings), the callback Token (a string the operator chooses) and the EncodingAESKey (43 base64 characters). The secret travels only to the access-token endpoint, the token into the signature check and the key into the decryption; the adapter never logs any of them.",
     },
     {
+      field: "gateway-qq `clientSecret`",
+      why: "a QQ Bot AppSecret (a 32-character opaque string with no prefix). It travels only to the access-token endpoint; the adapter never logs it.",
+    },
+    {
       field: "gateway-zalo-personal `credentials`",
       why: "a Zalo web session: a cookie jar, an IMEI-like device id and a user agent. The cookie has no prefix or fixed shape to recognise. It travels only to the Zalo library, which the adapter never logs.",
     },
