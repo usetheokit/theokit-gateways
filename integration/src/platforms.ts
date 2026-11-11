@@ -373,6 +373,20 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     undefined,
   ),
   platform(
+    "yuanbao",
+    "Tencent Yuanbao",
+    "webhook",
+    [
+      "YUANBAO_APP_KEY :: The bot's app key :: The Tencent Yuanbao bot platform, the bot's application settings",
+      "YUANBAO_APP_SECRET :: The bot's app secret, used to sign the token request :: The same page",
+    ],
+    [
+      "YUANBAO_TEST_ACCOUNT :: The account id of a user who has messaged the bot :: The `from_account` of one webhook delivery",
+    ],
+    "Inbound needs a public HTTPS webhook, so the suite checks the token exchange and one send. The wire shapes are an assumption until this suite has run against a real bot (yuanbao_send_failed names the platform's refusal).",
+    undefined,
+  ),
+  platform(
     "zalo-personal",
     "Zalo Personal",
     "connection",

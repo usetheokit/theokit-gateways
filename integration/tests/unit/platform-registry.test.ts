@@ -89,6 +89,7 @@ const ROUTES: Routes = {
   buzz: (event) => `bz:${event.buzz.messageId}`,
   zalo: (event) => `za:${event.zalo.messageId}`,
   wechat: (event) => `wx:${event.wechat.messageId}`,
+  yuanbao: (event) => `yb:${event.yuanbao.messageId}`,
   raft: (event) => `rf:${event.raft.messageId}`,
   zalo_personal: (event) => `zp:${event.zalo_personal.messageId}`,
   acmechat: (event) => `ac:${event.acmechat.senderUuid}`,

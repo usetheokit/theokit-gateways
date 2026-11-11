@@ -41,6 +41,7 @@ const PLATFORM_NAMES = [
   "zalo-personal",
   "zalo",
   "wechat",
+  "yuanbao",
   "raft",
   "clickclack",
   "buzz",

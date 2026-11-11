@@ -259,6 +259,19 @@ export interface RaftMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** Tencent Yuanbao bot event variant, a text message pushed to the webhook. */
+export interface YuanbaoMessageEvent extends BaseMessageEvent {
+  readonly platform: "yuanbao";
+  readonly yuanbao: {
+    /** The message's `msg_id`. */
+    readonly messageId: string;
+    /** The sender's account id; the send target for a reply. */
+    readonly accountId: string;
+    /** The parsed webhook body — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** Twitch event variant (B-363), a `channel.chat.message` EventSub notification. */
 export interface TwitchMessageEvent extends BaseMessageEvent {
   readonly platform: "twitch";

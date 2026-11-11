@@ -46,6 +46,7 @@ import { TelegramAdapter } from "@theokit/gateway-telegram";
 import { TlonUrbitAdapter } from "@theokit/gateway-tlon-urbit";
 import { TwitchAdapter } from "@theokit/gateway-twitch";
 import { WeChatAdapter } from "@theokit/gateway-wechat";
+import { YuanbaoAdapter } from "@theokit/gateway-yuanbao";
 import { ZaloAdapter } from "@theokit/gateway-zalo";
 import { ZaloPersonalAdapter } from "@theokit/gateway-zalo-personal";
 import { describe, expect, it } from "vitest";
@@ -205,6 +206,10 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
   {
     platform: "wechat",
     make: () => new WeChatAdapter({ appId: "a", appSecret: "s", token: "t" }),
+  },
+  {
+    platform: "yuanbao",
+    make: () => new YuanbaoAdapter({ appKey: "k", appSecret: "s" }),
   },
   {
     platform: "zalo",

@@ -51,6 +51,7 @@ export const PLATFORM_NAMES = Object.freeze([
   "zalo_personal",
   "zalo",
   "wechat",
+  "yuanbao",
   "raft",
   "clickclack",
   "buzz",

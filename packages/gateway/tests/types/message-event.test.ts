@@ -181,6 +181,8 @@ describe("MessageEvent (T1.1)", () => {
           return `rf:${e.raft.messageId}`;
         case "wechat":
           return `wx:${e.wechat.messageId}`;
+        case "yuanbao":
+          return `yb:${e.yuanbao.messageId}`;
         case "zalo":
           return `za:${e.zalo.messageId}`;
         case "zalo_personal":
