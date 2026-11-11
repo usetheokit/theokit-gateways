@@ -90,7 +90,8 @@ type FirstParty =
   | "zalo_personal"
   | "clickclack"
   | "buzz"
-  | "zalo";
+  | "zalo"
+  | "wechat";
 
 describe("PlatformEventRegistry — what may join the union", () => {
   it("is exactly the first-party platforms, no more and no fewer", () => {

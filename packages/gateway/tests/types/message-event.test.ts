@@ -177,6 +177,8 @@ describe("MessageEvent (T1.1)", () => {
           return `tu:${e.tlon_urbit.messageId}`;
         case "twitch":
           return `tw:${e.twitch.messageId}`;
+        case "wechat":
+          return `wx:${e.wechat.messageId}`;
         case "zalo":
           return `za:${e.zalo.messageId}`;
         case "zalo_personal":

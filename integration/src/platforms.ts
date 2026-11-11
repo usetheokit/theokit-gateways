@@ -345,6 +345,21 @@ export const PLATFORMS: readonly PlatformSpec[] = [
     undefined,
   ),
   platform(
+    "wechat",
+    "WeChat Official Account",
+    "webhook",
+    [
+      "WECHAT_APP_ID :: The Official Account AppID :: mp.weixin.qq.com → Settings and Development → Basic Configuration (or a test account at mp.weixin.qq.com/debug/cgi-bin/sandboxinfo)",
+      "WECHAT_APP_SECRET :: The AppSecret, exchanged for an access token :: The same page",
+      "WECHAT_TOKEN :: The server-URL verification token you chose, used for the inbound signature :: Basic Configuration → Server Configuration",
+    ],
+    [
+      "WECHAT_TEST_OPENID :: The OpenID of a follower who messaged the account in the last 48 hours :: The `FromUserName` of one webhook delivery, or the follower list API",
+    ],
+    "Inbound needs a public HTTPS server URL, so the suite checks the token exchange and one send. WeChat refuses a customer-service send to a user outside the 48-hour window (wechat_send_failed). The account's IP allow-list must include the machine running the suite.",
+    undefined,
+  ),
+  platform(
     "zalo-personal",
     "Zalo Personal",
     "connection",

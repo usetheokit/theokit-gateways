@@ -37,6 +37,7 @@ import type {
   SynologyChatMessageEvent,
   TlonUrbitMessageEvent,
   TwitchMessageEvent,
+  WeChatMessageEvent,
   ZaloMessageEvent,
   ZaloPersonalMessageEvent,
 } from "./platform-events.js";
@@ -341,6 +342,7 @@ export interface PlatformEventRegistry {
   twitch: TwitchMessageEvent;
   zalo_personal: ZaloPersonalMessageEvent;
   zalo: ZaloMessageEvent;
+  wechat: WeChatMessageEvent;
   clickclack: ClickClackMessageEvent;
   buzz: BuzzMessageEvent;
 }
