@@ -229,6 +229,9 @@ describe("live-test readiness", () => {
         "the shared flow of the WeChat and WeCom adapters. Both have their own unit suites that " +
         "drive it end to end against a faked fetch; a live run needs a real Official Account or " +
         "WeCom application",
+      DEFAULT_WEBHOOK_MAX_BYTES:
+        "a constant, no I/O. Its effect (413 past 1 MiB) is covered by " +
+        "packages/gateway/tests/webhook/raw-body-capture.test.ts and the LINE and SMS webhook tests",
       parseFlatXml:
         "pure string -> record, no I/O. Covered by tests/weixin-xml.test.ts and by both adapters' " +
         "webhook tests",
