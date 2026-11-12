@@ -45,10 +45,14 @@ interface ApiBody {
   expires_in?: number | string;
 }
 
-const defaultFetch: QQFetch = async (url, init) => {
-  const res = await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-  return { status: res.status, text: () => res.text() };
-};
+async function defaultFetch(...[url, init]: Parameters<QQFetch>): ReturnType<QQFetch> {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const { status, text } = await fetch(url, { ...init, signal: timeout }).then((res) => ({
+    status: res.status,
+    text: () => res.text(),
+  }));
+  return { status, text };
+}
 
 /** Split `text` into messages of at most 2000 characters, never inside a grapheme. @public */
 export function splitForQQ(text: string): string[] {
@@ -83,25 +87,27 @@ export class QQAdapter extends BasePlatformAdapter {
   /** @throws Error when `appId` or `appSecret` is empty */
   constructor(opts: QQAdapterOptions) {
     super();
-    for (const key of ["appId", "appSecret"] as const) {
-      if (typeof opts[key] !== "string" || opts[key] === "") {
-        throw new Error(`${LABEL}: opts.${key} is required`);
-      }
-    }
+    const missing = (["appId", "appSecret"] as const).find((key) => !opts[key]);
+    if (missing !== undefined) throw new Error(`${LABEL}: opts.${missing} is required`);
     this.opts = opts;
     this.doFetch = opts.fetch ?? defaultFetch;
   }
 
   async connect(): Promise<boolean> {
     if (this.connected) return true;
-    try {
-      await this.token(true);
-      this.connected = true;
-      return true;
-    } catch (err) {
-      process.stderr.write(`[${LABEL}] connect failed: ${messageOf(err)}\n`);
-      return false;
-    }
+    this.connected = await this.fetchToken();
+    return this.connected;
+  }
+
+  /** Whether a fresh access token was obtained; a failure is logged, never thrown. */
+  private async fetchToken(): Promise<boolean> {
+    return this.token(true).then(
+      () => true,
+      (err: unknown) => {
+        process.stderr.write(`[${LABEL}] connect failed: ${messageOf(err)}\n`);
+        return false;
+      },
+    );
   }
 
   async disconnect(): Promise<void> {
@@ -115,32 +121,22 @@ export class QQAdapter extends BasePlatformAdapter {
   }
 
   private async sendText(out: OutboundMessage): Promise<SendResult> {
+    const channel = {
+      valid: (id: string) => id !== "",
+      message: "channel.id must be a QQ user openid",
+    };
     const refused = this.refuseUnsendable(out, {
       className: "QQAdapter",
       connected: this.connected,
-      channel: { valid: (id) => id !== "", message: "channel.id must be a QQ user openid" },
+      channel,
     });
     if (refused !== undefined) return refused;
     let messageId = "";
     try {
       for (const text of splitForQQ(this.outboundText(out))) {
-        const token = await this.token(false);
-        const body = await this.call(
-          "POST",
-          `${this.opts.apiBase ?? DEFAULT_API}/v2/users/${encodeURIComponent(out.channel.id)}/messages`,
-          token,
-          { content: text, msg_type: 0, ...this.nextReplyRef(out.channel.id) },
-        );
-        if (body.code !== undefined) {
-          return {
-            ok: false,
-            error: {
-              code: "qq_send_failed",
-              message: `QQ error ${String(body.code)}: ${String(body.message)}`,
-            },
-          };
-        }
-        messageId = body.id ?? messageId;
+        const sent = await this.sendPart(out.channel.id, text);
+        if (typeof sent !== "string") return sent;
+        messageId = sent || messageId;
       }
     } catch (err) {
       return { ok: false, error: { code: "qq_send_failed", message: messageOf(err) } };
@@ -148,14 +144,22 @@ export class QQAdapter extends BasePlatformAdapter {
     return { ok: true, messageId };
   }
 
+  /** Send one part; answers the message id, or the failure QQ reported. */
+  private async sendPart(openid: string, text: string): Promise<string | SendResult> {
+    const url = `${this.opts.apiBase ?? DEFAULT_API}/v2/users/${encodeURIComponent(openid)}/messages`;
+    const payload = { content: text, msg_type: 0, ...this.nextReplyRef(openid) };
+    const body = await this.call("POST", url, await this.token(false), payload);
+    if (body.code === undefined) return body.id ?? "";
+    const message = `QQ error ${String(body.code)}: ${String(body.message)}`;
+    return { ok: false, error: { code: "qq_send_failed", message } };
+  }
+
   onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
     return this.subscribe(handler);
   }
 
   /** Deliver an event that arrived out of band, through `runHandler`. */
-  override async deliver(
-    event: GatewayMessageEvent,
-  ): Promise<"ok" | "no_handler" | "handler_threw"> {
+  override deliver(event: GatewayMessageEvent) {
     return this.deliverInbound(event);
   }
 
@@ -170,12 +174,8 @@ export class QQAdapter extends BasePlatformAdapter {
     signature: string | undefined,
     timestamp: string | undefined,
   ): Promise<QQWebhookAnswer> {
-    let payload: QQWebhookPayload;
-    try {
-      payload = JSON.parse(rawBody) as QQWebhookPayload;
-    } catch {
-      return { status: 400, reason: "body is not JSON" };
-    }
+    const payload = parseJson<QQWebhookPayload>(rawBody);
+    if (payload === undefined) return { status: 400, reason: "body is not JSON" };
     // The URL validation (op 13) is signed by us, not by QQ: QQ checks our answer.
     if (payload.op === 13) return this.validation(payload);
     if (!verifyQQSignature(this.opts.appSecret, rawBody, signature, timestamp)) {
@@ -186,8 +186,9 @@ export class QQAdapter extends BasePlatformAdapter {
     // Before dispatch: the handler's reply is the one that answers this message.
     this.rememberReplyRef(event.channel.id, event.id);
     const outcome = await this.dispatchOnce(this.seen, event, LABEL);
-    if (outcome === "no_handler") return { status: 503, reason: "no handler subscribed" };
-    return { status: 200, reason: outcome };
+    return outcome === "no_handler"
+      ? { status: 503, reason: "no handler subscribed" }
+      : { status: 200, reason: outcome };
   }
 
   private validation(payload: QQWebhookPayload): QQWebhookAnswer {
@@ -219,10 +220,8 @@ export class QQAdapter extends BasePlatformAdapter {
   }
 
   private async token(force: boolean): Promise<string> {
-    const cached = this.accessToken;
-    if (!force && cached !== undefined && cached.expiresAt - TOKEN_MARGIN_MS > Date.now()) {
-      return cached.value;
-    }
+    const fresh = force ? undefined : this.cachedToken();
+    if (fresh !== undefined) return fresh;
     const body = await this.call("POST", this.opts.tokenUrl ?? DEFAULT_TOKEN_URL, undefined, {
       appId: this.opts.appId,
       clientSecret: this.opts.appSecret,
@@ -230,14 +229,19 @@ export class QQAdapter extends BasePlatformAdapter {
     if (body.code !== undefined) {
       throw new Error(`token answered error ${String(body.code)}: ${String(body.message)}`);
     }
-    const value = body.access_token;
-    if (!value) throw new Error("token answer has no access_token");
+    if (!body.access_token) throw new Error("token answer has no access_token");
     const ttl = Number(body.expires_in);
-    this.accessToken = {
-      value,
-      expiresAt: Date.now() + (Number.isFinite(ttl) && ttl > 0 ? ttl : 7200) * 1000,
-    };
-    return value;
+    const seconds = Number.isFinite(ttl) && ttl > 0 ? ttl : 7200;
+    this.accessToken = { value: body.access_token, expiresAt: Date.now() + seconds * 1000 };
+    return body.access_token;
+  }
+
+  /** The cached token while it has more than the refresh margin left. */
+  private cachedToken(): string | undefined {
+    const cached = this.accessToken;
+    return cached !== undefined && cached.expiresAt - TOKEN_MARGIN_MS > Date.now()
+      ? cached.value
+      : undefined;
   }
 
   private async call(
@@ -246,22 +250,26 @@ export class QQAdapter extends BasePlatformAdapter {
     token: string | undefined,
     payload: unknown,
   ): Promise<ApiBody> {
+    const auth: Record<string, string> =
+      token === undefined
+        ? {}
+        : { Authorization: `QQBot ${token}`, "X-Union-Appid": this.opts.appId };
     const res = await this.doFetch(url, {
       method,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token === undefined
-          ? {}
-          : { Authorization: `QQBot ${token}`, "X-Union-Appid": this.opts.appId }),
-      },
+      headers: { "Content-Type": "application/json", ...auth },
       body: JSON.stringify(payload),
     });
-    const text = await res.text();
-    try {
-      return JSON.parse(text) as ApiBody;
-    } catch {
-      throw new Error(`QQ answered HTTP ${res.status} with a non-JSON body`);
-    }
+    const body = parseJson<ApiBody>(await res.text());
+    if (body === undefined) throw new Error(`QQ answered HTTP ${res.status} with a non-JSON body`);
+    return body;
+  }
+}
+
+function parseJson<T>(text: string): T | undefined {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return undefined;
   }
 }
 
