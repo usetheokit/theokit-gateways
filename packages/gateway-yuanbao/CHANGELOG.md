@@ -1,5 +1,11 @@
 # @theokit/gateway-yuanbao
 
+## 0.1.1
+
+### Patch Changes
+
+- cf4d875: `handleWebhook` answers 400 to a signed body that is valid JSON but not an object (`null`, a number, a string, an array, a boolean) instead of throwing.
+
 ## 0.1.0
 
 ### Minor Changes

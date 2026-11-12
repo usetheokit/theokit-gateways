@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+### Patch Changes
+
+- 592891e: A bad Slack bot or app token no longer crashes the process. `connect()` now stops Bolt from starting its own background token check, so a wrong credential resolves `false` without an unhandled rejection.
+
 ## 0.5.0
 
 ### Minor Changes
