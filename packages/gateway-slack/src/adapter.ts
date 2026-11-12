@@ -144,6 +144,10 @@ export class SlackAdapter extends BasePlatformAdapter {
         token: this.opts.botToken,
         appToken: this.opts.appToken,
         socketMode: true,
+        // Bolt's constructor otherwise starts its own auth.test and keeps the
+        // promise; when start() fails first nobody awaits it and Node exits on
+        // the unhandled rejection. The awaited auth.test() below does the check.
+        tokenVerificationEnabled: false,
         ...(this.opts.logLevel !== undefined
           ? // biome-ignore lint/suspicious/noExplicitAny: Bolt's LogLevel enum is a runtime const
             { logLevel: this.opts.logLevel as any }
