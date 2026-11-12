@@ -67,6 +67,7 @@ export class XApi {
   private readonly base: string;
   private accessToken: { value: string; expiresAt: number } | undefined;
   private refreshToken: string;
+  private refreshing: Promise<string> | undefined;
 
   constructor(
     private readonly opts: XAdapterOptions,
@@ -77,8 +78,15 @@ export class XApi {
     this.refreshToken = opts.refreshToken;
   }
 
-  /** Exchange the refresh token for an access token, and keep the rotated refresh token. */
-  async refresh(): Promise<string> {
+  /** Exchange the refresh token for an access token, and keep the rotated refresh token. Concurrent callers share one request. */
+  refresh(): Promise<string> {
+    this.refreshing ??= this.doRefresh().finally(() => {
+      this.refreshing = undefined;
+    });
+    return this.refreshing;
+  }
+
+  private async doRefresh(): Promise<string> {
     const basic = Buffer.from(`${this.opts.clientId}:${this.opts.clientSecret}`).toString("base64");
     const form = new URLSearchParams({
       grant_type: "refresh_token",
