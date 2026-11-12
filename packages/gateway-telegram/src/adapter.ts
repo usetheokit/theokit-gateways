@@ -39,10 +39,16 @@ export interface TelegramAdapterOptions {
   readonly token: string;
   /** Optional allow-list filter applied at the adapter level. */
   readonly allowedUsers?: ReadonlyArray<string>;
+  /**
+   * How updates arrive. `"polling"` (default) pulls them with long polling; `"webhook"` only marks
+   * the adapter connected, and updates arrive through `deliver()`.
+   */
+  readonly inbound?: "polling" | "webhook";
 }
 
 /**
- * Telegram gateway adapter — long-polls for updates, so inbound needs no public URL.
+ * Telegram gateway adapter — long-polls for updates by default, so inbound needs no public URL.
+ * With `inbound: "webhook"` it does not poll; updates arrive through `deliver()`.
  *
  * Two platform rules shape what this can do, and neither has a workaround: a bot cannot enumerate
  * the chats it belongs to, and it cannot speak into a chat that has not spoken to it first. A chat
@@ -53,6 +59,7 @@ export class TelegramAdapter extends BasePlatformAdapter {
   private readonly bot: Bot;
   private readonly allowedUsers: Set<string>;
   private handler?: (event: GatewayMessageEvent) => Promise<void>;
+  private readonly inbound: "polling" | "webhook";
   private connected = false;
   private startPromise?: Promise<void>;
 
@@ -60,6 +67,7 @@ export class TelegramAdapter extends BasePlatformAdapter {
     super();
     this.bot = new Bot(opts.token);
     this.allowedUsers = new Set(opts.allowedUsers ?? []);
+    this.inbound = opts.inbound ?? "polling";
     this.bot.on("message", async (ctx) => this.handleInbound(ctx));
     this.bot.catch((err) => {
       process.stderr.write(`[telegram] bot error: ${(err.error as Error)?.message ?? err}\n`);
@@ -87,9 +95,10 @@ export class TelegramAdapter extends BasePlatformAdapter {
       process.stderr.write(`[telegram] connect failed: ${(err as Error).message}\n`);
       return false;
     }
-    this.startPromise = this.bot.start({ drop_pending_updates: true }).catch((err) => {
-      process.stderr.write(`[telegram] polling stopped: ${(err as Error).message}\n`);
-    });
+    if (this.inbound === "polling")
+      this.startPromise = this.bot.start({ drop_pending_updates: true }).catch((err) => {
+        process.stderr.write(`[telegram] polling stopped: ${(err as Error).message}\n`);
+      });
     this.connected = true;
     return true;
   }
@@ -97,6 +106,7 @@ export class TelegramAdapter extends BasePlatformAdapter {
   override async disconnect(): Promise<void> {
     if (!this.connected) return;
     this.connected = false;
+    if (this.inbound === "webhook") return;
     try {
       await this.bot.stop();
     } catch (cause) {
