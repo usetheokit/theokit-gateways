@@ -325,6 +325,9 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
 - `start()` waits for every connect under both `connectFailure` modes, so a connect that never
   settles blocks it. Under `"rollback"` that holds after a failure too: a failing start rejects
   only once its slowest connect settles.
+- `rawBodyCapture(tag, { maxBytes })` (Express webhook routes) answers 413 with
+  `{ "error": "request body too large" }` to a body over `maxBytes`. The default is
+  `DEFAULT_WEBHOOK_MAX_BYTES`, 1 MiB; pass `Number.POSITIVE_INFINITY` for no limit.
 - A webhook channel's request reaches your HTTP route; route it by platform to the descriptor's
   `webhook.verify(adapter, { rawBody, headers })`, then parse the body and pass it to
   `webhook.ingest(adapter, payload)`, which answers `"delivered"`, `"malformed"` or
