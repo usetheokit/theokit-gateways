@@ -351,7 +351,8 @@ function parseMessageId(messageId: string): number | undefined {
 /** Did Telegram refuse the edit because the message already shows this text? */
 function isNotModified(err: unknown): boolean {
   return (
-    err instanceof GrammyError && err.description.toLowerCase().includes("message is not modified")
+    err instanceof GrammyError &&
+    (err.description ?? "").toLowerCase().includes("message is not modified")
   );
 }
 

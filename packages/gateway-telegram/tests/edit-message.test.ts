@@ -152,6 +152,15 @@ describe("TelegramAdapter.editMessage", () => {
     expect(result).toEqual({ ok: true, messageId: "42" });
   });
 
+  it("maps a GrammyError without a description to a SendResult", async () => {
+    edit.mockRejectedValueOnce(new GrammyError("x", { ok: false } as never, "editMessageText", {}));
+
+    const result = await adapter.editMessage("42", out("hello"));
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBeTruthy();
+  });
+
   it.each(["abc", "1.5", "-3", " 42", "0x10", "0", "00", "9007199254740993", "1".repeat(400)])(
     "refuses the message id %j as invalid_message_id with no request",
     async (messageId) => {
