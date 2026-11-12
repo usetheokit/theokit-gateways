@@ -214,24 +214,25 @@ export function parseModeOptions(format: OutboundMessage["format"]): {
   return parseMode !== undefined ? { parse_mode: parseMode } : {};
 }
 
+function mapGrammyError(err: GrammyError): SendResult {
+  // A proxy or a non Bot API body can leave `description` undefined.
+  const message = err.description ?? err.message;
+  const description = message.toLowerCase();
+  if (description.includes("rate limit") || err.error_code === 429) {
+    return { ok: false, error: { code: "rate_limited", message } };
+  }
+  if (description.includes("forbidden") || err.error_code === 403) {
+    return { ok: false, error: { code: "no_permission", message } };
+  }
+  if (description.includes("parse")) {
+    return { ok: false, error: { code: "markdown_error", message } };
+  }
+  return { ok: false, error: { code: `telegram_${err.error_code ?? "unknown"}`, message } };
+}
+
 /** A thrown grammy error as a `SendResult`; never rethrows. */
 export function mapSendError(err: unknown): SendResult {
-  if (err instanceof GrammyError) {
-    const description = err.description.toLowerCase();
-    if (description.includes("rate limit") || err.error_code === 429) {
-      return { ok: false, error: { code: "rate_limited", message: err.description } };
-    }
-    if (description.includes("forbidden") || err.error_code === 403) {
-      return { ok: false, error: { code: "no_permission", message: err.description } };
-    }
-    if (description.includes("parse")) {
-      return { ok: false, error: { code: "markdown_error", message: err.description } };
-    }
-    return {
-      ok: false,
-      error: { code: `telegram_${err.error_code}`, message: err.description },
-    };
-  }
+  if (err instanceof GrammyError) return mapGrammyError(err);
   if (err instanceof HttpError) {
     return { ok: false, error: { code: "network_error", message: err.message } };
   }
