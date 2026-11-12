@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-twitch",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Twitch chat platform adapter for @theokit/gateway: EventSub over WebSocket in, Helix Send Chat Message out.",
   "license": "Apache-2.0",
   "repository": {

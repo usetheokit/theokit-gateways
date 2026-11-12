@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.16.0
+
+### Minor Changes
+
+- 6178f72: Make `qq` a first-party platform.
+
+  `@theokit/gateway` gains the `qq` key in `PlatformEventRegistry`, the `QQMessageEvent` type and a
+  `channelRendering` row (`plain`, markers removed). `PlatformName` grows by one member. Code that
+  lists every platform in a `Record<PlatformName, …>` or in a switch with a `never` default must add
+  it.
+
+- 971efb1: Make `x` a first-party platform.
+
+  `@theokit/gateway` gains the `x` key in `PlatformEventRegistry`, the `XMessageEvent` and
+  `XThreadTweet` types and a `channelRendering` row (`plain`, markers removed). `PlatformName` grows
+  by one member. Code that lists every platform in a `Record<PlatformName, …>` or in a switch with a
+  `never` default must add it.
+
+### Patch Changes
+
+- c6ee490: Restructure the QQ adapter and write the credential-shape and platform tables as rows, so they no longer repeat the same structure entry after entry. Behaviour and exports are unchanged.
+
 ## 0.15.0
 
 ### Minor Changes

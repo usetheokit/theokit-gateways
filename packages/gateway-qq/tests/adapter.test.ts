@@ -160,10 +160,79 @@ describe("QQAdapter", () => {
     ).toBe(400);
   });
 
+  it("refuses a validation whose plain_token holds an event body", async () => {
+    const a = started(fakeFetch(ok).fetch);
+    const seen: string[] = [];
+    a.onInbound(async (e) => void seen.push(e.text));
+    const now = String(Math.floor(Date.now() / 1000));
+    const eventBody = body("msg-1", "hello");
+
+    const validation = await a.handleWebhook(
+      JSON.stringify({ op: 13, d: { event_ts: now, plain_token: eventBody } }),
+      undefined,
+      undefined,
+    );
+    const event = await a.handleWebhook(eventBody, validation.body?.signature, now);
+
+    expect(seen).toEqual([]);
+    expect(event.status).toBe(401);
+    expect(validation.status).toBe(400);
+    expect(validation.body).toBeUndefined();
+  });
+
+  it("refuses a validation whose event_ts holds an event body", async () => {
+    const a = started(fakeFetch(ok).fetch);
+    const seen: string[] = [];
+    a.onInbound(async (e) => void seen.push(e.text));
+    const now = String(Math.floor(Date.now() / 1000));
+    const eventBody = body("msg-2", "hello");
+
+    const validation = await a.handleWebhook(
+      JSON.stringify({ op: 13, d: { event_ts: now + eventBody, plain_token: " " } }),
+      undefined,
+      undefined,
+    );
+    const event = await a.handleWebhook(`${eventBody} `, validation.body?.signature, now);
+
+    expect(seen).toEqual([]);
+    expect(event.status).toBe(401);
+    expect(validation.status).toBe(400);
+  });
+
+  it("refuses validation fields outside the token and timestamp shapes", async () => {
+    const a = started(fakeFetch(ok).fetch);
+    const validate = (d: Record<string, unknown>) =>
+      a.handleWebhook(JSON.stringify({ op: 13, d }), undefined, undefined);
+    const ts = "1725442341";
+    for (const plain_token of ["", " ", "a b", "{}", '"x"', "a".repeat(129), 42]) {
+      expect((await validate({ plain_token, event_ts: ts })).status).toBe(400);
+    }
+    for (const event_ts of ["", "17254a", " 1725442341", "1.7e9", "1".repeat(21), 1725442341]) {
+      expect((await validate({ plain_token: "Arq0D5A61EgUu4OxUvOp", event_ts })).status).toBe(400);
+    }
+    for (const plain_token of ["Arq0D5A61EgUu4OxUvOp", "a", "a".repeat(128), "aZ09_-+/="]) {
+      const answer = await validate({ plain_token, event_ts: ts });
+      expect(answer.status).toBe(200);
+      expect(answer.body?.signature).toBe(signQQ(SECRET, ts + plain_token));
+    }
+  });
+
   it("rejects a signature from another secret", () => {
     const ts = String(Math.floor(Date.now() / 1000));
     expect(verifyQQSignature(SECRET, "b", signQQ("other", `${ts}b`), ts)).toBe(false);
     expect(verifyQQSignature(SECRET, "b", signQQ(SECRET, `${ts}b`), ts)).toBe(true);
+  });
+
+  it("answers 400 to a JSON body that is not an object", async () => {
+    const a = started(fakeFetch(ok).fetch);
+    const seen: string[] = [];
+    a.onInbound(async (e) => void seen.push(e.text));
+    for (const raw of ["null", "42", '"text"', "[]", "[{}]", "true"]) {
+      const answer = await a.handleWebhook(raw, undefined, undefined);
+      expect(answer.status).toBe(400);
+      expect(answer.body).toBeUndefined();
+    }
+    expect(seen).toEqual([]);
   });
 
   it("acknowledges a throwing handler", async () => {
