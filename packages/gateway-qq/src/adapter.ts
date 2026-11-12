@@ -28,6 +28,10 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const TOKEN_MARGIN_MS = 60_000;
 /** How many users' last inbound message ids are kept for passive replies. */
 const REPLY_WINDOW_MAX = 1000;
+/** What a callback URL validation `plain_token` may contain (QQ sends short alphanumeric tokens). */
+const PLAIN_TOKEN_SHAPE = /^[A-Za-z0-9+/=_-]{1,128}$/;
+/** A callback URL validation `event_ts`: Unix seconds as a decimal string. */
+const EVENT_TS_SHAPE = /^[0-9]{1,20}$/;
 
 /** What a webhook route answers: 200 acknowledges, anything else makes QQ redeliver. */
 export type QQWebhookAnswer = {
@@ -176,6 +180,9 @@ export class QQAdapter extends BasePlatformAdapter {
   ): Promise<QQWebhookAnswer> {
     const payload = parseJson<QQWebhookPayload>(rawBody);
     if (payload === undefined) return { status: 400, reason: "body is not JSON" };
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      return { status: 400, reason: "body is not a JSON object" };
+    }
     // The URL validation (op 13) is signed by us, not by QQ: QQ checks our answer.
     if (payload.op === 13) return this.validation(payload);
     if (!verifyQQSignature(this.opts.appSecret, rawBody, signature, timestamp)) {
@@ -195,6 +202,15 @@ export class QQAdapter extends BasePlatformAdapter {
     const plain = payload.d?.plain_token;
     const ts = payload.d?.event_ts;
     if (!plain || !ts) return { status: 400, reason: "validation has no plain_token or event_ts" };
+    // Answer only values in the shape QQ sends. The same key verifies events over
+    // `timestamp + rawBody`, and neither charset contains `{`, so an answer never covers a JSON
+    // object.
+    if (typeof plain !== "string" || !PLAIN_TOKEN_SHAPE.test(plain)) {
+      return { status: 400, reason: "validation plain_token is not a token" };
+    }
+    if (typeof ts !== "string" || !EVENT_TS_SHAPE.test(ts)) {
+      return { status: 400, reason: "validation event_ts is not a timestamp" };
+    }
     return {
       status: 200,
       reason: "validation",
