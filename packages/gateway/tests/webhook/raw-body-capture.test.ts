@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { rawBodyCapture } from "../../src/webhook/express-server.js";
+import { DEFAULT_WEBHOOK_MAX_BYTES, rawBodyCapture } from "../../src/webhook/express-server.js";
 
 /** A request stream with the members `rawBodyCapture` reads. */
 class FakeRequest extends EventEmitter {
@@ -148,21 +148,42 @@ describe("rawBodyCapture", () => {
     expect(nextCalls[0]?.[0]).toMatchObject({ message: "aborted" });
   });
 
-  it.each([Number.NaN, -1, Number.POSITIVE_INFINITY])(
-    "throws a RangeError for maxBytes %s",
-    (maxBytes) => {
-      expect(() => rawBodyCapture("test-router", { maxBytes })).toThrow(RangeError);
-    },
-  );
+  it.each([Number.NaN, -1])("throws a RangeError for maxBytes %s", (maxBytes) => {
+    expect(() => rawBodyCapture("test-router", { maxBytes })).toThrow(RangeError);
+  });
 
-  it("keeps no limit when maxBytes is not given", async () => {
+  it("refuses a body over the default limit when maxBytes is not given", () => {
+    const req = new FakeRequest();
+    const res = new FakeResponse();
+    const nextCalls: unknown[][] = [];
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    rawBodyCapture("t")(req, res, (...a: unknown[]) => nextCalls.push(a));
+
+    req.emit("data", "x".repeat(DEFAULT_WEBHOOK_MAX_BYTES + 1));
+    req.emit("end");
+
+    expect(res.answers).toEqual([{ status: 413, body: { error: "request body too large" } }]);
+    expect(nextCalls).toEqual([]);
+  });
+
+  it("accepts a body of exactly the default limit", async () => {
     const req = new FakeRequest();
     const { next } = capture(req);
 
-    req.emit("data", "x".repeat(100_000));
+    req.emit("data", "x".repeat(DEFAULT_WEBHOOK_MAX_BYTES));
     req.emit("end");
 
     expect(await next).toEqual([]);
-    expect(req.rawBody).toHaveLength(100_000);
+  });
+
+  it("accepts a body over the default when maxBytes is Infinity", async () => {
+    const req = new FakeRequest();
+    const { next } = capture(req, { maxBytes: Number.POSITIVE_INFINITY });
+
+    req.emit("data", "x".repeat(DEFAULT_WEBHOOK_MAX_BYTES + 1));
+    req.emit("end");
+
+    expect(await next).toEqual([]);
+    expect(req.rawBody).toHaveLength(DEFAULT_WEBHOOK_MAX_BYTES + 1);
   });
 });

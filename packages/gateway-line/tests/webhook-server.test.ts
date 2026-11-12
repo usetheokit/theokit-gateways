@@ -291,3 +291,18 @@ describe("createWebhookServer — mounting", () => {
     }
   });
 });
+
+describe("createWebhookServer — body cap", () => {
+  it("answers 413 to a body over 1 MiB and never dispatches", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const app = express();
+    const { adapter, rec } = makeAdapter();
+    await createWebhookServer({ adapter, app });
+    const base = await listen(app);
+
+    const res = await post(base, "/line", "x".repeat(1024 * 1024 + 1));
+
+    expect(res.status).toBe(413);
+    expect(rec.dispatched).toEqual([]);
+  });
+});

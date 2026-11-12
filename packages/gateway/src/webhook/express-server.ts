@@ -76,10 +76,11 @@ export async function loadPeer<T>(
  * Every provider signs the exact bytes, so a body that was parsed and re-serialised hashes
  * differently and fails verification for a correct request. The bytes are attached as `rawBody`.
  *
- * With `maxBytes`, a body larger than that many bytes is refused before it is held. The rest of
- * the stream is read and dropped, and once it ends the middleware answers 413 with the JSON body
- * `{ "error": "request body too large" }` itself; `next` is not called. A route that must stay
- * public (a provider dials in) sets it, or any client can stream a body until the heap runs out.
+ * A body larger than `maxBytes` is refused before it is held. `maxBytes` defaults to
+ * {@link DEFAULT_WEBHOOK_MAX_BYTES} (1 MiB); pass `Number.POSITIVE_INFINITY` for no limit. The rest
+ * of the stream is read and dropped, and once it ends the middleware answers 413 with the JSON body
+ * `{ "error": "request body too large" }` itself; `next` is not called. The capture runs before
+ * signature verification, so without a limit any client could stream a body until the heap runs out.
  * The refusal is answered here rather than handed to `next` as an error because Express's final
  * handler writes an error as an HTML page carrying its stack whenever `NODE_ENV` is not
  * `production`, and these routes answer anyone.
@@ -88,14 +89,14 @@ export async function loadPeer<T>(
  * error do nothing, and after a stream error the end of the stream does nothing.
  *
  * @param tag the package name for the diagnostic, so a reader knows which router is complaining
- * @param options `maxBytes`, the largest body accepted; no limit when absent
- * @throws RangeError when `maxBytes` is not a finite number of zero or more
+ * @param options `maxBytes`, the largest body accepted; 1 MiB when absent, `Infinity` for no limit
+ * @throws RangeError when `maxBytes` is NaN or negative
  */
 export function rawBodyCapture(tag: string, options: RawBodyCaptureOptions = {}) {
-  const { maxBytes } = options;
-  if (maxBytes !== undefined && !(Number.isFinite(maxBytes) && maxBytes >= 0)) {
+  const maxBytes = options.maxBytes ?? DEFAULT_WEBHOOK_MAX_BYTES;
+  if (!(maxBytes >= 0)) {
     throw new RangeError(
-      `[${tag}] rawBodyCapture: maxBytes must be a finite number of zero or more, got ${maxBytes}`,
+      `[${tag}] rawBodyCapture: maxBytes must be a number of zero or more (Infinity allowed), got ${maxBytes}`,
     );
   }
   // `unknown` rather than `RawBodyRequest`, and that is a type-system requirement rather than
@@ -123,13 +124,13 @@ export function rawBodyCapture(tag: string, options: RawBodyCaptureOptions = {})
     let buf = "";
     let bytes = 0;
     // `refused` drops what is left of the body; `settled` keeps every path to one answer.
-    let refused = maxBytes !== undefined && declaredLength(req) > maxBytes;
+    let refused = declaredLength(req) > maxBytes;
     let settled = false;
     req.setEncoding("utf8");
     req.on("data", (chunk: string) => {
       if (refused || settled) return;
       bytes += Buffer.byteLength(chunk);
-      if (maxBytes !== undefined && bytes > maxBytes) {
+      if (bytes > maxBytes) {
         refused = true;
         buf = "";
         return;
@@ -140,7 +141,7 @@ export function rawBodyCapture(tag: string, options: RawBodyCaptureOptions = {})
       if (settled) return;
       settled = true;
       if (refused) {
-        answerTooLarge(rawRes as JsonResponse, tag, maxBytes ?? 0);
+        answerTooLarge(rawRes as JsonResponse, tag, maxBytes);
         return;
       }
       (req as unknown as { rawBody: string }).rawBody = buf;
@@ -156,9 +157,13 @@ export function rawBodyCapture(tag: string, options: RawBodyCaptureOptions = {})
   };
 }
 
+/** The body size {@link rawBodyCapture} accepts when `maxBytes` is not given: 1 MiB. */
+export const DEFAULT_WEBHOOK_MAX_BYTES = 1024 * 1024;
+
 /** Options for {@link rawBodyCapture}. */
 export interface RawBodyCaptureOptions {
-  /** The largest body accepted, in bytes. A larger one is refused with 413. No limit when absent. */
+  /** The largest body accepted, in bytes. A larger one is refused with 413. Defaults to
+   * {@link DEFAULT_WEBHOOK_MAX_BYTES}; `Number.POSITIVE_INFINITY` removes the limit. */
   readonly maxBytes?: number;
 }
 

@@ -139,4 +139,9 @@ export type {
   RawBodyCaptureOptions,
   RawBodyRequest,
 } from "./webhook/express-server.js";
-export { listenerLifecycle, loadPeer, rawBodyCapture } from "./webhook/express-server.js";
+export {
+  DEFAULT_WEBHOOK_MAX_BYTES,
+  listenerLifecycle,
+  loadPeer,
+  rawBodyCapture,
+} from "./webhook/express-server.js";
