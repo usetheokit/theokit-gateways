@@ -1,0 +1,13 @@
+# @theokit/gateway-buzz
+
+## 0.1.0
+
+### Minor Changes
+
+- 48b1b04: Add `@theokit/gateway-buzz`, a Buzz adapter.
+
+  `@theokit/gateway-buzz` (first release) exports `BuzzAdapter`, which follows a
+  workspace's realtime WebSocket with a bot token, turns `message.created` events into events and
+  posts replies to `/api/channels/{id}/messages`, splitting one over 4000 characters into messages
+  sent in order (`splitForBuzz` is exported). It requires `@theokit/gateway` 0.12.0 or later.
+  Wire shapes are an assumption (no Buzz spec was available) and not yet run against a live server.

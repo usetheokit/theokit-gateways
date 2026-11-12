@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-buzz",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Buzz platform adapter for @theokit/gateway, over the REST API and realtime WebSocket with a bot token.",
   "license": "Apache-2.0",
   "repository": {
