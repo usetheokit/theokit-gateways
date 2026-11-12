@@ -7,6 +7,7 @@
  * comes from the telegram-pro dogfood (Phase 10).
  */
 
+import { GrammyError } from "grammy";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TelegramAdapter } from "../src/adapter.js";
@@ -48,6 +49,15 @@ describe("TelegramAdapter (T5.1)", () => {
     });
     expect(r.ok).toBe(false);
     expect(r.error?.code).toBe("empty_text");
+  });
+
+  it("sendMessage maps a GrammyError without a description to a SendResult", async () => {
+    vi.spyOn(adapter.getBot().api, "sendMessage").mockRejectedValue(
+      new GrammyError("x", { ok: false } as never, "sendMessage", {}),
+    );
+    const r = await adapter.sendMessage({ channel: { id: "100", type: "dm" }, text: "hi" });
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBeTruthy();
   });
 
   it("sendMessage with non-numeric channel.id returns invalid_channel error", async () => {

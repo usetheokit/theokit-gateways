@@ -111,15 +111,17 @@ export class JsonRpcLineClient {
 
   private onLine(line: string): void {
     if (!this.open || line.trim() === "") return;
-    let message: RpcMessage;
+    let parsed: unknown;
     try {
-      message = JSON.parse(line) as RpcMessage;
+      parsed = JSON.parse(line);
     } catch {
       process.stderr.write(
         `[${this.label}] skipped a stdout line that is not JSON: ${line.slice(0, 120)}\n`,
       );
       return;
     }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return;
+    const message = parsed as RpcMessage;
     if (typeof message.method === "string" && (message.id === undefined || message.id === null)) {
       this.onNotification({ method: message.method, params: message.params });
       return;

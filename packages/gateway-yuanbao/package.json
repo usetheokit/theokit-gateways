@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-yuanbao",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Tencent Yuanbao (元宝) bot adapter for @theokit/gateway (signed JSON webhook in, bot message API out).",
   "license": "Apache-2.0",
   "repository": {
