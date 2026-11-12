@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-wecom",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "WeCom (企业微信) self-built application adapter for @theokit/gateway (encrypted XML callback in, application message API out).",
   "license": "Apache-2.0",
   "repository": {
