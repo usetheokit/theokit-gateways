@@ -45,7 +45,7 @@
     "nostr-tools": "^2.25.2"
   },
   "peerDependencies": {
-    "@theokit/gateway": ">=0.12.0 <1.0.0"
+    "@theokit/gateway": ">=0.15.0 <1.0.0"
   },
   "devDependencies": {
     "@theokit/gateway": "workspace:*",
