@@ -21,8 +21,8 @@ import type { MessageEvent as GatewayMessageEvent } from "../types/message-event
 export type AgentIdStrategy = (event: GatewayMessageEvent) => string;
 
 /**
- * Default strategy. Sanitizes `-` to `_` inside ids so the format
- * remains parseable by `-` segments.
+ * Default strategy. Escapes ids (`_` to `__`, `-` to `_d`) so the format
+ * remains splittable on `-` and distinct ids never share a key.
  */
 export function defaultStrategy(event: GatewayMessageEvent): string {
   const { platform, channel, sender } = event;
@@ -45,7 +45,8 @@ export function defaultStrategy(event: GatewayMessageEvent): string {
 }
 
 function sanitize(s: string): string {
-  return s.replace(/-/g, "_");
+  // Injective: every `_` in the output is followed by `_` or `d`.
+  return s.replace(/_/g, "__").replace(/-/g, "_d");
 }
 
 /**
