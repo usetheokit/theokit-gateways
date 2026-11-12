@@ -7,11 +7,15 @@ describe("WeChat signature", () => {
     const expected = "51b94a7ec2e827006d18b9cf6690ac5e35430412";
     expect(computeWeChatSignature("Zeta", "1700000000", "alpha")).toBe(expected);
     expect(
-      verifyWeChatSignature("Zeta", {
-        signature: expected,
-        timestamp: "1700000000",
-        nonce: "alpha",
-      }),
+      verifyWeChatSignature(
+        "Zeta",
+        {
+          signature: expected,
+          timestamp: "1700000000",
+          nonce: "alpha",
+        },
+        1_700_000_000_000,
+      ),
     ).toBe(true);
   });
 });
