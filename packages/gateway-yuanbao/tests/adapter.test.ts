@@ -115,6 +115,19 @@ describe("YuanbaoAdapter", () => {
     expect(calls).toHaveLength(before);
   });
 
+  it("answers 400 to a signed body that is not a JSON object", async () => {
+    const a = started(fakeFetch(ok).fetch);
+    const seen: string[] = [];
+    a.onInbound(async (e) => void seen.push(e.text));
+    for (const raw of ["null", "42", '"text"', "[]", "true"]) {
+      expect(await a.handleWebhook(...signed(raw))).toEqual({
+        status: 400,
+        reason: "body is not a JSON object",
+      });
+    }
+    expect(seen).toEqual([]);
+  });
+
   it("verifies, dispatches once, and answers by outcome", async () => {
     const a = started(fakeFetch(ok).fetch);
     const seen: string[] = [];
