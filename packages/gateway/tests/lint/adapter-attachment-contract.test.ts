@@ -106,7 +106,7 @@ describe("the attachment contract", () => {
   });
 
   it("reads every adapter package", async () => {
-    expect(await adapterPackages()).toHaveLength(28);
+    expect(await adapterPackages()).toHaveLength(30);
   });
 
   it("exactly one package declares supportsAttachments true", async () => {
@@ -121,7 +121,7 @@ describe("the attachment contract", () => {
     const offenders = refusing
       .map(({ pkg, adapter }) => ({ pkg, why: refusalVerdict(adapter, SEND_DECLARATION) }))
       .filter(({ why }) => why !== undefined);
-    expect(refusing).toHaveLength(27);
+    expect(refusing).toHaveLength(29);
     expect(offenders).toEqual([]);
   });
 

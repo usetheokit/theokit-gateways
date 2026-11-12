@@ -51,6 +51,8 @@
     "@theokit/gateway-whatsapp": "workspace:*",
     "@theokit/gateway-wechat": "workspace:*",
     "@theokit/gateway-wecom": "workspace:*",
+    "@theokit/gateway-qq": "workspace:*",
+    "@theokit/gateway-x": "workspace:*",
     "@theokit/gateway-yuanbao": "workspace:*",
     "@theokit/gateway-raft": "workspace:*",
     "@theokit/gateway-zalo": "workspace:*",

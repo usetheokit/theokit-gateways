@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+### Minor Changes
+
+- 00af16f: `BasePlatformAdapter` gains `react(channelId, messageId, emoji)`, which adds an emoji reaction to an inbound message. The default resolves `react_unsupported`; the Discord, Slack, Telegram and Matrix adapters implement it.
+
 ## 0.4.1
 
 ### Patch Changes

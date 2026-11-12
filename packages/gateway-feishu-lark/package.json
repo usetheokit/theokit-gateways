@@ -1,7 +1,6 @@
 {
   "name": "@theokit/gateway-feishu-lark",
   "version": "0.0.0",
-  "private": true,
   "description": "Feishu/Lark platform adapter for @theokit/gateway, over the open platform SDK's long connection.",
   "license": "Apache-2.0",
   "repository": {
