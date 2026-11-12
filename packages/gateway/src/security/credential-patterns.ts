@@ -52,6 +52,42 @@ export interface UncoveredShape {
 }
 
 /**
+ * The uncovered shapes as one `field :: why` row per line. A single literal rather than an object
+ * per entry keeps a long list of same-shaped entries from reading as a block repeated line for line.
+ */
+const UNCOVERED_TABLE = `gateway-qq \`appSecret\` :: a QQ Bot AppSecret, an opaque 32-character string with no prefix or fixed shape. It travels only to the access-token endpoint and into the webhook signature derivation; the adapter never logs it.
+gateway-x \`clientSecret\`, \`refreshToken\`, \`bearerToken\` :: an X OAuth 2.0 client secret, a rotating refresh token and an app bearer token, opaque strings with no fixed prefix. They travel only to the X API in Authorization headers and the token request body, which the adapter never logs.
+gateway-buzz \`token\` :: a Buzz bot token with no fixed shape this package could confirm. It travels only in Authorization headers, which the adapter never logs.
+gateway-clickclack \`token\` :: a ClickClack bot token (\`ccb_\` prefix) or session token with no fixed shape for the latter. It travels only in Authorization headers, which the adapter never logs.
+gateway-zalo \`accessToken\`, \`oaSecretKey\` :: a Zalo Official Account access token and OA secret key: opaque strings with no prefix or fixed shape to recognise. The token travels only in an \`access_token\` header and the key only into the signature check, and the adapter never logs either.
+gateway-wechat \`appSecret\`, \`token\` :: a WeChat Official Account AppSecret (32 hex characters, indistinguishable from any other hex string) and the server-URL verification token (a string the operator chooses). The secret travels only to the access-token endpoint and the token only into the signature check; the adapter never logs either.
+gateway-wecom \`corpSecret\`, \`token\`, \`encodingAesKey\` :: a WeCom application Secret (43 URL-safe base64 characters, indistinguishable from other opaque strings), the callback Token (a string the operator chooses) and the EncodingAESKey (43 base64 characters). The secret travels only to the access-token endpoint, the token into the signature check and the key into the decryption; the adapter never logs any of them.
+gateway-yuanbao \`appSecret\`, \`callbackSecret\` :: a Yuanbao bot AppSecret and the callback signing secret, both opaque strings with no prefix or fixed shape. The app secret travels only to the access-token endpoint and the callback secret only into the signature check; the adapter never logs either.
+gateway-zalo-personal \`credentials\` :: a Zalo web session: a cookie jar, an IMEI-like device id and a user agent. The cookie has no prefix or fixed shape to recognise. It travels only to the Zalo library, which the adapter never logs.
+gateway-twitch \`accessToken\` :: 30 lowercase alphanumerics with no prefix, the shape of many ids and hashes in a log. It travels only in Authorization headers, which the adapter never logs.
+gateway-tlon-urbit \`code\` :: a +code is four dash-joined phonemic syllable words, the same shape as an Urbit ship name such as ~sampel-palnet-sampel-palnet, which the logs exist to show. It travels only in the /~/login body, which the adapter never logs.
+gateway-synology-chat \`botToken\` and \`incomingUrl\` :: a bot token is a random string the NAS generates with no prefix, and the Incoming URL carries its own token as a query parameter of an ordinary entry.cgi URL. Neither has a shape to claim without eating ordinary ids and URLs; the adapter never logs the URL, and refuses a callback token before reading it.
+gateway-feishu-lark \`appSecret\` :: 32 alphanumerics with no prefix, the shape of many tokens and hashes; it travels only in the body of the tenant-token request, which the adapter never logs.
+gateway-nostr \`secretKey\` (64-hex form) :: 64 hex characters is also every Nostr public key and event id, which the logs exist to show, and a sha256 digest. The nsec1 spelling of the same key is masked above.
+gateway-sms \`authToken\` (Twilio), gateway-line \`channelSecret\` :: 32 lowercase hex characters, which is also an md5 digest, a dashless UUID and half a git tree hash. Masking it would eat the correlation id a developer reads the log to find.
+gateway-mattermost \`accessToken\` :: 26 lowercase alphanumerics, which is exactly a lowercase ULID — the shape of most trace ids.
+gateway-email \`password\`, gateway-sms \`apiSecret\` and \`signatureSecret\` (Vonage) :: no format of their own; a passphrase is indistinguishable from prose. The SDK's own \`key=value\` rule already masks these fully wherever they appear as \`field=value\`, and adding a pattern here made that WORSE by claiming the value first — it was masked as first6…last4 instead of removed.
+gateway-slack \`botToken\` :: already masked by one of the SDK's own twelve built-in patterns — \`xoxb-\` is Slack's and the SDK knows it. A pattern here would be a second one doing the first's work, and the field-level gate flagged its absence, which is the gate working.
+gateway-whatsapp \`appSecret\` :: 32 lowercase hex, the same shape as the Twilio auth token above and as every md5 and dashless UUID. Masking it would eat the correlation ids in a log.
+gateway-nextcloud-talk \`secret\` :: a Talk bot secret is a string of 40 to 128 characters the administrator chose for \`occ talk:bot:install\`, with no prefix or format to recognise. It never travels: both sides send only an HMAC made with it, and the adapter never logs it.
+gateway-irc \`password\` and \`saslPassword\` :: a server password and a NickServ password are passphrases the operator chose, with no format to recognise. The SDK's \`key=value\` rule masks them as fields wherever they appear as \`password=...\`; the SASL payload on the wire is their base64, which the adapter never logs.
+gateway-google-chat \`privateKey\` :: a PEM block spans lines, and in a log it usually arrives inside a JSON string with its line breaks escaped as \\n, which no single-line shape can claim whole. The SDK's \`key=value\` rule masks it as a field wherever it appears as \`private_key=...\` or \`privateKey=...\`.
+gateway-line \`channelAccessToken\`, gateway-sms \`authToken\` (Plivo) :: long base64 runs with no prefix, indistinguishable from any encoded blob a platform library puts in an error message.`;
+
+/** Read the rows of {@link UNCOVERED_TABLE}. */
+function parseUncovered(table: string): readonly UncoveredShape[] {
+  return table.split("\n").map((row) => {
+    const [field = "", why = ""] = row.split(" :: ");
+    return { field, why };
+  });
+}
+
+/**
  * What is masked and what is not.
  *
  * The uncovered list is the point of publishing this as data rather than burying it in a regex
@@ -102,100 +138,7 @@ export const CREDENTIAL_SHAPES: {
       alsoMatches: "nothing plausible — `nsec1` is NIP-19's prefix for a secret key",
     },
   ],
-  uncovered: [
-    {
-      field: "gateway-qq `appSecret`",
-      why: "a QQ Bot AppSecret, an opaque 32-character string with no prefix or fixed shape. It travels only to the access-token endpoint and into the webhook signature derivation; the adapter never logs it.",
-    },
-    {
-      field: "gateway-x `clientSecret`, `refreshToken`, `bearerToken`",
-      why: "an X OAuth 2.0 client secret, a rotating refresh token and an app bearer token, opaque strings with no fixed prefix. They travel only to the X API in Authorization headers and the token request body, which the adapter never logs.",
-    },
-    {
-      field: "gateway-buzz `token`",
-      why: "a Buzz bot token with no fixed shape this package could confirm. It travels only in Authorization headers, which the adapter never logs.",
-    },
-    {
-      field: "gateway-clickclack `token`",
-      why: "a ClickClack bot token (`ccb_` prefix) or session token with no fixed shape for the latter. It travels only in Authorization headers, which the adapter never logs.",
-    },
-    {
-      field: "gateway-zalo `accessToken`, `oaSecretKey`",
-      why: "a Zalo Official Account access token and OA secret key: opaque strings with no prefix or fixed shape to recognise. The token travels only in an `access_token` header and the key only into the signature check, and the adapter never logs either.",
-    },
-    {
-      field: "gateway-wechat `appSecret`, `token`",
-      why: "a WeChat Official Account AppSecret (32 hex characters, indistinguishable from any other hex string) and the server-URL verification token (a string the operator chooses). The secret travels only to the access-token endpoint and the token only into the signature check; the adapter never logs either.",
-    },
-    {
-      field: "gateway-wecom `corpSecret`, `token`, `encodingAesKey`",
-      why: "a WeCom application Secret (43 URL-safe base64 characters, indistinguishable from other opaque strings), the callback Token (a string the operator chooses) and the EncodingAESKey (43 base64 characters). The secret travels only to the access-token endpoint, the token into the signature check and the key into the decryption; the adapter never logs any of them.",
-    },
-    {
-      field: "gateway-yuanbao `appSecret`, `callbackSecret`",
-      why: "a Yuanbao bot AppSecret and the callback signing secret, both opaque strings with no prefix or fixed shape. The app secret travels only to the access-token endpoint and the callback secret only into the signature check; the adapter never logs either.",
-    },
-    {
-      field: "gateway-zalo-personal `credentials`",
-      why: "a Zalo web session: a cookie jar, an IMEI-like device id and a user agent. The cookie has no prefix or fixed shape to recognise. It travels only to the Zalo library, which the adapter never logs.",
-    },
-    {
-      field: "gateway-twitch `accessToken`",
-      why: "30 lowercase alphanumerics with no prefix, the shape of many ids and hashes in a log. It travels only in Authorization headers, which the adapter never logs.",
-    },
-    {
-      field: "gateway-tlon-urbit `code`",
-      why: "a +code is four dash-joined phonemic syllable words, the same shape as an Urbit ship name such as ~sampel-palnet-sampel-palnet, which the logs exist to show. It travels only in the /~/login body, which the adapter never logs.",
-    },
-    {
-      field: "gateway-synology-chat `botToken` and `incomingUrl`",
-      why: "a bot token is a random string the NAS generates with no prefix, and the Incoming URL carries its own token as a query parameter of an ordinary entry.cgi URL. Neither has a shape to claim without eating ordinary ids and URLs; the adapter never logs the URL, and refuses a callback token before reading it.",
-    },
-    {
-      field: "gateway-feishu-lark `appSecret`",
-      why: "32 alphanumerics with no prefix, the shape of many tokens and hashes; it travels only in the body of the tenant-token request, which the adapter never logs.",
-    },
-    {
-      field: "gateway-nostr `secretKey` (64-hex form)",
-      why: "64 hex characters is also every Nostr public key and event id, which the logs exist to show, and a sha256 digest. The nsec1 spelling of the same key is masked above.",
-    },
-    {
-      field: "gateway-sms `authToken` (Twilio), gateway-line `channelSecret`",
-      why: "32 lowercase hex characters, which is also an md5 digest, a dashless UUID and half a git tree hash. Masking it would eat the correlation id a developer reads the log to find.",
-    },
-    {
-      field: "gateway-mattermost `accessToken`",
-      why: "26 lowercase alphanumerics, which is exactly a lowercase ULID — the shape of most trace ids.",
-    },
-    {
-      field: "gateway-email `password`, gateway-sms `apiSecret` and `signatureSecret` (Vonage)",
-      why: "no format of their own; a passphrase is indistinguishable from prose. The SDK's own `key=value` rule already masks these fully wherever they appear as `field=value`, and adding a pattern here made that WORSE by claiming the value first — it was masked as first6…last4 instead of removed.",
-    },
-    {
-      field: "gateway-slack `botToken`",
-      why: "already masked by one of the SDK's own twelve built-in patterns — `xoxb-` is Slack's and the SDK knows it. A pattern here would be a second one doing the first's work, and the field-level gate flagged its absence, which is the gate working.",
-    },
-    {
-      field: "gateway-whatsapp `appSecret`",
-      why: "32 lowercase hex, the same shape as the Twilio auth token above and as every md5 and dashless UUID. Masking it would eat the correlation ids in a log.",
-    },
-    {
-      field: "gateway-nextcloud-talk `secret`",
-      why: "a Talk bot secret is a string of 40 to 128 characters the administrator chose for `occ talk:bot:install`, with no prefix or format to recognise. It never travels: both sides send only an HMAC made with it, and the adapter never logs it.",
-    },
-    {
-      field: "gateway-irc `password` and `saslPassword`",
-      why: "a server password and a NickServ password are passphrases the operator chose, with no format to recognise. The SDK's `key=value` rule masks them as fields wherever they appear as `password=...`; the SASL payload on the wire is their base64, which the adapter never logs.",
-    },
-    {
-      field: "gateway-google-chat `privateKey`",
-      why: "a PEM block spans lines, and in a log it usually arrives inside a JSON string with its line breaks escaped as \\n, which no single-line shape can claim whole. The SDK's `key=value` rule masks it as a field wherever it appears as `private_key=...` or `privateKey=...`.",
-    },
-    {
-      field: "gateway-line `channelAccessToken`, gateway-sms `authToken` (Plivo)",
-      why: "long base64 runs with no prefix, indistinguishable from any encoded blob a platform library puts in an error message.",
-    },
-  ],
+  uncovered: parseUncovered(UNCOVERED_TABLE),
 };
 
 /**
