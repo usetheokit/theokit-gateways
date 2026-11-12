@@ -274,6 +274,19 @@ export interface WeComMessageEvent extends BaseMessageEvent {
   };
 }
 
+/** QQ Bot event variant, a C2C (direct) text message pushed to the signed webhook. */
+export interface QQMessageEvent extends BaseMessageEvent {
+  readonly platform: "qq";
+  readonly qq: {
+    /** The message's id; a reply is sent as a passive reply to it. */
+    readonly messageId: string;
+    /** The sender's `user_openid`; the send target for a reply. */
+    readonly userOpenId: string;
+    /** The webhook payload — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
 /** Yuanbao (元宝) bot event variant, a text message pushed to the signed callback URL. */
 export interface YuanbaoMessageEvent extends BaseMessageEvent {
   readonly platform: "yuanbao";
@@ -300,6 +313,36 @@ export interface TwitchMessageEvent extends BaseMessageEvent {
     /** The chat message's `message_id`. */
     readonly messageId: string;
     /** The notification's `event` object — escape hatch. */
+    readonly raw: unknown;
+  };
+}
+
+/** One tweet of a mention's thread, oldest first in {@link XMessageEvent.x}`.thread`. */
+export interface XThreadTweet {
+  readonly tweetId: string;
+  readonly authorId: string;
+  /** The author's handle, `""` when the API did not return it. */
+  readonly username: string;
+  readonly text: string;
+}
+
+/** X (Twitter) event variant, a tweet that mentions the bot account. */
+export interface XMessageEvent extends BaseMessageEvent {
+  readonly platform: "x";
+  readonly x: {
+    /** The mention tweet's id; a reply is posted under it. */
+    readonly tweetId: string;
+    /** The thread's conversation id; also the channel id. */
+    readonly conversationId: string;
+    /** The author's user id. */
+    readonly authorId: string;
+    /** The tweets the mention replies to, oldest first; empty when it starts a thread. */
+    readonly thread: readonly XThreadTweet[];
+    /** The tweet the mention quotes, when it quotes one. */
+    readonly quoted?: XThreadTweet;
+    /** `true` when the author is not allowlisted and was let in by guest mode. */
+    readonly guest: boolean;
+    /** The tweet object — escape hatch. */
     readonly raw: unknown;
   };
 }

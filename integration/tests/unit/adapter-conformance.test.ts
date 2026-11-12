@@ -36,6 +36,7 @@ import { MatrixAdapter } from "@theokit/gateway-matrix";
 import { MattermostAdapter } from "@theokit/gateway-mattermost";
 import { NextcloudTalkAdapter } from "@theokit/gateway-nextcloud-talk";
 import { NostrAdapter } from "@theokit/gateway-nostr";
+import { QQAdapter } from "@theokit/gateway-qq";
 import { RaftAdapter } from "@theokit/gateway-raft";
 import { SignalAdapter } from "@theokit/gateway-signal";
 import { SlackAdapter } from "@theokit/gateway-slack";
@@ -47,6 +48,7 @@ import { TlonUrbitAdapter } from "@theokit/gateway-tlon-urbit";
 import { TwitchAdapter } from "@theokit/gateway-twitch";
 import { WeChatAdapter } from "@theokit/gateway-wechat";
 import { WeComAdapter } from "@theokit/gateway-wecom";
+import { XAdapter } from "@theokit/gateway-x";
 import { YuanbaoAdapter } from "@theokit/gateway-yuanbao";
 import { ZaloAdapter } from "@theokit/gateway-zalo";
 import { ZaloPersonalAdapter } from "@theokit/gateway-zalo-personal";
@@ -218,6 +220,23 @@ const ADAPTERS: readonly { platform: string; make: () => BasePlatformAdapter }[]
         token: "t",
         encodingAesKey: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
       }),
+  },
+  {
+    platform: "x",
+    make: () =>
+      new XAdapter({
+        userId: "1",
+        username: "bot",
+        clientId: "c",
+        clientSecret: "s",
+        refreshToken: "r",
+        allowFrom: ["alice"],
+        pollIntervalMs: 0,
+      }),
+  },
+  {
+    platform: "qq",
+    make: () => new QQAdapter({ appId: "a", appSecret: "s" }),
   },
   {
     platform: "yuanbao",
