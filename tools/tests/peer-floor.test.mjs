@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { floorOf, publishableAdapters, runChecks } from "../../scripts/check-peer-floor.mjs";
+import { floorOf, main, publishableAdapters, runChecks } from "../../scripts/check-peer-floor.mjs";
 
 describe("check-peer-floor", () => {
   it("reads the exact floor from a range", () => {
@@ -24,5 +24,44 @@ describe("check-peer-floor", () => {
     expect(byName["@theokit/gateway-zalo"]).toBe("0.15.0");
     expect(byName["@theokit/gateway-qq"]).toBe("0.16.0");
     expect(byName["@theokit/gateway-buzz"]).toBe("0.14.0");
+  });
+});
+
+describe("check-peer-floor main", () => {
+  it("exits 1 when an import fails, naming the adapter, and 0 when all succeed", async () => {
+    const calls = [];
+    const argv = ["--adapter", "@theokit/gateway-zalo@0.1.0", "--core", "0.12.0"];
+    const bad = await main(argv, {
+      install: (c) => {
+        calls.push(c);
+        throw new Error("does not provide an export named 'SeenIds'");
+      },
+    });
+    expect(bad).toBe(1);
+    expect(calls).toEqual([
+      {
+        adapterSpec: "@theokit/gateway-zalo@0.1.0",
+        adapterName: "@theokit/gateway-zalo",
+        coreVersion: "0.12.0",
+      },
+    ]);
+    expect(await main(argv, { install: () => {} })).toBe(0);
+  });
+
+  it("installs each workspace adapter at its own floor", async () => {
+    const seen = {};
+    const code = await main([], {
+      pack: (dir) => dir,
+      install: (c) => {
+        seen[c.adapterName] = c.coreVersion;
+      },
+    });
+    expect(code).toBe(0);
+    expect(seen["@theokit/gateway-zalo"]).toBe("0.15.0");
+    expect(seen["@theokit/gateway-qq"]).toBe("0.16.0");
+  });
+
+  it("rejects --adapter without --core", async () => {
+    await expect(main(["--adapter", "x@1.0.0"], { install: () => {} })).rejects.toThrow("--core");
   });
 });

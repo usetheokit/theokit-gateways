@@ -79,9 +79,14 @@ export function installAndImport({ adapterSpec, adapterName, coreVersion }) {
   }
 }
 
+/** Pack a workspace package and return its tarball, whatever else pnpm prints. */
 function packWorkspace(dir, into) {
-  const out = sh("pnpm", ["pack", "--pack-destination", into], dir).trim().split("\n").pop();
-  return resolve(into, out.split("/").pop());
+  const dest = mkdtempSync(join(into, "adapter-"));
+  sh("pnpm", ["pack", "--pack-destination", dest], dir);
+  const tarballs = readdirSync(dest).filter((f) => f.endsWith(".tgz"));
+  if (tarballs.length !== 1)
+    throw new Error(`pnpm pack of ${dir} produced ${tarballs.length} tarballs`);
+  return join(dest, tarballs[0]);
 }
 
 function flag(argv, name) {
@@ -89,16 +94,14 @@ function flag(argv, name) {
   return i === -1 ? undefined : argv[i + 1];
 }
 
-async function main(argv) {
+function casesFor(argv) {
   const adapter = flag(argv, "--adapter");
   const core = flag(argv, "--core");
   const only = flag(argv, "--only");
-  let cases;
-  const packDir = mkdtempSync(join(tmpdir(), "peer-floor-pack-"));
   if (adapter !== undefined) {
     if (core === undefined) throw new Error("--adapter needs --core <version>");
     const at = adapter.lastIndexOf("@");
-    cases = [
+    return [
       {
         label: adapter,
         adapterSpec: adapter,
@@ -107,7 +110,7 @@ async function main(argv) {
       },
     ];
   } else {
-    cases = publishableAdapters()
+    return publishableAdapters()
       .filter((a) => only === undefined || a.name.endsWith(`/${only}`) || a.name === only)
       .map((a) => ({
         label: a.name,
@@ -117,13 +120,25 @@ async function main(argv) {
         range: a.range,
       }));
   }
-  const failures = await runChecks(cases, (c) => {
-    if (c.coreVersion === undefined) throw new Error(`cannot read a floor from "${c.range}"`);
-    const spec = c.adapterSpec ?? packWorkspace(c.dir, packDir);
-    installAndImport({ adapterSpec: spec, adapterName: c.adapterName, coreVersion: c.coreVersion });
-    console.log(`ok   ${c.label} against ${CORE}@${c.coreVersion}`);
-  });
-  rmSync(packDir, { recursive: true, force: true });
+}
+
+/** Returns the exit code: 0 all imports work, 1 some failed. Throws on bad usage (caller exits 2). */
+export async function main(argv, deps = {}) {
+  const install = deps.install ?? installAndImport;
+  const pack = deps.pack ?? packWorkspace;
+  const cases = casesFor(argv);
+  const packDir = mkdtempSync(join(tmpdir(), "peer-floor-pack-"));
+  let failures;
+  try {
+    failures = await runChecks(cases, (c) => {
+      if (c.coreVersion === undefined) throw new Error(`cannot read a floor from "${c.range}"`);
+      const spec = c.adapterSpec ?? pack(c.dir, packDir);
+      install({ adapterSpec: spec, adapterName: c.adapterName, coreVersion: c.coreVersion });
+      console.log(`ok   ${c.label} against ${CORE}@${c.coreVersion}`);
+    });
+  } finally {
+    rmSync(packDir, { recursive: true, force: true });
+  }
   for (const f of failures) console.error(`FAIL ${f.label}: ${f.message}`);
   return failures.length === 0 ? 0 : 1;
 }
