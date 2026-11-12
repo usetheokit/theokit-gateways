@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-wechat",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "WeChat Official Account platform adapter for @theokit/gateway (signed XML webhook in, customer-service message API out).",
   "license": "Apache-2.0",
   "repository": {
