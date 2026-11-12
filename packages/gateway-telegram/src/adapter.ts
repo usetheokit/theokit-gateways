@@ -25,6 +25,7 @@ import {
   mapSendError,
   parseModeOptions,
   sendPhotos,
+  withPlainFallback,
 } from "./send-photos.js";
 import { splitForTelegram } from "./split.js";
 
@@ -136,13 +137,16 @@ export class TelegramAdapter extends BasePlatformAdapter {
     let lastId: string | undefined;
     for (const chunk of chunks) {
       try {
-        const msg = await this.bot.api.sendMessage(chatIdNum, chunk, {
-          ...(parseMode !== undefined ? { parse_mode: parseMode } : {}),
-          ...(threadId !== undefined ? { message_thread_id: threadId } : {}),
-          ...(out.replyTo !== undefined
-            ? { reply_parameters: { message_id: Number(out.replyTo) } }
-            : {}),
-        });
+        const msg = await withPlainFallback(
+          {
+            ...(parseMode !== undefined ? { parse_mode: parseMode } : {}),
+            ...(threadId !== undefined ? { message_thread_id: threadId } : {}),
+            ...(out.replyTo !== undefined
+              ? { reply_parameters: { message_id: Number(out.replyTo) } }
+              : {}),
+          },
+          (opts) => this.bot.api.sendMessage(chatIdNum, chunk, opts),
+        );
         lastId = String(msg.message_id);
       } catch (err) {
         return mapSendError(err);
