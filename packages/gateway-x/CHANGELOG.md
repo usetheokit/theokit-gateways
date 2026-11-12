@@ -1,5 +1,11 @@
 # @theokit/gateway-x
 
+## 0.1.1
+
+### Patch Changes
+
+- 8eb22db: Concurrent calls no longer spend the same OAuth refresh token. `XApi.refresh()` now shares one in-flight token request, so a poll and a reply that both need a new access token make a single POST and get the same token.
+
 ## 0.1.0
 
 ### Minor Changes
