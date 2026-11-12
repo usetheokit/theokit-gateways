@@ -155,13 +155,16 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     if (!verifyYuanbaoSignature(this.opts.callbackSecret, rawBody, signature, timestamp)) {
       return { status: 401, reason: "signature mismatch" };
     }
-    let payload: YuanbaoWebhookEvent;
+    let parsed: unknown;
     try {
-      payload = JSON.parse(rawBody) as YuanbaoWebhookEvent;
+      parsed = JSON.parse(rawBody);
     } catch {
       return { status: 400, reason: "body is not JSON" };
     }
-    const event = toMessageEvent(payload);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { status: 400, reason: "body is not a JSON object" };
+    }
+    const event = toMessageEvent(parsed as YuanbaoWebhookEvent);
     if (event === undefined) return { status: 200, reason: "not a text message" };
     const outcome = await this.dispatchOnce(this.seen, event, LABEL);
     if (outcome === "no_handler") return { status: 503, reason: "no handler subscribed" };

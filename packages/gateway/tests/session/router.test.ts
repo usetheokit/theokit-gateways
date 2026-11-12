@@ -61,8 +61,23 @@ describe("SessionRouter (T2.1)", () => {
     expect(router.resolveAgentId(tg({ id: "200", type: "dm" }))).toBe("tg-pro-dm-100");
   });
 
-  it("sanitize: ids with `-` become `_`", () => {
-    expect(defaultStrategy(tg({ id: "200", type: "dm" }, "abc-def"))).toBe("telegram-dm-abc_def");
+  it("escape: `-` becomes `_d` and `_` becomes `__`", () => {
+    expect(defaultStrategy(tg({ id: "200", type: "dm" }, "abc-def"))).toBe("telegram-dm-abc_ddef");
+    expect(defaultStrategy(tg({ id: "200", type: "dm" }, "abc_def"))).toBe("telegram-dm-abc__def");
+  });
+
+  it("distinct ids never share a key (sender, channel, topic)", () => {
+    const k = (c: MessageEvent["channel"], s = "1") => defaultStrategy(tg(c, s));
+    expect(k({ id: "c", type: "dm" }, "alice-bob")).not.toBe(
+      k({ id: "c", type: "dm" }, "alice_bob"),
+    );
+    expect(k({ id: "a-b", type: "group" })).not.toBe(k({ id: "a_b", type: "group" }));
+    expect(k({ id: "c", type: "thread", topicId: "t-1" })).not.toBe(
+      k({ id: "c", type: "thread", topicId: "t_1" }),
+    );
+    const ids = ["-d", "_d", "_", "-", "__", "_-", "-_", "d", ""];
+    const keys = ids.map((i) => k({ id: "c", type: "dm" }, i));
+    expect(new Set(keys).size).toBe(ids.length);
   });
 
   it("EC-B: thread without topicId falls back to group key (no `undefined`)", () => {
