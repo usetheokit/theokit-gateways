@@ -13,9 +13,9 @@ import {
   type WeixinSendRequest,
   type WeixinWebhookAnswer,
 } from "@theokit/gateway";
-
+import { NonceMemory } from "./nonce-memory.js";
 import { refuseAttachments } from "./refuse-attachments.js";
-import { verifyWeChatSignature } from "./signature.js";
+import { isWeChatTimestampFresh, verifyWeChatSignature } from "./signature.js";
 import { splitForWeChat } from "./split.js";
 import type { WeChatAdapterOptions } from "./types.js";
 
@@ -51,6 +51,7 @@ export type WeChatWebhookAnswer = WeixinWebhookAnswer;
 export class WeChatAdapter extends WeixinAdapterBase {
   readonly platform = "wechat" as const;
   private readonly opts: WeChatAdapterOptions;
+  private readonly nonces = new NonceMemory();
 
   /** @throws Error when `appId`, `appSecret` or `token` is empty */
   constructor(opts: WeChatAdapterOptions) {
@@ -99,15 +100,26 @@ export class WeChatAdapter extends WeixinAdapterBase {
    * Webhook entry. Pass the request's query and, for a `POST`, its RAW body; omit `rawBody` for
    * the `GET` verification. Answer `status` and `body` as given. A `503` (no handler subscribed)
    * must not be turned into a 200, or WeChat does not retry and the message is lost.
+   *
+   * Plain mode signs the query string, not the body. A request is refused (401) when its
+   * timestamp is more than 300 seconds from this host's clock, or when its timestamp and nonce
+   * were already accepted with a different body. The same request sent again is let through to
+   * the message-id dedupe, so WeChat's own retries still work.
    */
   async handleWebhook(query: WeChatWebhookRequest, rawBody?: string): Promise<WeChatWebhookAnswer> {
-    if (!verifyWeChatSignature(this.opts.token, query)) {
-      return { status: 401, body: "", reason: "signature mismatch" };
+    const now = Date.now();
+    if (!verifyWeChatSignature(this.opts.token, query, now)) {
+      const stale = query.timestamp !== undefined && !isWeChatTimestampFresh(query.timestamp, now);
+      return { status: 401, body: "", reason: stale ? "stale timestamp" : "signature mismatch" };
     }
     if (rawBody === undefined) {
       return query.echostr === undefined
         ? { status: 400, body: "", reason: "echostr missing" }
         : { status: 200, body: query.echostr, reason: "verified" };
+    }
+    const { timestamp = "", nonce = "" } = query;
+    if (!this.nonces.admit(timestamp, nonce, rawBody, now)) {
+      return { status: 401, body: "", reason: "nonce reused" };
     }
     return this.handleMessage(rawBody);
   }

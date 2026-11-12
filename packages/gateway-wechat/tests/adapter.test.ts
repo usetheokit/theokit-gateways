@@ -36,7 +36,12 @@ function make(f: WeChatFetch) {
   return new WeChatAdapter({ appId: "wx1", appSecret: "sec", token: TOKEN, fetch: f });
 }
 
-function query(ts = "1700000000", nonce = "n1") {
+let nonceCount = 0;
+
+/** A query signed now, with a nonce no other request in the file uses. */
+function query() {
+  const ts = String(Math.floor(Date.now() / 1000));
+  const nonce = `n${++nonceCount}`;
   return { timestamp: ts, nonce, signature: computeWeChatSignature(TOKEN, ts, nonce) };
 }
 
@@ -156,8 +161,9 @@ describe("handleWebhook", () => {
     const seen: unknown[] = [];
     a.onInbound(async (e) => void seen.push({ id: e.id, text: e.text, channel: e.channel }));
     expect((await a.handleWebhook({ ...query(), signature: "00" }, XML)).status).toBe(401);
-    expect(await a.handleWebhook(query(), XML)).toMatchObject({ status: 200, body: "success" });
-    expect((await a.handleWebhook(query(), XML)).reason).toBe("duplicate");
+    const signed = query();
+    expect(await a.handleWebhook(signed, XML)).toMatchObject({ status: 200, body: "success" });
+    expect((await a.handleWebhook(signed, XML)).reason).toBe("duplicate");
     expect(seen).toEqual([{ id: "123", text: "hi 你好", channel: { id: "o1", type: "dm" } }]);
   });
   it("acknowledges other message types, answers 503 with no handler, contains a throw", async () => {

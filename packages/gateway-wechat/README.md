@@ -29,6 +29,16 @@ response.status(answer.status).send(answer.body);
 
 - Signature: `sha1(sort([token, timestamp, nonce]).join(""))`, compared in constant time; a
   failure answers 401 and dispatches nothing. `GET` with a valid signature echoes `echostr`.
+- Freshness: a request whose `timestamp` is more than 300 seconds from the server clock answers
+  401 (`stale timestamp`), so keep the host clock in sync. A `POST` whose timestamp and nonce
+  were already accepted with a different body answers 401 (`nonce reused`); an identical
+  request sent again reaches the message-id dedupe instead, so a retry is never refused for its
+  nonce. Accepted
+  nonces live in memory, per adapter instance and per process.
+- Plain mode does not authenticate the body. The signature covers only the token, timestamp and
+  nonce, all in the query string. Treat webhook URLs as secrets for their 300 seconds: keep them
+  out of logs that others can read, and do not let the sender's OpenID alone authorize anything
+  sensitive.
 - Inbound: text messages become direct-message events (`channel.id` = the sender's OpenID). Other
   message types and repeats are acknowledged (`success`) and dropped. With no handler subscribed
   the answer is 503 so WeChat retries. Plain-text mode only; encrypted (安全模式) is not supported.
