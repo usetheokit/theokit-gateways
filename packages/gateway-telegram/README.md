@@ -10,8 +10,17 @@ Telegram platform adapter for `@theokit/gateway`. Wraps [grammy](https://grammy.
 **Long polling by default.** grammY pulls updates and they reach `onInbound` once `connect()`
 resolves.
 
-Telegram also supports a webhook, and `theokit/server/webhook` exports `telegram()` for the secret
-token it sends in `X-Telegram-Bot-Api-Secret-Token`. Parsed updates go to `adapter.deliver(event)`.
+**Webhook.** Telegram also supports a webhook, and `theokit/server/webhook` exports `telegram()` for
+the secret token it sends in `X-Telegram-Bot-Api-Secret-Token`. Set `inbound: "webhook"` so
+`connect()` checks the token but does not start long polling (a bot with a webhook set cannot call
+`getUpdates`), and `disconnect()` does not stop a poller. Parsed updates go to `adapter.deliver(event)`.
+
+```typescript
+const adapter = new TelegramAdapter({ token: process.env.TELEGRAM_BOT_TOKEN!, inbound: "webhook" });
+// In your webhook route, after verifying the secret token:
+await adapter.deliver(event);
+```
+
 ## Install
 
 ```bash

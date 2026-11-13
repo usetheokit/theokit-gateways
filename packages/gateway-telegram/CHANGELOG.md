@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+### Patch Changes
+
+- b5941b6: `sendMessage` and `editMessage` no longer throw a `TypeError` when Telegram (or a proxy) answers with an error body that has no `description`. The failure now comes back as a `SendResult` with code `telegram_<error_code>`.
+
 ## 0.7.0
 
 ### Minor Changes

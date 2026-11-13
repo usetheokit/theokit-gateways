@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-imessage",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "iMessage platform adapter for @theokit/gateway, driving imsg's JSON-RPC mode over stdio on a signed-in Mac.",
   "license": "Apache-2.0",
   "repository": {

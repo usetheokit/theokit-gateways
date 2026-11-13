@@ -41,7 +41,7 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@theokit/gateway": ">=0.12.0 <1.0.0"
+    "@theokit/gateway": ">=0.14.0 <1.0.0"
   },
   "devDependencies": {
     "@theokit/gateway": "workspace:*",
