@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+### Minor Changes
+
+- 21184a8: Export `twilioRequestVerifier` (standalone Twilio signature check for SMS and voice webhooks) and `twiml` builders.
+
 ## 0.3.3
 
 ### Patch Changes
