@@ -383,6 +383,15 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
   `connectFailure: "isolate"` (under `"rollback"` the start still rejects). A `connect()` that
   returns `false`, or throws a 401/403 credential error, is reported once and never retried.
   `start()` called again afterwards returns the updated `connected` and `failed`.
+- `connectTimeoutMs` (under `"isolate"`) gives up on one adapter's `connect()` after that many ms:
+  it is reported `timed_out` in `StartResult.failed`, never wired for inbound, and disconnected if
+  its `connect()` resolves `true` later. With `reconnect` it is retried like a transient failure.
+  `onAdapterState(platform, state, reason?)` fires as each adapter becomes `connected`, `failed`,
+  `retrying` or `timed_out`, while `start()` may still be pending; `reason` is redacted. Both are
+  ignored under `"rollback"`. `secrets: [...]` masks those exact values (longest first) with
+  `[redacted]` in every reason and log line before `redactSecrets` runs (`maskSecrets` is exported).
+- `runner.adapter(platform)` returns the registered adapter, connected or not, or `undefined`;
+  `runner.connected` is the live set of connected platforms, updated by retries and `stop()`.
 - `connectFailure` defaults to `"rollback"`: one failed connect disconnects the adapters that did
   connect and rejects `start()`, as before. Under `"isolate"`, `start()` resolves even when every
   adapter failed, so check `connected` before you rely on the runner.

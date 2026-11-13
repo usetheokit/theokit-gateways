@@ -66,6 +66,7 @@ export type {
 } from "./hooks/types.js";
 // Runner
 export {
+  type AdapterState,
   type ConnectFailure,
   type GatewayContext,
   type GatewayHandler,
@@ -81,6 +82,7 @@ export {
 export type { CoveredShape, UncoveredShape } from "./security/credential-patterns.js";
 export {
   CREDENTIAL_SHAPES,
+  maskSecrets,
   maskShapes,
   redactSecrets,
 } from "./security/credential-patterns.js";
