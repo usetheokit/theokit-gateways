@@ -85,6 +85,13 @@ export {
 } from "./security/credential-patterns.js";
 // Session
 export {
+  type AgentBindingRule,
+  type AgentBindings,
+  type AgentBindingsOptions,
+  bindingStrategy,
+  createAgentBindings,
+} from "./session/bindings.js";
+export {
   type AgentIdStrategy,
   defaultStrategy,
   SessionRouter,

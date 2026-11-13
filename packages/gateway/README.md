@@ -280,6 +280,23 @@ const hook = commandHook([
 
 A command declared `arg: "none"` given an argument (or `"required"` given none) replies with its usage line instead of running. Two commands with the same name throw `GatewayConfigurationError` with code `duplicate_command`. `parseChatCommand(text, { prefixes })` is exported for apps that parse on their own.
 
+## Agent bindings
+
+When one gateway serves several agents, `createAgentBindings` picks the agent per message. A rule names an `agent` and any of `platform`, `account` and `peer` (the sender id in a DM, the channel id otherwise). A rule matches when every field it sets equals the message's. The most specific match wins (peer 4, account 2, platform 1), ties go to the earlier rule, and no match gives `defaultAgent`.
+
+```ts
+import { bindingStrategy, createAgentBindings, defaultStrategy, SessionRouter } from "@theokit/gateway";
+
+const bindings = createAgentBindings({
+  defaultAgent: "personal",
+  agents: ["personal", "support"],
+  rules: [{ agent: "support", platform: "slack" }],
+});
+const router = new SessionRouter(bindingStrategy(bindings, defaultStrategy));
+```
+
+`accountOf(event)` says which bot account received the event when the app runs several. Creation throws `GatewayConfigurationError` with code `unknown_agent` for a default or rule naming an agent not in `agents`, and `empty_binding_rule` for a rule with no `platform`, `account` or `peer`. `bindingStrategy` prefixes the inner key with the escaped agent name, so two agents never share a session.
+
 ## Architecture (5 pieces)
 
 | Module | Responsibility |

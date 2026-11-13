@@ -260,6 +260,10 @@ describe("live-test readiness", () => {
         "Covered by packages/gateway/tests/hooks/chat-command.test.ts",
       helpText:
         "pure function, no I/O. Covered by packages/gateway/tests/hooks/chat-command.test.ts",
+      createAgentBindings:
+        "pure rule matching, no I/O. Covered by packages/gateway/tests/agent-bindings.test.ts",
+      bindingStrategy:
+        "pure function, no I/O. Covered by packages/gateway/tests/agent-bindings.test.ts",
       toDialect:
         "pure function, no I/O — and unlike chunkText its work is NOT proven over the wire here, " +
         "because no adapter in this package calls it. That is deliberate and documented in " +
