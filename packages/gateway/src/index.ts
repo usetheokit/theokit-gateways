@@ -2,6 +2,7 @@
 
 // Adapter contract
 export {
+  type AdapterCapabilities,
   BasePlatformAdapter,
   type OutboundAttachment,
   type OutboundMessage,

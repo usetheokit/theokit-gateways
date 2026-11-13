@@ -168,6 +168,9 @@ export class TelegramAdapter extends BasePlatformAdapter {
   /** Telegram sends each image of `out.attachments` through `sendPhoto` (B-674). */
   override readonly supportsAttachments = true;
 
+  /** Telegram sends images through `sendPhoto` and audio through `sendVoice`. */
+  protected override readonly attachmentKinds = ["image", "audio"] as const;
+
   /** Telegram edits a sent message's text through `editMessageText`. */
   override readonly supportsEdit = true;
 
