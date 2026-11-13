@@ -246,6 +246,21 @@ reach the platform in either order, and the one that lands last stays on screen;
 edit is a separate event and clients show the newest. Await each edit before sending the next,
 or keep one in flight and send only the latest text when it settles.
 
+## Chat commands
+
+`commandHook` is one `pre_inbound` hook for many commands. It recognises a command behind one leading mention (`<@U123> /help`, `@bot /help`) and with Telegram's `@bot` suffix (`/help@my_bot`), matches the name exactly (`/new chat` is `/new` with arg `chat`; `/newer` passes through), and answers `/help` with `helpText(commands)`.
+
+```ts
+import { commandHook } from "@theokit/gateway";
+
+const hook = commandHook([
+  { name: "new", description: "Start a new chat", arg: "none", run: () => ({ block: true, message: "Reset." }) },
+  { name: "think", description: "Set thinking", usage: "/think off|low|medium|high", run: (_e, arg) => ({ block: true, message: `think=${arg}` }) },
+]);
+```
+
+A command declared `arg: "none"` given an argument (or `"required"` given none) replies with its usage line instead of running. Two commands with the same name throw `GatewayConfigurationError` with code `duplicate_command`. `parseChatCommand(text, { prefixes })` is exported for apps that parse on their own.
+
 ## Architecture (5 pieces)
 
 | Module | Responsibility |
