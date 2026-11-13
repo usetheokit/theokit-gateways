@@ -22,6 +22,7 @@ export type {
   ChannelDescriptor,
   ChannelWebhook,
   IngestResult,
+  WebhookAnswer,
   WebhookRequest,
 } from "./channel/channel-descriptor.js";
 export {
@@ -149,7 +150,8 @@ export type {
   ZaloMessageEvent,
   ZaloPersonalMessageEvent,
 } from "./types/platform-events.js";
-
+// A Fetch handler that routes webhook requests to the channels' descriptors.
+export { statusForDeliver } from "./webhook/deliver-status.js";
 // The shared half of an Express webhook server — see `webhook/express-server.ts` for why it lives
 // here and why it does not make express a dependency of the core (#89).
 export type {
@@ -164,3 +166,4 @@ export {
   loadPeer,
   rawBodyCapture,
 } from "./webhook/express-server.js";
+export { createWebhookHandler, type WebhookHandlerOptions } from "./webhook/fetch-handler.js";

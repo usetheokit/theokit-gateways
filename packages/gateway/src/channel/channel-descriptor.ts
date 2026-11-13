@@ -30,6 +30,20 @@ export interface WebhookRequest {
   readonly rawBody: string;
   /** Request headers. Descriptors look a header up without regard to case. */
   readonly headers: Readonly<Record<string, string | undefined>>;
+  /** The HTTP method. Always set by `createWebhookHandler`; optional so existing callers compile. */
+  readonly method?: string;
+  /** The full request URL, query included. Always set by `createWebhookHandler`. */
+  readonly url?: string;
+}
+
+/** The answer a channel's `handle` gives for one webhook request. */
+export interface WebhookAnswer {
+  /** The HTTP status. */
+  readonly status: number;
+  /** The response body, when the platform expects one. */
+  readonly body?: string;
+  /** The response `content-type`. */
+  readonly contentType?: string;
 }
 
 /**
@@ -54,6 +68,10 @@ export interface ChannelWebhook<TAdapter extends BasePlatformAdapter> {
   verify(adapter: TAdapter, request: WebhookRequest): boolean;
   /** Dispatch a parsed, verified payload, or report it malformed without dispatching. */
   ingest(adapter: TAdapter, payload: unknown): Promise<IngestResult>;
+  /** Methods the route takes. Default `["POST"]`. */
+  readonly methods?: readonly string[];
+  /** Full control of one request. When absent, the handler runs verify, JSON.parse and ingest. */
+  handle?(adapter: TAdapter, request: WebhookRequest): Promise<WebhookAnswer>;
 }
 
 interface ChannelDescriptorBase<TAdapter extends BasePlatformAdapter> {

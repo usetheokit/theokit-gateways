@@ -412,6 +412,29 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
   `failed` under `"isolate"`. Acknowledging it loses the message, since the platform does not
   redeliver an acknowledged request.
 
+### Mounting webhooks in a Fetch server
+
+`createWebhookHandler` routes `/webhooks/<platform>` for every `transport: "webhook"` channel. It
+answers 404 for an unknown platform, 503 while the platform has not started, 405 for a method the
+route does not take, 413 (with `connection: close`) past `maxBodyBytes` (default 1 MiB), 401 when
+`verify` fails, 400 for a body that is not JSON or is `"malformed"`, and 503 for `"no_handler"`. A
+descriptor with `webhook.handle` answers the request itself (method, URL and query included).
+A throw gives 500 with no body and calls `onError(platform, error)`. `statusForDeliver(outcomes)`
+maps `deliver()` outcomes to a status, worst wins.
+
+```ts
+import { createChannels, createWebhookHandler } from "@theokit/gateway";
+
+const { channels } = createChannels(entries);
+const handler = createWebhookHandler({
+  channels,
+  isStarted: (platform) => runnerStarted.has(platform),
+  onError: (platform, error) => log.error({ platform, error }),
+});
+
+Bun.serve({ port: 3000, fetch: handler });
+```
+
 ## Receiving from a TheoKit app
 
 Three repositories share this path. `theokit` owns the HTTP route and the signature check —
