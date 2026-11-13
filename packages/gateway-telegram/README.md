@@ -111,6 +111,11 @@ refuses a token that is not a string or is empty, and an `allowedUsers` that is 
 strings, with this package's `ConfigurationError` (also a `GatewayConfigurationError`), so
 `createChannels` lists that channel in `rejected` too.
 
+## Capabilities
+
+`adapter.capabilities` reports `edit`, `typing` and `reactions` as `true` and
+`attachments: ["image", "audio"]`. See `@theokit/gateway` for the field meanings.
+
 ## Helpers
 
 - `shouldRespondInChat(ctx, policy)` — group-chat policy (DM = always reply, group = only on `@mention` or reply-to-bot or slash command). Register as a `pre_inbound` hook.

@@ -246,6 +246,25 @@ reach the platform in either order, and the one that lands last stays on screen;
 edit is a separate event and clients show the newest. Await each edit before sending the next,
 or keep one in flight and send only the latest text when it settles.
 
+## Adapter capabilities
+
+Every adapter has a `capabilities` getter, so an app reads what a channel can do instead of
+keeping a table of platform names:
+
+```ts
+const { edit, attachments, typing, reactions, threads, maxMessageChars } = adapter.capabilities;
+```
+
+- `edit` is `supportsEdit`.
+- `attachments` lists the kinds the adapter sends (`"image"`, `"audio"`); `[]` when none. An
+  adapter that sets only `supportsAttachments = true` reports `["image"]`; one that sends more
+  sets the protected `attachmentKinds`.
+- `typing` and `reactions` are `true` when the adapter overrides `startTyping` and `react`.
+- `threads` is `false` and `maxMessageChars` is `undefined` unless an adapter overrides the
+  getter; no adapter sets them yet.
+
+The type is exported as `AdapterCapabilities`.
+
 ## Chat commands
 
 `commandHook` is one `pre_inbound` hook for many commands. It recognises a command behind one leading mention (`<@U123> /help`, `@bot /help`) and with Telegram's `@bot` suffix (`/help@my_bot`), matches the name exactly (`/new chat` is `/new` with arg `chat`; `/newer` passes through), and answers `/help` with `helpText(commands)`.
