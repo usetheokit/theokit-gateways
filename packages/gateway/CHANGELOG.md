@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.0
+
+### Minor Changes
+
+- 6329554: `rawBodyCapture` now refuses a body over 1 MiB with 413 when `maxBytes` is not given. The default is exported as `DEFAULT_WEBHOOK_MAX_BYTES`; pass `maxBytes: Number.POSITIVE_INFINITY` for no limit.
+
 ## 0.16.1
 
 ### Patch Changes

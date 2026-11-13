@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-raft",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Raft External Agent platform adapter for @theokit/gateway (Raft CLI wake bridge in, Raft CLI reply out).",
   "license": "Apache-2.0",
   "repository": {
