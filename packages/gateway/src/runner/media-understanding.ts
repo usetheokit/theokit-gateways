@@ -6,6 +6,7 @@
 import type { MessageEvent as GatewayMessageEvent } from "../types/message-event.js";
 import type { GatewayHandler } from "./gateway-runner.js";
 
+/** Options for `withMediaUnderstanding`: the functions that understand media, a size cap and a failure sink. */
 export interface MediaUnderstandingOptions {
   /** e.g. plugin-voice's transcribe, bound to its config. */
   transcribe?(audio: { data: Uint8Array; mediaType: string }): Promise<string>;
