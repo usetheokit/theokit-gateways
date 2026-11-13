@@ -14,7 +14,7 @@ function esc(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+    .replace(/'/g, "&#39;");
 }
 
 function attrs(a: Record<string, string | number | undefined>): string {
@@ -25,7 +25,12 @@ function attrs(a: Record<string, string | number | undefined>): string {
   return out;
 }
 
-/** @public */
+/**
+ * TwiML verb builders for Twilio voice webhooks. Each returns an XML string; combine them with
+ * `twiml.response`.
+ *
+ * @public
+ */
 export const twiml = {
   say(text: string, opts: { voice?: string; language?: string } = {}): string {
     return `<Say${attrs({ voice: opts.voice, language: opts.language })}>${esc(text)}</Say>`;
