@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-zalo-personal",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Zalo Personal platform adapter for @theokit/gateway, over the unofficial zca-js web session (a personal account, not an Official Account).",
   "license": "Apache-2.0",
   "repository": {

@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-zalo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Zalo Official Account platform adapter for @theokit/gateway (OA webhook in, OA Open API out).",
   "license": "Apache-2.0",
   "repository": {
