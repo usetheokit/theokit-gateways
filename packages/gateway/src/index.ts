@@ -65,6 +65,10 @@ export {
   type ReconnectPolicy,
   type StartResult,
 } from "./runner/gateway-runner.js";
+export {
+  type MediaUnderstandingOptions,
+  withMediaUnderstanding,
+} from "./runner/media-understanding.js";
 export type { CoveredShape, UncoveredShape } from "./security/credential-patterns.js";
 export {
   CREDENTIAL_SHAPES,
