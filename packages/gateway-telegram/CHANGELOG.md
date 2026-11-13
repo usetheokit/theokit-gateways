@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0
+
+### Minor Changes
+
+- 4ae0506: `TelegramAdapter` takes `inbound: "webhook"`: `connect()` checks the token without starting long polling, and `disconnect()` does not call `bot.stop()`. Updates arrive through `deliver()`. The default stays `"polling"`.
+
+### Patch Changes
+
+- 66646fc: A chunk (or photo caption) that Telegram refuses with a legacy Markdown parse error is now resent once as plain text, so the reply arrives and later chunks are no longer dropped.
+
 ## 0.7.1
 
 ### Patch Changes
