@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3
+
+### Patch Changes
+
+- 6329554: The LINE and SMS webhook routes answer 413 to a request body over 1 MiB instead of buffering it without limit before the signature check.
+- bca7cfd: Raise the `@theokit/gateway` peer floor to the core version that ships the APIs this adapter imports, so npm no longer installs it next to a core it cannot load.
+
 ## 0.3.2
 
 ### Patch Changes
