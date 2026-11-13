@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.0
+
+### Minor Changes
+
+- 58aadd0: Add `withMediaUnderstanding`, a handler wrapper that folds a voice note's transcript into the turn text, naming any attachment it could not understand.
+
 ## 0.17.0
 
 ### Minor Changes
