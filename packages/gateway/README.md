@@ -246,6 +246,57 @@ reach the platform in either order, and the one that lands last stays on screen;
 edit is a separate event and clients show the newest. Await each edit before sending the next,
 or keep one in flight and send only the latest text when it settles.
 
+## Adapter capabilities
+
+Every adapter has a `capabilities` getter, so an app reads what a channel can do instead of
+keeping a table of platform names:
+
+```ts
+const { edit, attachments, typing, reactions, threads, maxMessageChars } = adapter.capabilities;
+```
+
+- `edit` is `supportsEdit`.
+- `attachments` lists the kinds the adapter sends (`"image"`, `"audio"`); `[]` when none. An
+  adapter that sets only `supportsAttachments = true` reports `["image"]`; one that sends more
+  sets the protected `attachmentKinds`.
+- `typing` and `reactions` are `true` when the adapter overrides `startTyping` and `react`.
+- `threads` is `false` and `maxMessageChars` is `undefined` unless an adapter overrides the
+  getter; no adapter sets them yet.
+
+The type is exported as `AdapterCapabilities`.
+
+## Chat commands
+
+`commandHook` is one `pre_inbound` hook for many commands. It recognises a command behind one leading mention (`<@U123> /help`, `@bot /help`) and with Telegram's `@bot` suffix (`/help@my_bot`), matches the name exactly (`/new chat` is `/new` with arg `chat`; `/newer` passes through), and answers `/help` with `helpText(commands)`.
+
+```ts
+import { commandHook } from "@theokit/gateway";
+
+const hook = commandHook([
+  { name: "new", description: "Start a new chat", arg: "none", run: () => ({ block: true, message: "Reset." }) },
+  { name: "think", description: "Set thinking", usage: "/think off|low|medium|high", run: (_e, arg) => ({ block: true, message: `think=${arg}` }) },
+]);
+```
+
+A command declared `arg: "none"` given an argument (or `"required"` given none) replies with its usage line instead of running. Two commands with the same name throw `GatewayConfigurationError` with code `duplicate_command`. `parseChatCommand(text, { prefixes })` is exported for apps that parse on their own.
+
+## Agent bindings
+
+When one gateway serves several agents, `createAgentBindings` picks the agent per message. A rule names an `agent` and any of `platform`, `account` and `peer` (the sender id in a DM, the channel id otherwise). A rule matches when every field it sets equals the message's. The most specific match wins (peer 4, account 2, platform 1), ties go to the earlier rule, and no match gives `defaultAgent`.
+
+```ts
+import { bindingStrategy, createAgentBindings, defaultStrategy, SessionRouter } from "@theokit/gateway";
+
+const bindings = createAgentBindings({
+  defaultAgent: "personal",
+  agents: ["personal", "support"],
+  rules: [{ agent: "support", platform: "slack" }],
+});
+const router = new SessionRouter(bindingStrategy(bindings, defaultStrategy));
+```
+
+`accountOf(event)` says which bot account received the event when the app runs several. Creation throws `GatewayConfigurationError` with code `unknown_agent` for a default or rule naming an agent not in `agents`, and `empty_binding_rule` for a rule with no `platform`, `account` or `peer`. `bindingStrategy` prefixes the inner key with the escaped agent name, so two agents never share a session.
+
 ## Architecture (5 pieces)
 
 | Module | Responsibility |
@@ -332,6 +383,15 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
   `connectFailure: "isolate"` (under `"rollback"` the start still rejects). A `connect()` that
   returns `false`, or throws a 401/403 credential error, is reported once and never retried.
   `start()` called again afterwards returns the updated `connected` and `failed`.
+- `connectTimeoutMs` (under `"isolate"`) gives up on one adapter's `connect()` after that many ms:
+  it is reported `timed_out` in `StartResult.failed`, never wired for inbound, and disconnected if
+  its `connect()` resolves `true` later. With `reconnect` it is retried like a transient failure.
+  `onAdapterState(platform, state, reason?)` fires as each adapter becomes `connected`, `failed`,
+  `retrying` or `timed_out`, while `start()` may still be pending; `reason` is redacted. Both are
+  ignored under `"rollback"`. `secrets: [...]` masks those exact values (longest first) with
+  `[redacted]` in every reason and log line before `redactSecrets` runs (`maskSecrets` is exported).
+- `runner.adapter(platform)` returns the registered adapter, connected or not, or `undefined`;
+  `runner.connected` is the live set of connected platforms, updated by retries and `stop()`.
 - `connectFailure` defaults to `"rollback"`: one failed connect disconnects the adapters that did
   connect and rejects `start()`, as before. Under `"isolate"`, `start()` resolves even when every
   adapter failed, so check `connected` before you rely on the runner.
@@ -360,6 +420,45 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
   arrives before `start()` resolves, after `stop()`, or for a channel `start()` reported in
   `failed` under `"isolate"`. Acknowledging it loses the message, since the platform does not
   redeliver an acknowledged request.
+
+### Mounting webhooks in a Fetch server
+
+`createWebhookHandler` routes `/webhooks/<platform>` for every `transport: "webhook"` channel. It
+answers 404 for an unknown platform, 503 while the platform has not started, 405 for a method the
+route does not take, 413 (with `connection: close`) past `maxBodyBytes` (default 1 MiB), 401 when
+`verify` fails, 400 for a body that is not JSON or is `"malformed"`, and 503 for `"no_handler"`. A
+descriptor with `webhook.handle` answers the request itself (method, URL and query included).
+A throw gives 500 with no body and calls `onError(platform, error)`. `statusForDeliver(outcomes)`
+maps `deliver()` outcomes to a status, worst wins.
+
+```ts
+import { createChannels, createWebhookHandler } from "@theokit/gateway";
+
+const { channels } = createChannels(entries);
+const handler = createWebhookHandler({
+  channels,
+  isStarted: (platform) => runnerStarted.has(platform),
+  onError: (platform, error) => log.error({ platform, error }),
+});
+
+Bun.serve({ port: 3000, fetch: handler });
+```
+
+### Is the sender id authenticated?
+
+A descriptor can say whether `sender.id` is proven by the platform with `senderIdentity`:
+`"authenticated"`, or `{ unauthenticated: "why it can be forged" }` for a channel such as email (the
+From header) or SMS (the caller id), where the sender writes the id (CWE-290).
+`isAuthenticatedSender(descriptor)` is true only for `"authenticated"`. A descriptor that does not
+set the field is unknown, and unknown is treated as not authenticated (fail closed), so an app
+that lets owners control an agent should refuse owner entries on such a channel.
+
+```typescript
+import { isAuthenticatedSender } from "@theokit/gateway";
+import { telegramChannel } from "@theokit/gateway-telegram";
+
+isAuthenticatedSender(telegramChannel); // true
+```
 
 ## Receiving from a TheoKit app
 

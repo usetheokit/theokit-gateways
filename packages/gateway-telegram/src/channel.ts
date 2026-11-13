@@ -42,6 +42,13 @@ function readAllowedUsers(config: Readonly<Record<string, unknown>>): string[] |
   return value;
 }
 
+function readRequireMention(config: Readonly<Record<string, unknown>>): boolean | undefined {
+  const value = config.requireMention;
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "boolean") throw invalid("requireMention", "a boolean");
+  return value;
+}
+
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally, D4). */
 interface ConfigField {
   readonly key: string;
@@ -63,6 +70,13 @@ const CONFIG: ReadonlyArray<ConfigField> = [
     secret: false,
     description: "Telegram user ids allowed to reach the handler; absent or empty allows everyone.",
   },
+  {
+    key: "requireMention",
+    required: false,
+    secret: false,
+    description:
+      "When true, group messages reach the handler only if they mention the bot, reply to it or are slash commands; default false.",
+  },
 ];
 
 /**
@@ -76,10 +90,16 @@ const CONFIG: ReadonlyArray<ConfigField> = [
 export const telegramChannel = {
   platform: "telegram" as const,
   transport: "socket" as const,
+  senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): TelegramAdapter {
     const token = readToken(config);
     const allowedUsers = readAllowedUsers(config);
-    return new TelegramAdapter(allowedUsers === undefined ? { token } : { token, allowedUsers });
+    const requireMention = readRequireMention(config);
+    return new TelegramAdapter({
+      token,
+      ...(allowedUsers === undefined ? {} : { allowedUsers }),
+      ...(requireMention === undefined ? {} : { requireMention }),
+    });
   },
 };

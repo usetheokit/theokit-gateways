@@ -16,6 +16,7 @@
 import type { MessageEvent as GatewayMessageEvent, TelegramMessageEvent } from "@theokit/gateway";
 import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "@theokit/gateway";
 import { Bot, type Context, GrammyError } from "grammy";
+import { type PolicyInput, shouldRespond } from "./group-policy.js";
 import { buildEvent } from "./parse-inbound.js";
 import { readVoice } from "./read-voice.js";
 import { refuseAttachments } from "./refuse-attachments.js";
@@ -45,6 +46,30 @@ export interface TelegramAdapterOptions {
    * the adapter connected, and updates arrive through `deliver()`.
    */
   readonly inbound?: "polling" | "webhook";
+  /**
+   * When true, a group or supergroup message reaches the handler only if it mentions the bot,
+   * replies to one of the bot's messages, or is a slash command. Private chats always pass.
+   * Default false (today's behaviour).
+   */
+  readonly requireMention?: boolean;
+}
+
+function isObj(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** The message facts the policy reads, from an event whose `raw` is a Context or an update. */
+function policyInput(event: GatewayMessageEvent): PolicyInput {
+  const raw = (event as { telegram?: { raw?: unknown } }).telegram?.raw;
+  const msg = isObj(raw) && isObj(raw.message) ? raw.message : undefined;
+  const replyTo =
+    msg !== undefined && isObj(msg.reply_to_message) ? msg.reply_to_message : undefined;
+  const from = replyTo !== undefined && isObj(replyTo.from) ? replyTo.from : undefined;
+  return {
+    chatType: event.channel.type === "dm" ? "private" : "group",
+    text: event.text,
+    replyToFromId: typeof from?.id === "number" ? from.id : undefined,
+  };
 }
 
 /**
@@ -61,6 +86,8 @@ export class TelegramAdapter extends BasePlatformAdapter {
   private readonly allowedUsers: Set<string>;
   private handler?: (event: GatewayMessageEvent) => Promise<void>;
   private readonly inbound: "polling" | "webhook";
+  private readonly requireMention: boolean;
+  private warnedNoIdentity = false;
   private connected = false;
   private startPromise?: Promise<void>;
 
@@ -69,6 +96,7 @@ export class TelegramAdapter extends BasePlatformAdapter {
     this.bot = new Bot(opts.token);
     this.allowedUsers = new Set(opts.allowedUsers ?? []);
     this.inbound = opts.inbound ?? "polling";
+    this.requireMention = opts.requireMention === true;
     this.bot.on("message", async (ctx) => this.handleInbound(ctx));
     this.bot.catch((err) => {
       process.stderr.write(`[telegram] bot error: ${(err.error as Error)?.message ?? err}\n`);
@@ -167,6 +195,9 @@ export class TelegramAdapter extends BasePlatformAdapter {
 
   /** Telegram sends each image of `out.attachments` through `sendPhoto` (B-674). */
   override readonly supportsAttachments = true;
+
+  /** Telegram sends images through `sendPhoto` and audio through `sendVoice`. */
+  protected override readonly attachmentKinds = ["image", "audio"] as const;
 
   /** Telegram edits a sent message's text through `editMessageText`. */
   override readonly supportsEdit = true;
@@ -275,7 +306,29 @@ export class TelegramAdapter extends BasePlatformAdapter {
     }
     const event = normalizeEvent(ctx);
     if (event === undefined) return;
+    if (!this.passesMentionGate(event)) return;
     await this.dispatchEvent(await this.withVoice(ctx, event));
+  }
+
+  /** The `requireMention` gate, shared by the polled and webhook paths. */
+  private passesMentionGate(event: GatewayMessageEvent): boolean {
+    if (!this.requireMention || event.channel.type === "dm") return true;
+    let me: { id: number; username?: string } | undefined;
+    try {
+      me = this.bot.botInfo;
+    } catch {
+      me = undefined;
+    }
+    if (me?.username === undefined) {
+      if (!this.warnedNoIdentity) {
+        this.warnedNoIdentity = true;
+        process.stderr.write(
+          "[telegram] requireMention: bot identity not known yet; dropping group message\n",
+        );
+      }
+      return false;
+    }
+    return shouldRespond(policyInput(event), { botUsername: me.username, botId: me.id });
   }
 
   /**
@@ -332,6 +385,7 @@ export class TelegramAdapter extends BasePlatformAdapter {
   override async deliver(
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
+    if (!this.passesMentionGate(event)) return "ok";
     return this.runHandler(this.handler, event);
   }
 }
