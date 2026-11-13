@@ -76,6 +76,7 @@ const CONFIG: ReadonlyArray<ConfigField> = [
 export const telegramChannel = {
   platform: "telegram" as const,
   transport: "socket" as const,
+  senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): TelegramAdapter {
     const token = readToken(config);

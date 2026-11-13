@@ -412,6 +412,14 @@ for (const { platform, reason } of failed) console.error(`${platform} did not co
   `failed` under `"isolate"`. Acknowledging it loses the message, since the platform does not
   redeliver an acknowledged request.
 
+### Is the sender id authenticated?
+
+A descriptor may carry `senderIdentity`: `"authenticated"` when the platform vouches for
+`sender.id`, or `{ unauthenticated: "why" }` when the sender writes it itself (an e-mail From
+header, an SMS caller id). `isAuthenticatedSender(descriptor)` is true only for `"authenticated"`.
+The field is optional, and absent means unknown, so it is treated as not authenticated (fail
+closed): do not let such a sender act as an owner.
+
 ## Receiving from a TheoKit app
 
 Three repositories share this path. `theokit` owns the HTTP route and the signature check —

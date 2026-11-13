@@ -23,6 +23,10 @@ function configurationErrorOf(fn: () => unknown): ConfigurationError {
 }
 
 describe("telegramChannel", () => {
+  it("declares an authenticated sender id", () => {
+    expect(telegramChannel.senderIdentity).toBe("authenticated");
+  });
+
   it("marks the token field required and secret", () => {
     expect(telegramChannel.config).toContainEqual(
       expect.objectContaining({ key: "token", required: true, secret: true }),

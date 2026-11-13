@@ -56,6 +56,18 @@ export interface ChannelWebhook<TAdapter extends BasePlatformAdapter> {
   ingest(adapter: TAdapter, payload: unknown): Promise<IngestResult>;
 }
 
+/**
+ * Whether a channel can prove who sent a message. `"authenticated"`: the platform vouches for
+ * `sender.id`. `{ unauthenticated }`: the sender writes it (an e-mail From header, an SMS caller
+ * id; CWE-290), and the string says why, for error messages.
+ *
+ * @public
+ */
+export type SenderIdentity =
+  | "authenticated"
+  /** Why the sender id can be forged, for error messages. */
+  | { readonly unauthenticated: string };
+
 interface ChannelDescriptorBase<TAdapter extends BasePlatformAdapter> {
   /** The platform the built adapter reports as its `platform`. */
   readonly platform: PlatformName;
@@ -66,6 +78,11 @@ interface ChannelDescriptorBase<TAdapter extends BasePlatformAdapter> {
    * which `createChannels` reports as a rejected channel; it performs no network call.
    */
   create(config: Readonly<Record<string, unknown>>): TAdapter;
+  /**
+   * Whether `sender.id` is authenticated. Absent means unknown and is treated as not
+   * authenticated (fail closed); it is optional only so descriptors in other packages keep compiling.
+   */
+  readonly senderIdentity?: SenderIdentity;
 }
 
 /**
@@ -80,3 +97,12 @@ export type ChannelDescriptor<TAdapter extends BasePlatformAdapter = BasePlatfor
       readonly transport: "webhook";
       readonly webhook: ChannelWebhook<TAdapter>;
     });
+
+/**
+ * True only when the descriptor says `"authenticated"`. Absent or unauthenticated is false.
+ *
+ * @public
+ */
+export function isAuthenticatedSender(descriptor: ChannelDescriptor): boolean {
+  return descriptor.senderIdentity === "authenticated";
+}
