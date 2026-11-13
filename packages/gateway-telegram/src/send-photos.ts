@@ -75,7 +75,8 @@ export async function sendPhotos(api: Api, out: OutboundMessage): Promise<SendRe
     let lastId = await sendEachAttachment(api, chatId, out, shared);
     if (out.text.length > CAPTION_LIMIT) {
       for (const chunk of splitForTelegram(out.text)) {
-        lastId = (await api.sendMessage(chatId, chunk, shared)).message_id;
+        lastId = (await withPlainFallback(shared, (opts) => api.sendMessage(chatId, chunk, opts)))
+          .message_id;
       }
     }
     return { ok: true, messageId: String(lastId) };
@@ -99,14 +100,38 @@ async function sendEachAttachment(
   let lastId = 0;
   for (const [index, attachment] of attachments.entries()) {
     const options = { ...shared, ...(index === 0 ? firstPhotoOptions(out, caption) : {}) };
-    const file = new InputFile(attachment.data, attachment.filename);
-    const msg =
-      attachment.kind === "audio"
-        ? await api.sendVoice(chatId, file, options)
-        : await api.sendPhoto(chatId, file, options);
+    const msg = await withPlainFallback<typeof options, { message_id: number }>(options, (opts) => {
+      const file = new InputFile(attachment.data, attachment.filename);
+      return attachment.kind === "audio"
+        ? api.sendVoice(chatId, file, opts)
+        : api.sendPhoto(chatId, file, opts);
+    });
     lastId = msg.message_id;
   }
   return lastId;
+}
+
+/**
+ * Run `send` with `options`. When Telegram refuses the legacy Markdown (`markdown_error`), write
+ * one diagnostic line and run `send` once more without `parse_mode`. Any other failure, and a
+ * failure of the resend, is rethrown for the caller's `mapSendError`.
+ */
+export async function withPlainFallback<O extends { parse_mode?: "Markdown" | "HTML" }, R>(
+  options: O,
+  send: (options: O) => Promise<R>,
+): Promise<R> {
+  try {
+    return await send(options);
+  } catch (err) {
+    if (options.parse_mode === undefined) throw err;
+    const mapped = mapSendError(err);
+    if (mapped.ok || mapped.error?.code !== "markdown_error") throw err;
+    process.stderr.write(
+      `[theokit-gateway-telegram] ${mapped.error.message}; resending as plain text\n`,
+    );
+    const { parse_mode: _dropped, ...plain } = options;
+    return send(plain as O);
+  }
 }
 
 /** The text as a caption when it fits in 1 to 1024 units, otherwise none. */

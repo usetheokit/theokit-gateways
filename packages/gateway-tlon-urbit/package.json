@@ -44,7 +44,7 @@
     "@urbit/aura": "3.0.0"
   },
   "peerDependencies": {
-    "@theokit/gateway": ">=0.13.0 <1.0.0"
+    "@theokit/gateway": ">=0.15.0 <1.0.0"
   },
   "devDependencies": {
     "@theokit/gateway": "workspace:*",

@@ -16,7 +16,12 @@
  * @public
  */
 
-import { listenerLifecycle, loadPeer, rawBodyCapture } from "@theokit/gateway";
+import {
+  DEFAULT_WEBHOOK_MAX_BYTES,
+  listenerLifecycle,
+  loadPeer,
+  rawBodyCapture,
+} from "@theokit/gateway";
 import type { Express, Request, Response } from "express";
 import type { SMSAdapter } from "./adapter.js";
 import type { SignatureContext } from "./backend-types.js";
@@ -124,7 +129,11 @@ export async function createWebhookServer(opts: WebhookServerOptions): Promise<W
     res.status(204).end();
   };
 
-  app.post(`${prefix}/${backend}`, rawBodyCapture("gateway-sms"), handler);
+  app.post(
+    `${prefix}/${backend}`,
+    rawBodyCapture("gateway-sms", { maxBytes: DEFAULT_WEBHOOK_MAX_BYTES }),
+    handler,
+  );
 
   // The lifecycle lives in `@theokit/gateway`, written once. It was duplicated here and in
   // gateway-line, and the same write-once latch bug had to be fixed in both files by one commit —

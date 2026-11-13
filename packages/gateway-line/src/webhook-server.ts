@@ -7,7 +7,12 @@
  * @public
  */
 
-import { listenerLifecycle, loadPeer, rawBodyCapture } from "@theokit/gateway";
+import {
+  DEFAULT_WEBHOOK_MAX_BYTES,
+  listenerLifecycle,
+  loadPeer,
+  rawBodyCapture,
+} from "@theokit/gateway";
 import type { Express, Request, Response } from "express";
 import type { LineAdapter } from "./adapter.js";
 
@@ -93,7 +98,11 @@ export async function createWebhookServer(opts: WebhookServerOptions): Promise<W
   const createApp = await loadExpress();
   const app: Express = opts.app ?? createApp();
   const path = opts.path ?? "/line";
-  app.post(path, rawBodyCapture("gateway-line"), handlerFactory(opts.adapter));
+  app.post(
+    path,
+    rawBodyCapture("gateway-line", { maxBytes: DEFAULT_WEBHOOK_MAX_BYTES }),
+    handlerFactory(opts.adapter),
+  );
 
   // The lifecycle — and the latches that make a restart a restart — live in `@theokit/gateway`,
   // written once. They were duplicated here and in gateway-sms, and the same write-once bug had to
