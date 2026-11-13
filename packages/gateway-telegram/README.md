@@ -90,6 +90,16 @@ shows OGG/Opus, MP3 and M4A as a voice bubble; other audio is delivered as a fil
 Attachments need `@theokit/gateway` 0.13.0 or later: an older core's `ctx.reply` does not carry
 them to the adapter, so install both together.
 
+## Group messages: `requireMention`
+
+With `requireMention: true`, a group or supergroup message reaches the handler only if it mentions
+the bot (`@username`, any case), replies to one of the bot's messages, or starts with `/`. Private
+chats always pass. The gate applies to polled updates and to events given to `deliver()` (webhook).
+It uses the identity grammy holds after `connect()`; a group message that arrives before it is
+known is dropped with one stderr line. The default is `false` here, so existing bots keep
+answering every message (the other adapters default to `true`). In `telegramChannel` config,
+`requireMention` must be a boolean.
+
 ## Channel descriptor
 
 `telegramChannel` describes this channel as data, for `createChannels` in `@theokit/gateway`:
