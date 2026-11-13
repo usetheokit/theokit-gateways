@@ -167,6 +167,30 @@ const runner = new GatewayRunner({
 });
 ```
 
+### Folding a transcript into the turn text
+
+A voice note's `text` is empty, so the agent would see nothing. `withMediaUnderstanding` wraps a
+handler and appends one line per item to `text`: `[Audio transcript: ...]`, or
+`[Attachment of type audio/ogg could not be understood]` when the function throws or the payload
+exceeds `maxBytes` (default 20 MiB), or `[Attachment of type audio/ogg not understood]` when no
+function is configured. The media type is sanitized to `[\w/.+-]`, the event keeps `audio`, and
+the handler always runs once. `write` receives one line per failure with the type and error name
+only. The gateway makes no network call; pass plugin-voice's `transcribe`:
+
+```typescript
+import { GatewayRunner, withMediaUnderstanding } from "@theokit/gateway";
+import { transcribe } from "@theokit/plugin-voice";
+
+const runner = new GatewayRunner({
+  adapters: [adapter],
+  handler: withMediaUnderstanding(answer, {
+    transcribe: (audio) => transcribe(audio, voiceConfig),
+  }),
+});
+```
+
+`describeImage` is accepted for when events carry image bytes; no adapter fills them today.
+
 ## Editing a sent message
 
 Six adapters can replace the text of a message they sent, keeping its id: Telegram, Discord,

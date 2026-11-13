@@ -249,6 +249,10 @@ describe("live-test readiness", () => {
       chunkText:
         "pure function, no I/O. The splitting it performs IS proven over the wire, by the five adapter suites that send past their platform's cap",
       chunkByGrapheme: "pure function, same reasoning as chunkText",
+      withMediaUnderstanding:
+        "a handler wrapper that makes no network call; the transcribe function is the caller's. " +
+        "Covered by packages/gateway/tests/runner/media-understanding.test.ts, and no adapter " +
+        "but Telegram fills the audio it reads",
       toDialect:
         "pure function, no I/O — and unlike chunkText its work is NOT proven over the wire here, " +
         "because no adapter in this package calls it. That is deliberate and documented in " +
