@@ -79,6 +79,26 @@ For local development, `ngrok http 3000` and use the `https://*.ngrok.io` URL.
 
 If a request arrives without (or with invalid) signature, the webhook responds `401 Unauthorized` BEFORE any handler dispatch.
 
+## Twilio voice webhooks and TwiML
+
+Twilio signs voice webhooks like SMS ones. `twilioRequestVerifier` checks them without an adapter or the `twilio` SDK (HMAC-SHA1 of the URL plus sorted form parameters, constant-time compare). Failures carry a reason: `missing X-Twilio-Signature header` or `signature mismatch`. Behind a proxy set `publicUrl`; JSON bodies (`bodySHA256`) are not supported.
+
+```ts
+import { twilioRequestVerifier, twiml } from "@theokit/gateway-sms";
+
+const verify = twilioRequestVerifier({ authToken: process.env.TWILIO_AUTH_TOKEN!, publicUrl });
+const result = await verify(request.clone());
+if (!result.ok) return new Response(result.reason, { status: 401 });
+
+const xml = twiml.response(
+  twiml.say("How can I help?"),
+  twiml.gather({ action: "/voice/turn", input: "speech", timeoutSeconds: 5 }),
+  twiml.redirect("/voice/turn"),
+);
+```
+
+`twiml.say`, `gather`, `redirect`, `hangup` and `response` escape every text node and attribute.
+
 ## Multipart split (D393)
 
 Outbound messages longer than 1600 chars are split into `(1/N) ...` / `(2/N) ...` parts. Split is grapheme-cluster safe (`Intl.Segmenter`) so emoji and combining characters are not severed.
