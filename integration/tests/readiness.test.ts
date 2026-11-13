@@ -249,6 +249,9 @@ describe("live-test readiness", () => {
       chunkText:
         "pure function, no I/O. The splitting it performs IS proven over the wire, by the five adapter suites that send past their platform's cap",
       chunkByGrapheme: "pure function, same reasoning as chunkText",
+      isAuthenticatedSender:
+        "pure function over a descriptor's declared field, no I/O. Covered by " +
+        "packages/gateway/tests/sender-identity.test.ts and the telegram and LINE channel tests",
       withMediaUnderstanding:
         "a handler wrapper that makes no network call; the transcribe function is the caller's. " +
         "Covered by packages/gateway/tests/runner/media-understanding.test.ts, and no adapter " +
