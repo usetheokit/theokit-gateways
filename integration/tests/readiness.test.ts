@@ -253,6 +253,13 @@ describe("live-test readiness", () => {
         "a handler wrapper that makes no network call; the transcribe function is the caller's. " +
         "Covered by packages/gateway/tests/runner/media-understanding.test.ts, and no adapter " +
         "but Telegram fills the audio it reads",
+      parseChatCommand:
+        "pure string -> record, no I/O. Covered by packages/gateway/tests/hooks/chat-command.test.ts",
+      commandHook:
+        "a pre_inbound hook that makes no network call; it only decides on the event text. " +
+        "Covered by packages/gateway/tests/hooks/chat-command.test.ts",
+      helpText:
+        "pure function, no I/O. Covered by packages/gateway/tests/hooks/chat-command.test.ts",
       toDialect:
         "pure function, no I/O — and unlike chunkText its work is NOT proven over the wire here, " +
         "because no adapter in this package calls it. That is deliberate and documented in " +
