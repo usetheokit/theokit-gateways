@@ -22,9 +22,11 @@ export type {
   ChannelDescriptor,
   ChannelWebhook,
   IngestResult,
+  SenderIdentity,
   WebhookAnswer,
   WebhookRequest,
 } from "./channel/channel-descriptor.js";
+export { isAuthenticatedSender } from "./channel/channel-descriptor.js";
 export {
   type BuiltChannel,
   type ChannelEntry,

@@ -198,6 +198,10 @@ describe("lineChannel.webhook.ingest", () => {
 });
 
 describe("lineChannel", () => {
+  it("declares an authenticated sender", () => {
+    expect(lineChannel.senderIdentity).toBe("authenticated");
+  });
+
   it("reports the required and secret fields", () => {
     const byKey = Object.fromEntries(lineChannel.config.map((f) => [f.key, f]));
     expect(byKey.channelSecret).toMatchObject({ required: true, secret: true });

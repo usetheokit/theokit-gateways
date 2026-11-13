@@ -247,6 +247,9 @@ describe("live-test readiness", () => {
         "pure string -> string, no I/O. What a live run could add is whether a REAL credential " +
         "matches the shape, and no live test may carry one — the tests use synthetic values built " +
         "to each platform's documented format, which is the strongest form available anywhere",
+      isAuthenticatedSender:
+        "a pure read of a descriptor's senderIdentity field, no I/O. Covered by " +
+        "packages/gateway/tests/sender-identity.test.ts and the Telegram and LINE channel tests",
       CREDENTIAL_SHAPES: "a data table. A live run would read the same rows the unit tests read",
       redactSecrets:
         "reached on every handler and hook throw, so the live suites exercise it whenever one " +
