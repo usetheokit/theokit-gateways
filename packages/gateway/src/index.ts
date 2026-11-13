@@ -46,6 +46,13 @@ export {
   type GatewayLifecycleErrorOptions,
 } from "./errors/lifecycle-error.js";
 // Hooks
+export {
+  type ChatCommand,
+  commandHook,
+  helpText,
+  type ParsedChatCommand,
+  parseChatCommand,
+} from "./hooks/chat-command.js";
 export { HookExecutor } from "./hooks/executor.js";
 export type {
   GatewayHook,
