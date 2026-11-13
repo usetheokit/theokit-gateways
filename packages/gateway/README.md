@@ -444,6 +444,22 @@ const handler = createWebhookHandler({
 Bun.serve({ port: 3000, fetch: handler });
 ```
 
+### Is the sender id authenticated?
+
+A descriptor can say whether `sender.id` is proven by the platform with `senderIdentity`:
+`"authenticated"`, or `{ unauthenticated: "why it can be forged" }` for a channel such as email (the
+From header) or SMS (the caller id), where the sender writes the id (CWE-290).
+`isAuthenticatedSender(descriptor)` is true only for `"authenticated"`. A descriptor that does not
+set the field is unknown, and unknown is treated as not authenticated (fail closed), so an app
+that lets owners control an agent should refuse owner entries on such a channel.
+
+```typescript
+import { isAuthenticatedSender } from "@theokit/gateway";
+import { telegramChannel } from "@theokit/gateway-telegram";
+
+isAuthenticatedSender(telegramChannel); // true
+```
+
 ## Receiving from a TheoKit app
 
 Three repositories share this path. `theokit` owns the HTTP route and the signature check —
