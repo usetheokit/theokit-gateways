@@ -44,7 +44,7 @@ export function defaultStrategy(event: GatewayMessageEvent): string {
   }
 }
 
-function sanitize(s: string): string {
+export function sanitize(s: string): string {
   // Injective: every `_` in the output is followed by `_` or `d`.
   return s.replace(/_/g, "__").replace(/-/g, "_d");
 }
