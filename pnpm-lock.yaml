@@ -231,6 +231,27 @@ importers:
         specifier: ^4.6.6
         version: 4.6.7
 
+  packages/gateway-agent:
+    devDependencies:
+      '@theokit/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      '@theokit/presenter':
+        specifier: ^0.10.0
+        version: 0.10.0(@theokit/sdk@5.14.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(zod@4.6.7)
+      '@theokit/sdk':
+        specifier: ^5.9.0
+        version: 5.14.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@7.3.7(@types/node@26.6.6)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/gateway-buzz:
     devDependencies:
       '@theokit/gateway':

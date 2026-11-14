@@ -141,12 +141,16 @@ async function withSharedCore(source: string): Promise<string> {
   return `${core}\n${out}`;
 }
 
+/** `gateway-*` packages that bridge an agent to adapters and are not platform adapters themselves. */
+const NOT_ADAPTERS: ReadonlySet<string> = new Set(["gateway-agent"]);
+
 /** Every `gateway-*` package on disk that ships a `src/` — the gate's own universe. */
 async function adapterPackages(): Promise<string[]> {
   const entries = await readdir(PACKAGES_DIR, { withFileTypes: true });
   const out: string[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory() || !entry.name.startsWith("gateway-")) continue;
+    if (NOT_ADAPTERS.has(entry.name)) continue;
     try {
       await readdir(join(PACKAGES_DIR, entry.name, "src"));
       out.push(entry.name);

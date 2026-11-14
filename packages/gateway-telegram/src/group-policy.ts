@@ -23,6 +23,27 @@ export interface PolicyContext {
   readonly botId: number;
 }
 
+/** The message facts the policy reads, as plain values (no grammy `Context`). */
+export interface PolicyInput {
+  /** Telegram chat type: `private`, `group`, `supergroup` or `channel`. */
+  readonly chatType: string;
+  /** Message text or caption; empty when there is none. */
+  readonly text: string;
+  /** Id of the sender of the message being replied to, when it is a reply. */
+  readonly replyToFromId?: number | undefined;
+}
+
+/**
+ * Decide from plain values whether the bot should respond. Works without a grammy `Context`.
+ * @public
+ */
+export function shouldRespond(input: PolicyInput, policy: PolicyContext): boolean {
+  if (input.chatType === "private") return true;
+  if (input.text.startsWith("/")) return true;
+  if (input.replyToFromId !== undefined && input.replyToFromId === policy.botId) return true;
+  return input.text.toLowerCase().includes(`@${policy.botUsername.toLowerCase()}`);
+}
+
 /**
  * Decide whether the bot should respond to this update.
  * @public
@@ -30,14 +51,14 @@ export interface PolicyContext {
 export function shouldRespondInChat(ctx: Context, policy: PolicyContext): boolean {
   const chat = ctx.chat;
   if (chat === undefined) return false;
-  if (chat.type === "private") return true;
-  const text = ctx.message?.text ?? ctx.message?.caption ?? "";
-  if (text.startsWith("/")) return true;
-  const replyTo = ctx.message?.reply_to_message;
-  if (replyTo?.from?.id === policy.botId) return true;
-  const mentionTag = `@${policy.botUsername.toLowerCase()}`;
-  if (text.toLowerCase().includes(mentionTag)) return true;
-  return false;
+  return shouldRespond(
+    {
+      chatType: chat.type,
+      text: ctx.message?.text ?? ctx.message?.caption ?? "",
+      replyToFromId: ctx.message?.reply_to_message?.from?.id,
+    },
+    policy,
+  );
 }
 
 /** Strip the bot's @-mention from a message so the LLM doesn't see it. @public */

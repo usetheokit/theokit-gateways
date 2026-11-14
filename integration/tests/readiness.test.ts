@@ -232,13 +232,24 @@ describe("live-test readiness", () => {
       DEFAULT_WEBHOOK_MAX_BYTES:
         "a constant, no I/O. Its effect (413 past 1 MiB) is covered by " +
         "packages/gateway/tests/webhook/raw-body-capture.test.ts and the LINE and SMS webhook tests",
+      createWebhookHandler:
+        "a Fetch Request -> Response router with no network I/O of its own; a live run would need a " +
+        "public URL the platform can reach. Covered by packages/gateway/tests/fetch-webhook-handler.test.ts",
+      statusForDeliver:
+        "pure outcomes -> status, no I/O. Covered by packages/gateway/tests/deliver-status.test.ts",
       parseFlatXml:
         "pure string -> record, no I/O. Covered by tests/weixin-xml.test.ts and by both adapters' " +
         "webhook tests",
+      maskSecrets:
+        "pure string masking, no I/O. Covered by packages/gateway/tests/runner-adapter-lookup.test.ts " +
+        "and packages/gateway/tests/runner-connect-timeout.test.ts",
       maskShapes:
         "pure string -> string, no I/O. What a live run could add is whether a REAL credential " +
         "matches the shape, and no live test may carry one — the tests use synthetic values built " +
         "to each platform's documented format, which is the strongest form available anywhere",
+      isAuthenticatedSender:
+        "a pure read of a descriptor's senderIdentity field, no I/O. Covered by " +
+        "packages/gateway/tests/sender-identity.test.ts and the Telegram and LINE channel tests",
       CREDENTIAL_SHAPES: "a data table. A live run would read the same rows the unit tests read",
       redactSecrets:
         "reached on every handler and hook throw, so the live suites exercise it whenever one " +
@@ -253,6 +264,17 @@ describe("live-test readiness", () => {
         "a handler wrapper that makes no network call; the transcribe function is the caller's. " +
         "Covered by packages/gateway/tests/runner/media-understanding.test.ts, and no adapter " +
         "but Telegram fills the audio it reads",
+      parseChatCommand:
+        "pure string -> record, no I/O. Covered by packages/gateway/tests/hooks/chat-command.test.ts",
+      commandHook:
+        "a pre_inbound hook that makes no network call; it only decides on the event text. " +
+        "Covered by packages/gateway/tests/hooks/chat-command.test.ts",
+      helpText:
+        "pure function, no I/O. Covered by packages/gateway/tests/hooks/chat-command.test.ts",
+      createAgentBindings:
+        "pure rule matching, no I/O. Covered by packages/gateway/tests/agent-bindings.test.ts",
+      bindingStrategy:
+        "pure function, no I/O. Covered by packages/gateway/tests/agent-bindings.test.ts",
       toDialect:
         "pure function, no I/O — and unlike chunkText its work is NOT proven over the wire here, " +
         "because no adapter in this package calls it. That is deliberate and documented in " +

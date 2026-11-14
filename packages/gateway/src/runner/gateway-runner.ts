@@ -40,7 +40,7 @@ import { attachmentsOf, refuseUnsupportedAttachments } from "../delivery/attachm
 import { GatewayLifecycleError } from "../errors/lifecycle-error.js";
 import { HookExecutor } from "../hooks/executor.js";
 import type { GatewayHook } from "../hooks/types.js";
-import { redactSecrets } from "../security/credential-patterns.js";
+import { maskSecrets, redactSecrets } from "../security/credential-patterns.js";
 import type { MessageEvent as GatewayMessageEvent, PlatformName } from "../types/message-event.js";
 
 /** Per-event context passed to the user handler. */
@@ -96,7 +96,38 @@ export interface GatewayRunnerOptions {
    * @public
    */
   readonly reconnect?: ReconnectPolicy;
+  /**
+   * Under `connectFailure: "isolate"`, give up on one adapter's `connect()` after this many ms. The
+   * adapter is reported `timed_out`, counted in `StartResult.failed`, and never wired for inbound:
+   * if its `connect()` resolves `true` later, the runner disconnects it. With `reconnect` set it is
+   * retried like a transient failure. Ignored under `"rollback"`, as `reconnect` is.
+   *
+   * @public
+   */
+  readonly connectTimeoutMs?: number;
+  /**
+   * Called as each adapter changes state, while `start()` may still be pending. `reason` is
+   * redacted. A callback that throws is ignored. Ignored under `"rollback"`.
+   *
+   * @public
+   */
+  readonly onAdapterState?: (platform: PlatformName, state: AdapterState, reason?: string) => void;
+  /**
+   * Exact credential values masked (longest first) in every reason and log line before
+   * `redactSecrets` runs.
+   *
+   * @public
+   */
+  readonly secrets?: ReadonlyArray<string>;
 }
+
+/**
+ * Where one adapter stands under `connectFailure: "isolate"`, as reported to
+ * `GatewayRunnerOptions.onAdapterState`.
+ *
+ * @public
+ */
+export type AdapterState = "connected" | "failed" | "retrying" | "timed_out";
 
 /**
  * Backoff for `GatewayRunnerOptions.reconnect`. The delay before attempt n is
@@ -165,11 +196,19 @@ interface ConnectOutcome {
   readonly retryable: BasePlatformAdapter[];
 }
 
-function connectFailureReason(outcome: PromiseSettledResult<boolean>): string {
+type Redact = (text: string) => string;
+
+interface IsolatedResult {
+  readonly adapter: BasePlatformAdapter;
+  readonly failure: StartResult["failed"][number] | undefined;
+  readonly retry: boolean;
+}
+
+function connectFailureReason(outcome: PromiseSettledResult<boolean>, redact: Redact): string {
   if (outcome.status === "fulfilled") return "connect returned false";
   const message = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
   // A connect error can echo the credential it was given.
-  return redactSecrets(message);
+  return redact(message);
 }
 
 /** A credential refusal will fail identically on every retry, so it is never retried. */
@@ -195,6 +234,7 @@ function isTerminalConnectError(err: unknown): boolean {
 async function releaseAdapters(
   adapters: ReadonlyArray<BasePlatformAdapter>,
   during: string,
+  redact: Redact = redactSecrets,
 ): Promise<void> {
   await Promise.all(
     adapters.map(async (a) => {
@@ -203,7 +243,7 @@ async function releaseAdapters(
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         process.stderr.write(
-          `[gateway] adapter "${a.platform}" disconnect failed while ${during}: ${redactSecrets(message)}\n`,
+          `[gateway] adapter "${a.platform}" disconnect failed while ${during}: ${redact(message)}\n`,
         );
       }
     }),
@@ -228,9 +268,32 @@ export class GatewayRunner {
   private startInFlight: Promise<StartResult> | undefined;
   private stopped = false;
   private readonly retryTimers = new Set<NodeJS.Timeout>();
+  private readonly connectedPlatforms = new Set<PlatformName>();
+  private readonly redact: Redact;
 
   constructor(private readonly opts: GatewayRunnerOptions) {
     this.hookExecutor = new HookExecutor(opts.hooks ?? []);
+    const secrets = opts.secrets ?? [];
+    this.redact = (text) => redactSecrets(maskSecrets(text, secrets));
+  }
+
+  /** The registered adapter for a platform, connected or not. */
+  adapter(platform: PlatformName): BasePlatformAdapter | undefined {
+    return this.opts.adapters.find((a) => a.platform === platform);
+  }
+
+  /** Platforms whose adapter is connected now; updated by connects, retries and `stop()`. */
+  get connected(): ReadonlySet<PlatformName> {
+    return this.connectedPlatforms;
+  }
+
+  private emitState(platform: PlatformName, state: AdapterState, reason?: string): void {
+    if ((this.opts.connectFailure ?? "rollback") !== "isolate") return;
+    try {
+      this.opts.onAdapterState?.(platform, state, reason);
+    } catch {
+      /* a throwing observer must not break the runner */
+    }
   }
 
   /**
@@ -306,11 +369,17 @@ export class GatewayRunner {
       // stop() ran while the connect was pending: it disconnected these adapters before their
       // connect settled, and a later stop() returns at its guard. Wiring them would leave a live
       // adapter on a stopped runner.
-      await releaseAdapters(result.connected, "releasing a start that stop() overtook");
+      await releaseAdapters(
+        result.connected,
+        "releasing a start that stop() overtook",
+        this.redact,
+      );
+      this.connectedPlatforms.clear();
       this.startResult = { connected: [], failed: result.failed };
       return this.startResult;
     }
     this.wireInbound(result.connected);
+    for (const a of result.connected) this.connectedPlatforms.add(a.platform);
     this.startResult = {
       connected: result.connected.map((a) => a.platform),
       failed: result.failed,
@@ -343,6 +412,7 @@ export class GatewayRunner {
     process.stderr.write(
       `[gateway] adapter "${adapter.platform}" reconnect attempt ${attempt} in ${delay}ms\n`,
     );
+    this.emitState(adapter.platform, "retrying", `reconnect attempt ${attempt} in ${delay}ms`);
   }
 
   private async reconnectOnce(adapter: BasePlatformAdapter, attempt: number): Promise<void> {
@@ -350,10 +420,16 @@ export class GatewayRunner {
     try {
       if (await adapter.connect()) {
         if (this.stopped) {
-          await releaseAdapters([adapter], "releasing a reconnect that stop() overtook");
+          await releaseAdapters(
+            [adapter],
+            "releasing a reconnect that stop() overtook",
+            this.redact,
+          );
           return;
         }
         this.wireInbound([adapter]);
+        this.connectedPlatforms.add(adapter.platform);
+        this.emitState(adapter.platform, "connected");
         const prev = this.startResult ?? { connected: [], failed: [] };
         this.startResult = {
           connected: [...prev.connected, adapter.platform],
@@ -369,8 +445,9 @@ export class GatewayRunner {
       );
       return;
     } catch (err) {
-      const reason = connectFailureReason({ status: "rejected", reason: err });
+      const reason = connectFailureReason({ status: "rejected", reason: err }, this.redact);
       if (isTerminalConnectError(err)) {
+        this.emitState(adapter.platform, "failed", reason);
         process.stderr.write(
           `[gateway] adapter "${adapter.platform}" credentials rejected: ${reason}; not retrying\n`,
         );
@@ -413,7 +490,7 @@ export class GatewayRunner {
     if (failures.length > 0) {
       // "fulfilled" means connected: a refusal and a throw both reject their wrapper.
       const connected = adapters.filter((_, i) => settled[i]?.status === "fulfilled");
-      await releaseAdapters(connected, "rolling back a failed start");
+      await releaseAdapters(connected, "rolling back a failed start", this.redact);
       throw failures[0];
     }
     return { connected: [...adapters], failed: [], retryable: [] };
@@ -426,21 +503,63 @@ export class GatewayRunner {
    */
   private async connectIsolated(): Promise<ConnectOutcome> {
     const adapters = this.opts.adapters;
-    const settled = await Promise.allSettled(adapters.map(async (a) => a.connect()));
+    const results = await Promise.all(adapters.map((a) => this.connectOne(a)));
     const connected: BasePlatformAdapter[] = [];
     const failed: StartResult["failed"][number][] = [];
     const retryable: BasePlatformAdapter[] = [];
-    settled.forEach((outcome, i) => {
-      const adapter = adapters[i] as BasePlatformAdapter;
-      if (outcome.status === "fulfilled" && outcome.value) connected.push(adapter);
-      else {
-        failed.push({ platform: adapter.platform, reason: connectFailureReason(outcome) });
-        if (outcome.status === "rejected" && !isTerminalConnectError(outcome.reason)) {
-          retryable.push(adapter);
-        }
-      }
-    });
+    for (const r of results) {
+      if (r.failure === undefined) connected.push(r.adapter);
+      else failed.push(r.failure);
+      if (r.retry) retryable.push(r.adapter);
+    }
     return { connected, failed, retryable };
+  }
+
+  /** Connect one adapter, bounded by `connectTimeoutMs`, and report its state as it settles. */
+  private async connectOne(adapter: BasePlatformAdapter): Promise<IsolatedResult> {
+    const attempt = Promise.allSettled([(async () => adapter.connect())()]).then(
+      ([r]) => r as PromiseSettledResult<boolean>,
+    );
+    const ms = this.opts.connectTimeoutMs;
+    if (ms === undefined) return this.classify(adapter, await attempt);
+    let timer: NodeJS.Timeout | undefined;
+    const first = await Promise.race([
+      attempt,
+      new Promise<"timeout">((resolve) => {
+        timer = setTimeout(() => resolve("timeout"), ms);
+      }),
+    ]);
+    if (timer !== undefined) clearTimeout(timer);
+    if (first !== "timeout") return this.classify(adapter, first);
+    void attempt.then((late) => this.releaseLateConnect(adapter, late));
+    const reason = `connect timed out after ${ms}ms`;
+    this.emitState(adapter.platform, "timed_out", reason);
+    return { adapter, failure: { platform: adapter.platform, reason }, retry: true };
+  }
+
+  /** A connect that finished after the runner gave up on it must not stay connected unseen. */
+  private releaseLateConnect(
+    adapter: BasePlatformAdapter,
+    late: PromiseSettledResult<boolean>,
+  ): void {
+    if (late.status !== "fulfilled" || !late.value) return;
+    if (this.connectedPlatforms.has(adapter.platform)) return; // a retry connected it meanwhile
+    void releaseAdapters([adapter], "releasing a connect that timed out", this.redact);
+  }
+
+  private classify(
+    adapter: BasePlatformAdapter,
+    outcome: PromiseSettledResult<boolean>,
+  ): IsolatedResult {
+    if (outcome.status === "fulfilled" && outcome.value) {
+      this.connectedPlatforms.add(adapter.platform);
+      this.emitState(adapter.platform, "connected");
+      return { adapter, failure: undefined, retry: false };
+    }
+    const reason = connectFailureReason(outcome, this.redact);
+    this.emitState(adapter.platform, "failed", reason);
+    const retry = outcome.status === "rejected" && !isTerminalConnectError(outcome.reason);
+    return { adapter, failure: { platform: adapter.platform, reason }, retry };
   }
 
   private wireInbound(adapters: ReadonlyArray<BasePlatformAdapter>): void {
@@ -485,6 +604,7 @@ export class GatewayRunner {
     this.unsubs.length = 0;
     for (const t of this.retryTimers) clearTimeout(t);
     this.retryTimers.clear();
+    this.connectedPlatforms.clear();
 
     const drainMs = this.opts.drainTimeoutMs ?? DEFAULT_DRAIN_MS;
     if (this.inflight.size > 0) {
@@ -507,7 +627,7 @@ export class GatewayRunner {
       }
     }
 
-    await releaseAdapters([...new Set(this.opts.adapters)], "stopping the runner");
+    await releaseAdapters([...new Set(this.opts.adapters)], "stopping the runner", this.redact);
   }
 
   /**
@@ -532,7 +652,7 @@ export class GatewayRunner {
         await ctx.reply(decision.message).catch(async (err) => {
           const error = err as Error;
           await this.hookExecutor.fireOnError({ event, error });
-          process.stderr.write(`[gateway] auto-reply error: ${redactSecrets(error.message)}\n`);
+          process.stderr.write(`[gateway] auto-reply error: ${this.redact(error.message)}\n`);
         });
       }
       return;
@@ -553,7 +673,7 @@ export class GatewayRunner {
         await handler(event, ctx);
       } catch (err) {
         await this.hookExecutor.fireOnError({ event, error: err as Error });
-        process.stderr.write(`[gateway] handler error: ${redactSecrets((err as Error).message)}\n`);
+        process.stderr.write(`[gateway] handler error: ${this.redact((err as Error).message)}\n`);
       } finally {
         await stopTyping();
       }

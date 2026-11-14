@@ -169,3 +169,22 @@ export function maskShapes(text: string): string {
 export function redactSecrets(value: unknown): string {
   return Security.redact(maskShapes(typeof value === "string" ? value : String(value)));
 }
+
+/**
+ * Replace each exact value in `secrets` with `[redacted]`, longest value first so a value that
+ * contains another is masked whole. Empty values are ignored. It does not run `redactSecrets`:
+ * call that afterwards, because it shortens some shapes to a head and tail and the masked fragments
+ * would otherwise survive.
+ *
+ * @param text the text to mask
+ * @param secrets the exact credential values configured for this process
+ * @returns the text with every occurrence of every value replaced
+ */
+export function maskSecrets(text: string, secrets: ReadonlyArray<string>): string {
+  const ordered = [...new Set(secrets)]
+    .filter((s) => s.length > 0)
+    .sort((a, b) => b.length - a.length);
+  let out = text;
+  for (const secret of ordered) out = out.split(secret).join("[redacted]");
+  return out;
+}
