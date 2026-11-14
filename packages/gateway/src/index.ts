@@ -2,6 +2,7 @@
 
 // Adapter contract
 export {
+  type AdapterCapabilities,
   BasePlatformAdapter,
   type OutboundAttachment,
   type OutboundMessage,
@@ -21,8 +22,11 @@ export type {
   ChannelDescriptor,
   ChannelWebhook,
   IngestResult,
+  SenderIdentity,
+  WebhookAnswer,
   WebhookRequest,
 } from "./channel/channel-descriptor.js";
+export { isAuthenticatedSender } from "./channel/channel-descriptor.js";
 export {
   type BuiltChannel,
   type ChannelEntry,
@@ -46,6 +50,13 @@ export {
   type GatewayLifecycleErrorOptions,
 } from "./errors/lifecycle-error.js";
 // Hooks
+export {
+  type ChatCommand,
+  commandHook,
+  helpText,
+  type ParsedChatCommand,
+  parseChatCommand,
+} from "./hooks/chat-command.js";
 export { HookExecutor } from "./hooks/executor.js";
 export type {
   GatewayHook,
@@ -57,6 +68,7 @@ export type {
 } from "./hooks/types.js";
 // Runner
 export {
+  type AdapterState,
   type ConnectFailure,
   type GatewayContext,
   type GatewayHandler,
@@ -72,10 +84,18 @@ export {
 export type { CoveredShape, UncoveredShape } from "./security/credential-patterns.js";
 export {
   CREDENTIAL_SHAPES,
+  maskSecrets,
   maskShapes,
   redactSecrets,
 } from "./security/credential-patterns.js";
 // Session
+export {
+  type AgentBindingRule,
+  type AgentBindings,
+  type AgentBindingsOptions,
+  bindingStrategy,
+  createAgentBindings,
+} from "./session/bindings.js";
 export {
   type AgentIdStrategy,
   defaultStrategy,
@@ -134,7 +154,8 @@ export type {
   ZaloMessageEvent,
   ZaloPersonalMessageEvent,
 } from "./types/platform-events.js";
-
+// A Fetch handler that routes webhook requests to the channels' descriptors.
+export { statusForDeliver } from "./webhook/deliver-status.js";
 // The shared half of an Express webhook server — see `webhook/express-server.ts` for why it lives
 // here and why it does not make express a dependency of the core (#89).
 export type {
@@ -149,3 +170,4 @@ export {
   loadPeer,
   rawBodyCapture,
 } from "./webhook/express-server.js";
+export { createWebhookHandler, type WebhookHandlerOptions } from "./webhook/fetch-handler.js";

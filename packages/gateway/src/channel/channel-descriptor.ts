@@ -30,6 +30,20 @@ export interface WebhookRequest {
   readonly rawBody: string;
   /** Request headers. Descriptors look a header up without regard to case. */
   readonly headers: Readonly<Record<string, string | undefined>>;
+  /** The HTTP method. Always set by `createWebhookHandler`; optional so existing callers compile. */
+  readonly method?: string;
+  /** The full request URL, query included. Always set by `createWebhookHandler`. */
+  readonly url?: string;
+}
+
+/** The answer a channel's `handle` gives for one webhook request. */
+export interface WebhookAnswer {
+  /** The HTTP status. */
+  readonly status: number;
+  /** The response body, when the platform expects one. */
+  readonly body?: string;
+  /** The response `content-type`. */
+  readonly contentType?: string;
 }
 
 /**
@@ -54,7 +68,22 @@ export interface ChannelWebhook<TAdapter extends BasePlatformAdapter> {
   verify(adapter: TAdapter, request: WebhookRequest): boolean;
   /** Dispatch a parsed, verified payload, or report it malformed without dispatching. */
   ingest(adapter: TAdapter, payload: unknown): Promise<IngestResult>;
+  /** Methods the route takes. Default `["POST"]`. */
+  readonly methods?: readonly string[];
+  /** Full control of one request. When absent, the handler runs verify, JSON.parse and ingest. */
+  handle?(adapter: TAdapter, request: WebhookRequest): Promise<WebhookAnswer>;
 }
+
+/**
+ * Whether a channel's `sender.id` is proven by the platform. An email From header or an SMS caller
+ * id is written by the sender (CWE-290), so such a channel declares why it cannot be trusted.
+ *
+ * @public
+ */
+export type SenderIdentity =
+  | "authenticated"
+  /** Why the sender id can be forged, for error messages. */
+  | { readonly unauthenticated: string };
 
 interface ChannelDescriptorBase<TAdapter extends BasePlatformAdapter> {
   /** The platform the built adapter reports as its `platform`. */
@@ -66,6 +95,11 @@ interface ChannelDescriptorBase<TAdapter extends BasePlatformAdapter> {
    * which `createChannels` reports as a rejected channel; it performs no network call.
    */
   create(config: Readonly<Record<string, unknown>>): TAdapter;
+  /**
+   * Whether `sender.id` is authenticated. Absent means unknown and is treated as not
+   * authenticated (fail closed); it is optional only so descriptors in other packages keep compiling.
+   */
+  readonly senderIdentity?: SenderIdentity;
 }
 
 /**
@@ -80,3 +114,13 @@ export type ChannelDescriptor<TAdapter extends BasePlatformAdapter = BasePlatfor
       readonly transport: "webhook";
       readonly webhook: ChannelWebhook<TAdapter>;
     });
+
+/**
+ * True only when the descriptor declares `senderIdentity: "authenticated"`. An absent or
+ * unauthenticated declaration is false.
+ *
+ * @public
+ */
+export function isAuthenticatedSender(descriptor: ChannelDescriptor): boolean {
+  return descriptor.senderIdentity === "authenticated";
+}

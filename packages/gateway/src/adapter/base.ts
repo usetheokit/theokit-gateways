@@ -70,6 +70,18 @@ export interface SendResult {
   readonly error?: { readonly code: string; readonly message: string };
 }
 
+/** The facts about an adapter that an app picks its rendering from. */
+export interface AdapterCapabilities {
+  readonly edit: boolean;
+  /** The attachment kinds the adapter sends; `[]` when none. */
+  readonly attachments: ReadonlyArray<OutboundAttachment["kind"]>;
+  readonly typing: boolean;
+  readonly reactions: boolean;
+  readonly threads: boolean;
+  /** Longest text one message holds; `undefined` when the adapter does not know. */
+  readonly maxMessageChars?: number;
+}
+
 /**
  * Abstract base for all platform adapters.
  *
@@ -261,6 +273,30 @@ export abstract class BasePlatformAdapter {
    * `boolean` so that an adapter that sends images can override it with `true`.
    */
   readonly supportsAttachments: boolean = false;
+
+  /**
+   * The attachment kinds {@link sendMessage} can send. `undefined` means "not declared": the
+   * `capabilities` getter then reports `["image"]` when `supportsAttachments` is `true`, else `[]`.
+   */
+  protected readonly attachmentKinds: ReadonlyArray<OutboundAttachment["kind"]> | undefined =
+    undefined;
+
+  /**
+   * What this adapter can do, for an app that renders differently per channel.
+   *
+   * Derived from the members above and from which lifecycle methods the subclass overrides; an
+   * adapter overrides the getter only for what derivation cannot know. Read it at call time.
+   */
+  get capabilities(): AdapterCapabilities {
+    const proto = BasePlatformAdapter.prototype;
+    return {
+      edit: this.supportsEdit,
+      attachments: this.attachmentKinds ?? (this.supportsAttachments ? ["image"] : []),
+      typing: this.startTyping !== proto.startTyping,
+      reactions: this.react !== proto.react,
+      threads: false,
+    };
+  }
 
   /**
    * Replace the text of a message this adapter sent, keeping its id.

@@ -129,6 +129,7 @@ const CONFIG: ReadonlyArray<ConfigField> = [
 export const lineChannel = {
   platform: "line" as const,
   transport: "webhook" as const,
+  senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): LineAdapter {
     return new LineAdapter(buildOptions(config));
