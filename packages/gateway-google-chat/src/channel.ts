@@ -106,14 +106,14 @@ interface ConfigField {
 const CONFIG: ReadonlyArray<ConfigField> = [
   {
     key: "serviceAccountEmail",
-    required: false,
+    required: true,
     secret: false,
     env: "GOOGLE_CHAT_SERVICE_ACCOUNT_EMAIL",
     description: "The Chat app's service account email; read from serviceAccountFile when absent.",
   },
   {
     key: "privateKey",
-    required: false,
+    required: true,
     secret: true,
     env: "GOOGLE_CHAT_PRIVATE_KEY",
     description: "The service account's PEM private key; read from serviceAccountFile when absent.",
@@ -144,6 +144,11 @@ const CONFIG: ReadonlyArray<ConfigField> = [
   },
 ];
 
+/** The `file` variant: the credentials come from the JSON key at `serviceAccountFile`. */
+const FILE_CONFIG: ReadonlyArray<ConfigField> = CONFIG.map((field) =>
+  field.key === "serviceAccountFile" ? { ...field, required: true } : field,
+).filter((field) => field.key !== "serviceAccountEmail" && field.key !== "privateKey");
+
 /**
  * The Google Chat channel: `connect()` opens its own webhook listener, unless `webhook` is
  * `"external"`.
@@ -152,10 +157,8 @@ const CONFIG: ReadonlyArray<ConfigField> = [
  * `serviceAccountFile` for whichever of the two is absent. `create` refuses a value of the wrong
  * type, and a key file it cannot read, with a `GatewayConfigurationError` coded `invalid_config`;
  * it performs no network call.
- *
- * @public
  */
-export const googleChatChannel = {
+const inlineChannel = {
   platform: "google_chat" as const,
   transport: "socket" as const,
   senderIdentity: "authenticated" as const,
@@ -170,5 +173,20 @@ export const googleChatChannel = {
       ...(webhook === undefined ? {} : { webhook }),
     };
     return new GoogleChatAdapter(options);
+  },
+};
+
+/**
+ * The Google Chat channel. The descriptor itself is the `inline` shape (`serviceAccountEmail` and
+ * `privateKey` required); `selectVariant(googleChatChannel, "file")` is the shape that requires
+ * `serviceAccountFile` instead. `create` serves both.
+ *
+ * @public
+ */
+export const googleChatChannel = {
+  ...inlineChannel,
+  variants: {
+    inline: inlineChannel,
+    file: { ...inlineChannel, config: FILE_CONFIG },
   },
 };

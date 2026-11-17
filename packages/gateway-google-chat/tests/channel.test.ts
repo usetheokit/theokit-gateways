@@ -9,6 +9,7 @@ import {
   configFromEnv,
   createChannels,
   GatewayConfigurationError,
+  selectVariant,
 } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
@@ -68,17 +69,44 @@ describe("googleChatChannel", () => {
 
   it("reads client_email and private_key from serviceAccountFile", () => {
     const path = keyFile(JSON.stringify({ client_email: "a@b.c", private_key: "k" }));
+    const fileDescriptor = selectVariant(descriptor, "file");
     const env = configFromEnv(
-      descriptor,
+      fileDescriptor,
       {
         APP_GOOGLE_CHAT_SERVICE_ACCOUNT_FILE: path,
         APP_GOOGLE_CHAT_AUDIENCE: "https://example.com/x",
       },
       "APP_",
     );
-    const result = createChannels([{ descriptor, config: env.config }]);
+    expect(env.missing).toEqual([]);
+    const result = createChannels([{ descriptor: fileDescriptor, config: env.config }]);
     expect(result.rejected).toEqual([]);
     expect(result.adapters[0]).toBeInstanceOf(GoogleChatAdapter);
+  });
+
+  it.each([
+    ["APP_GOOGLE_CHAT_SERVICE_ACCOUNT_EMAIL", "serviceAccountEmail"],
+    ["APP_GOOGLE_CHAT_PRIVATE_KEY", "privateKey"],
+  ])("a missing %s is missing_required_config, not invalid_config", (name, key) => {
+    const source: Record<string, string> = { ...ENV };
+    delete source[name];
+    const env = configFromEnv(descriptor, source, "APP_");
+    expect(env.missing).toEqual([name]);
+    const result = createChannels([{ descriptor, config: env.config }]);
+    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
+    expect(result.rejected[0]?.error.message).toContain(key);
+  });
+
+  it("the file variant requires APP_GOOGLE_CHAT_SERVICE_ACCOUNT_FILE", () => {
+    const fileDescriptor = selectVariant(descriptor, "file");
+    const env = configFromEnv(
+      fileDescriptor,
+      { APP_GOOGLE_CHAT_AUDIENCE: "https://example.com/x" },
+      "APP_",
+    );
+    expect(env.missing).toEqual(["APP_GOOGLE_CHAT_SERVICE_ACCOUNT_FILE"]);
+    const result = createChannels([{ descriptor: fileDescriptor, config: env.config }]);
+    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
   });
 
   it("names the file when it cannot be read or lacks the fields", () => {

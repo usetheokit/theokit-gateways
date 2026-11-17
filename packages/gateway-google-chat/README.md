@@ -175,13 +175,16 @@ confirming the reply appears in that space. TheoClaw integration also remains un
 
 Credentials come from `serviceAccountEmail` and `privateKey`, or from the JSON key at
 `serviceAccountFile` (`client_email`, `private_key`) for whichever of the two is absent; `create`
-throws `invalid_config` when neither source is complete or the file cannot be read. `webhook` is
+throws `invalid_config` when the file cannot be read. The descriptor is the `inline` shape (email and
+key required); `selectVariant(googleChatChannel, "file")` is the shape that requires
+`serviceAccountFile` instead, so a missing credential is reported as `missing_required_config`. `webhook` is
 `"listener"` (default) or `"external"`.
 
 ```ts
-import { configFromEnv, createChannels } from "@theokit/gateway";
+import { configFromEnv, createChannels, selectVariant } from "@theokit/gateway";
 import { googleChatChannel } from "@theokit/gateway-google-chat";
 
-const { config } = configFromEnv(googleChatChannel, process.env, "APP_");
-const { adapters, rejected } = createChannels([{ descriptor: googleChatChannel, config }]);
+const descriptor = selectVariant(googleChatChannel, "file"); // or "inline"
+const { config } = configFromEnv(descriptor, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor, config }]);
 ```
