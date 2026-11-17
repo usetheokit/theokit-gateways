@@ -1,7 +1,7 @@
 import type { MessageEvent, XMessageEvent } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 import type { XAdapterOptions, XFetch, XTweet } from "../src/index.js";
-import { XAdapter } from "../src/index.js";
+import { X_POST_LIMIT, XAdapter } from "../src/index.js";
 
 const BOT = "100";
 
@@ -238,5 +238,20 @@ describe("XAdapter", () => {
     }));
     expect(await adapter.connect()).toBe(false);
     expect(() => new XAdapter({ allowFrom: [] } as unknown as XAdapterOptions)).toThrow(/userId/);
+  });
+});
+
+describe("XAdapter.capabilities", () => {
+  it("reports the splitter limit and threads", () => {
+    const c = new XAdapter({
+      userId: "1",
+      username: "@b",
+      clientId: "c",
+      clientSecret: "s",
+      refreshToken: "r",
+      allowFrom: ["@a"],
+    }).capabilities;
+    expect(c.maxMessageChars).toBe(X_POST_LIMIT);
+    expect(c.threads).toBe(false);
   });
 });
