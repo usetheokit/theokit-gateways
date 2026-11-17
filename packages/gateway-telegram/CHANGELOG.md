@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0
+
+### Minor Changes
+
+- 9c832b2: Add `AdapterCapabilities` and `BasePlatformAdapter.capabilities` (edit, attachment kinds, typing, reactions, threads, max length), derived by default. Telegram reports `image` and `audio` attachments.
+- 0bc525c: Add a `requireMention` option: when true, group messages reach the handler only if they mention the bot, reply to it or are slash commands, on both the polled and the `deliver()` paths. Default false.
+- 56bb1d8: Declare whether a channel's sender id is authenticated with `senderIdentity`.
+
 ## 0.8.0
 
 ### Minor Changes

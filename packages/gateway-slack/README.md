@@ -62,3 +62,7 @@ await adapter.disconnect();
 ## License
 
 Apache-2.0
+
+## Capabilities
+
+`adapter.capabilities.maxMessageChars` is `4000` (the splitter limit) and `threads` is `true`. See `@theokit/gateway` for the field meanings.

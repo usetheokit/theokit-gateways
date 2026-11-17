@@ -124,7 +124,8 @@ strings, with this package's `ConfigurationError` (also a `GatewayConfigurationE
 ## Capabilities
 
 `adapter.capabilities` reports `edit`, `typing` and `reactions` as `true` and
-`attachments: ["image", "audio"]`. See `@theokit/gateway` for the field meanings.
+`attachments: ["image", "audio"]`. It also reports `maxMessageChars: 4096` (the splitter limit)
+and `threads: true`. See `@theokit/gateway` for the field meanings.
 
 ## Helpers
 

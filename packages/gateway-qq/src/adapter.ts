@@ -6,6 +6,7 @@
  */
 
 import {
+  type AdapterCapabilities,
   BasePlatformAdapter,
   chunkByGrapheme,
   type MessageEvent as GatewayMessageEvent,
@@ -80,6 +81,10 @@ function messageOf(err: unknown): string {
  * @public
  */
 export class QQAdapter extends BasePlatformAdapter {
+  override get capabilities(): AdapterCapabilities {
+    return { ...super.capabilities, maxMessageChars: QQ_MESSAGE_LIMIT, threads: false };
+  }
+
   readonly platform = "qq" as const;
   private readonly opts: QQAdapterOptions;
   private readonly doFetch: QQFetch;

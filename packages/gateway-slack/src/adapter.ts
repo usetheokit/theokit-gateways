@@ -34,6 +34,7 @@ import { App } from "@slack/bolt";
 export type BoltApp = InstanceType<typeof App>;
 
 import {
+  type AdapterCapabilities,
   BasePlatformAdapter,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
@@ -43,7 +44,7 @@ import {
 import { mapSlackError } from "./errors.js";
 import { type BoltMessageBody, normalizeSlackEvent } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
-import { splitForSlack } from "./split.js";
+import { SLACK_MAX_TEXT, splitForSlack } from "./split.js";
 
 /** Construction options for {@link SlackAdapter}. */
 export interface SlackAdapterOptions {
@@ -105,6 +106,10 @@ const SLACK_EMOJI_NAMES: Readonly<Record<string, string>> = {
  * `requireMention` is set to `false`.
  */
 export class SlackAdapter extends BasePlatformAdapter {
+  override get capabilities(): AdapterCapabilities {
+    return { ...super.capabilities, maxMessageChars: SLACK_MAX_TEXT, threads: true };
+  }
+
   readonly platform = "slack" as const;
   private app: BoltApp | undefined;
   /** Thread (or message) ts of the last inbound message per channel, for the typing status. */
