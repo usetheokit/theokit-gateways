@@ -2,18 +2,21 @@
  * `scopedStrategy` — session keys with DM scopes, peer links and account labels.
  *
  * `dm` is always the second key segment, so no label or peer name can make a
- * DM key equal a group (`grp`) or thread (`tpc`) key. Every id is escaped with
- * the injective `sanitize` from the router.
+ * DM key equal a group (`grp`) or thread (`tpc`) key. Every segment is encoded
+ * with `encodeURIComponent` and joined with `:`, which it never emits, so the
+ * key mapping is injective. Linked peers and `main` use a leading `@` segment,
+ * which no encoded platform can start with (`@` encodes to `%40`).
  *
  * @public
  */
 
 import { GatewayConfigurationError } from "../errors/config-error.js";
 import type { MessageEvent as GatewayMessageEvent } from "../types/message-event.js";
-import { type AgentIdStrategy, sanitize } from "./router.js";
+import type { AgentIdStrategy } from "./router.js";
 
 /** How DMs are keyed: one conversation, per peer, per channel and peer, or per account too. */
-export type DmScope = "main" | "per-peer" | "per-channel-peer" | "per-account-channel-peer";
+export type DmScope =
+  "main" | "per-peer" | "per-channel-peer" | "per-account-channel-peer";
 
 /** Options for {@link scopedStrategy}. */
 export interface ScopedStrategyOptions {
@@ -26,6 +29,9 @@ export interface ScopedStrategyOptions {
   readonly groupScope?: "channel" | "channel-sender";
 }
 
+const enc = encodeURIComponent;
+const join = (...segments: readonly string[]): string => segments.map(enc).join(":");
+
 function invalid(message: string, detail?: string): GatewayConfigurationError {
   return new GatewayConfigurationError("gateway", {
     code: "invalid_session_scope",
@@ -36,12 +42,12 @@ function invalid(message: string, detail?: string): GatewayConfigurationError {
 
 /**
  * Builds a strategy for the chosen DM scope. Keys:
- * `main` → `main-dm`; `per-peer` linked → `peer-dm-<peer>`, unlinked → the
- * per-channel-peer key; `per-channel-peer` → `<platform>-dm-<sender>`;
- * `per-account-channel-peer` → `<platform>-dm-<account>-<sender>`.
- * Groups are `<platform>-grp-<channel>[-<sender>]`, topic threads
- * `<platform>-tpc-<channel>-<topic>`. Throws `GatewayConfigurationError`
- * (`invalid_session_scope`) on bad options, never per event.
+ * `main` → `@main:dm`; `per-peer` linked → `@peer:dm:<peer>`, unlinked → the
+ * per-channel-peer key; `per-channel-peer` → `<platform>:dm:<sender>`;
+ * `per-account-channel-peer` → `<platform>:dm:<account>:<sender>`.
+ * Groups are `<platform>:grp:<channel>[:<sender>]`, topic threads
+ * `<platform>:tpc:<channel>:<topic>`. Every segment is URI-encoded.
+ * Throws `GatewayConfigurationError` (`invalid_session_scope`) on bad options, never per event.
  */
 export function scopedStrategy(options: ScopedStrategyOptions): AgentIdStrategy {
   const { dmScope, peerLinks, accountLabel, groupScope = "channel" } = options;
@@ -56,32 +62,30 @@ export function scopedStrategy(options: ScopedStrategyOptions): AgentIdStrategy 
       if (peer === "") throw invalid(`empty peer name for ${from}`, from);
     }
   }
-  const account = sanitize(accountLabel ?? "");
 
   const dmKey = (platform: string, senderId: string): string => {
-    const sid = sanitize(senderId);
     switch (dmScope) {
       case "main":
-        return "main-dm";
+        return "@main:dm";
       case "per-peer": {
         const peer = peerLinks?.get(`${platform}:${senderId}`);
-        return peer === undefined ? `${platform}-dm-${sid}` : `peer-dm-${sanitize(peer)}`;
+        return peer === undefined ? join(platform, "dm", senderId) : `@peer:dm:${enc(peer)}`;
       }
       case "per-channel-peer":
-        return `${platform}-dm-${sid}`;
+        return join(platform, "dm", senderId);
       case "per-account-channel-peer":
-        return `${platform}-dm-${account}-${sid}`;
+        return join(platform, "dm", accountLabel ?? "", senderId);
     }
   };
 
   return (event: GatewayMessageEvent): string => {
     const { platform, channel, sender } = event;
     if (channel.type === "dm") return dmKey(platform, sender.id);
-    const cid = sanitize(channel.id);
     if (channel.type === "thread" && channel.topicId !== undefined) {
-      return `${platform}-tpc-${cid}-${sanitize(channel.topicId)}`;
+      return join(platform, "tpc", channel.id, channel.topicId);
     }
-    const base = `${platform}-grp-${cid}`;
-    return groupScope === "channel-sender" ? `${base}-${sanitize(sender.id)}` : base;
+    return groupScope === "channel-sender"
+      ? join(platform, "grp", channel.id, sender.id)
+      : join(platform, "grp", channel.id);
   };
 }
