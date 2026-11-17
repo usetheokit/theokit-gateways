@@ -46,7 +46,7 @@ importers:
         version: 5.88.1(@types/node@22.20.5)(typescript@5.9.3)
       theokit:
         specifier: ^0.60.0
-        version: 0.60.0(@opentelemetry/api@1.10.0)(@theokit/sdk@5.14.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(@types/node@22.20.5)(@types/ws@8.18.2)(csstype@3.2.3)(jiti@2.7.0)(react-dom@19.3.1(react@19.3.1))(react-router@8.5.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)(vitest@4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(vite@7.3.7(@types/node@22.20.5)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))(yaml@2.9.1)(zod@4.6.7)
+        version: 0.60.0(@opentelemetry/api@1.10.0)(@theokit/sdk@5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(@types/node@22.20.5)(@types/ws@8.18.2)(csstype@3.2.3)(jiti@2.7.0)(react-dom@19.3.1(react@19.3.1))(react-router@8.5.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)(vitest@4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(vite@7.3.7(@types/node@22.20.5)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))(yaml@2.9.1)(zod@4.6.7)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -233,6 +233,9 @@ importers:
 
   packages/gateway-agent:
     devDependencies:
+      '@theokit/agents':
+        specifier: 16.5.0
+        version: 16.5.0(@opentelemetry/api@1.10.0)(@theokit/http@1.2.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7))(@types/ws@8.18.2)(react@19.3.1)(vitest@4.1.12(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@7.3.7(@types/node@26.6.6)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))(zod@4.6.7)
       '@theokit/gateway':
         specifier: workspace:*
         version: link:../gateway
@@ -2595,6 +2598,23 @@ packages:
       react:
         optional: true
 
+  '@theokit/agents@16.5.0':
+    resolution: {integrity: sha512-+AbcFhgmlCbmRoAdGrX0Fg9TCX1ofFNsuUsbRRbpRg/yuW941S8YEZMyqAjrcxUsrKxotMyBu/cdG86iyfDypQ==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@jitl/quickjs-wasmfile-release-sync': 0.32.0
+      '@theokit/http': '>=2.1.0-next.0'
+      quickjs-emscripten-core: 0.32.0
+      react: '>=18'
+      zod: ^4.6.6
+    peerDependenciesMeta:
+      '@jitl/quickjs-wasmfile-release-sync':
+        optional: true
+      quickjs-emscripten-core:
+        optional: true
+      react:
+        optional: true
+
   '@theokit/http@1.2.0':
     resolution: {integrity: sha512-apgyDiJd2ojgN7XNw1QOFv83g4tCCWTxiGzC3rJih0OOxd8sYuhbhZKn8A++cjhHxTt2Rjv91rmpiWH3QavGSQ==}
     engines: {node: '>=22.12.0'}
@@ -2619,6 +2639,13 @@ packages:
       '@theokit/sdk': ^5.3.0
       zod: ^4.6.6
 
+  '@theokit/presenter@0.11.0':
+    resolution: {integrity: sha512-wNU7mmRI4CHxZ0n+XTJZsu0NOdiQ8TfqVE4BxwlZUNlz2kdum82wOwaJhNE4NcSo5N6cKOf5u6DsJfrcaO3zuA==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/sdk': ^5.3.0
+      zod: ^4.6.6
+
   '@theokit/presenter@0.8.0':
     resolution: {integrity: sha512-L3MSD/X4oZ4XJAZfLCSuO83SPH47jId/gtIIpx51Swgx8lpYJrZBEREbIGuUeMUhYVs6EYofxi1fcs+xNMmYgw==}
     engines: {node: '>=22.12.0'}
@@ -2636,6 +2663,26 @@ packages:
       zod: ^4.6.6
     peerDependenciesMeta:
       simple-git:
+        optional: true
+      vitest:
+        optional: true
+
+  '@theokit/sdk-tools@0.29.0':
+    resolution: {integrity: sha512-O96htwfh40QlQgEAcWbSMqdJ9555XjpqWqopoT3sGQ7B4QW58v7sQw0a0WgILeJUlR8EXxmMDK8RP7LBRNFMuQ==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/sdk': '>=5.0.0-next.1'
+      mammoth: ^1.13.0
+      simple-git: ^4.0.1
+      unpdf: ^2.1.0
+      vitest: '>=2.0.0'
+      zod: ^4.6.6
+    peerDependenciesMeta:
+      mammoth:
+        optional: true
+      simple-git:
+        optional: true
+      unpdf:
         optional: true
       vitest:
         optional: true
@@ -2687,6 +2734,36 @@ packages:
       '@types/ws':
         optional: true
       better-sqlite3:
+        optional: true
+      proper-lockfile:
+        optional: true
+      sqlite-vec:
+        optional: true
+      ws:
+        optional: true
+
+  '@theokit/sdk@5.23.0':
+    resolution: {integrity: sha512-zn0CEqZf4SE23leY7Lx+PzEdTvUrKVBG9l6kUAgk6ny2++pFHDve81NOV3JSzY7Xiqi03WoVunAlnOUMRN/tQA==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@lancedb/lancedb': ^0.30.0
+      '@opentelemetry/api': ^1.9.0
+      '@types/ws': '>=8.0.0'
+      better-sqlite3: ^12.0.0
+      onnxruntime-node: '>=1.17.0'
+      proper-lockfile: ^4.1.2
+      sqlite-vec: ^0.1.0
+      ws: '>=8.0.0'
+    peerDependenciesMeta:
+      '@lancedb/lancedb':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+      '@types/ws':
+        optional: true
+      better-sqlite3:
+        optional: true
+      onnxruntime-node:
         optional: true
       proper-lockfile:
         optional: true
@@ -7318,6 +7395,29 @@ snapshots:
       - vitest
       - ws
 
+  '@theokit/agents@16.5.0(@opentelemetry/api@1.10.0)(@theokit/http@1.2.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7))(@types/ws@8.18.2)(react@19.3.1)(vitest@4.1.12(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@7.3.7(@types/node@26.6.6)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))(zod@4.6.7)':
+    dependencies:
+      '@theokit/http': 1.2.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7)
+      '@theokit/presenter': 0.11.0(@theokit/sdk@5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(zod@4.6.7)
+      '@theokit/sdk': 5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))
+      '@theokit/sdk-tools': 0.29.0(@theokit/sdk@5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(vitest@4.1.12(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@7.3.7(@types/node@26.6.6)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(zod@4.6.7)
+      zod: 4.6.7
+    optionalDependencies:
+      react: 19.3.1
+    transitivePeerDependencies:
+      - '@lancedb/lancedb'
+      - '@opentelemetry/api'
+      - '@types/ws'
+      - better-sqlite3
+      - mammoth
+      - onnxruntime-node
+      - proper-lockfile
+      - simple-git
+      - sqlite-vec
+      - unpdf
+      - vitest
+      - ws
+
   '@theokit/http@1.2.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7)':
     dependencies:
       reflect-metadata: 0.2.2
@@ -7331,14 +7431,19 @@ snapshots:
       '@theokit/sdk': 5.14.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))
       zod: 4.6.7
 
+  '@theokit/presenter@0.11.0(@theokit/sdk@5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(zod@4.6.7)':
+    dependencies:
+      '@theokit/sdk': 5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))
+      zod: 4.6.7
+
   '@theokit/presenter@0.8.0(@theokit/sdk@4.63.5(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(zod@4.6.7)':
     dependencies:
       '@theokit/sdk': 4.63.5(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))
       zod: 4.6.7
 
-  '@theokit/presenter@0.8.0(@theokit/sdk@5.14.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(zod@4.6.7)':
+  '@theokit/presenter@0.8.0(@theokit/sdk@5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(zod@4.6.7)':
     dependencies:
-      '@theokit/sdk': 5.14.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))
+      '@theokit/sdk': 5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))
       zod: 4.6.7
 
   '@theokit/sdk-tools@0.27.6(@theokit/sdk@4.63.5(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(vitest@4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(vite@7.3.7(@types/node@22.20.5)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(zod@4.6.7)':
@@ -7347,6 +7452,13 @@ snapshots:
       zod: 4.6.7
     optionalDependencies:
       vitest: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(vite@7.3.7(@types/node@22.20.5)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
+  '@theokit/sdk-tools@0.29.0(@theokit/sdk@5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(vitest@4.1.12(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@7.3.7(@types/node@26.6.6)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(zod@4.6.7)':
+    dependencies:
+      '@theokit/sdk': 5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))
+      zod: 4.6.7
+    optionalDependencies:
+      vitest: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@7.3.7(@types/node@26.6.6)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   '@theokit/sdk@4.63.5(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))':
     dependencies:
@@ -7359,6 +7471,16 @@ snapshots:
       ws: 8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)
 
   '@theokit/sdk@5.14.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))':
+    dependencies:
+      croner: 9.1.0
+      jsonrepair: 3.15.0
+      zod: 4.6.7
+    optionalDependencies:
+      '@opentelemetry/api': 1.10.0
+      '@types/ws': 8.18.2
+      ws: 8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+
+  '@theokit/sdk@5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))':
     dependencies:
       croner: 9.1.0
       jsonrepair: 3.15.0
@@ -10227,11 +10349,11 @@ snapshots:
     dependencies:
       any-promise: 1.3.0
 
-  theokit@0.60.0(@opentelemetry/api@1.10.0)(@theokit/sdk@5.14.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(@types/node@22.20.5)(@types/ws@8.18.2)(csstype@3.2.3)(jiti@2.7.0)(react-dom@19.3.1(react@19.3.1))(react-router@8.5.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)(vitest@4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(vite@7.3.7(@types/node@22.20.5)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))(yaml@2.9.1)(zod@4.6.7):
+  theokit@0.60.0(@opentelemetry/api@1.10.0)(@theokit/sdk@5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(@types/node@22.20.5)(@types/ws@8.18.2)(csstype@3.2.3)(jiti@2.7.0)(react-dom@19.3.1(react@19.3.1))(react-router@8.5.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)(vitest@4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(vite@7.3.7(@types/node@22.20.5)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))(yaml@2.9.1)(zod@4.6.7):
     dependencies:
       '@theokit/agents': 12.1.0(@opentelemetry/api@1.10.0)(@theokit/http@1.2.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7))(@types/ws@8.18.2)(react@19.3.1)(vitest@4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(vite@7.3.7(@types/node@22.20.5)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))(zod@4.6.7)
       '@theokit/http': 1.2.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7)
-      '@theokit/presenter': 0.8.0(@theokit/sdk@5.14.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(zod@4.6.7)
+      '@theokit/presenter': 0.8.0(@theokit/sdk@5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(zod@4.6.7)
       '@vitejs/plugin-react': 4.7.0(vite@7.3.7(@types/node@22.20.5)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       busboy: 1.6.0
       cac: 6.7.14
@@ -10251,7 +10373,7 @@ snapshots:
       vite: 7.3.7(@types/node@22.20.5)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
       zod: 4.6.7
     optionalDependencies:
-      '@theokit/sdk': 5.14.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))
+      '@theokit/sdk': 5.23.0(@opentelemetry/api@1.10.0)(@types/ws@8.18.2)(ws@8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))
       ws: 8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
       - '@lancedb/lancedb'
