@@ -1,5 +1,11 @@
 # @theokit/gateway-agent
 
+## 0.2.0
+
+### Minor Changes
+
+- 46e9a65: Add `gatewayDeliverPort` and `parseChannelTarget`: adapt gateway adapters to a scheduler's deliver port, masking secrets and rendering the text for the platform.
+
 ## 0.1.0
 
 ### Minor Changes
