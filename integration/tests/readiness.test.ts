@@ -243,6 +243,10 @@ describe("live-test readiness", () => {
       maskSecrets:
         "pure string masking, no I/O. Covered by packages/gateway/tests/runner-adapter-lookup.test.ts " +
         "and packages/gateway/tests/runner-connect-timeout.test.ts",
+      createFileCredentialStore:
+        "writes files in a local directory, no network and no platform. Covered by " +
+        "packages/gateway/tests/credential-store.test.ts and the rotation test in " +
+        "packages/gateway-x/tests/refresh.test.ts",
       maskShapes:
         "pure string -> string, no I/O. What a live run could add is whether a REAL credential " +
         "matches the shape, and no live test may carry one — the tests use synthetic values built " +
