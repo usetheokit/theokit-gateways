@@ -80,3 +80,24 @@ This status is not evidence of a shipped real-account surface.
 ## Capabilities
 
 `adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.
+
+## Channel descriptor
+
+`twitchChannel` is a `ChannelDescriptor` (transport `socket`) for `createChannels`; bind it to the environment with `configFromEnv` (needs `@theokit/gateway >=0.20.0`).
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { twitchChannel } from "@theokit/gateway-twitch";
+
+const { config, missing } = configFromEnv(twitchChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: twitchChannel, config }]);
+```
+
+| Env name | Option | Required | Secret |
+| --- | --- | --- | --- |
+| `TWITCH_ACCESS_TOKEN` | `accessToken` | yes | yes |
+| `TWITCH_BOT_USER_ID` | `botUserId` | yes | no |
+| `TWITCH_BROADCASTER_USER_IDS` | `broadcasterUserIds` (comma-separated) | yes | no |
+| `TWITCH_EVENT_SUB_URL` | `eventSubUrl` | no | no |
+
+Options without an env name are programmatic only. `create` makes no network call and throws a `GatewayConfigurationError` (`invalid_config`, naming the key) for a wrongly typed value.
