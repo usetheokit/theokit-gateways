@@ -17,7 +17,6 @@ import {
   type SendResult,
 } from "@theokit/gateway";
 
-import { ConfigurationError } from "./errors.js";
 import { JsonRpcLineClient, type RpcNotification, type RpcOutcome } from "./json-rpc.js";
 import { GROUP_PREFIX, type SignalEnvelope, signalEnvelopeToMessageEvent } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
@@ -31,15 +30,6 @@ const LABEL = "gateway-signal";
 
 const defaultSpawn: SpawnLike = (command, args) =>
   nodeSpawn(command, [...args], { stdio: ["pipe", "pipe", "pipe"] });
-
-function assertSenderKey(senderKey: unknown): void {
-  if (senderKey === undefined || senderKey === "uuid" || senderKey === "number") return;
-  throw new ConfigurationError({
-    code: "invalid_config",
-    message: `${LABEL}: opts.senderKey must be "uuid" or "number", got ${JSON.stringify(senderKey)}`,
-    detail: "senderKey",
-  });
-}
 
 /**
  * Signal adapter over one `signal-cli jsonRpc` child.
@@ -66,7 +56,6 @@ export class SignalAdapter extends BasePlatformAdapter {
    */
   constructor(opts: SignalAdapterOptions) {
     super();
-    assertSenderKey(opts.senderKey);
     if (!E164.test(opts.account)) {
       throw new Error(
         `${LABEL}: opts.account must be the registered number in E.164 form (e.g. "+5511999990000"), got "${opts.account}"`,
@@ -230,7 +219,7 @@ export class SignalAdapter extends BasePlatformAdapter {
     if (notification.method !== "receive") return;
     const envelope = (notification.params as { envelope?: SignalEnvelope } | undefined)?.envelope;
     if (envelope === undefined) return;
-    const event = signalEnvelopeToMessageEvent(envelope, Date.now(), this.opts.senderKey ?? "uuid");
+    const event = signalEnvelopeToMessageEvent(envelope, Date.now());
     if (event === undefined) return;
     void this.runHandler(this.handler, event).catch((err: unknown) => {
       process.stderr.write(`[${LABEL}] handler threw: ${message(err)}\n`);
