@@ -43,9 +43,12 @@ describe("feishuLarkChannel", () => {
     expect(missing).toEqual([name]);
     const { rejected } = createChannels([{ descriptor: feishuLarkChannel, config }]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
-    const key = feishuLarkChannel.config.find((f) => `APP_${f.env}` === name)?.key;
-    expect(key).toBeDefined();
-    expect(rejected[0]?.error.message).toBe(`channel feishu_lark: missing required config ${key}`);
+    const field = feishuLarkChannel.config.find((f) => `APP_${f.env}` === name);
+    expect(field).toBeDefined();
+    // The core does not know the app prefix, so it names the unprefixed variable, which the set name ends with.
+    expect(rejected[0]?.error.message).toBe(
+      `channel feishu_lark: missing required config ${field?.key} (${field?.env})`,
+    );
   });
 
   it("throws invalid_config naming the key for a wrongly typed value", () => {

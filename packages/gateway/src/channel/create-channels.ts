@@ -51,7 +51,7 @@ function missingRequiredKeys(
 ): string[] {
   return entry.descriptor.config
     .filter((field) => field.required && isAbsent(values[field.key]))
-    .map((field) => field.key);
+    .map((field) => (field.env === undefined ? field.key : `${field.key} (${field.env})`));
 }
 
 /** An entry that was refused, and the rejection that says why. */
