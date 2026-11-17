@@ -38,6 +38,9 @@ describe("synologyChatChannel", () => {
     const { rejected } = createChannels([{ descriptor: synologyChatChannel, config }]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
     expect(rejected[0]?.error.message).toContain(key);
+    // The factory message names the config key; the descriptor binds that key to the full variable.
+    const field = synologyChatChannel.config.find((f) => f.key === key);
+    expect(`APP_${field?.env}`).toBe(name);
   });
 
   it("accepts numeric strings for port and connectTimeoutMs", () => {

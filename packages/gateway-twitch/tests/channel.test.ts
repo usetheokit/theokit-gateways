@@ -44,6 +44,9 @@ describe("twitchChannel", () => {
     const { rejected } = createChannels([{ descriptor: twitchChannel, config }]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
     expect(rejected[0]?.error.message).toContain(KEYS[name] as string);
+    // The factory message names the config key; the descriptor binds that key to the full variable.
+    const field = twitchChannel.config.find((f) => f.key === KEYS[name]);
+    expect(`APP_${field?.env}`).toBe(name);
   });
 
   it("accepts broadcasterUserIds as an array or a comma-separated string", () => {

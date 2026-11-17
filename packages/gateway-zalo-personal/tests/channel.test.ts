@@ -34,6 +34,9 @@ describe("zaloPersonalChannel", () => {
     const { rejected } = createChannels([{ descriptor: zaloPersonalChannel, config }]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
     expect(rejected[0]?.error.message).toContain("credentials");
+    // The factory message names the config key; the descriptor binds that key to the full variable.
+    const field = zaloPersonalChannel.config.find((f) => f.key === "credentials");
+    expect(`APP_${field?.env}`).toBe(missing[0]);
   });
 
   it("accepts credentials as an object", () => {
