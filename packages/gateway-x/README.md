@@ -46,3 +46,29 @@ Status: unverified against the live X API; wire shapes are written from X's publ
 ## Capabilities
 
 `adapter.capabilities.maxMessageChars` is `280` (the splitter limit) and `threads` is `false`. See `@theokit/gateway` for the field meanings.
+
+## Channel descriptor
+
+`xChannel` describes the channel as data, for `createChannels` and `configFromEnv` from `@theokit/gateway` (peer `>=0.20.0`). Its transport is `"socket"`; it has no `webhook` half.
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { xChannel } from "@theokit/gateway-x";
+
+const { config, missing, secrets } = configFromEnv(xChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: xChannel, config }]);
+```
+
+| Config key | Env name (after your prefix) | Required | Secret |
+| --- | --- | --- | --- |
+| `userId` | `X_USER_ID` | yes | no |
+| `username` | `X_USERNAME` | yes | no |
+| `clientId` | `X_CLIENT_ID` | yes | no |
+| `clientSecret` | `X_CLIENT_SECRET` | yes | yes |
+| `refreshToken` | `X_REFRESH_TOKEN` | yes | yes |
+| `allowFrom` | `X_ALLOW_FROM` | yes | no |
+| `bearerToken` | `X_BEARER_TOKEN` | no | yes |
+| `guestDailyLimit` | `X_GUEST_DAILY_LIMIT` | no | no |
+
+`create` checks every value and throws a `GatewayConfigurationError` (code `invalid_config`, message naming the key) before building the adapter; it makes no network call.
+`allowFrom` is an array or a comma-separated string and must not be empty (an empty list answers nobody). `guestDailyLimit` is a positive integer (number or digit string) and becomes `guest.dailyLimit`.

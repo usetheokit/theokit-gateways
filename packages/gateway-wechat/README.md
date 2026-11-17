@@ -56,3 +56,23 @@ are written from WeChat's Official Account documentation and tested against a sc
 ## Capabilities
 
 `adapter.capabilities.maxMessageChars` is `600` (the splitter limit) and `threads` is `false`. See `@theokit/gateway` for the field meanings.
+
+## Channel descriptor
+
+`wechatChannel` describes the channel as data, for `createChannels` and `configFromEnv` from `@theokit/gateway` (peer `>=0.20.0`). Its transport is `"socket"`; it has no `webhook` half.
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { wechatChannel } from "@theokit/gateway-wechat";
+
+const { config, missing, secrets } = configFromEnv(wechatChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: wechatChannel, config }]);
+```
+
+| Config key | Env name (after your prefix) | Required | Secret |
+| --- | --- | --- | --- |
+| `appId` | `WECHAT_APP_ID` | yes | no |
+| `appSecret` | `WECHAT_APP_SECRET` | yes | yes |
+| `token` | `WECHAT_TOKEN` | yes | yes |
+
+`create` checks every value and throws a `GatewayConfigurationError` (code `invalid_config`, message naming the key) before building the adapter; it makes no network call.

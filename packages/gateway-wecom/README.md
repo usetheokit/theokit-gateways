@@ -49,3 +49,26 @@ written from WeCom's server API documentation and tested against a scripted fake
 ## Capabilities
 
 `adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.
+
+## Channel descriptor
+
+`wecomChannel` describes the channel as data, for `createChannels` and `configFromEnv` from `@theokit/gateway` (peer `>=0.20.0`). Its transport is `"socket"`; it has no `webhook` half.
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { wecomChannel } from "@theokit/gateway-wecom";
+
+const { config, missing, secrets } = configFromEnv(wecomChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: wecomChannel, config }]);
+```
+
+| Config key | Env name (after your prefix) | Required | Secret |
+| --- | --- | --- | --- |
+| `corpId` | `WECOM_CORP_ID` | yes | no |
+| `corpSecret` | `WECOM_CORP_SECRET` | yes | yes |
+| `agentId` | `WECOM_AGENT_ID` | yes | no |
+| `token` | `WECOM_TOKEN` | yes | yes |
+| `encodingAesKey` | `WECOM_ENCODING_AES_KEY` | yes | yes |
+
+`create` checks every value and throws a `GatewayConfigurationError` (code `invalid_config`, message naming the key) before building the adapter; it makes no network call.
+`agentId` is a number or a digit string.
