@@ -75,3 +75,40 @@ describe("XApi single-flight refresh", () => {
     expect(rotated).toEqual(["rt1"]);
   });
 });
+
+describe("credentialStore", () => {
+  it("reads the stored token first and saves the rotated one", async () => {
+    const data = new Map<string, string>([["x-refresh-token:100", "stored"]]);
+    const store = {
+      get: async (k: string) => data.get(k),
+      set: async (k: string, v: string) => void data.set(k, v),
+    };
+    const bodies: string[] = [];
+    const rotated: string[] = [];
+    const fetchFake: XFetch = async (_url, init) => {
+      bodies.push(init.body ?? "");
+      return {
+        status: 200,
+        text: async () =>
+          JSON.stringify({ access_token: "at", refresh_token: "new", expires_in: 7200 }),
+      };
+    };
+    const api = new XApi(
+      {
+        userId: "100",
+        username: "@theobot",
+        clientId: "cid",
+        clientSecret: "csec",
+        refreshToken: "env",
+        credentialStore: store,
+        onRefreshToken: (t: string) => void rotated.push(t),
+        fetch: fetchFake,
+      } as XAdapterOptions,
+      () => 0,
+    );
+    await api.refresh();
+    expect(new URLSearchParams(bodies[0]).get("refresh_token")).toBe("stored");
+    expect(data.get("x-refresh-token:100")).toBe("new");
+    expect(rotated).toEqual(["new"]);
+  });
+});

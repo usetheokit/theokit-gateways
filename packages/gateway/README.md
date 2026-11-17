@@ -297,6 +297,14 @@ const router = new SessionRouter(bindingStrategy(bindings, defaultStrategy));
 
 `accountOf(event)` says which bot account received the event when the app runs several. Creation throws `GatewayConfigurationError` with code `unknown_agent` for a default or rule naming an agent not in `agents`, and `empty_binding_rule` for a rule with no `platform`, `account` or `peer`. `bindingStrategy` prefixes the inner key with the escaped agent name, so two agents never share a session.
 
+## Keeping a credential across restarts
+
+`CredentialStore` is a `get(key)` / `set(key, value)` interface. `createFileCredentialStore(dir)`
+keeps one file per key under `dir` (mode 0600, written to a temp file and renamed). Keys match
+`[A-Za-z0-9._:-]+`, otherwise `set` and `get` throw `GatewayConfigurationError` with code
+`invalid_credential_key`. `get` returns `undefined` for a missing key; any other read error throws
+code `credential_store_unreadable`. `@theokit/gateway-x` uses it to keep a rotated refresh token.
+
 ## Architecture (5 pieces)
 
 | Module | Responsibility |

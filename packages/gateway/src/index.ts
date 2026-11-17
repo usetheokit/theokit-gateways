@@ -88,6 +88,8 @@ export {
   maskShapes,
   redactSecrets,
 } from "./security/credential-patterns.js";
+export type { CredentialStore } from "./security/credential-store.js";
+export { createFileCredentialStore } from "./security/credential-store.js";
 // Session
 export {
   type AgentBindingRule,

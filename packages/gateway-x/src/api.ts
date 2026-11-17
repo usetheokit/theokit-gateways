@@ -68,6 +68,7 @@ export class XApi {
   private accessToken: { value: string; expiresAt: number } | undefined;
   private refreshToken: string;
   private refreshing: Promise<string> | undefined;
+  private storedLoaded = false;
 
   constructor(
     private readonly opts: XAdapterOptions,
@@ -86,7 +87,30 @@ export class XApi {
     return this.refreshing;
   }
 
+  private get credentialKey(): string {
+    return this.opts.credentialKey ?? `x-refresh-token:${this.opts.userId}`;
+  }
+
+  /** The saved refresh token, when there is one, wins over the configured one. Read once. */
+  private async loadStored(): Promise<void> {
+    const store = this.opts.credentialStore;
+    if (store === undefined || this.storedLoaded) return;
+    const stored = await store.get(this.credentialKey);
+    this.storedLoaded = true;
+    if (stored) this.refreshToken = stored;
+  }
+
+  private async persist(token: string): Promise<void> {
+    this.refreshToken = token;
+    try {
+      await this.opts.credentialStore?.set(this.credentialKey, token);
+    } finally {
+      await this.opts.onRefreshToken?.(token);
+    }
+  }
+
   private async doRefresh(): Promise<string> {
+    await this.loadStored();
     const basic = Buffer.from(`${this.opts.clientId}:${this.opts.clientSecret}`).toString("base64");
     const form = new URLSearchParams({
       grant_type: "refresh_token",
@@ -108,8 +132,7 @@ export class XApi {
       expiresAt: this.now() + (body.expires_in ?? 7200) * 1000,
     };
     if (body.refresh_token && body.refresh_token !== this.refreshToken) {
-      this.refreshToken = body.refresh_token;
-      await this.opts.onRefreshToken?.(body.refresh_token);
+      await this.persist(body.refresh_token);
     }
     return body.access_token;
   }
