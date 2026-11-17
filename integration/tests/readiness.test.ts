@@ -247,6 +247,12 @@ describe("live-test readiness", () => {
         "pure string -> string, no I/O. What a live run could add is whether a REAL credential " +
         "matches the shape, and no live test may carry one — the tests use synthetic values built " +
         "to each platform's documented format, which is the strongest form available anywhere",
+      configFromEnv:
+        "a pure read of an env record into config, missing names and secrets, no I/O. Covered by " +
+        "packages/gateway/tests/config-from-env.test.ts",
+      selectVariant:
+        "a pure lookup of a descriptor variant, no I/O. Covered by " +
+        "packages/gateway/tests/config-from-env.test.ts",
       isAuthenticatedSender:
         "a pure read of a descriptor's senderIdentity field, no I/O. Covered by " +
         "packages/gateway/tests/sender-identity.test.ts and the Telegram and LINE channel tests",

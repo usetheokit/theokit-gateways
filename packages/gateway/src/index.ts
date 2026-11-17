@@ -27,6 +27,7 @@ export type {
   WebhookRequest,
 } from "./channel/channel-descriptor.js";
 export { isAuthenticatedSender } from "./channel/channel-descriptor.js";
+export { configFromEnv, type EnvConfig, selectVariant } from "./channel/config-from-env.js";
 export {
   type BuiltChannel,
   type ChannelEntry,
