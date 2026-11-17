@@ -2,8 +2,7 @@ import { configFromEnv, createChannels } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 import { TlonUrbitAdapter } from "../src/adapter.js";
-import { tlonUrbitChannel } from "../src/channel.js";
-import { ConfigurationError } from "../src/errors.js";
+import { ConfigurationError, tlonUrbitChannel } from "../src/channel.js";
 
 const ENV: Record<string, string> = {
   TLON_URBIT_SHIP_URL: "https://bot.example.com",
@@ -86,6 +85,17 @@ describe("tlonUrbitChannel connectTimeoutMs", () => {
     expect(tlonUrbitChannel.create({ ...base, connectTimeoutMs: "500" })).toBeInstanceOf(
       TlonUrbitAdapter,
     );
+  });
+  it("accepts 0 and rejects null", () => {
+    expect(tlonUrbitChannel.create({ ...base, connectTimeoutMs: 0 })).toBeInstanceOf(
+      TlonUrbitAdapter,
+    );
+    expect(() => tlonUrbitChannel.create({ ...base, connectTimeoutMs: null })).toThrow(
+      /connectTimeoutMs/,
+    );
+  });
+  it("does not claim an authenticated sender", () => {
+    expect("senderIdentity" in tlonUrbitChannel).toBe(false);
   });
   it("rejects anything else", () => {
     expect(() => tlonUrbitChannel.create({ ...base, connectTimeoutMs: "soon" })).toThrow(

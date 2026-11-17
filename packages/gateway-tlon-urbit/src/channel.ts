@@ -5,8 +5,21 @@
  * `.d.ts` naming a core type must not break a consumer on an older peer floor.
  */
 
+import { GatewayConfigurationError, type GatewayConfigurationErrorOptions } from "@theokit/gateway";
+
 import { TlonUrbitAdapter } from "./adapter.js";
-import { ConfigurationError } from "./errors.js";
+
+/**
+ * Misconfiguration of this adapter, raised before any network call.
+ *
+ * @public
+ */
+export class ConfigurationError extends GatewayConfigurationError {
+  override readonly name = "ConfigurationError";
+  constructor(opts: GatewayConfigurationErrorOptions) {
+    super("gateway-tlon-urbit", opts);
+  }
+}
 
 function invalid(key: string, expected: string): ConfigurationError {
   return new ConfigurationError({
@@ -26,12 +39,10 @@ function readString(config: Readonly<Record<string, unknown>>, key: string): str
 
 function readTimeout(config: Readonly<Record<string, unknown>>): number | undefined {
   const value = config.connectTimeoutMs;
-  if (value === undefined || value === null) return undefined;
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
-  if (typeof value === "string" && /^\d+$/.test(value.trim()) && Number(value) > 0) {
-    return Number(value.trim());
-  }
-  throw invalid("connectTimeoutMs", "a positive number or a digit string");
+  if (value === undefined) return undefined;
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value.trim());
+  throw invalid("connectTimeoutMs", "a number or a digit string");
 }
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
@@ -84,7 +95,6 @@ const CONFIG: ReadonlyArray<ConfigField> = [
 export const tlonUrbitChannel = {
   platform: "tlon_urbit" as const,
   transport: "socket" as const,
-  senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): TlonUrbitAdapter {
     const shipUrl = readString(config, "shipUrl");
