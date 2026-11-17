@@ -78,7 +78,9 @@ export function createFilePairingStore(options: {
   function persist(next: Set<string>): void {
     mkdirSync(options.dir, { recursive: true });
     const tmp = `${path}.${process.pid}.${random(0, 1e9)}.tmp`;
-    writeFileSync(tmp, JSON.stringify({ paired: [...next].sort((a, b) => a.localeCompare(b)) }), { mode: 0o600 });
+    writeFileSync(tmp, JSON.stringify({ paired: [...next].sort((a, b) => a.localeCompare(b)) }), {
+      mode: 0o600,
+    });
     renameSync(tmp, path);
   }
 
