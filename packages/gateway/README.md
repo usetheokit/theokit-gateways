@@ -372,6 +372,23 @@ if (connected.length === 0) throw new Error("no channel connected");
 for (const { platform, reason } of failed) console.error(`${platform} did not connect: ${reason}`);
 ```
 
+To build channels from environment variables, give each descriptor field an `env` name and read it
+with `configFromEnv`. It trims values, treats empty or whitespace as unset, lists unset required
+variables by full name in `missing`, and returns secret values in `secrets` for a log mask.
+`selectVariant` picks one of a descriptor's `variants` (for example a WhatsApp backend).
+
+```typescript
+import { configFromEnv, createChannels, selectVariant } from "@theokit/gateway";
+
+const descriptor = selectVariant(whatsappChannel, process.env.APP_WHATSAPP_BACKEND);
+const { config, missing, secrets } = configFromEnv(descriptor, process.env, "APP_");
+if (missing.length > 0) console.error(`skipped: set ${missing.join(", ")}`);
+else {
+  const { adapters } = createChannels([{ descriptor, config }]);
+  // pass `secrets` to your log mask
+}
+```
+
 - `createChannels` rejects an entry whose required field is absent, `null` or `""` with a
   `GatewayConfigurationError` coded `missing_required_config` that names the keys, and reports a
   configuration error thrown by `create` the same way. Any other error propagates. It performs no
