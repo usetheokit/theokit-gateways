@@ -112,3 +112,26 @@ Record the date and observed receive and reply results after that run succeeds.
 ## Capabilities
 
 `adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.
+
+## Channel descriptor and environment variables
+
+`nextcloudTalkChannel` describes the channel as data, for `createChannels` and `configFromEnv` from `@theokit/gateway`. It uses a `"socket"` transport and builds a `NextcloudTalkAdapter` without any network call.
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { nextcloudTalkChannel } from "@theokit/gateway-nextcloud-talk";
+
+const { config, missing, secrets } = configFromEnv(nextcloudTalkChannel, process.env, "APP_");
+// `missing` lists the unset required variables; `secrets` holds values to mask in logs.
+const { adapters, rejected } = createChannels([{ descriptor: nextcloudTalkChannel, config }]);
+```
+
+List values accept an array or a comma-separated string, booleans `true`/`false`, numbers a number or a digit string. Test seams and objects (not representable in the environment) are not config fields.
+
+| Variable | Config key | Required | Secret |
+| --- | --- | --- | --- |
+| `NEXTCLOUD_TALK_BASE_URL` | `baseUrl` | yes | no |
+| `NEXTCLOUD_TALK_SECRET` | `secret` | yes | yes |
+| `NEXTCLOUD_TALK_PORT` | `port` | no | no |
+| `NEXTCLOUD_TALK_PATH` | `path` | no | no |
+| `NEXTCLOUD_TALK_CONNECT_TIMEOUT_MS` | `connectTimeoutMs` | no | no |

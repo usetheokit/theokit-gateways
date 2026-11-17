@@ -100,3 +100,32 @@ inbound message, and observed reply from an independent IRC client.
 ## Capabilities
 
 `adapter.capabilities` reports `maxMessageChars` is left undefined: IRC's limit is 512 bytes per line, not characters. `threads` is `false`.
+
+## Channel descriptor and environment variables
+
+`ircChannel` describes the channel as data, for `createChannels` and `configFromEnv` from `@theokit/gateway`. It uses a `"socket"` transport and builds a `IrcAdapter` without any network call.
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { ircChannel } from "@theokit/gateway-irc";
+
+const { config, missing, secrets } = configFromEnv(ircChannel, process.env, "APP_");
+// `missing` lists the unset required variables; `secrets` holds values to mask in logs.
+const { adapters, rejected } = createChannels([{ descriptor: ircChannel, config }]);
+```
+
+List values accept an array or a comma-separated string, booleans `true`/`false`, numbers a number or a digit string. Test seams and objects (not representable in the environment) are not config fields.
+
+| Variable | Config key | Required | Secret |
+| --- | --- | --- | --- |
+| `IRC_HOST` | `host` | yes | no |
+| `IRC_NICK` | `nick` | yes | no |
+| `IRC_CHANNELS` | `channels` (list) | yes | no |
+| `IRC_PORT` | `port` | no | no |
+| `IRC_TLS` | `tls` | no | no |
+| `IRC_USERNAME` | `username` | no | no |
+| `IRC_REALNAME` | `realname` | no | no |
+| `IRC_PASSWORD` | `password` | no | yes |
+| `IRC_SASL_ACCOUNT` | `saslAccount` | no | no |
+| `IRC_SASL_PASSWORD` | `saslPassword` | no | yes |
+| `IRC_CONNECT_TIMEOUT_MS` | `connectTimeoutMs` | no | no |

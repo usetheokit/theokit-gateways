@@ -1,0 +1,216 @@
+/**
+ * The IRC channel described as data.
+ *
+ * Typed locally on purpose: this package declares `@theokit/gateway` as a peer, and a published
+ * `.d.ts` naming a core type a consumer's floor lacks would break that consumer. The object is
+ * structurally a `ChannelDescriptor`.
+ *
+ * `configFromEnv` yields strings, so `create` accepts a list as an array or a comma-separated
+ * string, a boolean as a boolean or `"true"`/`"false"`, and a number as a number or a digit string.
+ */
+
+import { GatewayConfigurationError, type GatewayConfigurationErrorOptions } from "@theokit/gateway";
+
+import { IrcAdapter } from "./adapter.js";
+import type { IrcAdapterOptions } from "./types.js";
+
+/** Misconfiguration of the IRC channel, raised before any network call. */
+export class ConfigurationError extends GatewayConfigurationError {
+  override readonly name = "ConfigurationError";
+  constructor(opts: GatewayConfigurationErrorOptions) {
+    super("gateway-irc", opts);
+  }
+}
+
+type Config = Readonly<Record<string, unknown>>;
+
+function invalid(key: string, expected: string): ConfigurationError {
+  return new ConfigurationError({
+    code: "invalid_config",
+    message: `gateway-irc: config.${key} must be ${expected}`,
+    detail: key,
+  });
+}
+
+function absent(value: unknown): boolean {
+  return value === undefined || value === null;
+}
+
+function readString(config: Config, key: string): string | undefined {
+  const value = config[key];
+  if (absent(value)) return undefined;
+  if (typeof value !== "string") throw invalid(key, "a string");
+  return value;
+}
+
+function readRequiredString(config: Config, key: string): string {
+  const value = readString(config, key);
+  if (value === undefined) throw invalid(key, "a string");
+  return value;
+}
+
+function readList(config: Config, key: string): string[] | undefined {
+  const value = config[key];
+  if (absent(value)) return undefined;
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item !== "");
+  }
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+    throw invalid(key, "an array of strings or a comma-separated string");
+  }
+  return value;
+}
+
+function readBoolean(config: Config, key: string): boolean | undefined {
+  const value = config[key];
+  if (absent(value)) return undefined;
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw invalid(key, 'a boolean or the string "true" or "false"');
+}
+
+function readNumber(config: Config, key: string): number | undefined {
+  const value = config[key];
+  if (absent(value)) return undefined;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && /^\d+$/.test(value)) return Number(value);
+  throw invalid(key, "a number or a digit string");
+}
+
+/** Keep only the keys whose value is defined. */
+function defined<T extends object>(options: T): T {
+  return Object.fromEntries(Object.entries(options).filter(([, v]) => v !== undefined)) as T;
+}
+
+/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
+interface ConfigField {
+  readonly key: string;
+  readonly required: boolean;
+  readonly secret: boolean;
+  readonly env: string;
+  readonly description: string;
+}
+
+const CONFIG: ReadonlyArray<ConfigField> = [
+  {
+    key: "host",
+    required: true,
+    secret: false,
+    env: "IRC_HOST",
+    description: "The IRC server's host name, for example irc.libera.chat.",
+  },
+  {
+    key: "nick",
+    required: true,
+    secret: false,
+    env: "IRC_NICK",
+    description: "The nick the adapter registers with.",
+  },
+  {
+    key: "channels",
+    required: true,
+    secret: false,
+    env: "IRC_CHANNELS",
+    description: "Channels to join, #name or &name: an array or a comma-separated string.",
+  },
+  {
+    key: "port",
+    required: false,
+    secret: false,
+    env: "IRC_PORT",
+    description: "The server's port; default 6697.",
+  },
+  {
+    key: "tls",
+    required: false,
+    secret: false,
+    env: "IRC_TLS",
+    description: "Whether to speak TLS; default true.",
+  },
+  {
+    key: "username",
+    required: false,
+    secret: false,
+    env: "IRC_USERNAME",
+    description: "The username sent in USER; default the nick.",
+  },
+  {
+    key: "realname",
+    required: false,
+    secret: false,
+    env: "IRC_REALNAME",
+    description: "The real name sent in USER; default the nick.",
+  },
+  {
+    key: "password",
+    required: false,
+    secret: true,
+    env: "IRC_PASSWORD",
+    description: "The server password, sent as PASS before registration.",
+  },
+  {
+    key: "saslAccount",
+    required: false,
+    secret: false,
+    env: "IRC_SASL_ACCOUNT",
+    description: "The account name for SASL PLAIN; default the nick.",
+  },
+  {
+    key: "saslPassword",
+    required: false,
+    secret: true,
+    env: "IRC_SASL_PASSWORD",
+    description: "The NickServ account password, sent through SASL PLAIN.",
+  },
+  {
+    key: "connectTimeoutMs",
+    required: false,
+    secret: false,
+    env: "IRC_CONNECT_TIMEOUT_MS",
+    description: "How long connect() waits for registration and every join; default 10000.",
+  },
+];
+
+/**
+ * The IRC channel: the adapter opens its own connection in `connect()`, so it needs no webhook
+ * route. `create` validates each value and makes no network call; the `socketFactory` test seam is
+ * not a config field.
+ *
+ * @public
+ */
+export const ircChannel = {
+  platform: "irc" as const,
+  transport: "socket" as const,
+  config: CONFIG,
+  create(config: Config): IrcAdapter {
+    const channels = readList(config, "channels");
+    if (channels === undefined)
+      throw invalid("channels", "an array of strings or a comma-separated string");
+    const options: IrcAdapterOptions = defined({
+      host: readRequiredString(config, "host"),
+      nick: readRequiredString(config, "nick"),
+      channels,
+      port: readNumber(config, "port"),
+      tls: readBoolean(config, "tls"),
+      username: readString(config, "username"),
+      realname: readString(config, "realname"),
+      password: readString(config, "password"),
+      saslAccount: readString(config, "saslAccount"),
+      saslPassword: readString(config, "saslPassword"),
+      connectTimeoutMs: readNumber(config, "connectTimeoutMs"),
+    });
+    try {
+      return new IrcAdapter(options);
+    } catch (err) {
+      // The constructor throws a plain Error for a malformed host, nick, channel or credential.
+      throw new ConfigurationError({
+        code: "invalid_config",
+        message: `gateway-irc: ${err instanceof Error ? err.message : "invalid config"}`,
+      });
+    }
+  },
+};

@@ -114,3 +114,24 @@ await client.subscribe([{ kinds: [1], limit: 10 }], (event) => console.log(event
 
 `parseNostrSecretKey` accepts an `nsec1…` key or 64 hex characters and throws `NostrKeyError` for
 anything else, with no part of the value in the message.
+
+## Channel descriptor and environment variables
+
+`nostrChannel` describes the channel as data, for `createChannels` and `configFromEnv` from `@theokit/gateway`. It uses a `"socket"` transport and builds a `NostrAdapter` without any network call.
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { nostrChannel } from "@theokit/gateway-nostr";
+
+const { config, missing, secrets } = configFromEnv(nostrChannel, process.env, "APP_");
+// `missing` lists the unset required variables; `secrets` holds values to mask in logs.
+const { adapters, rejected } = createChannels([{ descriptor: nostrChannel, config }]);
+```
+
+List values accept an array or a comma-separated string, booleans `true`/`false`, numbers a number or a digit string. Test seams and objects (not representable in the environment) are not config fields.
+
+| Variable | Config key | Required | Secret |
+| --- | --- | --- | --- |
+| `NOSTR_SECRET_KEY` | `secretKey` | yes | yes |
+| `NOSTR_RELAYS` | `relays` (list) | yes | no |
+| `NOSTR_IGNORE_BEFORE` | `ignoreBefore` | no | no |
