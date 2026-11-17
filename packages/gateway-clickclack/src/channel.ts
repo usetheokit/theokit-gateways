@@ -84,7 +84,7 @@ const CONFIG: ReadonlyArray<ConfigField> = [
 /**
  * The channel: it opens its own realtime socket in `connect()`, so it needs no webhook route.
  *
- * `create` refuses a missing or wrongly typed value with this package's `ConfigurationError`
+ * `create` refuses a missing or wrongly typed value with `GatewayConfigurationError` (prefix `gateway-clickclack`)
  * (code `invalid_config`, the key in the message); it performs no network call. A number or
  * a digit string is accepted for `reconnectDelayMs`.
  *

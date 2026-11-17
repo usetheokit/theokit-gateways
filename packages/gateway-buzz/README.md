@@ -65,4 +65,4 @@ const { config, missing, secrets } = configFromEnv(buzzChannel, process.env, "AP
 const { adapters, rejected } = createChannels([{ descriptor: buzzChannel, config }]);
 ```
 
-A wrongly typed value makes `create` throw `ConfigurationError` with code `invalid_config`.
+A wrongly typed value makes `create` throw `GatewayConfigurationError` (prefix `gateway-buzz`) with code `invalid_config`.

@@ -63,4 +63,4 @@ const { config, missing, secrets } = configFromEnv(clickclackChannel, process.en
 const { adapters, rejected } = createChannels([{ descriptor: clickclackChannel, config }]);
 ```
 
-A wrongly typed value makes `create` throw `ConfigurationError` with code `invalid_config`.
+A wrongly typed value makes `create` throw `GatewayConfigurationError` (prefix `gateway-clickclack`) with code `invalid_config`.

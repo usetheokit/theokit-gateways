@@ -105,4 +105,4 @@ const { config, missing, secrets } = configFromEnv(feishuLarkChannel, process.en
 const { adapters, rejected } = createChannels([{ descriptor: feishuLarkChannel, config }]);
 ```
 
-A wrongly typed value makes `create` throw `ConfigurationError` with code `invalid_config`.
+A wrongly typed value makes `create` throw `GatewayConfigurationError` (prefix `gateway-feishu-lark`) with code `invalid_config`.

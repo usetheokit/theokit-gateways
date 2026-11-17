@@ -80,7 +80,7 @@ const CONFIG: ReadonlyArray<ConfigField> = [
  * webhook route.
  *
  * `create` refuses a missing or wrongly typed value, a malformed `appId` and an unknown `domain`
- * with this package's `ConfigurationError` (code `invalid_config`, the key in the message); it
+ * with `GatewayConfigurationError` (prefix `gateway-feishu-lark`) (code `invalid_config`, the key in the message); it
  * performs no network call.
  *
  * @public
