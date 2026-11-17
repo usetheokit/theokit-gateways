@@ -45,6 +45,8 @@ export {
   verifyWebhookSubscription,
 } from "./backend/cloud/webhook.js";
 
+export { whatsappChannel } from "./channel.js";
+
 // Web bridge backend (whatsapp-web.js subprocess).
 export {
   defaultBridgeScriptPath,

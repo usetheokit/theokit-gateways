@@ -159,3 +159,29 @@ To complete that check, configure a Chat app and its service account, expose the
 endpoint over HTTPS, add the app to a space, and send it a unique message. Record the date,
 received message resource name, and visible reply resource name (never credentials) after
 confirming the reply appears in that space. TheoClaw integration also remains unverified here.
+
+## Channel descriptor
+
+`googleChatChannel` describes the channel as data, for `createChannels` and `configFromEnv` from
+`@theokit/gateway`.
+
+| Field | Env | Required | Secret |
+| --- | --- | --- | --- |
+| `serviceAccountEmail` | `GOOGLE_CHAT_SERVICE_ACCOUNT_EMAIL` | see below | no |
+| `privateKey` | `GOOGLE_CHAT_PRIVATE_KEY` | see below | yes |
+| `serviceAccountFile` | `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE` | see below | no |
+| `audience` | `GOOGLE_CHAT_AUDIENCE` | yes | no |
+| `webhook` | `GOOGLE_CHAT_WEBHOOK` | no | no |
+
+Credentials come from `serviceAccountEmail` and `privateKey`, or from the JSON key at
+`serviceAccountFile` (`client_email`, `private_key`) for whichever of the two is absent; `create`
+throws `invalid_config` when neither source is complete or the file cannot be read. `webhook` is
+`"listener"` (default) or `"external"`.
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { googleChatChannel } from "@theokit/gateway-google-chat";
+
+const { config } = configFromEnv(googleChatChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: googleChatChannel, config }]);
+```

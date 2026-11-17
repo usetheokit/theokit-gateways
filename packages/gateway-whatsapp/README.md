@@ -211,3 +211,32 @@ it exists (B-001).
 ## Capabilities
 
 `adapter.capabilities.maxMessageChars` is `4096` (the splitter limit) and `threads` is `false`. See `@theokit/gateway` for the field meanings.
+
+## Channel descriptor
+
+`whatsappChannel` describes the channel as data, for `createChannels` and `configFromEnv` from
+`@theokit/gateway`. It has two variants, chosen with `selectVariant(whatsappChannel, name)`; the
+descriptor itself is the `cloud` shape.
+
+| Variant | Field | Env | Required | Secret |
+| --- | --- | --- | --- | --- |
+| `cloud` | `accessToken` | `WHATSAPP_ACCESS_TOKEN` | yes | yes |
+| `cloud` | `phoneNumberId` | `WHATSAPP_PHONE_NUMBER_ID` | yes | no |
+| `cloud` | `appSecret` | `WHATSAPP_APP_SECRET` | yes | yes |
+| `cloud` | `verifyToken` | `WHATSAPP_VERIFY_TOKEN` | no | yes |
+| `baileys` | `sessionDir` | `WHATSAPP_SESSION_DIR` | yes | no |
+| both | `requireMention` | `WHATSAPP_REQUIRE_MENTION` | no | no |
+
+`verifyToken` is not an adapter option: it is kept so the webhook half can answer Meta's
+subscription check.
+
+```ts
+import { configFromEnv, createChannels, selectVariant } from "@theokit/gateway";
+import { whatsappChannel } from "@theokit/gateway-whatsapp";
+
+const descriptor = selectVariant(whatsappChannel, "cloud");
+const { config, missing } = configFromEnv(descriptor, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor, config }]);
+```
+
+`create` refuses a value of the wrong type with `ConfigurationError` (`invalid_config`, naming the key).
