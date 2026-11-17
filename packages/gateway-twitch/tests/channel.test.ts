@@ -70,7 +70,10 @@ describe("twitchChannel", () => {
   });
 
   it("reports exactly the secret fields in configFromEnv(...).secrets", () => {
-    expect(configFromEnv(twitchChannel, ENV, "APP_").secrets).toEqual(["oauth-secret-token"]);
+    const full = { ...ENV, APP_TWITCH_EVENT_SUB_URL: "wss://example.test/ws" };
+    const { secrets, config } = configFromEnv(twitchChannel, full, "APP_");
+    expect(Object.keys(config)).toHaveLength(4);
+    expect(secrets).toEqual(["oauth-secret-token"]);
   });
 
   it("declares socket transport", () => {

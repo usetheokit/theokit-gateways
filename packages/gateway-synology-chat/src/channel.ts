@@ -52,8 +52,13 @@ function readNumber(config: Config, key: string): number | undefined {
 function readApp(config: Config): SynologyChatAdapterOptions["app"] {
   const value = config.app;
   if (isAbsent(value)) return undefined;
-  if (typeof value !== "function" && (typeof value !== "object" || value === null)) {
-    throw invalid("app", "an Express app");
+  // The adapter mounts its route with `app.post(...)` in connect(); anything else fails there.
+  const post = (value as { post?: unknown } | null)?.post;
+  if (
+    (typeof value !== "function" && (typeof value !== "object" || value === null)) ||
+    typeof post !== "function"
+  ) {
+    throw invalid("app", "an Express app (an object with a post method)");
   }
   return value as SynologyChatAdapterOptions["app"];
 }

@@ -56,6 +56,7 @@ describe("synologyChatChannel", () => {
     ["port", "eighty"],
     ["connectTimeoutMs", true],
     ["app", "x"],
+    ["app", {}],
     ["fetch", "x"],
   ])("throws invalid_config naming %s for a wrongly typed value", (key, value) => {
     const error = errorOf(() =>
@@ -75,7 +76,14 @@ describe("synologyChatChannel", () => {
   });
 
   it("reports exactly the secret fields in configFromEnv(...).secrets", () => {
-    const { secrets } = configFromEnv(synologyChatChannel, ENV, "APP_");
+    const full = {
+      ...ENV,
+      APP_SYNOLOGY_CHAT_PATH: "/hook-path",
+      APP_SYNOLOGY_CHAT_PORT: "8081",
+      APP_SYNOLOGY_CHAT_CONNECT_TIMEOUT_MS: "1234",
+    };
+    const { secrets, config } = configFromEnv(synologyChatChannel, full, "APP_");
+    expect(Object.keys(config)).toHaveLength(5);
     expect(secrets).toEqual([BOT_TOKEN]);
   });
 
