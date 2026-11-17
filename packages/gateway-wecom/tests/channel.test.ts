@@ -45,9 +45,9 @@ describe("wecomChannel", () => {
       delete env[`APP_${field.env}`];
       const { config, missing } = configFromEnv(wecomChannel, env, "APP_");
       expect(missing).toEqual([`APP_${field.env}`]);
-      const { rejected } = createChannels([{ descriptor: wecomChannel, config }]);
+      const { rejected } = createChannels([{ descriptor: wecomChannel, config, envPrefix: "APP_" }]);
       expect(rejected[0]?.error.code).toBe("missing_required_config");
-      expect(rejected[0]?.error.message).toContain(field.key);
+      expect(rejected[0]?.error.message).toContain(`APP_${field.env}`);
     }
   });
 

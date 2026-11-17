@@ -49,9 +49,9 @@ describe("xChannel", () => {
       delete env[`APP_${field.env}`];
       const { config, missing } = configFromEnv(xChannel, env, "APP_");
       expect(missing).toEqual([`APP_${field.env}`]);
-      const { rejected } = createChannels([{ descriptor: xChannel, config }]);
+      const { rejected } = createChannels([{ descriptor: xChannel, config, envPrefix: "APP_" }]);
       expect(rejected[0]?.error.code).toBe("missing_required_config");
-      expect(rejected[0]?.error.message).toContain(field.key);
+      expect(rejected[0]?.error.message).toContain(`APP_${field.env}`);
     }
   });
 
