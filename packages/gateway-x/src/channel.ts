@@ -29,7 +29,7 @@ function readString(config: Config, key: string): string {
 
 function readOptionalString(config: Config, key: string): string | undefined {
   const value = config[key];
-  if (value === undefined || value === null || value === "") return undefined;
+  if (value === undefined) return undefined;
   return readString(config, key);
 }
 
@@ -43,14 +43,15 @@ function readList(config: Config, key: string): string[] {
   if (!items.every((item) => typeof item === "string")) {
     throw invalid(key, "an array of strings or a comma-separated string");
   }
-  const list = (items as string[]).filter((item) => item.length > 0);
+  // The adapter drops entries that are empty once trimmed and stripped of a leading "@".
+  const list = (items as string[]).filter((item) => item.trim().replace(/^@/, "") !== "");
   if (list.length === 0) throw invalid(key, "a non-empty list (an empty list answers nobody)");
   return list;
 }
 
 function readOptionalPositiveInteger(config: Config, key: string): number | undefined {
   const value = config[key];
-  if (value === undefined || value === null || value === "") return undefined;
+  if (value === undefined) return undefined;
   const parsed =
     typeof value === "number"
       ? value

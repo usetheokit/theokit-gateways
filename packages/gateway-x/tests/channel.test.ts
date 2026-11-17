@@ -68,7 +68,7 @@ describe("xChannel", () => {
   });
 
   it("refuses an empty allowFrom", () => {
-    for (const allowFrom of [[], "", " , "]) {
+    for (const allowFrom of [[], "", " , ", [" "], ["@"], "@, @"]) {
       const error = errorOf(() => xChannel.create({ ...VALID, allowFrom }));
       expect(error.code).toBe("invalid_config");
       expect(error.message).toContain("allowFrom");
@@ -88,6 +88,19 @@ describe("xChannel", () => {
       const error = errorOf(() => xChannel.create({ ...VALID, guestDailyLimit: bad }));
       expect(error.code).toBe("invalid_config");
       expect(error.message).toContain("guestDailyLimit");
+    }
+  });
+
+  it("refuses null and empty optional values instead of ignoring them", () => {
+    for (const extra of [
+      { bearerToken: null },
+      { bearerToken: "" },
+      { guestDailyLimit: null },
+      { guestDailyLimit: "" },
+    ]) {
+      const error = errorOf(() => xChannel.create({ ...VALID, ...extra }));
+      expect(error.code).toBe("invalid_config");
+      expect(error.message).toContain(Object.keys(extra)[0]);
     }
   });
 
