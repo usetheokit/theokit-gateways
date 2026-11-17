@@ -31,15 +31,18 @@ export const GROUP_PREFIX = "group.";
  *
  * @param envelope - the `params.envelope` of a signal-cli `receive` notification
  * @param receivedAt - when the adapter read it, in ms since the epoch
+ * @param senderKey - which field becomes `sender.id`, falling back to the other when absent
  */
 export function signalEnvelopeToMessageEvent(
   envelope: SignalEnvelope,
   receivedAt: number,
+  senderKey: "uuid" | "number" = "uuid",
 ): SignalMessageEvent | undefined {
   const text = messageText(envelope);
   if (text === undefined) return undefined;
   const number = envelope.sourceNumber ?? envelope.source;
-  const senderId = envelope.sourceUuid ?? number;
+  const senderId =
+    senderKey === "number" ? (number ?? envelope.sourceUuid) : (envelope.sourceUuid ?? number);
   if (senderId === undefined) return undefined;
   const timestamp = sentAt(envelope, receivedAt);
   const groupId = envelope.dataMessage?.groupInfo?.groupId;
