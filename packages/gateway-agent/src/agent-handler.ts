@@ -28,6 +28,8 @@ export interface AgentLease {
 }
 
 /**
+ * How `createAgentHandler` finds its agent and what it sends besides the answer.
+ *
  * @public
  */
 export interface AgentHandlerOptions {
