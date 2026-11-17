@@ -6,6 +6,7 @@
  */
 
 import {
+  type AdapterCapabilities,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
   type SendResult,
@@ -16,7 +17,7 @@ import {
 import { NonceMemory } from "./nonce-memory.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import { isWeChatTimestampFresh, verifyWeChatSignature } from "./signature.js";
-import { splitForWeChat } from "./split.js";
+import { splitForWeChat, WECHAT_MESSAGE_LIMIT } from "./split.js";
 import type { WeChatAdapterOptions } from "./types.js";
 
 const LABEL = "gateway-wechat";
@@ -49,6 +50,10 @@ export type WeChatWebhookAnswer = WeixinWebhookAnswer;
  * @public
  */
 export class WeChatAdapter extends WeixinAdapterBase {
+  override get capabilities(): AdapterCapabilities {
+    return { ...super.capabilities, maxMessageChars: WECHAT_MESSAGE_LIMIT, threads: false };
+  }
+
   readonly platform = "wechat" as const;
   private readonly opts: WeChatAdapterOptions;
   private readonly nonces = new NonceMemory();

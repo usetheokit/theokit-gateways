@@ -10,6 +10,7 @@
  */
 
 import {
+  type AdapterCapabilities,
   BasePlatformAdapter,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
@@ -32,7 +33,7 @@ import { isForAnotherNumber } from "./foreign-number.js";
 import { digitsOnly, type InboundRules } from "./inbound-rules.js";
 import { decideForOwnNumber, requireOwnPhoneNumberId } from "./own-number.js";
 import { refuseAttachments } from "./refuse-attachments.js";
-import { splitForWhatsApp } from "./split.js";
+import { splitForWhatsApp, WHATSAPP_MAX_TEXT } from "./split.js";
 import type {
   WhatsAppAdapterCommonOptions,
   WhatsAppAdapterOptions,
@@ -75,6 +76,10 @@ function requireNonEmpty(entries: ReadonlyArray<readonly [string, string | undef
  * constructor stays available for tests and for a backend of your own.
  */
 export class WhatsAppAdapter extends BasePlatformAdapter {
+  override get capabilities(): AdapterCapabilities {
+    return { ...super.capabilities, maxMessageChars: WHATSAPP_MAX_TEXT, threads: false };
+  }
+
   readonly platform = "whatsapp" as const;
   private readonly backendImpl: WhatsAppBackend;
   /**

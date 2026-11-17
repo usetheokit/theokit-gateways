@@ -12,7 +12,7 @@
 
 import { chunkText } from "@theokit/gateway";
 
-const SLACK_MAX_TEXT = 4000;
+export const SLACK_MAX_TEXT = 4000;
 
 export function splitForSlack(text: string): string[] {
   return chunkText(text, {

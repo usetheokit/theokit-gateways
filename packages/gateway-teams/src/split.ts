@@ -20,7 +20,7 @@ import { chunkText } from "@theokit/gateway";
  */
 export const __splitMarker: unique symbol = Symbol("split");
 
-const TEAMS_MAX_TEXT = 8000;
+export const TEAMS_MAX_TEXT = 8000;
 
 /**
  * Split `text` into chunks Teams accepts — a fixed 8000-character window.

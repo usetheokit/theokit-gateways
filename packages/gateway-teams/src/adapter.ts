@@ -15,6 +15,7 @@
  */
 
 import {
+  type AdapterCapabilities,
   BasePlatformAdapter,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
@@ -25,7 +26,7 @@ import { mapTeamsError } from "./errors.js";
 import { NO_RECIPIENT_WARNING, readBotMention } from "./mention-gate.js";
 import { normalizeTeamsActivity } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
-import { splitForTeams } from "./split.js";
+import { splitForTeams, TEAMS_MAX_TEXT } from "./split.js";
 import type { TeamsAdapterOptions } from "./types.js";
 
 /** Minimal shape of `@microsoft/teams.apps` `App` we use. Lazy-typed to avoid hard import. */
@@ -139,6 +140,10 @@ async function fetchBotToken(opts: {
 }
 
 export class TeamsAdapter extends BasePlatformAdapter {
+  override get capabilities(): AdapterCapabilities {
+    return { ...super.capabilities, maxMessageChars: TEAMS_MAX_TEXT, threads: false };
+  }
+
   readonly platform = "teams" as const;
   private readonly opts: TeamsAdapterOptions;
   private app: TeamsAppLike | undefined;

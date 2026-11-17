@@ -108,3 +108,7 @@ will find out without having to watch for it.
 ## License
 
 Apache-2.0
+
+## Capabilities
+
+`adapter.capabilities.maxMessageChars` is `2000` (the splitter limit) and `threads` is `true`. See `@theokit/gateway` for the field meanings.

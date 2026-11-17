@@ -13,7 +13,7 @@
 
 import { chunkText } from "@theokit/gateway";
 
-const WHATSAPP_MAX_TEXT = 4096;
+export const WHATSAPP_MAX_TEXT = 4096;
 
 export function splitForWhatsApp(text: string): string[] {
   return chunkText(text, {

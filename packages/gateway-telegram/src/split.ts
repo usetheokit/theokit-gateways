@@ -3,7 +3,7 @@
  * boundaries before sending (T5.1, with EC-J markdown-pair preservation).
  */
 
-const TELEGRAM_MAX_MESSAGE = 4096;
+export const TELEGRAM_MAX_MESSAGE = 4096;
 const SAFE_CHUNK = 4000;
 
 /**
