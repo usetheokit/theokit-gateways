@@ -158,7 +158,7 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     signature: string | undefined,
     timestamp: string | undefined,
   ): Promise<YuanbaoWebhookAnswer> {
-    if (!this.verifyWebhook(rawBody, signature, timestamp)) {
+    if (!verifyYuanbaoSignature(this.opts.callbackSecret, rawBody, signature, timestamp)) {
       return { status: 401, reason: "signature mismatch" };
     }
     let parsed: unknown;
@@ -170,21 +170,7 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return { status: 400, reason: "body is not a JSON object" };
     }
-    return this.dispatchWebhookPayload(parsed as YuanbaoWebhookEvent);
-  }
-
-  /** Whether `signature` and `timestamp` sign `rawBody` with the callback secret. */
-  verifyWebhook(
-    rawBody: string,
-    signature: string | undefined,
-    timestamp: string | undefined,
-  ): boolean {
-    return verifyYuanbaoSignature(this.opts.callbackSecret, rawBody, signature, timestamp);
-  }
-
-  /** Dispatch a payload whose signature was already verified; the tail of `handleWebhook`. */
-  async dispatchWebhookPayload(parsed: YuanbaoWebhookEvent): Promise<YuanbaoWebhookAnswer> {
-    const event = toMessageEvent(parsed);
+    const event = toMessageEvent(parsed as YuanbaoWebhookEvent);
     if (event === undefined) return { status: 200, reason: "not a text message" };
     const outcome = await this.dispatchOnce(this.seen, event, LABEL);
     if (outcome === "no_handler") return { status: 503, reason: "no handler subscribed" };

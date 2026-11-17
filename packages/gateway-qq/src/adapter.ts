@@ -190,23 +190,9 @@ export class QQAdapter extends BasePlatformAdapter {
     }
     // The URL validation (op 13) is signed by us, not by QQ: QQ checks our answer.
     if (payload.op === 13) return this.validation(payload);
-    if (!this.verifyWebhook(rawBody, signature, timestamp)) {
+    if (!verifyQQSignature(this.opts.appSecret, rawBody, signature, timestamp)) {
       return { status: 401, reason: "signature mismatch" };
     }
-    return this.dispatchWebhookPayload(payload);
-  }
-
-  /** Whether `signature` and `timestamp` sign `rawBody` with this adapter's app secret. */
-  verifyWebhook(
-    rawBody: string,
-    signature: string | undefined,
-    timestamp: string | undefined,
-  ): boolean {
-    return verifyQQSignature(this.opts.appSecret, rawBody, signature, timestamp);
-  }
-
-  /** Dispatch a payload whose signature was already verified; the tail of `handleWebhook`. */
-  async dispatchWebhookPayload(payload: QQWebhookPayload): Promise<QQWebhookAnswer> {
     const event = toMessageEvent(payload);
     if (event === undefined) return { status: 200, reason: "not a direct text message" };
     // Before dispatch: the handler's reply is the one that answers this message.

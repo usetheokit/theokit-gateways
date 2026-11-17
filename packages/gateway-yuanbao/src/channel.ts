@@ -6,11 +6,11 @@
  * object is structurally a `ChannelDescriptor`.
  */
 
-import type { IngestResult, WebhookRequest } from "@theokit/gateway";
+import type { WebhookAnswer, WebhookRequest } from "@theokit/gateway";
 import { GatewayConfigurationError } from "@theokit/gateway";
 
 import { YuanbaoAdapter } from "./adapter.js";
-import type { YuanbaoFetch, YuanbaoWebhookEvent } from "./types.js";
+import type { YuanbaoFetch } from "./types.js";
 
 const ORIGIN = "gateway-yuanbao";
 
@@ -96,8 +96,10 @@ function header(request: WebhookRequest, name: string): string | undefined {
  * The Yuanbao channel.
  *
  * Yuanbao delivers inbound events by signed webhook and the adapter opens no connection or listener of
- * its own, so `transport` is `"webhook"`. `webhook.verify` checks the signature headers against the
- * raw body and `webhook.ingest` dispatches a verified payload through the adapter.
+ * its own, so `transport` is `"webhook"`. The route runs `webhook.handle`, which passes the raw body
+ * and signature headers to `YuanbaoAdapter.handleWebhook` and returns its status. `webhook.verify` and
+ * `webhook.ingest` are unused fail-closed stubs: the signature covers the raw body and the answer
+ * may carry a body, which only `handle` can serve.
  *
  * `create` refuses a missing, empty or non-string value with a `GatewayConfigurationError` coded
  * `invalid_config` that names the key; it performs no network call.
@@ -119,19 +121,22 @@ export const yuanbaoChannel = {
     });
   },
   webhook: {
-    verify(adapter: YuanbaoAdapter, request: WebhookRequest): boolean {
-      return adapter.verifyWebhook(
+    verify(): boolean {
+      return false;
+    },
+    ingest(): Promise<"malformed"> {
+      return Promise.resolve("malformed");
+    },
+    async handle(adapter: YuanbaoAdapter, request: WebhookRequest): Promise<WebhookAnswer> {
+      const answer = await adapter.handleWebhook(
         request.rawBody,
         header(request, "x-signature"),
         header(request, "x-timestamp"),
       );
-    },
-    async ingest(adapter: YuanbaoAdapter, payload: unknown): Promise<IngestResult> {
-      if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
-        return "malformed";
-      }
-      const answer = await adapter.dispatchWebhookPayload(payload as YuanbaoWebhookEvent);
-      return answer.status === 503 ? "no_handler" : "delivered";
+      const body = "body" in answer && answer.body !== undefined ? answer.body : undefined;
+      return body === undefined
+        ? { status: answer.status }
+        : { status: answer.status, body: JSON.stringify(body), contentType: "application/json" };
     },
   },
 };

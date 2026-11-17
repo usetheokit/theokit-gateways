@@ -6,11 +6,11 @@
  * object is structurally a `ChannelDescriptor`.
  */
 
-import type { IngestResult, WebhookAnswer, WebhookRequest } from "@theokit/gateway";
+import type { WebhookAnswer, WebhookRequest } from "@theokit/gateway";
 import { GatewayConfigurationError } from "@theokit/gateway";
 
 import { QQAdapter } from "./adapter.js";
-import type { QQFetch, QQWebhookPayload } from "./types.js";
+import type { QQFetch } from "./types.js";
 
 const ORIGIN = "gateway-qq";
 
@@ -97,9 +97,10 @@ function header(request: WebhookRequest, name: string): string | undefined {
  * The QQ channel.
  *
  * QQ delivers inbound events by signed webhook and the adapter opens no connection or listener of
- * its own, so `transport` is `"webhook"`. `webhook.verify` checks the signature headers against the
- * raw body and `webhook.ingest` dispatches a verified payload through the adapter. QQ also sets `webhook.handle`, because its callback URL validation (op 13)
- * is answered with a signed body that only `handleWebhook` produces.
+ * its own, so `transport` is `"webhook"`. The route runs `webhook.handle`, which passes the raw body
+ * and signature headers to `QQAdapter.handleWebhook` and returns its status. `webhook.verify` and
+ * `webhook.ingest` are unused fail-closed stubs: the signature covers the raw body and the answer
+ * may carry a body, which only `handle` can serve.
  *
  * `create` refuses a missing, empty or non-string value with a `GatewayConfigurationError` coded
  * `invalid_config` that names the key; it performs no network call.
@@ -121,20 +122,11 @@ export const qqChannel = {
     });
   },
   webhook: {
-    verify(adapter: QQAdapter, request: WebhookRequest): boolean {
-      return adapter.verifyWebhook(
-        request.rawBody,
-        header(request, "x-signature-ed25519"),
-        header(request, "x-signature-timestamp"),
-      );
+    verify(): boolean {
+      return false;
     },
-    async ingest(adapter: QQAdapter, payload: unknown): Promise<IngestResult> {
-      if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
-        return "malformed";
-      }
-    if ((payload as QQWebhookPayload).op === 13) return "malformed";
-      const answer = await adapter.dispatchWebhookPayload(payload as QQWebhookPayload);
-      return answer.status === 503 ? "no_handler" : "delivered";
+    ingest(): Promise<"malformed"> {
+      return Promise.resolve("malformed");
     },
     async handle(adapter: QQAdapter, request: WebhookRequest): Promise<WebhookAnswer> {
       const answer = await adapter.handleWebhook(
@@ -142,13 +134,10 @@ export const qqChannel = {
         header(request, "x-signature-ed25519"),
         header(request, "x-signature-timestamp"),
       );
-      return answer.body === undefined
+      const body = "body" in answer && answer.body !== undefined ? answer.body : undefined;
+      return body === undefined
         ? { status: answer.status }
-        : {
-            status: answer.status,
-            body: JSON.stringify(answer.body),
-            contentType: "application/json",
-          };
+        : { status: answer.status, body: JSON.stringify(body), contentType: "application/json" };
     },
   },
 };

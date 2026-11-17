@@ -47,7 +47,7 @@ are written from Zalo's OA documentation and tested against a scripted fake.
 
 ## Channel descriptor
 
-`zaloChannel` describes this channel as data for `createChannels` and `configFromEnv` from `@theokit/gateway`. Its `transport` is `"webhook"`: the adapter opens no connection or listener of its own, and `webhook.verify` and `webhook.ingest` check a request's signature and dispatch its payload.
+`zaloChannel` describes this channel as data for `createChannels` and `configFromEnv` from `@theokit/gateway`. Its `transport` is `"socket"` for now (no `webhook` half yet): the app still routes inbound webhooks to the adapter itself.
 
 ```ts
 import { configFromEnv, createChannels } from "@theokit/gateway";

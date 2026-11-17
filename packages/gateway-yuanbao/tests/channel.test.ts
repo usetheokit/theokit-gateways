@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import { YuanbaoAdapter } from "../src/adapter.js";
 import { yuanbaoChannel } from "../src/channel.js";
-import { computeYuanbaoSignature } from "../src/signature.js";
 
 const ENV: Record<string, string> = {
   APP_YUANBAO_APP_ID: "appId-value",
@@ -153,24 +152,10 @@ describe("yuanbaoChannel", () => {
     expect((thrown as Error).message).toContain("fetch");
   });
 
-  it("is a webhook channel whose verify and ingest follow the adapter", async () => {
+  it("is a webhook channel whose handle refuses an unsigned request with 401", async () => {
     expect(yuanbaoChannel.transport).toBe("webhook");
     const adapter = yuanbaoChannel.create(VALID);
-    const body = JSON.stringify({
-      type: "message",
-      message: { id: "m1", text: "hi", from: { id: "u1" } },
-    });
-    const ts = String(Math.floor(Date.now() / 1000));
-    const signed = { "X-Signature": computeYuanbaoSignature("x", ts, body), "x-timestamp": ts };
-    const unsigned = { "x-signature": "00", "x-timestamp": ts };
-    expect(yuanbaoChannel.webhook.verify(adapter, { rawBody: body, headers: signed })).toBe(true);
-    expect(yuanbaoChannel.webhook.verify(adapter, { rawBody: body, headers: unsigned })).toBe(false);
-    expect(await yuanbaoChannel.webhook.ingest(adapter, JSON.parse(body))).toBe("no_handler");
-    const seen: string[] = [];
-    adapter.onInbound(async (e) => void seen.push(e.text));
-    expect(await yuanbaoChannel.webhook.ingest(adapter, JSON.parse(body))).toBe("delivered");
-    expect(seen).toEqual(["hi"]);
-    expect(await yuanbaoChannel.webhook.ingest(adapter, [])).toBe("malformed");
-    expect(await yuanbaoChannel.webhook.ingest(adapter, null)).toBe("malformed");
+    const answer = await yuanbaoChannel.webhook.handle(adapter, { rawBody: "{}", headers: {} });
+    expect(answer.status).toBe(401);
   });
 });
