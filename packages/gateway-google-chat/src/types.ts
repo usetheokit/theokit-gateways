@@ -53,6 +53,13 @@ export interface GoogleChatAdapterOptions {
    * later `connect()` mounts it again; the first one still answers.
    */
   readonly app?: Express;
+  /**
+   * `"listener"` (default): `connect()` starts the webhook listener, or mounts the route on `app`.
+   * `"external"`: `connect()` fetches the first access token and opens nothing, and `express` is
+   * not loaded; the host routes requests to `handleRequest()`. Giving `app` or `port` with
+   * `"external"` throws `GatewayConfigurationError` (`conflicting_webhook_options`).
+   */
+  readonly webhook?: "listener" | "external";
   /** Path of the webhook route. Default `/google-chat`. */
   readonly path?: string;
   /** How long `connect()` waits for the first access token. Default 10000 ms. */

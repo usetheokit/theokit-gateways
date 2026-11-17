@@ -15,6 +15,7 @@ import { createPrivateKey, type KeyObject } from "node:crypto";
 import {
   BasePlatformAdapter,
   channelRendering,
+  GatewayConfigurationError,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
   type SendResult,
@@ -67,6 +68,7 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
 
   constructor(opts: GoogleChatAdapterOptions) {
     super();
+    refuseConflictingWebhookOptions(opts);
     this.opts = opts;
     this.fetchFn = opts.fetch ?? ((input, init) => fetch(input, init));
     this.now = opts.now ?? Date.now;
@@ -253,27 +255,36 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
     if (tokens === undefined) return false;
     if (!(await this.firstToken(tokens))) return false;
     if (generation !== this.generation) return overtaken();
-    let server: WebhookServer;
+    let server: WebhookServer | undefined;
+    if (this.opts.webhook !== "external") {
+      server = await this.startListener();
+      if (server === undefined) return false;
+      if (generation !== this.generation) {
+        await server.stop();
+        return overtaken();
+      }
+    }
+    this.server = server;
+    this.tokens = tokens;
+    this.connected = true;
+    return true;
+  }
+
+  /** The started listener, or `undefined` (after writing why) when it did not start. */
+  private async startListener(): Promise<WebhookServer | undefined> {
     try {
-      server = await createWebhookServer({
+      const server = await createWebhookServer({
         adapter: this,
         ...(this.opts.path === undefined ? {} : { path: this.opts.path }),
         ...(this.opts.port === undefined ? {} : { port: this.opts.port }),
         ...(this.opts.app === undefined ? {} : { app: this.opts.app }),
       });
       await server.start();
+      return server;
     } catch (err) {
       process.stderr.write(`[${LABEL}] connect failed: listener did not start: ${message(err)}\n`);
-      return false;
+      return undefined;
     }
-    if (generation !== this.generation) {
-      await server.stop();
-      return overtaken();
-    }
-    this.server = server;
-    this.tokens = tokens;
-    this.connected = true;
-    return true;
   }
 
   /** Whether the first token arrives within `connectTimeoutMs`; the exchange is aborted if not. */
@@ -312,4 +323,17 @@ function overtaken(): false {
 
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** `webhook: "external"` opens no listener, so `app` and `port` would be silently ignored. */
+function refuseConflictingWebhookOptions(opts: GoogleChatAdapterOptions): void {
+  if (opts.webhook !== "external") return;
+  const given = [opts.app === undefined ? "" : "app", opts.port === undefined ? "" : "port"].filter(
+    (name) => name !== "",
+  );
+  if (given.length === 0) return;
+  throw new GatewayConfigurationError("gateway-google-chat", {
+    code: "conflicting_webhook_options",
+    message: `gateway-google-chat: webhook "external" opens no listener, so ${given.join(" and ")} would be ignored; remove ${given.join(" and ")} or use webhook "listener"`,
+  });
 }

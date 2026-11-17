@@ -70,6 +70,27 @@ Express app passed to each as `app`; with `app` the adapter mounts its route the
 `listen`. A request with no bearer token is refused with 401 before its body is read, and a body
 over 1 MiB with 413 and `{"error":"request body too large"}`.
 
+### Serving the webhook from your own route
+
+Pass `webhook: "external"` when your app already has an HTTP server (a Fetch handler, Hono, a
+serverless function). `connect()` then fetches the first access token and opens nothing; no port is
+bound and `express` is not loaded. Your route passes each request to `handleRequest`:
+
+```ts
+const adapter = new GoogleChatAdapter({ serviceAccountEmail, privateKey, audience, webhook: "external" });
+await adapter.connect();
+
+// in your route:
+const authorization = request.headers.get("authorization") ?? undefined;
+if (authorization === undefined) return new Response(null, { status: 401 });
+const rawBody = await request.text(); // refuse over 1 MiB with 413 first
+const { status, body } = await adapter.handleRequest(authorization, rawBody);
+return Response.json(body, { status });
+```
+
+Give `rawBody` as received: the token is verified against it. `webhook: "external"` together with
+`app` or `port` throws `GatewayConfigurationError` with code `conflicting_webhook_options`.
+
 `audience` must be exactly the HTTP endpoint URL configured for the app in the Google Cloud
 console (Chat API → Configuration). A trailing slash on one side and not the other refuses every
 request.
