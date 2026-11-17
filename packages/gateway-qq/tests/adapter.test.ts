@@ -1,7 +1,14 @@
 import crypto from "node:crypto";
 import { GatewayRunner } from "@theokit/gateway";
 import { afterEach, describe, expect, it } from "vitest";
-import { QQAdapter, type QQFetch, signQQ, splitForQQ, verifyQQSignature } from "../src/index.js";
+import {
+  QQ_MESSAGE_LIMIT,
+  QQAdapter,
+  type QQFetch,
+  signQQ,
+  splitForQQ,
+  verifyQQSignature,
+} from "../src/index.js";
 
 const SECRET = "secret";
 
@@ -268,5 +275,13 @@ describe("QQAdapter", () => {
   it("splits without empty parts", () => {
     expect(splitForQQ("")).toEqual([]);
     expect(splitForQQ("a".repeat(2001))).toHaveLength(2);
+  });
+});
+
+describe("QQAdapter.capabilities", () => {
+  it("reports the splitter limit and threads", () => {
+    const c = new QQAdapter({ appId: "a", appSecret: "s" }).capabilities;
+    expect(c.maxMessageChars).toBe(QQ_MESSAGE_LIMIT);
+    expect(c.threads).toBe(false);
   });
 });

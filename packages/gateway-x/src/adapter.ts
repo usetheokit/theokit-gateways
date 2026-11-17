@@ -6,6 +6,7 @@
  */
 
 import {
+  type AdapterCapabilities,
   BasePlatformAdapter,
   channelRendering,
   chunkByGrapheme,
@@ -65,6 +66,10 @@ function newer(a: string, b: string | undefined): boolean {
  * @public
  */
 export class XAdapter extends BasePlatformAdapter {
+  override get capabilities(): AdapterCapabilities {
+    return { ...super.capabilities, maxMessageChars: X_POST_LIMIT, threads: false };
+  }
+
   readonly platform = "x" as const;
   private readonly opts: XAdapterOptions;
   private readonly api: XApi;

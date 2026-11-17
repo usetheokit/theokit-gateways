@@ -14,7 +14,12 @@
  */
 
 import type { MessageEvent as GatewayMessageEvent, TelegramMessageEvent } from "@theokit/gateway";
-import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "@theokit/gateway";
+import {
+  type AdapterCapabilities,
+  BasePlatformAdapter,
+  type OutboundMessage,
+  type SendResult,
+} from "@theokit/gateway";
 import { Bot, type Context, GrammyError } from "grammy";
 import { type PolicyInput, shouldRespond } from "./group-policy.js";
 import { buildEvent } from "./parse-inbound.js";
@@ -28,7 +33,7 @@ import {
   sendPhotos,
   withPlainFallback,
 } from "./send-photos.js";
-import { splitForTelegram } from "./split.js";
+import { splitForTelegram, TELEGRAM_MAX_MESSAGE } from "./split.js";
 
 export interface TelegramAdapterOptions {
   /**
@@ -81,6 +86,10 @@ function policyInput(event: GatewayMessageEvent): PolicyInput {
  * id therefore has to come from an inbound message, never from the token.
  */
 export class TelegramAdapter extends BasePlatformAdapter {
+  override get capabilities(): AdapterCapabilities {
+    return { ...super.capabilities, maxMessageChars: TELEGRAM_MAX_MESSAGE, threads: true };
+  }
+
   readonly platform = "telegram" as const;
   private readonly bot: Bot;
   private readonly allowedUsers: Set<string>;

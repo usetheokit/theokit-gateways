@@ -13,6 +13,7 @@ import type {
   WhatsAppSendResult,
   WhatsAppStatusReceipt,
 } from "../src/backend-types.js";
+import { WHATSAPP_MAX_TEXT } from "../src/split.js";
 
 class FakeBackend implements WhatsAppBackend {
   readonly kind = "cloud" as const;
@@ -658,5 +659,13 @@ describe("WhatsAppAdapter — the address a reply must go to (#84)", () => {
     expect(seen[0]?.channelJid, "the reply address never reached the consumer").toBe(
       "231116569108705@lid",
     );
+  });
+});
+
+describe("WhatsAppAdapter.capabilities", () => {
+  it("reports the splitter limit and threads", () => {
+    const c = new WhatsAppAdapter({ start: async () => undefined } as never).capabilities;
+    expect(c.maxMessageChars).toBe(WHATSAPP_MAX_TEXT);
+    expect(c.threads).toBe(false);
   });
 });

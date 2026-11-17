@@ -31,6 +31,7 @@ vi.mock("@slack/bolt", () => {
 
 // Import AFTER vi.mock so the adapter resolves the mock.
 import { SlackAdapter } from "../src/adapter.js";
+import { SLACK_MAX_TEXT } from "../src/split.js";
 
 beforeEach(() => {
   startMock.mockReset().mockImplementation(async () => undefined);
@@ -542,5 +543,13 @@ describe("SlackAdapter — sendMessage guard order", () => {
 
     expect(r.ok).toBe(false);
     expect(r.error?.code).toBe("empty_text");
+  });
+});
+
+describe("SlackAdapter.capabilities", () => {
+  it("reports the splitter limit and threads", () => {
+    const c = new SlackAdapter({ botToken: "xoxb-x", appToken: "xapp-x" }).capabilities;
+    expect(c.maxMessageChars).toBe(SLACK_MAX_TEXT);
+    expect(c.threads).toBe(true);
   });
 });
