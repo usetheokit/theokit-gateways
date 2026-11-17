@@ -23,29 +23,23 @@ function invalid(key: string, expected: string): ConfigurationError {
   });
 }
 
+type Kind = "string" | "boolean";
+
+/** Reads `key`; `undefined`, `null` and `""` are absent. A boolean may be the string "true"/"false". */
+function read(config: Config, key: string, kind: Kind): string | boolean | undefined {
+  const value = config[key];
+  if (value === undefined || value === null || value === "") return undefined;
+  if (kind === "string" && typeof value === "string") return value;
+  if (kind === "boolean" && typeof value === "boolean") return value;
+  if (kind === "boolean" && (value === "true" || value === "false")) return value === "true";
+  throw invalid(key, kind === "string" ? "a string" : 'a boolean or the string "true" or "false"');
+}
+
 /** A required string; an empty one is left for the adapter's own check, which names it. */
 function requiredString(config: Config, key: string): string {
-  const value = config[key];
+  const value = config[key] === "" ? "" : read(config, key, "string");
   if (typeof value !== "string") throw invalid(key, "a string");
   return value;
-}
-
-/** An optional string: `undefined`, `null` and `""` are absent. */
-function optionalString(config: Config, key: string): string | undefined {
-  const value = config[key];
-  if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return value;
-}
-
-/** An optional boolean, as a boolean or the strings `"true"` / `"false"`. */
-function optionalBoolean(config: Config, key: string): boolean | undefined {
-  const value = config[key];
-  if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value === "boolean") return value;
-  if (value === "true") return true;
-  if (value === "false") return false;
-  throw invalid(key, 'a boolean or the string "true" or "false"');
 }
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
@@ -118,8 +112,8 @@ const BAILEYS_CONFIG: ReadonlyArray<ConfigField> = [
 ];
 
 function common(config: Config): { requireMention?: boolean; botPhoneId?: string } {
-  const requireMention = optionalBoolean(config, "requireMention");
-  const botPhoneId = optionalString(config, "botPhoneId");
+  const requireMention = read(config, "requireMention", "boolean") as boolean | undefined;
+  const botPhoneId = read(config, "botPhoneId", "string") as string | undefined;
   return {
     ...(requireMention === undefined ? {} : { requireMention }),
     ...(botPhoneId === undefined ? {} : { botPhoneId }),
@@ -130,7 +124,7 @@ function createCloud(config: Config): WhatsAppAdapter {
   const accessToken = requiredString(config, "accessToken");
   const phoneNumberId = requiredString(config, "phoneNumberId");
   const appSecret = requiredString(config, "appSecret");
-  optionalString(config, "verifyToken");
+  read(config, "verifyToken", "string");
   const opts = common(config);
   return WhatsAppAdapter.from(
     { backend: "cloud", cloud: { accessToken, phoneNumberId, appSecret } },

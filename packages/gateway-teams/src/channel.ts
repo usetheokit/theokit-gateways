@@ -21,29 +21,19 @@ function invalid(key: string, expected: string): GatewayConfigurationError {
   });
 }
 
-function requiredString(config: Config, key: string): string {
+/** Reads `key` as a string (or boolean); `""`, `null` and `undefined` count as absent. */
+function read(config: Config, key: string, required: boolean, boolean = false): unknown {
   const value = config[key];
-  if (typeof value !== "string") throw invalid(key, "a string");
-  // The adapter's own check for an empty value throws a plain TypeError, which `createChannels`
-  // would rethrow as a defect instead of reporting the channel as rejected.
-  if (value.length === 0) throw invalid(key, "a non-empty string");
-  return value;
-}
-
-function optionalString(config: Config, key: string): string | undefined {
-  const value = config[key];
-  if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return value;
-}
-
-/** An optional boolean, as a boolean or the strings `"true"` / `"false"`. */
-function optionalBoolean(config: Config, key: string): boolean | undefined {
-  const value = config[key];
-  if (value === undefined || value === null || value === "") return undefined;
+  if (value === undefined || value === null || value === "") {
+    if (required) throw invalid(key, "a non-empty string");
+    return undefined;
+  }
+  if (!boolean) {
+    if (typeof value === "string") return value;
+    throw invalid(key, "a string");
+  }
   if (typeof value === "boolean") return value;
-  if (value === "true") return true;
-  if (value === "false") return false;
+  if (value === "true" || value === "false") return value === "true";
   throw invalid(key, 'a boolean or the string "true" or "false"');
 }
 
@@ -108,15 +98,13 @@ export const teamsChannel = {
   senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Config): TeamsAdapter {
-    const clientId = requiredString(config, "clientId");
-    const clientSecret = requiredString(config, "clientSecret");
-    const tenantId = requiredString(config, "tenantId");
-    const botDisplayName = optionalString(config, "botDisplayName");
-    const requireMention = optionalBoolean(config, "requireMention");
+    const str = (key: string, required = false) => read(config, key, required) as string;
+    const botDisplayName = str("botDisplayName") as string | undefined;
+    const requireMention = read(config, "requireMention", false, true) as boolean | undefined;
     const options: TeamsAdapterOptions = {
-      clientId,
-      clientSecret,
-      tenantId,
+      clientId: str("clientId", true),
+      clientSecret: str("clientSecret", true),
+      tenantId: str("tenantId", true),
       ...(botDisplayName === undefined ? {} : { botDisplayName }),
       ...(requireMention === undefined ? {} : { requireMention }),
     };

@@ -43,7 +43,7 @@
   },
   "peerDependencies": {
     "@microsoft/teams.apps": "^2.0.0",
-    "@theokit/gateway": ">=0.20.0 <1.0.0"
+    "@theokit/gateway": ">=0.19.0 <1.0.0"
   },
   "devDependencies": {
     "@microsoft/teams.apps": "^2.0.15",
