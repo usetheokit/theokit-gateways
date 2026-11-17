@@ -35,7 +35,7 @@ function invalid(key: string, expected: string): ConfigurationError {
 }
 
 function absent(value: unknown): boolean {
-  return value === undefined || value === null;
+  return value === undefined;
 }
 
 function readString(config: Config, key: string): string | undefined {
@@ -74,6 +74,27 @@ function readNumber(config: Config, key: string): number | undefined {
   throw invalid(key, "a number or a digit string");
 }
 
+function readFunction(config: Config, key: string): ((...args: never[]) => unknown) | undefined {
+  const value = config[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "function") throw invalid(key, "a function");
+  return value as (...args: never[]) => unknown;
+}
+
+function readClient(config: Config): NostrAdapterOptions["client"] {
+  const value = config.client;
+  if (value === undefined) return undefined;
+  const methods = ["open", "subscribe", "publish", "close"];
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !methods.every((m) => typeof (value as Record<string, unknown>)[m] === "function")
+  ) {
+    throw invalid("client", "an object with open, subscribe, publish and close functions");
+  }
+  return value as NostrAdapterOptions["client"];
+}
+
 /** Keep only the keys whose value is defined. */
 function defined<T extends object>(options: T): T {
   return Object.fromEntries(Object.entries(options).filter(([, v]) => v !== undefined)) as T;
@@ -84,7 +105,7 @@ interface ConfigField {
   readonly key: string;
   readonly required: boolean;
   readonly secret: boolean;
-  readonly env: string;
+  readonly env?: string;
   readonly description: string;
 }
 
@@ -111,12 +132,25 @@ const CONFIG: ReadonlyArray<ConfigField> = [
     description:
       "Unix seconds before which a direct message is not answered; default the time of construction.",
   },
+  {
+    key: "socketFactory",
+    required: false,
+    secret: false,
+    description: "Programmatic only, no env binding: a function that opens a relay socket.",
+  },
+  {
+    key: "client",
+    required: false,
+    secret: false,
+    description:
+      "Programmatic only, no env binding: a relay client (open, subscribe, publish, close).",
+  },
 ];
 
 /**
  * The Nostr channel: the adapter opens its own relay sockets in `connect()`, so it needs no
- * webhook route. `create` validates each value and makes no network call; the `socketFactory` and
- * `client` test seams are not config fields.
+ * webhook route. `create` validates each value and makes no network call; `socketFactory` and
+ * `client` are programmatic fields with no env binding.
  *
  * @public
  */
@@ -132,6 +166,8 @@ export const nostrChannel = {
       secretKey: readRequiredString(config, "secretKey"),
       relays,
       ignoreBefore: readNumber(config, "ignoreBefore"),
+      socketFactory: readFunction(config, "socketFactory") as NostrAdapterOptions["socketFactory"],
+      client: readClient(config),
     });
     try {
       return new NostrAdapter(options);

@@ -33,7 +33,7 @@ function invalid(key: string, expected: string): ConfigurationError {
 }
 
 function absent(value: unknown): boolean {
-  return value === undefined || value === null;
+  return value === undefined;
 }
 
 function readString(config: Config, key: string): string | undefined {
@@ -81,6 +81,13 @@ function readNumber(config: Config, key: string): number | undefined {
   throw invalid(key, "a number or a digit string");
 }
 
+function readFunction(config: Config, key: string): ((...args: never[]) => unknown) | undefined {
+  const value = config[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "function") throw invalid(key, "a function");
+  return value as (...args: never[]) => unknown;
+}
+
 /** Keep only the keys whose value is defined. */
 function defined<T extends object>(options: T): T {
   return Object.fromEntries(Object.entries(options).filter(([, v]) => v !== undefined)) as T;
@@ -91,7 +98,7 @@ interface ConfigField {
   readonly key: string;
   readonly required: boolean;
   readonly secret: boolean;
-  readonly env: string;
+  readonly env?: string;
   readonly description: string;
 }
 
@@ -173,12 +180,18 @@ const CONFIG: ReadonlyArray<ConfigField> = [
     env: "IRC_CONNECT_TIMEOUT_MS",
     description: "How long connect() waits for registration and every join; default 10000.",
   },
+  {
+    key: "socketFactory",
+    required: false,
+    secret: false,
+    description:
+      "Programmatic only, no env binding: a function that opens the connection, given the endpoint.",
+  },
 ];
 
 /**
  * The IRC channel: the adapter opens its own connection in `connect()`, so it needs no webhook
- * route. `create` validates each value and makes no network call; the `socketFactory` test seam is
- * not a config field.
+ * route. `create` validates each value and makes no network call; `socketFactory` is a programmatic field with no env binding.
  *
  * @public
  */
@@ -202,6 +215,7 @@ export const ircChannel = {
       saslAccount: readString(config, "saslAccount"),
       saslPassword: readString(config, "saslPassword"),
       connectTimeoutMs: readNumber(config, "connectTimeoutMs"),
+      socketFactory: readFunction(config, "socketFactory") as IrcAdapterOptions["socketFactory"],
     });
     try {
       return new IrcAdapter(options);

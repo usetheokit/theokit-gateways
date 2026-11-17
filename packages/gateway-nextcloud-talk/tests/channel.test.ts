@@ -67,11 +67,9 @@ describe("nextcloudTalkChannel", () => {
     }
   });
 
-  it("lists exactly the secret fields in configFromEnv secrets", () => {
-    const { config, secrets } = configFromEnv(nextcloudTalkChannel, ALL_ENV, PREFIX);
-    const secretKeys = nextcloudTalkChannel.config.filter((f) => f.secret).map((f) => f.key);
-    expect([...secrets].sort()).toEqual(secretKeys.map((k) => config[k] as string).sort());
-    expect(secrets).toHaveLength(secretKeys.length);
+  it("lists exactly the expected secret values in configFromEnv secrets", () => {
+    const { secrets } = configFromEnv(nextcloudTalkChannel, ALL_ENV, PREFIX);
+    expect([...secrets].sort()).toEqual([SECRET].sort());
   });
 });
 
@@ -90,5 +88,25 @@ describe("nextcloudTalkChannel conversions", () => {
     expect(() =>
       nextcloudTalkChannel.create({ baseUrl: "https://c.example", secret: "short" }),
     ).toThrow(ConfigurationError);
+  });
+});
+
+describe("nextcloudTalkChannel null and programmatic fields", () => {
+  const base = { baseUrl: "https://c.example", secret: SECRET };
+  for (const key of ["port", "path", "connectTimeoutMs", "app", "fetch"]) {
+    it(`refuses an explicit null ${key}`, () => {
+      expect(() => nextcloudTalkChannel.create({ ...base, [key]: null })).toThrow(new RegExp(key));
+    });
+  }
+  it("refuses an app that is not a function", () => {
+    expect(() => nextcloudTalkChannel.create({ ...base, app: {} })).toThrow(/app/);
+  });
+  it("passes app and fetch to the adapter", () => {
+    const app = Object.assign(() => undefined, { post: () => undefined, use: () => undefined });
+    const fetchFn = async () => new Response("{}");
+    const adapter = nextcloudTalkChannel.create({ ...base, app, fetch: fetchFn });
+    expect(adapter).toBeInstanceOf(NextcloudTalkAdapter);
+    expect((adapter as unknown as { opts: { app: unknown } }).opts.app).toBe(app);
+    expect((adapter as unknown as { fetchFn: unknown }).fetchFn).toBeTypeOf("function");
   });
 });

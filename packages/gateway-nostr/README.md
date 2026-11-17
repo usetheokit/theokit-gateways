@@ -128,7 +128,7 @@ const { config, missing, secrets } = configFromEnv(nostrChannel, process.env, "A
 const { adapters, rejected } = createChannels([{ descriptor: nostrChannel, config }]);
 ```
 
-List values accept an array or a comma-separated string, booleans `true`/`false`, numbers a number or a digit string. Test seams and objects (not representable in the environment) are not config fields.
+List values accept an array or a comma-separated string, booleans `true`/`false`, numbers a number or a digit string. Programmatic fields (`socketFactory`, `app`, `fetch`, `client`, whichever the package has) take a function or object and have no env variable.
 
 | Variable | Config key | Required | Secret |
 | --- | --- | --- | --- |

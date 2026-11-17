@@ -70,11 +70,9 @@ describe("ircChannel", () => {
     }
   });
 
-  it("lists exactly the secret fields in configFromEnv secrets", () => {
-    const { config, secrets } = configFromEnv(ircChannel, ALL_ENV, PREFIX);
-    const secretKeys = ircChannel.config.filter((f) => f.secret).map((f) => f.key);
-    expect([...secrets].sort()).toEqual(secretKeys.map((k) => config[k] as string).sort());
-    expect(secrets).toHaveLength(secretKeys.length);
+  it("lists exactly the expected secret values in configFromEnv secrets", () => {
+    const { secrets } = configFromEnv(ircChannel, ALL_ENV, PREFIX);
+    expect([...secrets].sort()).toEqual(["server-pass", "sasl-pass"].sort());
   });
 });
 
@@ -96,5 +94,29 @@ describe("ircChannel conversions", () => {
   });
   it("reports a malformed channel as invalid_config", () => {
     expect(() => ircChannel.create({ ...base, channels: ["nohash"] })).toThrow(ConfigurationError);
+  });
+});
+
+describe("ircChannel null and programmatic fields", () => {
+  const base = { host: "irc.example.org", nick: "theobot", channels: ["#a"] };
+  for (const key of ["port", "tls", "username", "password", "connectTimeoutMs", "socketFactory"]) {
+    it(`refuses an explicit null ${key}`, () => {
+      expect(() => ircChannel.create({ ...base, [key]: null })).toThrow(new RegExp(key));
+    });
+  }
+  it("refuses a socketFactory that is not a function", () => {
+    expect(() => ircChannel.create({ ...base, socketFactory: "x" })).toThrow(/socketFactory/);
+  });
+  it("passes socketFactory to the adapter", async () => {
+    let called = false;
+    const adapter = ircChannel.create({
+      ...base,
+      socketFactory: () => {
+        called = true;
+        throw new Error("stop");
+      },
+    });
+    await adapter.connect();
+    expect(called).toBe(true);
   });
 });

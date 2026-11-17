@@ -33,7 +33,7 @@ function invalid(key: string, expected: string): ConfigurationError {
 }
 
 function absent(value: unknown): boolean {
-  return value === undefined || value === null;
+  return value === undefined;
 }
 
 function readString(config: Config, key: string): string | undefined {
@@ -57,6 +57,13 @@ function readNumber(config: Config, key: string): number | undefined {
   throw invalid(key, "a number or a digit string");
 }
 
+function readFunction(config: Config, key: string): ((...args: never[]) => unknown) | undefined {
+  const value = config[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "function") throw invalid(key, "a function");
+  return value as (...args: never[]) => unknown;
+}
+
 /** Keep only the keys whose value is defined. */
 function defined<T extends object>(options: T): T {
   return Object.fromEntries(Object.entries(options).filter(([, v]) => v !== undefined)) as T;
@@ -67,7 +74,7 @@ interface ConfigField {
   readonly key: string;
   readonly required: boolean;
   readonly secret: boolean;
-  readonly env: string;
+  readonly env?: string;
   readonly description: string;
 }
 
@@ -107,12 +114,24 @@ const CONFIG: ReadonlyArray<ConfigField> = [
     env: "NEXTCLOUD_TALK_CONNECT_TIMEOUT_MS",
     description: "How long connect() waits for the capabilities read; default 10000.",
   },
+  {
+    key: "app",
+    required: false,
+    secret: false,
+    description: "Programmatic only, no env binding: an Express app to mount the webhook route on.",
+  },
+  {
+    key: "fetch",
+    required: false,
+    secret: false,
+    description: "Programmatic only, no env binding: the fetch function used for requests.",
+  },
 ];
 
 /**
  * The Nextcloud Talk channel: the adapter starts its own webhook listener in `connect()`, so the
- * transport is `"socket"`. `create` validates each value and makes no network call; the `app` and
- * `fetch` options are programmatic and not config fields.
+ * transport is `"socket"`. `create` validates each value and makes no network call; `app` and `fetch`
+ * are programmatic fields with no env binding.
  *
  * @public
  */
@@ -127,6 +146,8 @@ export const nextcloudTalkChannel = {
       port: readNumber(config, "port"),
       path: readString(config, "path"),
       connectTimeoutMs: readNumber(config, "connectTimeoutMs"),
+      app: readFunction(config, "app") as NextcloudTalkAdapterOptions["app"],
+      fetch: readFunction(config, "fetch") as NextcloudTalkAdapterOptions["fetch"],
     });
     try {
       return new NextcloudTalkAdapter(options);

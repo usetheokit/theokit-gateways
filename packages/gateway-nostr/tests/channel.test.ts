@@ -62,11 +62,9 @@ describe("nostrChannel", () => {
     }
   });
 
-  it("lists exactly the secret fields in configFromEnv secrets", () => {
-    const { config, secrets } = configFromEnv(nostrChannel, ALL_ENV, PREFIX);
-    const secretKeys = nostrChannel.config.filter((f) => f.secret).map((f) => f.key);
-    expect([...secrets].sort()).toEqual(secretKeys.map((k) => config[k] as string).sort());
-    expect(secrets).toHaveLength(secretKeys.length);
+  it("lists exactly the expected secret values in configFromEnv secrets", () => {
+    const { secrets } = configFromEnv(nostrChannel, ALL_ENV, PREFIX);
+    expect([...secrets].sort()).toEqual([KEY].sort());
   });
 });
 
@@ -89,5 +87,22 @@ describe("nostrChannel conversions", () => {
       /relays/,
     );
     expect(() => nostrChannel.create({ secretKey: KEY, relays: "" })).toThrow(/relays/);
+  });
+});
+
+describe("nostrChannel null and programmatic fields", () => {
+  const base = { secretKey: KEY, relays: ["wss://r.example"] };
+  for (const key of ["ignoreBefore", "socketFactory", "client"]) {
+    it(`refuses an explicit null ${key}`, () => {
+      expect(() => nostrChannel.create({ ...base, [key]: null })).toThrow(new RegExp(key));
+    });
+  }
+  it("refuses a client without the relay methods", () => {
+    expect(() => nostrChannel.create({ ...base, client: {} })).toThrow(/client/);
+  });
+  it("passes client to the adapter", () => {
+    const client = { open: () => {}, subscribe: () => {}, publish: () => {}, close: () => {} };
+    const adapter = nostrChannel.create({ ...base, client });
+    expect((adapter as unknown as { client: unknown }).client).toBe(client);
   });
 });
