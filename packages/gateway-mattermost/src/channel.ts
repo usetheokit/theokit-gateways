@@ -5,6 +5,8 @@
  * package's typecheck is where a drift between the two fails.
  */
 
+import { createConfigReaders } from "@theokit/gateway";
+
 import { MattermostAdapter } from "./adapter.js";
 import { ConfigurationError } from "./errors.js";
 
@@ -16,25 +18,7 @@ function invalid(key: string, expected: string): ConfigurationError {
   });
 }
 
-function isAbsent(value: unknown): boolean {
-  return value === undefined;
-}
-
-function readString(config: Readonly<Record<string, unknown>>, key: string): string {
-  const value = config[key];
-  if (typeof value !== "string") throw invalid(key, "a string");
-  if (value.trim().length === 0) throw invalid(key, "a non-empty string");
-  return value;
-}
-
-function readBoolean(config: Readonly<Record<string, unknown>>, key: string): boolean | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value === "boolean") return value;
-  if (value === "true") return true;
-  if (value === "false") return false;
-  throw invalid(key, 'a boolean or the string "true" or "false"');
-}
+const read = createConfigReaders(invalid);
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
 interface ConfigField {
@@ -82,9 +66,9 @@ export const mattermostChannel = {
   senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): MattermostAdapter {
-    const baseUrl = readString(config, "baseUrl");
-    const accessToken = readString(config, "accessToken");
-    const requireMention = readBoolean(config, "requireMention");
+    const baseUrl = read.string(config, "baseUrl");
+    const accessToken = read.string(config, "accessToken");
+    const requireMention = read.boolean(config, "requireMention");
     return new MattermostAdapter({
       baseUrl,
       accessToken,

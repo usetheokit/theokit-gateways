@@ -5,6 +5,8 @@
  * package's typecheck is where a drift between the two fails.
  */
 
+import { createConfigReaders } from "@theokit/gateway";
+
 import { MatrixAdapter } from "./adapter.js";
 import { ConfigurationError } from "./errors.js";
 import type { MatrixAdapterOptions } from "./types.js";
@@ -17,35 +19,10 @@ function invalid(key: string, expected: string): ConfigurationError {
   });
 }
 
+const read = createConfigReaders(invalid);
+
 function isAbsent(value: unknown): boolean {
   return value === undefined;
-}
-
-function readString(config: Readonly<Record<string, unknown>>, key: string): string {
-  const value = config[key];
-  if (typeof value !== "string") throw invalid(key, "a string");
-  if (value.trim().length === 0) throw invalid(key, "a non-empty string");
-  return value;
-}
-
-function readBoolean(config: Readonly<Record<string, unknown>>, key: string): boolean | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value === "boolean") return value;
-  if (value === "true") return true;
-  if (value === "false") return false;
-  throw invalid(key, 'a boolean or the string "true" or "false"');
-}
-
-function readNumber(config: Readonly<Record<string, unknown>>, key: string): number | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && /^[0-9]+$/.test(value.trim())) {
-    const parsed = Number(value.trim());
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  throw invalid(key, "a number or a digit string");
 }
 
 function readAcceptInvite(
@@ -123,11 +100,11 @@ export const matrixChannel = {
   senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): MatrixAdapter {
-    const homeserverUrl = readString(config, "homeserverUrl");
-    const accessToken = readString(config, "accessToken");
-    const userId = readString(config, "userId");
-    const freshnessWindowMs = readNumber(config, "freshnessWindowMs");
-    const requireMention = readBoolean(config, "requireMention");
+    const homeserverUrl = read.string(config, "homeserverUrl");
+    const accessToken = read.string(config, "accessToken");
+    const userId = read.string(config, "userId");
+    const freshnessWindowMs = read.number(config, "freshnessWindowMs");
+    const requireMention = read.boolean(config, "requireMention");
     const acceptInvite = readAcceptInvite(config);
     return new MatrixAdapter({
       homeserverUrl,

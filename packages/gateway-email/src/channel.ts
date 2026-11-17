@@ -6,7 +6,7 @@
  * its own, so a refused value throws the core `GatewayConfigurationError` tagged `gateway-email`.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { createConfigReaders, GatewayConfigurationError } from "@theokit/gateway";
 
 import { EmailAdapter } from "./adapter.js";
 import type { EmailCursorStore } from "./types.js";
@@ -19,55 +19,10 @@ function invalid(key: string, expected: string): GatewayConfigurationError {
   });
 }
 
+const read = createConfigReaders(invalid);
+
 function isAbsent(value: unknown): boolean {
   return value === undefined;
-}
-
-function readString(config: Readonly<Record<string, unknown>>, key: string): string {
-  const value = config[key];
-  if (typeof value !== "string") throw invalid(key, "a string");
-  if (value.trim().length === 0) throw invalid(key, "a non-empty string");
-  return value;
-}
-
-function readOptionalString(
-  config: Readonly<Record<string, unknown>>,
-  key: string,
-): string | undefined {
-  return isAbsent(config[key]) ? undefined : readString(config, key);
-}
-
-function readBoolean(config: Readonly<Record<string, unknown>>, key: string): boolean | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value === "boolean") return value;
-  if (value === "true") return true;
-  if (value === "false") return false;
-  throw invalid(key, 'a boolean or the string "true" or "false"');
-}
-
-function readNumber(config: Readonly<Record<string, unknown>>, key: string): number | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && /^[0-9]+$/.test(value.trim())) {
-    const parsed = Number(value.trim());
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  throw invalid(key, "a number or a digit string");
-}
-
-function readList(config: Readonly<Record<string, unknown>>, key: string): string[] | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0);
-  }
-  if (Array.isArray(value) && value.every((item) => typeof item === "string")) return value;
-  throw invalid(key, "an array of strings or a comma-separated string");
 }
 
 function readCursorStore(config: Readonly<Record<string, unknown>>): EmailCursorStore | undefined {
@@ -196,17 +151,17 @@ export const emailChannel = {
   },
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): EmailAdapter {
-    const address = readString(config, "address");
-    const password = readString(config, "password");
-    const imapHost = readString(config, "imapHost");
-    const smtpHost = readString(config, "smtpHost");
-    const imapPort = readNumber(config, "imapPort");
-    const smtpPort = readNumber(config, "smtpPort");
-    const fromName = readOptionalString(config, "fromName");
-    const allowedSenders = readList(config, "allowedSenders");
-    const allowAutomated = readBoolean(config, "allowAutomated");
-    const pollIntervalMs = readNumber(config, "pollIntervalMs");
-    const maxBodyChars = readNumber(config, "maxBodyChars");
+    const address = read.string(config, "address");
+    const password = read.string(config, "password");
+    const imapHost = read.string(config, "imapHost");
+    const smtpHost = read.string(config, "smtpHost");
+    const imapPort = read.number(config, "imapPort");
+    const smtpPort = read.number(config, "smtpPort");
+    const fromName = read.optionalString(config, "fromName");
+    const allowedSenders = read.list(config, "allowedSenders");
+    const allowAutomated = read.boolean(config, "allowAutomated");
+    const pollIntervalMs = read.number(config, "pollIntervalMs");
+    const maxBodyChars = read.number(config, "maxBodyChars");
     const cursorStore = readCursorStore(config);
     return new EmailAdapter({
       address,
