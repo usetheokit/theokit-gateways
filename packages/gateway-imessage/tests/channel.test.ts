@@ -88,4 +88,11 @@ describe("imessageChannel", () => {
       expect(error.message).toContain(key);
     }
   });
+
+  it("rejects a digit string too long to be a finite number", () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("darwin");
+    const error = errorOf(() => imessageChannel.create({ requestTimeoutMs: "9".repeat(400) }));
+    expect(error.code).toBe("invalid_config");
+    expect(error.message).toContain("requestTimeoutMs");
+  });
 });

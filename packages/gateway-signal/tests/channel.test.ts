@@ -88,4 +88,12 @@ describe("signalChannel", () => {
       }),
     ).toBeInstanceOf(SignalAdapter);
   });
+
+  it("rejects a digit string too long to be a finite number", () => {
+    const error = errorOf(() =>
+      signalChannel.create({ account: "+5511999990000", requestTimeoutMs: "9".repeat(400) }),
+    );
+    expect(error.code).toBe("invalid_config");
+    expect(error.message).toContain("requestTimeoutMs");
+  });
 });

@@ -37,7 +37,11 @@ function readNumber(config: Config, key: string): number | undefined {
   const value = config[key];
   if (isAbsent(value)) return undefined;
   if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value.trim());
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+    const parsed = Number(value.trim());
+    // A digit string longer than ~308 digits converts to Infinity, which a timer treats as 1 ms.
+    if (Number.isFinite(parsed)) return parsed;
+  }
   throw invalid(key, "a number or a string of digits");
 }
 
