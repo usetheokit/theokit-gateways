@@ -71,4 +71,12 @@ describe("raftChannel", () => {
     expect(error.code).toBe("invalid_config");
     expect(error.message).toContain("replyTimeoutMs");
   });
+
+  it("rejects null for an optional value, naming the key", () => {
+    for (const key of ["command", "wakeArgs", "replyTimeoutMs"]) {
+      const error = errorOf(() => raftChannel.create({ [key]: null }));
+      expect(error.code).toBe("invalid_config");
+      expect(error.message).toContain(key);
+    }
+  });
 });

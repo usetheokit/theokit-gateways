@@ -95,4 +95,13 @@ describe("imessageChannel", () => {
     expect(error.code).toBe("invalid_config");
     expect(error.message).toContain("requestTimeoutMs");
   });
+
+  it("rejects null for an optional value, naming the key", () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("darwin");
+    for (const key of ["cliPath", "requestTimeoutMs"]) {
+      const error = errorOf(() => imessageChannel.create({ [key]: null }));
+      expect(error.code).toBe("invalid_config");
+      expect(error.message).toContain(key);
+    }
+  });
 });
