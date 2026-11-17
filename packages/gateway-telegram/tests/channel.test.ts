@@ -105,6 +105,7 @@ describe("telegramChannel env bindings", () => {
     const result = createChannels([{ descriptor: telegramChannel, config }]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
     expect(result.rejected[0]?.error.message).toContain("token");
+    expect(result.rejected[0]?.error.message).toContain("TELEGRAM_TOKEN");
   });
 
   it("collects only secret values", () => {
@@ -131,5 +132,34 @@ describe("telegramChannel env bindings", () => {
     const err = configurationErrorOf(() => telegramChannel.create(config));
     expect(err.code).toBe("invalid_config");
     expect(err.message).toContain(key);
+  });
+
+  it("a comma-separated allowedUsers admits the listed users and drops others", async () => {
+    const adapter = telegramChannel.create({ token: "1:a", allowedUsers: "10, 20" });
+    adapter.getBot().botInfo = {
+      id: 1,
+      is_bot: true,
+      first_name: "Bot",
+      username: "bot",
+    } as never;
+    const seen: string[] = [];
+    adapter.onInbound(async (event) => {
+      seen.push(event.text);
+    });
+    const update = (updateId: number, userId: number) =>
+      ({
+        update_id: updateId,
+        message: {
+          message_id: updateId,
+          date: 1,
+          chat: { id: userId, type: "private", first_name: "U" },
+          from: { id: userId, is_bot: false, first_name: "U" },
+          text: `from ${userId}`,
+        },
+      }) as never;
+    await adapter.getBot().handleUpdate(update(1, 10));
+    await adapter.getBot().handleUpdate(update(2, 20));
+    await adapter.getBot().handleUpdate(update(3, 30));
+    expect(seen).toEqual(["from 10", "from 20"]);
   });
 });

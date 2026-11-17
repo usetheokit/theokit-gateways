@@ -275,6 +275,7 @@ describe("lineChannel env bindings", () => {
     const result = createChannels([{ descriptor: lineChannel, config }]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
     expect(result.rejected[0]?.error.message).toContain(key);
+    expect(result.rejected[0]?.error.message).toContain(variable.replace("APP_", ""));
   });
 
   it("collects only secret values", () => {
