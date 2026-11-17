@@ -40,3 +40,7 @@ response.status(answer.status).end();
 
 Unverified: no send-and-receive run against a real Zalo OA account has been recorded. Wire shapes
 are written from Zalo's OA documentation and tested against a scripted fake.
+
+## Capabilities
+
+`adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.
