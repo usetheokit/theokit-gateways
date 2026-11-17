@@ -108,7 +108,3 @@ unavailable and no real-account credentials were supplied. To run the existing l
 follow `integration/scripts/bootstrap-nextcloud-talk.ts` and run
 `pnpm --filter @theokit/gateway-integration exec vitest run tests/nextcloud-talk`.
 Record the date and observed receive and reply results after that run succeeds.
-
-## Capabilities
-
-`adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.

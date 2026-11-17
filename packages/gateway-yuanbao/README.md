@@ -43,7 +43,3 @@ response.status(answer.status).end();
 Unverified: no send-and-receive run against a real Yuanbao bot has been recorded, and no public
 Yuanbao bot specification was available, so endpoints, header names and payload shapes are an
 assumption written to be changed in one place. The live suite needs a bot account.
-
-## Capabilities
-
-`adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.

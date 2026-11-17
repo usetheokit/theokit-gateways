@@ -10,7 +10,6 @@ import type { Duplex } from "node:stream";
 import { connect as tlsConnect } from "node:tls";
 
 import {
-  type AdapterCapabilities,
   BasePlatformAdapter,
   channelRendering,
   type MessageEvent as GatewayMessageEvent,
@@ -52,11 +51,6 @@ const defaultSocketFactory: SocketFactory = ({ host, port, tls }) =>
  */
 export class IrcAdapter extends BasePlatformAdapter {
   readonly platform = "irc" as const;
-
-  /** The platform facts; `maxMessageChars` stays undefined because IRC\'s 512-byte limit is not in characters. */
-  override get capabilities(): AdapterCapabilities {
-    return { ...super.capabilities, maxMessageChars: undefined };
-  }
   private readonly opts: IrcAdapterOptions;
   private socket: Duplex | undefined;
   private nick: string;

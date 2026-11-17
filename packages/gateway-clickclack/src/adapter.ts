@@ -5,11 +5,11 @@
  * @public
  */
 
-import type { AdapterCapabilities, OutboundMessage, SendResult } from "@theokit/gateway";
+import type { OutboundMessage, SendResult } from "@theokit/gateway";
 import { RealtimeBotAdapter } from "@theokit/gateway-bot-realtime";
 
 import { refuseAttachments } from "./refuse-attachments.js";
-import { CLICKCLACK_MESSAGE_LIMIT, splitForClickClack } from "./split.js";
+import { splitForClickClack } from "./split.js";
 import type { ClickClackAdapterOptions } from "./types.js";
 
 /**
@@ -25,11 +25,6 @@ import type { ClickClackAdapterOptions } from "./types.js";
  */
 export class ClickClackAdapter extends RealtimeBotAdapter {
   readonly platform = "clickclack" as const;
-
-  /** The platform facts; `maxMessageChars` is the splitter\'s limit. */
-  override get capabilities(): AdapterCapabilities {
-    return { ...super.capabilities, maxMessageChars: CLICKCLACK_MESSAGE_LIMIT };
-  }
 
   /** @throws Error when `baseUrl`, `token`, `workspaceId` or `botUserId` is missing */
   constructor(opts: ClickClackAdapterOptions) {

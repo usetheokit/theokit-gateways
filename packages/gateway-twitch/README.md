@@ -76,7 +76,3 @@ credentials are provided. To complete that check, run the quick start with a bot
 numeric bot/channel IDs, send a message from a second account, and confirm the reply in Twitch.
 Record the date, channel, inbound message ID and outbound reply ID without recording the token.
 This status is not evidence of a shipped real-account surface.
-
-## Capabilities
-
-`adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.
