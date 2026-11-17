@@ -46,6 +46,7 @@
     "@theokit/sdk": ">=2.18.0 <6"
   },
   "devDependencies": {
+    "@theokit/agents": "16.5.0",
     "@theokit/gateway": "workspace:*",
     "@theokit/presenter": "^0.10.0",
     "@theokit/sdk": "^5.9.0",
