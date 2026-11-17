@@ -264,6 +264,14 @@ describe("live-test readiness", () => {
         "a handler wrapper that makes no network call; the transcribe function is the caller's. " +
         "Covered by packages/gateway/tests/runner/media-understanding.test.ts, and no adapter " +
         "but Telegram fills the audio it reads",
+      createAccessPolicyHook:
+        "a pre_inbound decision over an in-memory event, no network I/O. Covered by " +
+        "packages/gateway/tests/hooks/access-policy.test.ts",
+      createFilePairingStore:
+        "reads and writes one local pairing.json, no network I/O. Covered by " +
+        "packages/gateway/tests/hooks/pairing-store.test.ts",
+      senderKey:
+        "pure string -> string, no I/O. Covered by packages/gateway/tests/hooks/pairing-store.test.ts",
       parseChatCommand:
         "pure string -> record, no I/O. Covered by packages/gateway/tests/hooks/chat-command.test.ts",
       commandHook:
