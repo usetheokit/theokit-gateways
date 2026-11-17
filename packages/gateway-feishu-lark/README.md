@@ -85,3 +85,24 @@ UTC date, domain, redacted app/chat identifiers, inbound message ID and outbound
 message ID, and the command used. For TheoClaw, supply this adapter to its
 `GatewayRunner` and verify its handler's reply in the chat; keep protocol handling
 inside this package. Never include app secrets or access tokens in the record.
+
+## Channel descriptor
+
+`feishuLarkChannel` describes this channel as data for `createChannels` and `configFromEnv` in
+`@theokit/gateway`: a `socket` channel (the adapter opens its own long connection).
+
+| Config key | Environment variable | Required | Secret |
+| --- | --- | --- | --- |
+| `appId` | `FEISHU_LARK_APP_ID` | yes | no |
+| `appSecret` | `FEISHU_LARK_APP_SECRET` | yes | yes |
+| `domain` | `FEISHU_LARK_DOMAIN` (`feishu` or `lark`) | no | no |
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { feishuLarkChannel } from "@theokit/gateway-feishu-lark";
+
+const { config, missing, secrets } = configFromEnv(feishuLarkChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: feishuLarkChannel, config }]);
+```
+
+A wrongly typed value makes `create` throw `ConfigurationError` with code `invalid_config`.
