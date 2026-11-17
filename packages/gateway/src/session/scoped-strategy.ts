@@ -15,8 +15,7 @@ import type { MessageEvent as GatewayMessageEvent } from "../types/message-event
 import type { AgentIdStrategy } from "./router.js";
 
 /** How DMs are keyed: one conversation, per peer, per channel and peer, or per account too. */
-export type DmScope =
-  "main" | "per-peer" | "per-channel-peer" | "per-account-channel-peer";
+export type DmScope = "main" | "per-peer" | "per-channel-peer" | "per-account-channel-peer";
 
 /** Options for {@link scopedStrategy}. */
 export interface ScopedStrategyOptions {
