@@ -80,16 +80,42 @@ bound and `express` is not loaded. Your route passes each request to `handleRequ
 const adapter = new GoogleChatAdapter({ serviceAccountEmail, privateKey, audience, webhook: "external" });
 await adapter.connect();
 
+const MAX_BODY_BYTES = 1024 * 1024;
+
 // in your route:
-const authorization = request.headers.get("authorization") ?? undefined;
-if (authorization === undefined) return new Response(null, { status: 401 });
-const rawBody = await request.text(); // refuse over 1 MiB with 413 first
+const authorization = request.headers.get("authorization");
+if (authorization === null || !/^Bearer\s+\S/i.test(authorization)) {
+  return new Response(null, { status: 401 }); // before the body is read
+}
+const declared = Number(request.headers.get("content-length") ?? 0);
+if (declared > MAX_BODY_BYTES) return Response.json({ error: "request body too large" }, { status: 413 });
+
+// Read the body as a stream and stop at the cap, since content-length may be absent or wrong.
+const chunks: Uint8Array[] = [];
+let received = 0;
+const reader = request.body?.getReader();
+while (reader !== undefined) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  received += value.byteLength;
+  if (received > MAX_BODY_BYTES) {
+    await reader.cancel();
+    return Response.json({ error: "request body too large" }, { status: 413 });
+  }
+  chunks.push(value);
+}
+const rawBody = Buffer.concat(chunks).toString("utf8");
+
 const { status, body } = await adapter.handleRequest(authorization, rawBody);
 return Response.json(body, { status });
 ```
 
-Give `rawBody` as received: the token is verified against it. `webhook: "external"` together with
-`app` or `port` throws `GatewayConfigurationError` with code `conflicting_webhook_options`.
+`handleRequest` verifies the bearer token (Google's signature, issuer, audience and expiry), then
+parses the body. The token proves the request came from Google Chat for your `audience`; it does
+not sign the body. The 401 and 413 checks above keep an unauthenticated caller from making you
+read an unbounded body, but they do not replace the token verification `handleRequest` does.
+`webhook: "external"` together with `app` or `port` throws `GatewayConfigurationError` with code
+`conflicting_webhook_options`.
 
 `audience` must be exactly the HTTP endpoint URL configured for the app in the Google Cloud
 console (Chat API → Configuration). A trailing slash on one side and not the other refuses every
