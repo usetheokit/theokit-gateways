@@ -108,16 +108,13 @@ export function createAccessPolicyHook(options: AccessPolicyOptions): GatewayHoo
     return { block: true, message: r.ok ? "Paired." : "Unknown or expired code." };
   };
 
-  const unauthenticated = (event: MessageEvent): HookDecision | undefined =>
-    options.dm === "open" && event.channel.type === "dm" ? undefined : SILENT;
-
   const isPaired = (event: MessageEvent): boolean =>
     store?.isPaired(event.platform, event.sender.id) === true;
 
   const decide = async (event: MessageEvent): Promise<HookDecision | undefined> => {
     if (options.passThrough?.(event)) return undefined;
     // Never trust or answer a forgeable sender id.
-    if (!options.isAuthenticated(event.platform as PlatformName)) return unauthenticated(event);
+    if (!options.isAuthenticated(event.platform as PlatformName)) return SILENT;
     const key = senderKey(event.platform, event.sender.id);
     if (owners.has(key)) return ownerMessage(event.text);
     if (allowed.has(key) || isPaired(event)) return undefined;
@@ -130,7 +127,11 @@ export function createAccessPolicyHook(options: AccessPolicyOptions): GatewayHoo
       try {
         return await decide(event);
       } catch (e) {
-        write(`access-policy: hook failed: ${redactSecrets(e)}`);
+        try {
+          write(`access-policy: hook failed: ${redactSecrets(e)}`);
+        } catch {
+          // A failing logger must not turn the silent block into a hook-failed reply.
+        }
         return SILENT;
       }
     },

@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { HookExecutor } from "../../src/hooks/executor.js";
 import {
   createAccessPolicyHook,
   createFilePairingStore,
@@ -85,6 +86,32 @@ describe("access policy", () => {
     expect(await hook.pre_inbound?.({ event: ev("telegram", "2") })).toEqual({ block: true });
     expect(lines).toHaveLength(1);
     expect(lines[0]).not.toContain("abcdefghijklmnopqrstuvwxyz123456");
+  });
+  it("sends no reply to an unauthenticated DM under dm open, through the executor", async () => {
+    const hook = createAccessPolicyHook({ ...base, dm: "open" });
+    const d = await new HookExecutor([hook]).firePreInbound({ event: ev("sms", "9") });
+    expect(d.block).toBe(true);
+    expect(d.message).toBeUndefined();
+  });
+  it("keeps the silent block when the write callback throws", async () => {
+    const bad: PairingStore = {
+      issue() {
+        throw new Error("boom");
+      },
+      approve: async () => ({ ok: false, reason: "write_failed" }),
+      isPaired: () => false,
+    };
+    const hook = createAccessPolicyHook({
+      ...base,
+      dm: "pairing",
+      pairing: bad,
+      write: () => {
+        throw new Error("writer down");
+      },
+    });
+    const d = await new HookExecutor([hook]).firePreInbound({ event: ev("telegram", "2") });
+    expect(d.block).toBe(true);
+    expect(d.message).toBeUndefined();
   });
   it("matches email owners case-insensitively only when email is authenticated", async () => {
     const hook = createAccessPolicyHook({
