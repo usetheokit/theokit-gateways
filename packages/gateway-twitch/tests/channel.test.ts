@@ -39,6 +39,7 @@ describe("twitchChannel", () => {
     const rest = { ...ENV } as Record<string, string>;
     delete rest[name];
     const { config, missing } = configFromEnv(twitchChannel, rest, "APP_");
+    expect(name).toMatch(/^APP_TWITCH_/);
     expect(missing).toEqual([name]);
     const { rejected } = createChannels([{ descriptor: twitchChannel, config }]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");

@@ -30,6 +30,7 @@ describe("zaloPersonalChannel", () => {
   it("rejects with missing_required_config when the variable is unset", () => {
     const { config, missing } = configFromEnv(zaloPersonalChannel, {}, "APP_");
     expect(missing).toEqual(["APP_ZALO_PERSONAL_CREDENTIALS"]);
+    expect(missing[0]).toBe("APP_ZALO_PERSONAL_CREDENTIALS");
     const { rejected } = createChannels([{ descriptor: zaloPersonalChannel, config }]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
     expect(rejected[0]?.error.message).toContain("credentials");

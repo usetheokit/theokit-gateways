@@ -32,6 +32,7 @@ describe("synologyChatChannel", () => {
   it.each(Object.keys(ENV))("rejects with missing_required_config when %s is unset", (name) => {
     const { [name as keyof typeof ENV]: _omit, ...rest } = ENV;
     const { config, missing } = configFromEnv(synologyChatChannel, rest, "APP_");
+    expect(name).toMatch(/^APP_SYNOLOGY_CHAT_/);
     expect(missing).toEqual([name]);
     const key = name === "APP_SYNOLOGY_CHAT_BOT_TOKEN" ? "botToken" : "incomingUrl";
     const { rejected } = createChannels([{ descriptor: synologyChatChannel, config }]);
