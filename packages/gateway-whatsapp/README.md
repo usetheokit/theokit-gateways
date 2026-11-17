@@ -225,6 +225,7 @@ descriptor itself is the `cloud` shape.
 | `cloud` | `appSecret` | `WHATSAPP_APP_SECRET` | yes | yes |
 | `cloud` | `verifyToken` | `WHATSAPP_VERIFY_TOKEN` | no | yes |
 | `baileys` | `sessionDir` | `WHATSAPP_SESSION_DIR` | yes | no |
+| `baileys` | `botPhoneId` | `WHATSAPP_BOT_PHONE_ID` | no | no |
 | both | `requireMention` | `WHATSAPP_REQUIRE_MENTION` | no | no |
 
 `verifyToken` is not an adapter option: it is kept so the webhook half can answer Meta's

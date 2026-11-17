@@ -106,12 +106,24 @@ const BAILEYS_CONFIG: ReadonlyArray<ConfigField> = [
     env: "WHATSAPP_SESSION_DIR",
     description: "Directory where the Baileys session (credentials) is stored.",
   },
+  {
+    key: "botPhoneId",
+    required: false,
+    secret: false,
+    env: "WHATSAPP_BOT_PHONE_ID",
+    description:
+      "The bot's own number; with requireMention (default), a group message must mention it or is dropped.",
+  },
   REQUIRE_MENTION,
 ];
 
-function common(config: Config): { requireMention?: boolean } {
+function common(config: Config): { requireMention?: boolean; botPhoneId?: string } {
   const requireMention = optionalBoolean(config, "requireMention");
-  return requireMention === undefined ? {} : { requireMention };
+  const botPhoneId = optionalString(config, "botPhoneId");
+  return {
+    ...(requireMention === undefined ? {} : { requireMention }),
+    ...(botPhoneId === undefined ? {} : { botPhoneId }),
+  };
 }
 
 function createCloud(config: Config): WhatsAppAdapter {

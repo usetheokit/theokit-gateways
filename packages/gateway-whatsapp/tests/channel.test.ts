@@ -7,7 +7,7 @@ import {
   GatewayConfigurationError,
   selectVariant,
 } from "@theokit/gateway";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { WhatsAppAdapter } from "../src/adapter.js";
 import { whatsappChannel } from "../src/channel.js";
@@ -88,6 +88,7 @@ describe("whatsappChannel", () => {
       ["cloud", { accessToken: 42, phoneNumberId: "1", appSecret: "s" }],
       ["cloud", { accessToken: "t", phoneNumberId: "1", appSecret: "s", verifyToken: 7 }],
       ["baileys", { sessionDir: 5 }],
+      ["baileys", { sessionDir: "/x", botPhoneId: 5511 }],
       ["baileys", { sessionDir: "/x", requireMention: "maybe" }],
     ] as const) {
       let error: unknown;
@@ -119,5 +120,36 @@ describe("whatsappChannel", () => {
       "WHATSAPP_REQUIRE_MENTION",
     ]);
     expect(whatsappChannel.variants.baileys.config[0]?.env).toBe("WHATSAPP_SESSION_DIR");
+  });
+
+  it("passes botPhoneId so a baileys group message mentioning the bot is delivered", async () => {
+    const group = (text: string) => ({
+      wamid: "wamid.g",
+      fromPhone: "5511888888888",
+      phoneNumberId: "",
+      contactName: "User",
+      conversationType: "group" as const,
+      channelId: "g1",
+      text,
+      receivedAt: 1_700_000_000_000,
+      backend: "baileys" as const,
+      raw: {},
+    });
+    const run = async (config: Record<string, unknown>, text: string): Promise<number> => {
+      const adapter = descriptor("baileys").create({ sessionDir: "/tmp/wa", ...config });
+      const backend = (adapter as WhatsAppAdapter).getBackend();
+      let bridge: ((e: ReturnType<typeof group>) => Promise<void>) | undefined;
+      vi.spyOn(backend, "onInbound").mockImplementation((h) => {
+        bridge = h as typeof bridge;
+        return () => {};
+      });
+      const handler = vi.fn(async () => {});
+      (adapter as WhatsAppAdapter).onInbound(handler);
+      await bridge?.(group(text));
+      return handler.mock.calls.length;
+    };
+    expect(await run({ botPhoneId: "5511999999999" }, "@5511999999999 hi")).toBe(1);
+    expect(await run({ botPhoneId: "5511999999999" }, "hey team")).toBe(0);
+    expect(await run({}, "@5511999999999 hi")).toBe(0);
   });
 });
