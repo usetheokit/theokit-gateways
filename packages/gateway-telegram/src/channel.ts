@@ -36,8 +36,15 @@ function readToken(config: Readonly<Record<string, unknown>>): string {
 function readAllowedUsers(config: Readonly<Record<string, unknown>>): string[] | undefined {
   const value = config.allowedUsers;
   if (value === undefined || value === null) return undefined;
+  // `configFromEnv` yields strings, so a comma-separated string is accepted next to an array.
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+  }
   if (!Array.isArray(value) || !value.every((id) => typeof id === "string")) {
-    throw invalid("allowedUsers", "an array of user id strings");
+    throw invalid("allowedUsers", "an array of user id strings or a comma-separated string");
   }
   return value;
 }
@@ -45,6 +52,8 @@ function readAllowedUsers(config: Readonly<Record<string, unknown>>): string[] |
 function readRequireMention(config: Readonly<Record<string, unknown>>): boolean | undefined {
   const value = config.requireMention;
   if (value === undefined || value === null) return undefined;
+  if (value === "true") return true;
+  if (value === "false") return false;
   if (typeof value !== "boolean") throw invalid("requireMention", "a boolean");
   return value;
 }
@@ -52,6 +61,7 @@ function readRequireMention(config: Readonly<Record<string, unknown>>): boolean 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally, D4). */
 interface ConfigField {
   readonly key: string;
+  readonly env?: string;
   readonly required: boolean;
   readonly secret: boolean;
   readonly description: string;
@@ -60,12 +70,14 @@ interface ConfigField {
 const CONFIG: ReadonlyArray<ConfigField> = [
   {
     key: "token",
+    env: "TELEGRAM_TOKEN",
     required: true,
     secret: true,
     description: "The bot token BotFather issued for this bot.",
   },
   {
     key: "allowedUsers",
+    env: "TELEGRAM_ALLOWED_USERS",
     required: false,
     secret: false,
     description: "Telegram user ids allowed to reach the handler; absent or empty allows everyone.",

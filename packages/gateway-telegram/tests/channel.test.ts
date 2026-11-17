@@ -2,7 +2,7 @@
  * `telegramChannel` — the Telegram channel described as data (FR-004; alignment AC-004).
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { configFromEnv, createChannels, GatewayConfigurationError } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 import { TelegramAdapter } from "../src/adapter.js";
@@ -63,8 +63,7 @@ describe("telegramChannel", () => {
 
   it("refuses allowedUsers that is not an array of strings", () => {
     expect(
-      configurationErrorOf(() => telegramChannel.create({ token: "1:a", allowedUsers: "42" }))
-        .detail,
+      configurationErrorOf(() => telegramChannel.create({ token: "1:a", allowedUsers: 42 })).detail,
     ).toBe("allowedUsers");
     expect(
       configurationErrorOf(() => telegramChannel.create({ token: "1:a", allowedUsers: [42] }))
@@ -86,5 +85,46 @@ describe("gateway-telegram ConfigurationError", () => {
     expect(e.code).toBe("token_required");
     expect(e.message).toBe("gateway-telegram: token_required");
     expect(e).toBeInstanceOf(GatewayConfigurationError);
+  });
+});
+
+describe("telegramChannel env bindings", () => {
+  const ENV = { APP_TELEGRAM_TOKEN: "123:secret" };
+
+  it("builds the adapter from configFromEnv", () => {
+    const { config, missing } = configFromEnv(telegramChannel, ENV, "APP_");
+    expect(missing).toEqual([]);
+    const result = createChannels([{ descriptor: telegramChannel, config }]);
+    expect(result.rejected).toEqual([]);
+    expect(result.adapters[0]).toBeInstanceOf(TelegramAdapter);
+  });
+
+  it("reports the unset variable, and createChannels rejects it", () => {
+    const { config, missing } = configFromEnv(telegramChannel, {}, "APP_");
+    expect(missing).toEqual(["APP_TELEGRAM_TOKEN"]);
+    const result = createChannels([{ descriptor: telegramChannel, config }]);
+    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
+    expect(result.rejected[0]?.error.message).toContain("token");
+  });
+
+  it("collects only secret values", () => {
+    const env = { ...ENV, APP_TELEGRAM_ALLOWED_USERS: "1,2" };
+    expect(configFromEnv(telegramChannel, env, "APP_").secrets).toEqual(["123:secret"]);
+  });
+
+  it("accepts a comma-separated list and boolean strings", () => {
+    expect(
+      telegramChannel.create({ token: "1:a", allowedUsers: "1, 2", requireMention: "true" }),
+    ).toBeInstanceOf(TelegramAdapter);
+  });
+
+  it.each([
+    ["token", { token: 5 }],
+    ["allowedUsers", { token: "1:a", allowedUsers: 5 }],
+    ["requireMention", { token: "1:a", requireMention: "yes" }],
+  ])("throws invalid_config naming %s", (key, config) => {
+    const err = configurationErrorOf(() => telegramChannel.create(config));
+    expect(err.code).toBe("invalid_config");
+    expect(err.message).toContain(key);
   });
 });

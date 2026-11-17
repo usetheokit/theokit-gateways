@@ -45,6 +45,9 @@ function optional<T>(
 
 const isString = (value: unknown): value is string => typeof value === "string";
 const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
+/** `configFromEnv` yields strings, so `"true"` and `"false"` stand for the booleans. */
+const isBooleanLike = (value: unknown): value is boolean | "true" | "false" =>
+  isBoolean(value) || value === "true" || value === "false";
 
 function buildOptions(config: Readonly<Record<string, unknown>>): LineAdapterOptions {
   // Types are checked here, before the constructor: a numeric secret passes the constructor's
@@ -53,7 +56,9 @@ function buildOptions(config: Readonly<Record<string, unknown>>): LineAdapterOpt
   const channelSecret = requiredString(config, "channelSecret");
   const channelAccessToken = requiredString(config, "channelAccessToken");
   const botUserId = optional(config, "botUserId", isString, "a string");
-  const requireMention = optional(config, "requireMention", isBoolean, "a boolean");
+  const rawMention = optional(config, "requireMention", isBooleanLike, "a boolean");
+  const requireMention =
+    rawMention === undefined ? undefined : rawMention === true || rawMention === "true";
   return {
     channelSecret,
     channelAccessToken,
@@ -75,6 +80,7 @@ function headerValue(
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally, D4). */
 interface ConfigField {
   readonly key: string;
+  readonly env?: string;
   readonly required: boolean;
   readonly secret: boolean;
   readonly description: string;
@@ -83,12 +89,14 @@ interface ConfigField {
 const CONFIG: ReadonlyArray<ConfigField> = [
   {
     key: "channelSecret",
+    env: "LINE_CHANNEL_SECRET",
     required: true,
     secret: true,
     description: "The channel secret that signs inbound webhooks (LINE Developers Console).",
   },
   {
     key: "channelAccessToken",
+    env: "LINE_CHANNEL_ACCESS_TOKEN",
     required: true,
     secret: true,
     description: "The channel's long-lived access token (LINE Developers Console).",

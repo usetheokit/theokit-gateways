@@ -7,7 +7,7 @@
  */
 
 import type { MessageEvent } from "@theokit/gateway";
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { configFromEnv, createChannels, GatewayConfigurationError } from "@theokit/gateway";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LineAdapter } from "../src/adapter.js";
@@ -247,5 +247,57 @@ describe("lineChannel", () => {
     expect(lineChannel.create({ ...CONFIG, botUserId: "", requireMention: null })).toBeInstanceOf(
       LineAdapter,
     );
+  });
+});
+
+describe("lineChannel env bindings", () => {
+  const ENV = {
+    APP_LINE_CHANNEL_SECRET: "env-secret",
+    APP_LINE_CHANNEL_ACCESS_TOKEN: "env-token",
+  };
+
+  it("builds the adapter from configFromEnv", () => {
+    const { config, missing } = configFromEnv(lineChannel, ENV, "APP_");
+    expect(missing).toEqual([]);
+    const result = createChannels([{ descriptor: lineChannel, config }]);
+    expect(result.rejected).toEqual([]);
+    expect(result.adapters[0]).toBeInstanceOf(LineAdapter);
+  });
+
+  it.each([
+    ["APP_LINE_CHANNEL_SECRET", "channelSecret"],
+    ["APP_LINE_CHANNEL_ACCESS_TOKEN", "channelAccessToken"],
+  ])("reports %s unset, and createChannels rejects it", (variable, key) => {
+    const env: Record<string, string> = { ...ENV };
+    delete env[variable];
+    const { config, missing } = configFromEnv(lineChannel, env, "APP_");
+    expect(missing).toEqual([variable]);
+    const result = createChannels([{ descriptor: lineChannel, config }]);
+    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
+    expect(result.rejected[0]?.error.message).toContain(key);
+  });
+
+  it("collects only secret values", () => {
+    expect(configFromEnv(lineChannel, ENV, "APP_").secrets).toEqual(["env-secret", "env-token"]);
+  });
+
+  it("accepts a boolean string", () => {
+    expect(lineChannel.create({ ...CONFIG, requireMention: "false" })).toBeInstanceOf(LineAdapter);
+  });
+
+  it("throws invalid_config naming the key for a wrongly typed value", () => {
+    for (const [key, config] of [
+      ["channelSecret", { ...CONFIG, channelSecret: 5 }],
+      ["requireMention", { ...CONFIG, requireMention: "yes" }],
+    ] as const) {
+      try {
+        lineChannel.create(config);
+        throw new Error("expected a throw");
+      } catch (err) {
+        expect(err).toBeInstanceOf(ConfigurationError);
+        expect((err as ConfigurationError).code).toBe("invalid_config");
+        expect((err as ConfigurationError).message).toContain(key);
+      }
+    }
   });
 });
