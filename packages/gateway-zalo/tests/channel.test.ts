@@ -151,4 +151,11 @@ describe("zaloChannel", () => {
     expect((thrown as GatewayConfigurationError).code).toBe("invalid_config");
     expect((thrown as Error).message).toContain("fetch");
   });
+
+  it("is a webhook channel whose handle refuses an unsigned request with 401", async () => {
+    expect(zaloChannel.transport).toBe("webhook");
+    const adapter = zaloChannel.create(VALID);
+    const answer = await zaloChannel.webhook.handle(adapter, { rawBody: "{}", headers: {} });
+    expect(answer.status).toBe(401);
+  });
 });

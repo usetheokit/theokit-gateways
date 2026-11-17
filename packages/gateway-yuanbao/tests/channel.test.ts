@@ -151,4 +151,11 @@ describe("yuanbaoChannel", () => {
     expect((thrown as GatewayConfigurationError).code).toBe("invalid_config");
     expect((thrown as Error).message).toContain("fetch");
   });
+
+  it("is a webhook channel whose handle refuses an unsigned request with 401", async () => {
+    expect(yuanbaoChannel.transport).toBe("webhook");
+    const adapter = yuanbaoChannel.create(VALID);
+    const answer = await yuanbaoChannel.webhook.handle(adapter, { rawBody: "{}", headers: {} });
+    expect(answer.status).toBe(401);
+  });
 });

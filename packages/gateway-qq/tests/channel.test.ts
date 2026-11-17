@@ -139,4 +139,11 @@ describe("qqChannel", () => {
     expect((thrown as GatewayConfigurationError).code).toBe("invalid_config");
     expect((thrown as Error).message).toContain("fetch");
   });
+
+  it("is a webhook channel whose handle refuses an unsigned request with 401", async () => {
+    expect(qqChannel.transport).toBe("webhook");
+    const adapter = qqChannel.create(VALID);
+    const answer = await qqChannel.webhook.handle(adapter, { rawBody: "{}", headers: {} });
+    expect(answer.status).toBe(401);
+  });
 });
