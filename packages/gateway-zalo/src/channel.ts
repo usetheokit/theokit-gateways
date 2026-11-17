@@ -9,6 +9,7 @@
 import { GatewayConfigurationError } from "@theokit/gateway";
 
 import { ZaloAdapter } from "./adapter.js";
+import type { ZaloFetch } from "./types.js";
 
 const ORIGIN = "gateway-zalo";
 
@@ -31,9 +32,16 @@ function optionalString(
   key: string,
 ): Record<string, string> {
   const value = config[key];
-  if (value === undefined || value === null || value === "") return {};
+  if (value === undefined || value === "") return {};
   if (typeof value !== "string") throw invalid(key, "a string");
   return { [key]: value };
+}
+
+function optionalFetch(config: Readonly<Record<string, unknown>>): { fetch?: ZaloFetch } {
+  const value = config.fetch;
+  if (value === undefined) return {};
+  if (typeof value !== "function") throw invalid("fetch", "a function");
+  return { fetch: value as ZaloFetch };
 }
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
@@ -99,6 +107,7 @@ export const zaloChannel = {
       oaSecretKey: readString(config, "oaSecretKey"),
       accessToken: readString(config, "accessToken"),
       ...optionalString(config, "apiBase"),
+      ...optionalFetch(config),
     });
   },
 };

@@ -124,4 +124,31 @@ describe("yuanbaoChannel", () => {
     const { secrets } = configFromEnv(yuanbaoChannel, ENV, "APP_");
     expect([...secrets].sort()).toEqual(["appSecret-value", "callbackSecret-value"].sort());
   });
+
+  it("refuses a null optional apiBase with invalid_config naming the key", () => {
+    expect(() => yuanbaoChannel.create({ ...VALID, apiBase: null })).toThrow(/apiBase/);
+  });
+
+  it("passes a supplied fetch through to the adapter", async () => {
+    const calls: string[] = [];
+    const fetch = async (url: string) => {
+      calls.push(url);
+      return { status: 200, text: async () => "{}" };
+    };
+    const adapter = yuanbaoChannel.create({ ...VALID, fetch });
+    await adapter.connect();
+    expect(calls.length).toBeGreaterThan(0);
+  });
+
+  it("refuses a fetch that is not a function with invalid_config naming the key", () => {
+    let thrown: unknown;
+    try {
+      yuanbaoChannel.create({ ...VALID, fetch: "nope" });
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(GatewayConfigurationError);
+    expect((thrown as GatewayConfigurationError).code).toBe("invalid_config");
+    expect((thrown as Error).message).toContain("fetch");
+  });
 });

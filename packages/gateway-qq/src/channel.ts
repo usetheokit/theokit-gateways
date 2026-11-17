@@ -9,6 +9,7 @@
 import { GatewayConfigurationError } from "@theokit/gateway";
 
 import { QQAdapter } from "./adapter.js";
+import type { QQFetch } from "./types.js";
 
 const ORIGIN = "gateway-qq";
 
@@ -31,9 +32,16 @@ function optionalString(
   key: string,
 ): Record<string, string> {
   const value = config[key];
-  if (value === undefined || value === null || value === "") return {};
+  if (value === undefined || value === "") return {};
   if (typeof value !== "string") throw invalid(key, "a string");
   return { [key]: value };
+}
+
+function optionalFetch(config: Readonly<Record<string, unknown>>): { fetch?: QQFetch } {
+  const value = config.fetch;
+  if (value === undefined) return {};
+  if (typeof value !== "function") throw invalid("fetch", "a function");
+  return { fetch: value as QQFetch };
 }
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
@@ -100,6 +108,7 @@ export const qqChannel = {
       appSecret: readString(config, "appSecret"),
       ...optionalString(config, "apiBase"),
       ...optionalString(config, "tokenUrl"),
+      ...optionalFetch(config),
     });
   },
 };

@@ -18,7 +18,7 @@ describe("check-peer-floor", () => {
     ]);
   });
 
-  it("finds every adapter with a readable floor, and the raised floors", () => {
+  it("finds every adapter with a readable floor, and the twelve raised floors", () => {
     const byName = Object.fromEntries(publishableAdapters().map((a) => [a.name, a.floor]));
     for (const a of Object.values(byName)) expect(a).toMatch(/^\d+\.\d+\.\d+$/);
     expect(byName["@theokit/gateway-zalo"]).toBe("0.20.0");
