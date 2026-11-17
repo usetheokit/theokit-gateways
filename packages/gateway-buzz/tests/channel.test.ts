@@ -45,9 +45,9 @@ describe("buzzChannel", () => {
     expect(missing).toEqual([name]);
     const { rejected } = createChannels([{ descriptor: buzzChannel, config }]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
-    expect(rejected[0]?.error.message).toContain(
-      buzzChannel.config.find((f) => `APP_${f.env}` === name)?.key,
-    );
+    const key = buzzChannel.config.find((f) => `APP_${f.env}` === name)?.key;
+    expect(key).toBeDefined();
+    expect(rejected[0]?.error.message).toBe(`channel buzz: missing required config ${key}`);
   });
 
   it("throws invalid_config naming the key for a wrongly typed value", () => {
@@ -61,6 +61,16 @@ describe("buzzChannel", () => {
 
   it("refuses an explicit null reconnectDelayMs", () => {
     const config = { ...configFromEnv(buzzChannel, ENV, "APP_").config, reconnectDelayMs: null };
+    const error = errorOf(() => buzzChannel.create(config));
+    expect(error.code).toBe("invalid_config");
+    expect(error.message).toContain("reconnectDelayMs");
+  });
+
+  it("refuses a digit string that overflows to Infinity", () => {
+    const config = {
+      ...configFromEnv(buzzChannel, ENV, "APP_").config,
+      reconnectDelayMs: "9".repeat(400),
+    };
     const error = errorOf(() => buzzChannel.create(config));
     expect(error.code).toBe("invalid_config");
     expect(error.message).toContain("reconnectDelayMs");

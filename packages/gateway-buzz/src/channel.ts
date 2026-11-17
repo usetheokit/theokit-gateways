@@ -30,7 +30,10 @@ function readDelay(config: Config): number | undefined {
   const value = config.reconnectDelayMs;
   if (value === undefined) return undefined;
   if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
-  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value.trim());
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+    const parsed = Number(value.trim());
+    if (Number.isFinite(parsed)) return parsed;
+  }
   throw invalid("reconnectDelayMs", "a non-negative number or a digit string");
 }
 
