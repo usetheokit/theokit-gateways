@@ -29,3 +29,30 @@ code, or the thrown error's name. It never returns an error message or an id.
 ```ts
 const failure = await deliverText(adapter, "C123", result.text);
 ```
+
+## `createAgentHandler(options)`
+
+Turns an SDK agent into a `GatewayHandler`: one agent turn per message and exactly one reply,
+rendered with `ChatPresenter` and `channelRendering(event.platform)`. An empty answer replies
+`noAnswerText` ("I could not come up with an answer to that."). A failed turn replies `errorText`
+once and then throws `AgentTurnError` (`platform` and SDK `code`, no prompt text), so `on_error`
+hooks fire. The lease from `agentFor` is always released. Values in `secrets` are masked from the
+streamed text, including a value split across frames, and again from the final text. The handler
+starts no typing indicator: `GatewayRunner` already shows and renews one.
+
+```ts
+const runner: GatewayRunner = new GatewayRunner({
+  adapters: [telegram],
+  secrets: [apiKey],
+  handler: createAgentHandler({
+    agentFor: async (event) => {
+      const agent = await registry.agentFor(router.sessionKey(event));
+      return { agent, release: () => registry.release(agent) };
+    },
+    adapter: (platform) => runner.adapter(platform), // lets `ackEmoji` react to the inbound message
+    ackEmoji: "eyes", // best effort; a failing reaction never fails the turn
+    secrets: [apiKey],
+    progress: (output) => (output.type === "tool-call" ? `Running ${output.name}…` : undefined),
+  }),
+});
+```
