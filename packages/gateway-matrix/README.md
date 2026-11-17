@@ -132,6 +132,8 @@ const { adapters, rejected } = createChannels([{ descriptor: matrixChannel, conf
 | `requireMention` | `MATRIX_REQUIRE_MENTION` | no | no |
 | `acceptInvite` | none (callback) | no | no |
 
-The `APP_` prefix is the app's choice. A value of the wrong type throws `invalid_config` naming the key; a list may be an array or a comma-separated string, a boolean `true`/`false` or the same strings, a number a number or a digit string.## ADRs
+The `APP_` prefix is the app's choice. A value of the wrong type throws `invalid_config` naming the key; a list may be an array or a comma-separated string, a boolean `true`/`false` or the same strings, a number a number or a digit string.
+
+## ADRs
 
 D413 – D421 in `.claude/knowledge-base/adrs/`.

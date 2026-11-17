@@ -17,7 +17,7 @@ function invalid(key: string, expected: string): ConfigurationError {
 }
 
 function isAbsent(value: unknown): boolean {
-  return value === undefined || value === null;
+  return value === undefined;
 }
 
 function readString(config: Readonly<Record<string, unknown>>, key: string): string {

@@ -109,6 +109,8 @@ const { adapters, rejected } = createChannels([{ descriptor: mattermostChannel, 
 | `accessToken` | `MATTERMOST_ACCESS_TOKEN` | yes | yes |
 | `requireMention` | `MATTERMOST_REQUIRE_MENTION` | no | no |
 
-The `APP_` prefix is the app's choice. A value of the wrong type throws `invalid_config` naming the key; a list may be an array or a comma-separated string, a boolean `true`/`false` or the same strings, a number a number or a digit string.## ADRs
+The `APP_` prefix is the app's choice. A value of the wrong type throws `invalid_config` naming the key; a list may be an array or a comma-separated string, a boolean `true`/`false` or the same strings, a number a number or a digit string.
+
+## ADRs
 
 D397 – D404 in `.claude/knowledge-base/adrs/`.

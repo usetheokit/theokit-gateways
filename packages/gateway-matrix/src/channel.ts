@@ -18,7 +18,7 @@ function invalid(key: string, expected: string): ConfigurationError {
 }
 
 function isAbsent(value: unknown): boolean {
-  return value === undefined || value === null;
+  return value === undefined;
 }
 
 function readString(config: Readonly<Record<string, unknown>>, key: string): string {
@@ -41,7 +41,10 @@ function readNumber(config: Readonly<Record<string, unknown>>, key: string): num
   const value = config[key];
   if (isAbsent(value)) return undefined;
   if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && /^[0-9]+$/.test(value.trim())) return Number(value.trim());
+  if (typeof value === "string" && /^[0-9]+$/.test(value.trim())) {
+    const parsed = Number(value.trim());
+    if (Number.isFinite(parsed)) return parsed;
+  }
   throw invalid(key, "a number or a digit string");
 }
 

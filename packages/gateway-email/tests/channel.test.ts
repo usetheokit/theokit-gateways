@@ -83,3 +83,17 @@ describe("emailChannel list, number and boolean values", () => {
     expect(() => emailChannel.create({ ...config, allowedSenders: [1] })).toThrow(/allowedSenders/);
   });
 });
+
+describe("emailChannel null and overflow", () => {
+  it("rejects null for a supplied optional value instead of treating it as absent", () => {
+    const { config } = configFromEnv(emailChannel, ENV, "APP_");
+    for (const key of ["allowedSenders", "imapPort", "fromName", "allowAutomated", "cursorStore"]) {
+      expect(() => emailChannel.create({ ...config, [key]: null })).toThrow(new RegExp(key));
+    }
+  });
+
+  it("rejects a digit string that overflows to Infinity", () => {
+    const { config } = configFromEnv(emailChannel, ENV, "APP_");
+    expect(() => emailChannel.create({ ...config, imapPort: "9".repeat(400) })).toThrow(/imapPort/);
+  });
+});

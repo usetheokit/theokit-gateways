@@ -64,3 +64,19 @@ describe("matrixChannel", () => {
     expect(expected.length).toBeGreaterThan(0);
   });
 });
+
+describe("matrixChannel null and overflow", () => {
+  it("rejects null for a supplied optional value instead of treating it as absent", () => {
+    const { config } = configFromEnv(matrixChannel, ENV, "APP_");
+    for (const key of ["requireMention", "freshnessWindowMs", "acceptInvite"]) {
+      expect(() => matrixChannel.create({ ...config, [key]: null })).toThrow(new RegExp(key));
+    }
+  });
+
+  it("rejects a digit string that overflows to Infinity", () => {
+    const { config } = configFromEnv(matrixChannel, ENV, "APP_");
+    expect(() => matrixChannel.create({ ...config, freshnessWindowMs: "9".repeat(400) })).toThrow(
+      /freshnessWindowMs/,
+    );
+  });
+});
