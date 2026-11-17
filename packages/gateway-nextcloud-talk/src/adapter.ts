@@ -8,6 +8,7 @@
 import { randomBytes } from "node:crypto";
 
 import {
+  type AdapterCapabilities,
   BasePlatformAdapter,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
@@ -17,7 +18,7 @@ import {
 import { type TalkWebhookBody, talkBodyToMessageEvent } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import { talkSignature, verifyTalkSignature } from "./signature.js";
-import { splitForTalk } from "./split.js";
+import { splitForTalk, TALK_MAX_LENGTH } from "./split.js";
 import type { FetchLike, NextcloudTalkAdapterOptions } from "./types.js";
 import { createWebhookServer, type WebhookServer } from "./webhook-server.js";
 
@@ -65,6 +66,11 @@ type FeatureRead =
  */
 export class NextcloudTalkAdapter extends BasePlatformAdapter implements NextcloudTalkInbound {
   readonly platform = "nextcloud_talk" as const;
+
+  /** The platform facts; `maxMessageChars` is the splitter\'s limit. */
+  override get capabilities(): AdapterCapabilities {
+    return { ...super.capabilities, maxMessageChars: TALK_MAX_LENGTH };
+  }
   private readonly opts: NextcloudTalkAdapterOptions;
   private readonly baseUrl: string;
   private readonly fetchFn: FetchLike;

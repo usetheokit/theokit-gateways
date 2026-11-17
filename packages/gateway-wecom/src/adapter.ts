@@ -6,6 +6,7 @@
  */
 
 import {
+  type AdapterCapabilities,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
   type SendResult,
@@ -16,7 +17,7 @@ import {
 
 import { decryptWeCom, verifyWeComSignature } from "./crypto.js";
 import { refuseAttachments } from "./refuse-attachments.js";
-import { splitForWeCom } from "./split.js";
+import { splitForWeCom, WECOM_MESSAGE_LIMIT } from "./split.js";
 import type { WeComAdapterOptions } from "./types.js";
 import { parseWeComXml } from "./xml.js";
 
@@ -51,6 +52,11 @@ export type WeComWebhookAnswer = WeixinWebhookAnswer;
  */
 export class WeComAdapter extends WeixinAdapterBase {
   readonly platform = "wecom" as const;
+
+  /** The platform facts; `maxMessageChars` is the splitter\'s limit. */
+  override get capabilities(): AdapterCapabilities {
+    return { ...super.capabilities, maxMessageChars: WECOM_MESSAGE_LIMIT };
+  }
   private readonly opts: WeComAdapterOptions;
 
   /** @throws Error when a credential is empty */

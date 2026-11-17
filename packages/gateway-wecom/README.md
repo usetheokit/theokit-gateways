@@ -45,3 +45,7 @@ response.status(answer.status).send(answer.body);
 
 Unverified: no send-and-receive run against a real WeCom corp has been recorded. Wire shapes are
 written from WeCom's server API documentation and tested against a scripted fake.
+
+## Capabilities
+
+`adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.
