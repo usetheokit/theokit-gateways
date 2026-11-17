@@ -1,9 +1,11 @@
-import { configFromEnv, createChannels } from "@theokit/gateway";
+import {
+  GatewayConfigurationError as ConfigurationError,
+  configFromEnv,
+  createChannels,
+} from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
-
 import { BuzzAdapter } from "../src/adapter.js";
 import { buzzChannel } from "../src/channel.js";
-import { ConfigurationError } from "../src/errors.js";
 
 const ENV = {
   APP_BUZZ_BASE_URL: "https://chat.example.com",
@@ -55,6 +57,13 @@ describe("buzzChannel", () => {
     expect(error.message).toContain("token");
     const bad = { ...config, token: "t", reconnectDelayMs: "soon" };
     expect(errorOf(() => buzzChannel.create(bad)).message).toContain("reconnectDelayMs");
+  });
+
+  it("refuses an explicit null reconnectDelayMs", () => {
+    const config = { ...configFromEnv(buzzChannel, ENV, "APP_").config, reconnectDelayMs: null };
+    const error = errorOf(() => buzzChannel.create(config));
+    expect(error.code).toBe("invalid_config");
+    expect(error.message).toContain("reconnectDelayMs");
   });
 
   it("accepts a digit string for reconnectDelayMs", () => {

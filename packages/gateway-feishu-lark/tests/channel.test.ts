@@ -1,9 +1,11 @@
-import { configFromEnv, createChannels } from "@theokit/gateway";
+import {
+  GatewayConfigurationError as ConfigurationError,
+  configFromEnv,
+  createChannels,
+} from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
-
 import { FeishuLarkAdapter } from "../src/adapter.js";
 import { feishuLarkChannel } from "../src/channel.js";
-import { ConfigurationError } from "../src/errors.js";
 
 const ENV = {
   APP_FEISHU_LARK_APP_ID: "cli_0123456789abcdef",
@@ -62,6 +64,18 @@ describe("feishuLarkChannel", () => {
     const error = errorOf(() => feishuLarkChannel.create(bad));
     expect(error.code).toBe("invalid_config");
     expect(error.message).toContain("domain");
+  });
+
+  it("rejects an explicit null domain", () => {
+    const config = { appId: "cli_0123456789abcdef", appSecret: "s", domain: null };
+    expect(errorOf(() => feishuLarkChannel.create(config)).message).toContain("domain");
+  });
+
+  it("rejects an uppercase cli_ prefix through createChannels, not as a defect", () => {
+    const config = { appId: "CLI_0123456789abcdef", appSecret: "s" };
+    const { rejected } = createChannels([{ descriptor: feishuLarkChannel, config }]);
+    expect(rejected[0]?.error.code).toBe("invalid_config");
+    expect(rejected[0]?.error.message).toContain("appId");
   });
 
   it("lists exactly the secret fields' values in secrets", () => {

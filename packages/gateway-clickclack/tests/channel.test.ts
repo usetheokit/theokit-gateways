@@ -1,9 +1,11 @@
-import { configFromEnv, createChannels } from "@theokit/gateway";
+import {
+  GatewayConfigurationError as ConfigurationError,
+  configFromEnv,
+  createChannels,
+} from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
-
 import { ClickClackAdapter } from "../src/adapter.js";
 import { clickclackChannel } from "../src/channel.js";
-import { ConfigurationError } from "../src/errors.js";
 
 const ENV = {
   APP_CLICKCLACK_BASE_URL: "https://chat.example.com",
@@ -55,6 +57,16 @@ describe("clickclackChannel", () => {
     expect(error.message).toContain("token");
     const bad = { ...config, token: "t", reconnectDelayMs: "soon" };
     expect(errorOf(() => clickclackChannel.create(bad)).message).toContain("reconnectDelayMs");
+  });
+
+  it("refuses an explicit null reconnectDelayMs", () => {
+    const config = {
+      ...configFromEnv(clickclackChannel, ENV, "APP_").config,
+      reconnectDelayMs: null,
+    };
+    const error = errorOf(() => clickclackChannel.create(config));
+    expect(error.code).toBe("invalid_config");
+    expect(error.message).toContain("reconnectDelayMs");
   });
 
   it("accepts a digit string for reconnectDelayMs", () => {

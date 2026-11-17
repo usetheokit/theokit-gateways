@@ -5,13 +5,13 @@
  * `.d.ts` must not name core types an older peer lacks.
  */
 
+import { GatewayConfigurationError } from "@theokit/gateway";
 import { ClickClackAdapter } from "./adapter.js";
-import { ConfigurationError } from "./errors.js";
 
 type Config = Readonly<Record<string, unknown>>;
 
-function invalid(key: string, expected: string): ConfigurationError {
-  return new ConfigurationError({
+function invalid(key: string, expected: string): GatewayConfigurationError {
+  return new GatewayConfigurationError("gateway-clickclack", {
     code: "invalid_config",
     message: `gateway-clickclack: config.${key} must be ${expected}`,
     detail: key,
@@ -28,7 +28,7 @@ function readString(config: Config, key: string): string {
 
 function readDelay(config: Config): number | undefined {
   const value = config.reconnectDelayMs;
-  if (value === undefined || value === null) return undefined;
+  if (value === undefined) return undefined;
   if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
   if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value.trim());
   throw invalid("reconnectDelayMs", "a non-negative number or a digit string");

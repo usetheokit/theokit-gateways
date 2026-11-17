@@ -5,15 +5,15 @@
  * `.d.ts` must not name core types an older peer lacks.
  */
 
+import { GatewayConfigurationError } from "@theokit/gateway";
 import { FeishuLarkAdapter } from "./adapter.js";
-import { ConfigurationError } from "./errors.js";
 
 type Config = Readonly<Record<string, unknown>>;
 
-const APP_ID = /^cli_[0-9a-f]{16}$/i;
+const APP_ID = /^cli_[0-9a-fA-F]{16}$/;
 
-function invalid(key: string, expected: string): ConfigurationError {
-  return new ConfigurationError({
+function invalid(key: string, expected: string): GatewayConfigurationError {
+  return new GatewayConfigurationError("gateway-feishu-lark", {
     code: "invalid_config",
     message: `gateway-feishu-lark: config.${key} must be ${expected}`,
     detail: key,
@@ -37,7 +37,7 @@ function readAppId(config: Config): string {
 
 function readDomain(config: Config): "feishu" | "lark" | undefined {
   const value = config.domain;
-  if (value === undefined || value === null) return undefined;
+  if (value === undefined) return undefined;
   if (value === "feishu" || value === "lark") return value;
   throw invalid("domain", '"feishu" or "lark"');
 }
