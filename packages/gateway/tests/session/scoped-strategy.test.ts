@@ -18,8 +18,7 @@ function ev(
     receivedAt: 0,
   } as unknown as MessageEvent;
 }
-const dm = (p: "telegram" | "slack", s = "100") =>
-  ev(p, { type: "dm", id: "c" }, s);
+const dm = (p: "telegram" | "slack", s = "100") => ev(p, { type: "dm", id: "c" }, s);
 const peerLinks = new Map([
   ["telegram:100", "ana"],
   ["slack:U1", "ana"],
@@ -27,20 +26,13 @@ const peerLinks = new Map([
 
 describe("scopedStrategy", () => {
   it("produces the documented DM key per scope", () => {
-    expect(scopedStrategy({ dmScope: "main" })(dm("telegram"))).toBe(
-      "@main:dm",
-    );
+    expect(scopedStrategy({ dmScope: "main" })(dm("telegram"))).toBe("@main:dm");
+    expect(scopedStrategy({ dmScope: "per-channel-peer" })(dm("telegram"))).toBe("telegram:dm:100");
+    expect(scopedStrategy({ dmScope: "per-peer", peerLinks })(dm("telegram"))).toBe("@peer:dm:ana");
     expect(
-      scopedStrategy({ dmScope: "per-channel-peer" })(dm("telegram")),
-    ).toBe("telegram:dm:100");
-    expect(
-      scopedStrategy({ dmScope: "per-peer", peerLinks })(dm("telegram")),
-    ).toBe("@peer:dm:ana");
-    expect(
-      scopedStrategy({
-        dmScope: "per-account-channel-peer",
-        accountLabel: "bot-1",
-      })(dm("telegram")),
+      scopedStrategy({ dmScope: "per-account-channel-peer", accountLabel: "bot-1" })(
+        dm("telegram"),
+      ),
     ).toBe("telegram:dm:bot-1:100");
   });
 
@@ -59,9 +51,9 @@ describe("scopedStrategy", () => {
       expect(s(thread)).toBe("telegram:tpc:g-1:t");
       expect(s(bare)).toBe("telegram:grp:g-1");
     }
-    expect(
-      scopedStrategy({ dmScope: "main", groupScope: "channel-sender" })(group),
-    ).toBe("telegram:grp:g-1:100");
+    expect(scopedStrategy({ dmScope: "main", groupScope: "channel-sender" })(group)).toBe(
+      "telegram:grp:g-1:100",
+    );
   });
 
   it("per-peer links across platforms and falls back when unlinked", () => {
@@ -78,27 +70,16 @@ describe("scopedStrategy", () => {
       "per-account-channel-peer",
     ] as const) {
       const s = scopedStrategy({ dmScope, accountLabel: "x" });
-      const group = scopedStrategy({
-        dmScope,
-        accountLabel: "x",
-        groupScope: "channel-sender",
-      });
-      const g = (id: string) =>
-        group(ev("telegram", { type: "group", id: "g" }, id));
+      const group = scopedStrategy({ dmScope, accountLabel: "x", groupScope: "channel-sender" });
+      const g = (id: string) => group(ev("telegram", { type: "group", id: "g" }, id));
       expect(g("a-b")).not.toBe(g("a_b"));
-      if (dmScope !== "main")
-        expect(s(dm("telegram", "a-b"))).not.toBe(s(dm("telegram", "a_b")));
+      if (dmScope !== "main") expect(s(dm("telegram", "a-b"))).not.toBe(s(dm("telegram", "a_b")));
     }
   });
 
   it("keeps DM keys apart from group keys", () => {
-    const s = scopedStrategy({
-      dmScope: "per-account-channel-peer",
-      accountLabel: "grp-x",
-    });
-    expect(s(dm("telegram"))).not.toBe(
-      s(ev("telegram", { type: "group", id: "x" })),
-    );
+    const s = scopedStrategy({ dmScope: "per-account-channel-peer", accountLabel: "grp-x" });
+    expect(s(dm("telegram"))).not.toBe(s(ev("telegram", { type: "group", id: "x" })));
   });
 
   it("keeps a linked peer apart from an unlinked sender on a platform named peer", () => {
@@ -117,10 +98,7 @@ describe("scopedStrategy", () => {
 
   it("separates DM, group and thread keys with a hyphenated platform", () => {
     const p = "my-platform" as "slack";
-    const s = scopedStrategy({
-      dmScope: "per-channel-peer",
-      groupScope: "channel-sender",
-    });
+    const s = scopedStrategy({ dmScope: "per-channel-peer", groupScope: "channel-sender" });
     const keys = [
       s(ev(p, { type: "dm", id: "c" }, "u")),
       s(ev(p, { type: "group", id: "u" }, "u")),
@@ -136,17 +114,12 @@ describe("scopedStrategy", () => {
         expect.unreachable();
       } catch (e) {
         expect(e).toBeInstanceOf(GatewayConfigurationError);
-        expect((e as GatewayConfigurationError).code).toBe(
-          "invalid_session_scope",
-        );
+        expect((e as GatewayConfigurationError).code).toBe("invalid_session_scope");
         expect((e as Error).message).toContain("accountLabel");
       }
     }
     expect(() =>
-      scopedStrategy({
-        dmScope: "per-peer",
-        peerLinks: new Map([["telegram:1", ""]]),
-      }),
+      scopedStrategy({ dmScope: "per-peer", peerLinks: new Map([["telegram:1", ""]]) }),
     ).toThrow(GatewayConfigurationError);
   });
 });
