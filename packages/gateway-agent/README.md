@@ -56,3 +56,23 @@ const runner: GatewayRunner = new GatewayRunner({
   }),
 });
 ```
+
+## `gatewayDeliverPort(adapters, options?)` and `parseChannelTarget(spec)`
+
+`gatewayDeliverPort` adapts gateway adapters to the `DeliverPort` of the `@theokit/agents` scheduler. `adapters` is read on every send, so a platform that connects later is reached. The text is masked with `options.secrets`, rendered for the platform and sent to the channel as a group. A failure is `{ ok: false, error: { code } }`: `not_started` (no adapter for the platform), the adapter's refusal code, or `adapter_threw`.
+
+`parseChannelTarget("<platform>:<channelId>")` splits at the first colon (Matrix room ids keep theirs) and throws `GatewayConfigurationError` with code `invalid_channel_target` when a part is missing.
+
+```ts
+import { createScheduler } from "@theokit/agents/tools";
+import { gatewayDeliverPort, parseChannelTarget } from "@theokit/gateway-agent";
+
+// The adapters you pass to GatewayRunner; the list is read on every send.
+const adapters = [slackAdapter, telegramAdapter];
+
+const deliver = gatewayDeliverPort(() => adapters, { secrets: [process.env.API_KEY ?? ""] });
+const scheduler = createScheduler({ store, run, deliver });
+
+// A schedule line reads "0 9 * * * slack:C0123"; split its target with:
+const target = parseChannelTarget("slack:C0123"); // { platform: "slack", channelId: "C0123" }
+```

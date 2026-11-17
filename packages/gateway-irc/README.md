@@ -96,3 +96,7 @@ A real-account send-and-receive run and a live TheoClaw reply have **not been ve
 sandbox: no IRC account credentials or running TheoClaw instance were supplied. Before claiming
 live parity, record the run date, network, account (never its password), channel or DM target,
 inbound message, and observed reply from an independent IRC client.
+
+## Capabilities
+
+`adapter.capabilities` reports `maxMessageChars` is left undefined: IRC's limit is 512 bytes per line, not characters. `threads` is `false`.

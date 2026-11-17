@@ -207,3 +207,7 @@ PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome node your-app.js
 The bridge spawns without an explicit `env`, so it inherits yours and the variable
 reaches Puppeteer. `WhatsAppBaileysBackend` needs no browser at all, which is the reason
 it exists (B-001).
+
+## Capabilities
+
+`adapter.capabilities.maxMessageChars` is `4096` (the splitter limit) and `threads` is `false`. See `@theokit/gateway` for the field meanings.

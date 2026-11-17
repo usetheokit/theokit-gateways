@@ -42,3 +42,7 @@ await runner.start();
   (`attachments_unsupported`).
 
 Status: unverified against the live X API; wire shapes are written from X's public docs.
+
+## Capabilities
+
+`adapter.capabilities.maxMessageChars` is `280` (the splitter limit) and `threads` is `false`. See `@theokit/gateway` for the field meanings.

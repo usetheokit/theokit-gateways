@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.19.0
+
+### Minor Changes
+
+- 9c832b2: Add `AdapterCapabilities` and `BasePlatformAdapter.capabilities` (edit, attachment kinds, typing, reactions, threads, max length), derived by default. Telegram reports `image` and `audio` attachments.
+- 6a80cc5: Add `createAgentBindings` and `bindingStrategy`: rule-based choice of agent by platform, account and peer, with session keys prefixed by the bound agent.
+- 8e54100: Add `parseChatCommand`, `commandHook` and `helpText`: one `pre_inbound` hook that strips a leading mention and `@bot` suffix, matches commands exactly and answers `/help`.
+- 362e4ef: Add `createWebhookHandler`, a Fetch handler that routes every webhook channel, and `statusForDeliver`. `ChannelWebhook` gains optional `methods` and `handle`, and `WebhookRequest` gains `method` and `url`.
+- 9f21ff7: `GatewayRunner` gains `connectTimeoutMs`, `onAdapterState` and `secrets` options (under `connectFailure: "isolate"`), an `adapter(platform)` lookup, a live `connected` set, and an exported `maskSecrets` helper and `AdapterState` type.
+- 56bb1d8: Declare whether a channel's sender id is authenticated with `senderIdentity`.
+
+### Patch Changes
+
+- e2a6da8: The cross-adapter lint tests no longer count `gateway-agent`, which bridges an agent to adapters and is not a platform adapter.
+
 ## 0.18.0
 
 ### Minor Changes

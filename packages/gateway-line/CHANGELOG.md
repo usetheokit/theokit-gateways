@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- 56bb1d8: Declare whether a channel's sender id is authenticated with `senderIdentity`.
+
 ## 0.5.1
 
 ### Patch Changes

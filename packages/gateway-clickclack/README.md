@@ -37,3 +37,7 @@ Unverified. The endpoints and event field names are written from ClickClack's pu
 and tested against scripted fakes; no send-and-receive run against a real server has been
 recorded. Confirm the field names (`channel_id`, `author_user_id`, `body`) against a live server
 before relying on this.
+
+## Capabilities
+
+`adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.
