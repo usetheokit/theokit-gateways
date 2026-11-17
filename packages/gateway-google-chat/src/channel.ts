@@ -144,10 +144,14 @@ const CONFIG: ReadonlyArray<ConfigField> = [
   },
 ];
 
-/** The `file` variant: the credentials come from the JSON key at `serviceAccountFile`. */
+/** The `file` variant: the credentials come from the JSON key at `serviceAccountFile`; an inline email or key, when set, overrides the file's. */
 const FILE_CONFIG: ReadonlyArray<ConfigField> = CONFIG.map((field) =>
-  field.key === "serviceAccountFile" ? { ...field, required: true } : field,
-).filter((field) => field.key !== "serviceAccountEmail" && field.key !== "privateKey");
+  field.key === "serviceAccountFile" ||
+  field.key === "serviceAccountEmail" ||
+  field.key === "privateKey"
+    ? { ...field, required: field.key === "serviceAccountFile" }
+    : field,
+);
 
 /**
  * The Google Chat channel: `connect()` opens its own webhook listener, unless `webhook` is

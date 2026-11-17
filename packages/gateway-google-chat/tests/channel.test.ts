@@ -97,6 +97,27 @@ describe("googleChatChannel", () => {
     expect(result.rejected[0]?.error.message).toContain(key);
   });
 
+  it("the file variant keeps inline credentials optional and collects the inline key as secret", () => {
+    const fileDescriptor = selectVariant(descriptor, "file");
+    const path = keyFile(JSON.stringify({ client_email: "a@b.c", private_key: "file-key" }));
+    const env = configFromEnv(
+      fileDescriptor,
+      {
+        APP_GOOGLE_CHAT_SERVICE_ACCOUNT_FILE: path,
+        APP_GOOGLE_CHAT_AUDIENCE: "https://example.com/x",
+        APP_GOOGLE_CHAT_SERVICE_ACCOUNT_EMAIL: "inline@b.c",
+        APP_GOOGLE_CHAT_PRIVATE_KEY: "inline-key",
+      },
+      "APP_",
+    );
+    expect(env.missing).toEqual([]);
+    expect(env.config.serviceAccountEmail).toBe("inline@b.c");
+    expect(env.secrets).toEqual(["inline-key"]);
+    const result = createChannels([{ descriptor: fileDescriptor, config: env.config }]);
+    expect(result.rejected).toEqual([]);
+    expect(result.adapters[0]).toBeInstanceOf(GoogleChatAdapter);
+  });
+
   it("the file variant requires APP_GOOGLE_CHAT_SERVICE_ACCOUNT_FILE", () => {
     const fileDescriptor = selectVariant(descriptor, "file");
     const env = configFromEnv(
