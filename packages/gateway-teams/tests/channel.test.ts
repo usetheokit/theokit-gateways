@@ -32,14 +32,14 @@ describe("teamsChannel", () => {
     ["APP_TEAMS_CLIENT_ID", "clientId"],
     ["APP_TEAMS_CLIENT_SECRET", "clientSecret"],
     ["APP_TEAMS_TENANT_ID", "tenantId"],
-  ])("a missing %s is reported by name", (name, key) => {
+  ])("a missing %s is reported by name", (name) => {
     const source: Record<string, string> = { ...ENV };
     delete source[name];
     const env = configFromEnv(descriptor, source, "APP_");
     expect(env.missing).toEqual([name]);
-    const result = createChannels([{ descriptor, config: env.config }]);
+    const result = createChannels([{ descriptor, config: env.config, envPrefix: "APP_" }]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toContain(key);
+    expect(result.rejected[0]?.error.message).toContain(name);
   });
 
   it("lists exactly the secret values in configFromEnv(...).secrets", () => {

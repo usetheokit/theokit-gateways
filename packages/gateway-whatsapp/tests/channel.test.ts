@@ -58,7 +58,7 @@ describe("whatsappChannel", () => {
     ["cloud", "APP_WHATSAPP_PHONE_NUMBER_ID", "phoneNumberId"],
     ["cloud", "APP_WHATSAPP_APP_SECRET", "appSecret"],
     ["baileys", "APP_WHATSAPP_SESSION_DIR", "sessionDir"],
-  ])("a missing %s variable %s is reported by name", (variant, name, key) => {
+  ])("a missing %s variable %s is reported by name", (variant, name) => {
     const d = descriptor(variant);
     const source: Record<string, string> = {
       ...CLOUD_ENV,
@@ -67,10 +67,10 @@ describe("whatsappChannel", () => {
     delete source[name];
     const env = configFromEnv(d, source, "APP_");
     expect(env.missing).toEqual([name]);
-    const result = createChannels([{ descriptor: d, config: env.config }]);
+    const result = createChannels([{ descriptor: d, config: env.config, envPrefix: "APP_" }]);
     expect(result.rejected).toHaveLength(1);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toContain(key);
+    expect(result.rejected[0]?.error.message).toContain(name);
   });
 
   it("lists exactly the secret values in configFromEnv(...).secrets", () => {
