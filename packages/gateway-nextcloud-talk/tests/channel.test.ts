@@ -98,6 +98,10 @@ describe("nextcloudTalkChannel null and programmatic fields", () => {
       expect(() => nextcloudTalkChannel.create({ ...base, [key]: null })).toThrow(new RegExp(key));
     });
   }
+  it("refuses a function that is not an Express app (no post method)", () => {
+    expect(() => nextcloudTalkChannel.create({ ...base, app: () => undefined })).toThrow(/app/);
+  });
+
   it("refuses an app that is not a function", () => {
     expect(() => nextcloudTalkChannel.create({ ...base, app: {} })).toThrow(/app/);
   });

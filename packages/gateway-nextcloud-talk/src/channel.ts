@@ -64,6 +64,16 @@ function readFunction(config: Config, key: string): ((...args: never[]) => unkno
   return value as (...args: never[]) => unknown;
 }
 
+/** An Express app: a function with the `post` method the adapter mounts its route with. */
+function readApp(config: Config): NextcloudTalkAdapterOptions["app"] {
+  const app = readFunction(config, "app");
+  if (app === undefined) return undefined;
+  if (typeof (app as { post?: unknown }).post !== "function") {
+    throw invalid("app", "an Express app (a function with a post method)");
+  }
+  return app as unknown as NextcloudTalkAdapterOptions["app"];
+}
+
 /** Keep only the keys whose value is defined. */
 function defined<T extends object>(options: T): T {
   return Object.fromEntries(Object.entries(options).filter(([, v]) => v !== undefined)) as T;
@@ -146,7 +156,7 @@ export const nextcloudTalkChannel = {
       port: readNumber(config, "port"),
       path: readString(config, "path"),
       connectTimeoutMs: readNumber(config, "connectTimeoutMs"),
-      app: readFunction(config, "app") as NextcloudTalkAdapterOptions["app"],
+      app: readApp(config),
       fetch: readFunction(config, "fetch") as NextcloudTalkAdapterOptions["fetch"],
     });
     try {
