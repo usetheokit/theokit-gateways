@@ -34,6 +34,7 @@ export function gatewayDeliverPort(
       watched.adapter,
       target.channelId,
       maskSecrets(text, secrets),
+      "group",
     );
     if (failure === undefined) return { ok: true };
     return { ok: false, error: { code: watched.threw() ? "adapter_threw" : failure } };

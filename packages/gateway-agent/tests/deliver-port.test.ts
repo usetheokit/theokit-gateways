@@ -57,7 +57,7 @@ describe("gatewayDeliverPort", () => {
 
     const masked = maskSecrets("**key** s3cr3t", ["s3cr3t"]);
     const presenter = new ChatPresenter({
-      channel: { id: "C1", type: "dm" },
+      channel: { id: "C1", type: "group" },
       ...channelRendering("slack"),
     });
     presenter.present({ type: "text", text: masked });
