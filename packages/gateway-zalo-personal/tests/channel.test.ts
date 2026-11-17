@@ -49,6 +49,7 @@ describe("zaloPersonalChannel", () => {
     ["credentials", { cookie: [], imei: "", userAgent: "ua" }],
     ["credentials", { cookie: [], imei: "i", userAgent: 1 }],
     ["login", "x"],
+    ["login", null],
   ])("throws invalid_config naming the key for %s = %j", (key, value) => {
     const error = errorOf(() =>
       zaloPersonalChannel.create({ credentials: CREDENTIALS, [key]: value }),

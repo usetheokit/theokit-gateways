@@ -63,6 +63,8 @@ describe("twitchChannel", () => {
     ["eventSubUrl", 1],
     ["fetch", "x"],
     ["socketFactory", "x"],
+    ["eventSubUrl", null],
+    ["fetch", null],
   ])("throws invalid_config naming %s for a wrongly typed value", (key, value) => {
     const error = errorOf(() => twitchChannel.create({ ...VALID, [key]: value }));
     expect(error.code).toBe("invalid_config");

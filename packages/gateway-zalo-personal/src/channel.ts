@@ -24,7 +24,7 @@ function invalid(key: string, expected: string): GatewayConfigurationError {
 }
 
 function isAbsent(value: unknown): boolean {
-  return value === undefined || value === null || value === "";
+  return value === undefined || value === "";
 }
 
 const EXPECTED_CREDENTIALS = "an object with a cookie, an imei and a userAgent, or its JSON text";

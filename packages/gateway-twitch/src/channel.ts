@@ -24,7 +24,7 @@ function invalid(key: string, expected: string, code = "invalid_config") {
 }
 
 function isAbsent(value: unknown): boolean {
-  return value === undefined || value === null || value === "";
+  return value === undefined || value === "";
 }
 
 function readString(config: Config, key: string): string | undefined {
