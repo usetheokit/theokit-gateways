@@ -6,6 +6,7 @@
  */
 
 import {
+  type AdapterCapabilities,
   BasePlatformAdapter,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
@@ -15,7 +16,7 @@ import {
 
 import { refuseAttachments } from "./refuse-attachments.js";
 import { verifyYuanbaoSignature } from "./signature.js";
-import { splitForYuanbao } from "./split.js";
+import { splitForYuanbao, YUANBAO_MESSAGE_LIMIT } from "./split.js";
 import type { YuanbaoAdapterOptions, YuanbaoFetch, YuanbaoWebhookEvent } from "./types.js";
 
 const LABEL = "gateway-yuanbao";
@@ -58,6 +59,11 @@ function messageOf(err: unknown): string {
  */
 export class YuanbaoAdapter extends BasePlatformAdapter {
   readonly platform = "yuanbao" as const;
+
+  /** The platform facts; `maxMessageChars` is the splitter\'s limit. */
+  override get capabilities(): AdapterCapabilities {
+    return { ...super.capabilities, maxMessageChars: YUANBAO_MESSAGE_LIMIT };
+  }
   private readonly opts: YuanbaoAdapterOptions;
   private readonly doFetch: YuanbaoFetch;
   private connected = false;
