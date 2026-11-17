@@ -68,6 +68,8 @@ describe("slackChannel", () => {
   it.each([
     ["botToken", { botToken: 1, appToken: "b" }],
     ["appToken", { botToken: "a", appToken: 2 }],
+    ["botToken", { botToken: "", appToken: "b" }],
+    ["appToken", { botToken: "a", appToken: "" }],
     ["requireMention", { botToken: "a", appToken: "b", requireMention: "yes" }],
     ["transport", { botToken: "a", appToken: "b", transport: "http" }],
     ["logLevel", { botToken: "a", appToken: "b", logLevel: "loud" }],

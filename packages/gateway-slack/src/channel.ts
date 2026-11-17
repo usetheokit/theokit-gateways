@@ -21,7 +21,7 @@ const isAbsent = (value: unknown): boolean => value === undefined || value === n
 
 function readString(config: Readonly<Record<string, unknown>>, key: string): string {
   const value = config[key];
-  if (typeof value !== "string") throw invalid(key, "a string");
+  if (typeof value !== "string" || value.length === 0) throw invalid(key, "a non-empty string");
   return value;
 }
 

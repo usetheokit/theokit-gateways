@@ -121,6 +121,11 @@ describe("telegramChannel env bindings", () => {
   it.each([
     ["token", { token: 5 }],
     ["allowedUsers", { token: "1:a", allowedUsers: 5 }],
+    ["allowedUsers", { token: "1:a", allowedUsers: "," }],
+    ["allowedUsers", { token: "1:a", allowedUsers: "1,,2" }],
+    ["allowedUsers", { token: "1:a", allowedUsers: "1," }],
+    ["allowedUsers", { token: "1:a", allowedUsers: "  " }],
+    ["allowedUsers", { token: "1:a", allowedUsers: ["1", ""] }],
     ["requireMention", { token: "1:a", requireMention: "yes" }],
   ])("throws invalid_config naming %s", (key, config) => {
     const err = configurationErrorOf(() => telegramChannel.create(config));

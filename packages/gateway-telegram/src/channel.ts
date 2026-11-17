@@ -37,16 +37,15 @@ function readAllowedUsers(config: Readonly<Record<string, unknown>>): string[] |
   const value = config.allowedUsers;
   if (value === undefined || value === null) return undefined;
   // `configFromEnv` yields strings, so a comma-separated string is accepted next to an array.
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((id) => id.trim())
-      .filter((id) => id.length > 0);
+  // An empty element (a stray or trailing comma, a blank string) is refused: an empty list means
+  // "allow everyone", so a malformed allowlist must not collapse into one.
+  const expected = "an array of user id strings or a comma-separated string of user ids";
+  const ids =
+    typeof value === "string" ? value.split(",").map((id) => id.trim()) : (value as unknown);
+  if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string" && id.length > 0)) {
+    throw invalid("allowedUsers", expected);
   }
-  if (!Array.isArray(value) || !value.every((id) => typeof id === "string")) {
-    throw invalid("allowedUsers", "an array of user id strings or a comma-separated string");
-  }
-  return value;
+  return ids;
 }
 
 function readRequireMention(config: Readonly<Record<string, unknown>>): boolean | undefined {
