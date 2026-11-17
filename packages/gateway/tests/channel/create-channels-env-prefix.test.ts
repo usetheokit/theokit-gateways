@@ -10,7 +10,7 @@ const descriptor: ChannelDescriptor<MockAdapter> = {
   transport: "socket",
   config: [
     { key: "token", env: "TELEGRAM_TOKEN", required: true, secret: true, description: "token" },
-    { key: "nick", required: true, description: "no env binding" },
+    { key: "nick", required: true, secret: false, description: "no env binding" },
   ],
   create,
 };

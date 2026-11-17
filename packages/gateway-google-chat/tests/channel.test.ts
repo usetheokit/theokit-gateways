@@ -126,7 +126,9 @@ describe("googleChatChannel", () => {
       "APP_",
     );
     expect(env.missing).toEqual(["APP_GOOGLE_CHAT_SERVICE_ACCOUNT_FILE"]);
-    const result = createChannels([{ descriptor: fileDescriptor, config: env.config, envPrefix: "APP_" }]);
+    const result = createChannels([
+      { descriptor: fileDescriptor, config: env.config, envPrefix: "APP_" },
+    ]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
     expect(result.rejected[0]?.error.message).toContain("APP_GOOGLE_CHAT_SERVICE_ACCOUNT_FILE");
   });
