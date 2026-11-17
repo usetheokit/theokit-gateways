@@ -12,8 +12,10 @@ import { GatewayConfigurationError } from "../errors/config-error.js";
 import type { MessageEvent as GatewayMessageEvent } from "../types/message-event.js";
 import { type AgentIdStrategy, sanitize } from "./router.js";
 
+/** How DMs are keyed: one conversation, per peer, per channel and peer, or per account too. */
 export type DmScope = "main" | "per-peer" | "per-channel-peer" | "per-account-channel-peer";
 
+/** Options for {@link scopedStrategy}. */
 export interface ScopedStrategyOptions {
   readonly dmScope: DmScope;
   /** `<platform>:<senderId>` to a peer name. Used by `per-peer`. */
