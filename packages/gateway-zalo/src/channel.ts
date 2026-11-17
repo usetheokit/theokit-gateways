@@ -6,8 +6,8 @@
  * object is structurally a `ChannelDescriptor`.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
 import type { WebhookAnswer, WebhookRequest } from "@theokit/gateway";
+import { GatewayConfigurationError } from "@theokit/gateway";
 
 import { ZaloAdapter } from "./adapter.js";
 import type { ZaloFetch } from "./types.js";
@@ -128,7 +128,10 @@ export const zaloChannel = {
       return Promise.resolve("malformed");
     },
     async handle(adapter: ZaloAdapter, request: WebhookRequest): Promise<WebhookAnswer> {
-      const answer = await adapter.handleWebhook(request.rawBody, header(request, "x-zevent-signature"));
+      const answer = await adapter.handleWebhook(
+        request.rawBody,
+        header(request, "x-zevent-signature"),
+      );
       const body = "body" in answer && answer.body !== undefined ? answer.body : undefined;
       return body === undefined
         ? { status: answer.status }

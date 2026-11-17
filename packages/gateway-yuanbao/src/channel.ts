@@ -6,8 +6,8 @@
  * object is structurally a `ChannelDescriptor`.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
 import type { WebhookAnswer, WebhookRequest } from "@theokit/gateway";
+import { GatewayConfigurationError } from "@theokit/gateway";
 
 import { YuanbaoAdapter } from "./adapter.js";
 import type { YuanbaoFetch } from "./types.js";
@@ -128,7 +128,11 @@ export const yuanbaoChannel = {
       return Promise.resolve("malformed");
     },
     async handle(adapter: YuanbaoAdapter, request: WebhookRequest): Promise<WebhookAnswer> {
-      const answer = await adapter.handleWebhook(request.rawBody, header(request, "x-signature"), header(request, "x-timestamp"));
+      const answer = await adapter.handleWebhook(
+        request.rawBody,
+        header(request, "x-signature"),
+        header(request, "x-timestamp"),
+      );
       const body = "body" in answer && answer.body !== undefined ? answer.body : undefined;
       return body === undefined
         ? { status: answer.status }
