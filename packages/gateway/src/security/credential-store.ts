@@ -21,8 +21,8 @@ export interface CredentialStore {
 const KEY_PATTERN = /^[A-Za-z0-9._:-]+$/;
 
 function fileFor(dir: string, key: string): string {
-  // A key of only dots would name the directory itself or its parent.
-  if (!KEY_PATTERN.test(key) || /^\.+$/.test(key)) {
+  // `.` and `..` name the directory itself or its parent.
+  if (!KEY_PATTERN.test(key) || key === "." || key === "..") {
     throw new GatewayConfigurationError("gateway", {
       code: "invalid_credential_key",
       message: `gateway: invalid_credential_key (keys match [A-Za-z0-9._:-]+): ${JSON.stringify(key)}`,

@@ -112,3 +112,70 @@ describe("credentialStore", () => {
     expect(rotated).toEqual(["new"]);
   });
 });
+
+describe("credentialStore failures", () => {
+  function make(data: Map<string, string>, failSets: { n: number }) {
+    const store = {
+      get: async (k: string) => data.get(k),
+      set: async (k: string, v: string) => {
+        if (failSets.n-- > 0) throw new Error("disk full");
+        data.set(k, v);
+      },
+    };
+    let n = 0;
+    const fetchFake: XFetch = async (url) => {
+      if (url.endsWith("/2/oauth2/token")) {
+        n++;
+        return {
+          status: 200,
+          text: async () =>
+            JSON.stringify({ access_token: `at${n}`, refresh_token: `rt${n}`, expires_in: 7200 }),
+        };
+      }
+      return { status: 200, text: async () => JSON.stringify({ data: [] }) };
+    };
+    return new XApi(
+      {
+        userId: "100",
+        username: "@theobot",
+        clientId: "cid",
+        clientSecret: "csec",
+        refreshToken: "env",
+        credentialStore: store,
+        fetch: fetchFake,
+      } as XAdapterOptions,
+      () => 0,
+    );
+  }
+
+  it("retries a failed save before any later call succeeds", async () => {
+    const data = new Map<string, string>();
+    const api = make(data, { n: 1 });
+    await expect(api.refresh()).rejects.toThrow("disk full");
+    expect(data.size).toBe(0);
+    await api.mentions(undefined, 5); // retries the unsaved rt1, then refreshes to rt2
+    expect(data.get("x-refresh-token:100")).toBe("rt2");
+  });
+
+  it("lets an empty stored value win over the configured token", async () => {
+    const bodies: string[] = [];
+    const data = new Map([["x-refresh-token:100", ""]]);
+    const api = new XApi(
+      {
+        userId: "100",
+        username: "@theobot",
+        clientId: "cid",
+        clientSecret: "csec",
+        refreshToken: "env",
+        credentialStore: { get: async (k: string) => data.get(k), set: async () => {} },
+        fetch: async (_u: string, init: { body?: string }) => {
+          bodies.push(init.body ?? "");
+          return { status: 200, text: async () => JSON.stringify({ access_token: "a" }) };
+        },
+      } as unknown as XAdapterOptions,
+      () => 0,
+    );
+    await api.refresh();
+    expect(new URLSearchParams(bodies[0]).get("refresh_token")).toBe("");
+  });
+});

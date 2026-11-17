@@ -69,6 +69,8 @@ export class XApi {
   private refreshToken: string;
   private refreshing: Promise<string> | undefined;
   private storedLoaded = false;
+  /** A rotated token the store has not accepted yet; retried before any further call. */
+  private unsaved: string | undefined;
 
   constructor(
     private readonly opts: XAdapterOptions,
@@ -97,16 +99,23 @@ export class XApi {
     if (store === undefined || this.storedLoaded) return;
     const stored = await store.get(this.credentialKey);
     this.storedLoaded = true;
-    if (stored) this.refreshToken = stored;
+    if (stored !== undefined) this.refreshToken = stored;
   }
 
   private async persist(token: string): Promise<void> {
     this.refreshToken = token;
+    this.unsaved = this.opts.credentialStore === undefined ? undefined : token;
     try {
-      await this.opts.credentialStore?.set(this.credentialKey, token);
+      await this.retryUnsaved();
     } finally {
       await this.opts.onRefreshToken?.(token);
     }
+  }
+
+  private async retryUnsaved(): Promise<void> {
+    if (this.unsaved === undefined) return;
+    await this.opts.credentialStore?.set(this.credentialKey, this.unsaved);
+    this.unsaved = undefined;
   }
 
   private async doRefresh(): Promise<string> {
@@ -127,17 +136,18 @@ export class XApi {
       form.toString(),
     );
     if (status !== 200 || !body?.access_token) throw new XApiError(status, describe(status, body));
+    if (body.refresh_token && body.refresh_token !== this.refreshToken) {
+      await this.persist(body.refresh_token);
+    }
     this.accessToken = {
       value: body.access_token,
       expiresAt: this.now() + (body.expires_in ?? 7200) * 1000,
     };
-    if (body.refresh_token && body.refresh_token !== this.refreshToken) {
-      await this.persist(body.refresh_token);
-    }
     return body.access_token;
   }
 
   private async userToken(): Promise<string> {
+    await this.retryUnsaved();
     const cached = this.accessToken;
     if (cached !== undefined && cached.expiresAt - TOKEN_MARGIN_MS > this.now())
       return cached.value;
