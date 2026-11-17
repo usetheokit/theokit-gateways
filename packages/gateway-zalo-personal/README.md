@@ -45,3 +45,7 @@ await runner.start();
 
 Unverified: the wire calls are written against the `zca-js` API as documented and tested with a
 scripted fake. No send-and-receive run against a real account has been recorded.
+
+## Capabilities
+
+`adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.

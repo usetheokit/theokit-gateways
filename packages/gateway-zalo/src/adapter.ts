@@ -5,6 +5,7 @@
  */
 
 import {
+  type AdapterCapabilities,
   BasePlatformAdapter,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
@@ -14,7 +15,7 @@ import {
 
 import { refuseAttachments } from "./refuse-attachments.js";
 import { verifyZaloSignature } from "./signature.js";
-import { splitForZalo } from "./split.js";
+import { splitForZalo, ZALO_MESSAGE_LIMIT } from "./split.js";
 import type { ZaloAdapterOptions, ZaloFetch, ZaloWebhookEvent } from "./types.js";
 
 const LABEL = "gateway-zalo";
@@ -42,6 +43,11 @@ const defaultFetch: ZaloFetch = async (url, init) => {
  */
 export class ZaloAdapter extends BasePlatformAdapter {
   readonly platform = "zalo" as const;
+
+  /** The platform facts; `maxMessageChars` is the splitter\'s limit. */
+  override get capabilities(): AdapterCapabilities {
+    return { ...super.capabilities, maxMessageChars: ZALO_MESSAGE_LIMIT };
+  }
   private readonly opts: ZaloAdapterOptions;
   private readonly doFetch: ZaloFetch;
   private connected = false;

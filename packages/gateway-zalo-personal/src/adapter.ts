@@ -6,6 +6,7 @@
  */
 
 import {
+  type AdapterCapabilities,
   BasePlatformAdapter,
   channelRendering,
   type MessageEvent as GatewayMessageEvent,
@@ -14,7 +15,7 @@ import {
 } from "@theokit/gateway";
 
 import { refuseAttachments } from "./refuse-attachments.js";
-import { splitForZaloPersonal } from "./split.js";
+import { splitForZaloPersonal, ZALO_PERSONAL_MESSAGE_LIMIT } from "./split.js";
 import type {
   ZaloApi,
   ZaloListenerMessage,
@@ -55,6 +56,11 @@ const defaultLogin: ZaloLogin = async (credentials) => {
  */
 export class ZaloPersonalAdapter extends BasePlatformAdapter {
   readonly platform = "zalo_personal" as const;
+
+  /** The platform facts; `maxMessageChars` is the splitter\'s limit. */
+  override get capabilities(): AdapterCapabilities {
+    return { ...super.capabilities, maxMessageChars: ZALO_PERSONAL_MESSAGE_LIMIT };
+  }
   private readonly opts: ZaloPersonalAdapterOptions;
   private handler: ((event: GatewayMessageEvent) => Promise<void>) | undefined;
   private api: ZaloApi | undefined;
