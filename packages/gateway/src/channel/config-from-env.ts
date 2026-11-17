@@ -63,27 +63,31 @@ function mismatch(parent: ChannelDescriptor, variant: ChannelDescriptor, name: s
   });
 }
 
+function unknownVariant(descriptor: ChannelDescriptor, name: string | undefined): never {
+  const valid = Object.keys(descriptor.variants ?? {});
+  const given = name === undefined ? "(none given)" : `"${name}"`;
+  throw new GatewayConfigurationError("gateway", {
+    code: "unknown_channel_variant",
+    message: `channel ${descriptor.platform}: unknown variant ${given}; valid variants: ${
+      valid.length > 0 ? valid.join(", ") : "(none)"
+    }`,
+  });
+}
+
 /**
- * The descriptor to use for `name`: the descriptor itself when `name` is undefined, otherwise the
- * named variant. Throws `unknown_channel_variant` for a name that is not a variant and
- * `platform_mismatch` for a variant whose platform differs from its parent's.
+ * The descriptor to use for `name`: the descriptor itself when `name` is undefined and it has no
+ * variants, otherwise the named variant. Throws `unknown_channel_variant` for a name that is not a
+ * variant (or a missing name when variants exist) and `platform_mismatch` for a variant whose
+ * platform differs from its parent's.
  */
 export function selectVariant(
   descriptor: ChannelDescriptor,
   name: string | undefined,
 ): ChannelDescriptor {
-  if (name === undefined) return descriptor;
   const variants = descriptor.variants ?? {};
-  const variant = Object.hasOwn(variants, name) ? variants[name] : undefined;
-  if (variant === undefined) {
-    const valid = Object.keys(variants);
-    throw new GatewayConfigurationError("gateway", {
-      code: "unknown_channel_variant",
-      message: `channel ${descriptor.platform}: unknown variant "${name}"; valid variants: ${
-        valid.length > 0 ? valid.join(", ") : "(none)"
-      }`,
-    });
-  }
-  if (variant.platform !== descriptor.platform) mismatch(descriptor, variant, name);
+  if (name === undefined && Object.keys(variants).length === 0) return descriptor;
+  const variant = name !== undefined && Object.hasOwn(variants, name) ? variants[name] : undefined;
+  if (variant === undefined) return unknownVariant(descriptor, name);
+  if (variant.platform !== descriptor.platform) mismatch(descriptor, variant, name ?? "");
   return variant;
 }

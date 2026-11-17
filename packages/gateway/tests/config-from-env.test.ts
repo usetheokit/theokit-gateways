@@ -58,7 +58,8 @@ describe("selectVariant", () => {
   const d = make([], { variants: { cloud } });
 
   it("returns the descriptor or the named variant", () => {
-    expect(selectVariant(d, undefined)).toBe(d);
+    const plain = make([]);
+    expect(selectVariant(plain, undefined)).toBe(plain);
     expect(selectVariant(d, "cloud")).toBe(cloud);
   });
 
@@ -71,6 +72,12 @@ describe("selectVariant", () => {
       expect((e as GatewayConfigurationError).code).toBe("unknown_channel_variant");
       expect((e as Error).message).toContain("cloud");
     }
+  });
+
+  it("throws unknown_channel_variant when no name is given but variants exist", () => {
+    expect(() => selectVariant(d, undefined)).toThrow(
+      expect.objectContaining({ code: "unknown_channel_variant" }),
+    );
   });
 
   it("throws platform_mismatch", () => {
