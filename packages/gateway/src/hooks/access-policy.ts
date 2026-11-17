@@ -12,6 +12,7 @@ import type { GatewayHook, HookDecision } from "./types.js";
 
 export type DmPolicy = "pairing" | "allowlist" | "open" | "disabled";
 
+/** Options for {@link createAccessPolicyHook}. */
 export interface AccessPolicyOptions {
   /** `<platform>:<senderId>` keys. */
   readonly owners: ReadonlySet<string>;
