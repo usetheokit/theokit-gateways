@@ -29,3 +29,17 @@ code, or the thrown error's name. It never returns an error message or an id.
 ```ts
 const failure = await deliverText(adapter, "C123", result.text);
 ```
+
+## `gatewayDeliverPort(adapters, options?)` and `parseChannelTarget(spec)`
+
+`gatewayDeliverPort` adapts gateway adapters to the `DeliverPort` of the `& `adapters` is read on every send, so a platform that connects later is reached. The text is masked with `options.secrets`, rendered for the platform and sent with `deliverText`. A failure is `{ ok: false, error: { code } }`: `not_started` (no adapter for the platform), the adapter's refusal code, or `adapter_threw`.
+
+`parseChannelTarget("<platform>:<channelId>")` splits at the first colon (Matrix room ids keep theirs) and throws `GatewayConfigurationError` with code `invalid_channel_target` when a part is missing.
+
+```ts
+import { gatewayDeliverPort, parseChannelTarget } from "@theokit/gateway-agent";
+
+const deliver = gatewayDeliverPort(() => runner.adapters(), { secrets: [process.env.API_KEY!] });
+const scheduler = createScheduler({ run, deliver, /* ... */ });
+// schedule: "0 9 * * * slack:C0123"; target = parseChannelTarget("slack:C0123")
+```
