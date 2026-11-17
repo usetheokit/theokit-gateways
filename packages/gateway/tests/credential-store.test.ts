@@ -37,6 +37,8 @@ describe("createFileCredentialStore", () => {
   it("rejects invalid keys", async () => {
     const s = createFileCredentialStore(await dir());
     await expect(s.set("../x", "v")).rejects.toMatchObject({ code: "invalid_credential_key" });
+    for (const k of ["token\n", "token\r", "token\u2028"])
+      await expect(s.set(k, "v")).rejects.toMatchObject({ code: "invalid_credential_key" });
     await s.set("...", "dots");
     expect(await s.get("...")).toBe("dots");
     await expect(s.get("..")).rejects.toMatchObject({ code: "invalid_credential_key" });

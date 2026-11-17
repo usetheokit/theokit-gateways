@@ -18,7 +18,7 @@ export interface CredentialStore {
   set(key: string, value: string): Promise<void>;
 }
 
-const KEY_PATTERN = /^[A-Za-z0-9._:-]+$/;
+const KEY_PATTERN = /^[A-Za-z0-9._:-]+$(?![\s\S])/;
 
 function fileFor(dir: string, key: string): string {
   // `.` and `..` name the directory itself or its parent.

@@ -132,6 +132,7 @@ export class XApi {
 
   private async doRefresh(): Promise<string> {
     await this.loadStored();
+    await this.retryUnsaved();
     const basic = Buffer.from(`${this.opts.clientId}:${this.opts.clientSecret}`).toString("base64");
     const form = new URLSearchParams({
       grant_type: "refresh_token",

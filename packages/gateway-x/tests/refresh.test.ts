@@ -157,6 +157,14 @@ describe("credentialStore failures", () => {
     expect(data.get("x-refresh-token:100")).toBe("rt2");
   });
 
+  it("retries a failed save before a direct refresh request (reconnect)", async () => {
+    const data = new Map<string, string>();
+    const api = make(data, { n: 1 });
+    await expect(api.refresh()).rejects.toThrow("disk full");
+    await api.refresh(); // rt1 is written before rotating to rt2
+    expect(data.get("x-refresh-token:100")).toBe("rt2");
+  });
+
   it("keeps the newer token when a held retry of an older one finishes late", async () => {
     const data = new Map<string, string>();
     let failFirst = true;
