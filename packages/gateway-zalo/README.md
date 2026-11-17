@@ -44,3 +44,22 @@ are written from Zalo's OA documentation and tested against a scripted fake.
 ## Capabilities
 
 `adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.
+
+## Channel descriptor
+
+`zaloChannel` describes this channel as data for `createChannels` and `configFromEnv` from `@theokit/gateway`. Its `transport` is `"socket"` for now (no `webhook` half yet): the app still routes inbound webhooks to the adapter itself.
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { zaloChannel } from "@theokit/gateway-zalo";
+
+const { config, missing } = configFromEnv(zaloChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: zaloChannel, config }]);
+```
+
+| Config key | Env variable | Required | Secret |
+| --- | --- | --- | --- |
+| `appId` | `ZALO_APP_ID` | yes | no |
+| `oaSecretKey` | `ZALO_OA_SECRET_KEY` | yes | yes |
+| `accessToken` | `ZALO_ACCESS_TOKEN` | yes | yes |
+| `apiBase` | `ZALO_API_BASE` | no | no |

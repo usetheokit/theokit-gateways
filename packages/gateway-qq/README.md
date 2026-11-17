@@ -48,3 +48,22 @@ user who has messaged it.
 ## Capabilities
 
 `adapter.capabilities.maxMessageChars` is `2000` (the splitter limit) and `threads` is `false`. See `@theokit/gateway` for the field meanings.
+
+## Channel descriptor
+
+`qqChannel` describes this channel as data for `createChannels` and `configFromEnv` from `@theokit/gateway`. Its `transport` is `"socket"` for now (no `webhook` half yet): the app still routes inbound webhooks to the adapter itself.
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { qqChannel } from "@theokit/gateway-qq";
+
+const { config, missing } = configFromEnv(qqChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: qqChannel, config }]);
+```
+
+| Config key | Env variable | Required | Secret |
+| --- | --- | --- | --- |
+| `appId` | `QQ_APP_ID` | yes | no |
+| `appSecret` | `QQ_APP_SECRET` | yes | yes |
+| `apiBase` | `QQ_API_BASE` | no | no |
+| `tokenUrl` | `QQ_TOKEN_URL` | no | no |

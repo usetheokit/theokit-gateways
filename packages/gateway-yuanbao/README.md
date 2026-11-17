@@ -47,3 +47,22 @@ assumption written to be changed in one place. The live suite needs a bot accoun
 ## Capabilities
 
 `adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.
+
+## Channel descriptor
+
+`yuanbaoChannel` describes this channel as data for `createChannels` and `configFromEnv` from `@theokit/gateway`. Its `transport` is `"socket"` for now (no `webhook` half yet): the app still routes inbound webhooks to the adapter itself.
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { yuanbaoChannel } from "@theokit/gateway-yuanbao";
+
+const { config, missing } = configFromEnv(yuanbaoChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: yuanbaoChannel, config }]);
+```
+
+| Config key | Env variable | Required | Secret |
+| --- | --- | --- | --- |
+| `appId` | `YUANBAO_APP_ID` | yes | no |
+| `appSecret` | `YUANBAO_APP_SECRET` | yes | yes |
+| `callbackSecret` | `YUANBAO_CALLBACK_SECRET` | yes | yes |
+| `apiBase` | `YUANBAO_API_BASE` | no | no |
