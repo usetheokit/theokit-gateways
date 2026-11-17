@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { QQAdapter } from "../src/adapter.js";
 import { qqChannel } from "../src/channel.js";
+import { signQQ } from "../src/signature.js";
 
 const ENV: Record<string, string> = {
   APP_QQ_APP_ID: "appId-value",
@@ -140,10 +141,25 @@ describe("qqChannel", () => {
     expect((thrown as Error).message).toContain("fetch");
   });
 
-  it("is a webhook channel whose handle refuses an unsigned request with 401", async () => {
+  it("is a webhook channel whose verify and ingest follow the adapter", async () => {
     expect(qqChannel.transport).toBe("webhook");
     const adapter = qqChannel.create(VALID);
-    const answer = await qqChannel.webhook.handle(adapter, { rawBody: "{}", headers: {} });
-    expect(answer.status).toBe(401);
+    const body = JSON.stringify({
+      op: 0,
+      t: "C2C_MESSAGE_CREATE",
+      d: { id: "m1", content: "hi", author: { user_openid: "u1" } },
+    });
+    const ts = String(Math.floor(Date.now() / 1000));
+    const signed = { "x-signature-ed25519": signQQ("x", ts + body), "X-Signature-Timestamp": ts };
+    const unsigned = { "x-signature-ed25519": "00", "x-signature-timestamp": ts };
+    expect(qqChannel.webhook.verify(adapter, { rawBody: body, headers: signed })).toBe(true);
+    expect(qqChannel.webhook.verify(adapter, { rawBody: body, headers: unsigned })).toBe(false);
+    expect(await qqChannel.webhook.ingest(adapter, JSON.parse(body))).toBe("no_handler");
+    const seen: string[] = [];
+    adapter.onInbound(async (e) => void seen.push(e.text));
+    expect(await qqChannel.webhook.ingest(adapter, JSON.parse(body))).toBe("delivered");
+    expect(seen).toEqual(["hi"]);
+    expect(await qqChannel.webhook.ingest(adapter, [])).toBe("malformed");
+    expect(await qqChannel.webhook.ingest(adapter, null)).toBe("malformed");
   });
 });

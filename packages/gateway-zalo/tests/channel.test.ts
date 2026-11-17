@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { ZaloAdapter } from "../src/adapter.js";
 import { zaloChannel } from "../src/channel.js";
+import { computeZaloSignature } from "../src/signature.js";
 
 const ENV: Record<string, string> = {
   APP_ZALO_APP_ID: "appId-value",
@@ -152,10 +153,26 @@ describe("zaloChannel", () => {
     expect((thrown as Error).message).toContain("fetch");
   });
 
-  it("is a webhook channel whose handle refuses an unsigned request with 401", async () => {
+  it("is a webhook channel whose verify and ingest follow the adapter", async () => {
     expect(zaloChannel.transport).toBe("webhook");
     const adapter = zaloChannel.create(VALID);
-    const answer = await zaloChannel.webhook.handle(adapter, { rawBody: "{}", headers: {} });
-    expect(answer.status).toBe(401);
+    const ts = "1700000000";
+    const body = JSON.stringify({
+      event_name: "user_send_text",
+      timestamp: ts,
+      sender: { id: "u1" },
+      message: { text: "hi", msg_id: "m1" },
+    });
+    const signed = { "X-ZEvent-Signature": `mac=${computeZaloSignature("x", body, ts, "x")}` };
+    const unsigned = { "x-zevent-signature": "mac=00" };
+    expect(zaloChannel.webhook.verify(adapter, { rawBody: body, headers: signed })).toBe(true);
+    expect(zaloChannel.webhook.verify(adapter, { rawBody: body, headers: unsigned })).toBe(false);
+    expect(await zaloChannel.webhook.ingest(adapter, JSON.parse(body))).toBe("no_handler");
+    const seen: string[] = [];
+    adapter.onInbound(async (e) => void seen.push(e.text));
+    expect(await zaloChannel.webhook.ingest(adapter, JSON.parse(body))).toBe("delivered");
+    expect(seen).toEqual(["hi"]);
+    expect(await zaloChannel.webhook.ingest(adapter, [])).toBe("malformed");
+    expect(await zaloChannel.webhook.ingest(adapter, null)).toBe("malformed");
   });
 });
