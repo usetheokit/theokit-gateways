@@ -80,14 +80,13 @@ async function setup(
 ) {
   const counts = { released: 0 };
   const errors: Error[] = [];
-  const runner: GatewayRunner = new GatewayRunner({
+  const runner = new GatewayRunner({
     adapters: [adapter],
     handler: createAgentHandler({
       agentFor: async () => {
         const agent = await make();
         return { agent, release: () => void counts.released++ };
       },
-      adapter: (p) => runner.adapter(p),
       ...extra,
     }),
     hooks: [
@@ -107,8 +106,7 @@ describe("createAgentHandler", () => {
     const { adapter, counts } = await setup(async () => agentOf([text("Hello "), text("world")]));
     expect(texts(adapter)).toEqual(["Hello world"]);
     expect(counts.released).toBe(1);
-    expect(adapter.typing).toBeGreaterThanOrEqual(0);
-  });
+      });
 
   it("replies noAnswerText for an empty answer", async () => {
     const { adapter } = await setup(async () => agentOf([]));
@@ -156,6 +154,32 @@ describe("createAgentHandler", () => {
     await setup(async () => agentOf([text("ok")]), { ackEmoji: "eyes" }, adapter);
     expect(adapter.reacts).toEqual([["1", "1", "eyes"]]);
     expect(texts(adapter)).toEqual(["ok"]);
+  });
+
+  it("called directly, reacts through ctx only and never touches typing", async () => {
+    const adapter = new FakeAdapter();
+    const sent: string[] = [];
+    const reacts: Array<[string, string]> = [];
+    const handler = createAgentHandler({
+      agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => {} }),
+      ackEmoji: "eyes",
+    });
+    const reply = async (t: string) => {
+      sent.push(t);
+      return { ok: true };
+    };
+    await handler(EVENT, {
+      event: EVENT,
+      reply,
+      react: async (m: string, e: string) => {
+        reacts.push([m, e]);
+        throw new Error("nope");
+      },
+    });
+    await handler(EVENT, { event: EVENT, reply }); // a context without react
+    expect(sent).toEqual(["ok", "ok"]);
+    expect(reacts).toEqual([["1", "eyes"]]);
+    expect(adapter.typing).toBe(0);
   });
 
   it("falls back to the default text when noAnswerText or errorText is empty", async () => {

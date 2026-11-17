@@ -54,6 +54,11 @@ export interface GatewayContext {
       attachments?: ReadonlyArray<OutboundAttachment>;
     },
   ): Promise<SendResult>;
+  /**
+   * React to a message in the originating channel (auto-routed to the event's adapter). Absent
+   * on contexts built by runners older than this member.
+   */
+  react?(messageId: string, emoji: string): Promise<SendResult>;
   /** The triggering event. */
   readonly event: GatewayMessageEvent;
 }
@@ -714,6 +719,7 @@ export class GatewayRunner {
   private buildContext(event: GatewayMessageEvent, adapter: BasePlatformAdapter): GatewayContext {
     return {
       event,
+      react: (messageId, emoji) => adapter.react(event.channel.id, messageId, emoji),
       reply: async (text, opts) =>
         this.deliver(event, adapter, {
           channel: event.channel,

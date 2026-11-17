@@ -1,5 +1,4 @@
 import type {
-  BasePlatformAdapter,
   GatewayContext,
   GatewayHandler,
   MessageEvent,
@@ -39,8 +38,6 @@ export interface AgentHandlerOptions {
   prompt?(event: MessageEvent): string;
   /** React to the inbound message when the turn starts. Typing is the runner's job. */
   ackEmoji?: string;
-  /** The adapter for a platform, used for the ack reaction (e.g. `(p) => runner.adapter(p)`). */
-  adapter?(platform: MessageEvent["platform"]): BasePlatformAdapter | undefined;
   /** Called with each progress line; return a line to send, or undefined to skip. Default: none sent. */
   progress?(output: AgentOutputEvent): string | undefined;
   /** Exact values masked out of every reply and progress line. */
@@ -194,7 +191,7 @@ async function answer(
   ctx: GatewayContext,
   agent: TurnAgent,
 ): Promise<{ failure?: string; fatal?: unknown }> {
-  await ackReaction(options.adapter?.(event.platform), event, options.ackEmoji);
+  await ackReaction(ctx, event, options.ackEmoji);
   const state = await runTurn(options, event, ctx, agent);
   if (state.failed) return { failure: state.code ?? NO_CODE };
   const reply =

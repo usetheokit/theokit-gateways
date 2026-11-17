@@ -1,4 +1,4 @@
-import type { BasePlatformAdapter, MessageEvent } from "@theokit/gateway";
+import type { GatewayContext, MessageEvent } from "@theokit/gateway";
 
 /**
  * The id the platform gave the inbound message, which is what `react` takes: `event.id` is the
@@ -18,17 +18,18 @@ export function inboundMessageId(event: MessageEvent): string {
 }
 
 /**
- * Reacts to the inbound message with `emoji`. Best effort: a refusal or a throw is swallowed.
- * Typing is not started here; `GatewayRunner` already shows it around every handler call.
+ * Reacts to the inbound message with `emoji` through `ctx.react`. Best effort: a missing `react`
+ * (older runner), a refusal or a throw is swallowed. Typing is not started here; `GatewayRunner`
+ * already shows it around every handler call.
  */
 export async function ackReaction(
-  adapter: BasePlatformAdapter | undefined,
+  ctx: GatewayContext,
   event: MessageEvent,
   emoji: string | undefined,
 ): Promise<void> {
-  if (adapter === undefined || emoji === undefined || emoji === "") return;
+  if (emoji === undefined || emoji === "") return;
   try {
-    await adapter.react(event.channel.id, inboundMessageId(event), emoji);
+    await ctx.react?.(inboundMessageId(event), emoji);
   } catch {
     /* best effort */
   }

@@ -41,7 +41,7 @@ streamed text, including a value split across frames, and again from the final t
 starts no typing indicator: `GatewayRunner` already shows and renews one.
 
 ```ts
-const runner: GatewayRunner = new GatewayRunner({
+const runner = new GatewayRunner({
   adapters: [telegram],
   secrets: [apiKey],
   handler: createAgentHandler({
@@ -49,7 +49,6 @@ const runner: GatewayRunner = new GatewayRunner({
       const agent = await registry.agentFor(router.sessionKey(event));
       return { agent, release: () => registry.release(agent) };
     },
-    adapter: (platform) => runner.adapter(platform), // lets `ackEmoji` react to the inbound message
     ackEmoji: "eyes", // best effort; a failing reaction never fails the turn
     secrets: [apiKey],
     progress: (output) => (output.type === "tool-call" ? `Running ${output.name}…` : undefined),
