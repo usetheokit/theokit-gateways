@@ -66,3 +66,25 @@ await runner.start();
   it is not an identity the adapter can stand behind. An essay with no plain text is skipped too.
 - A stream that stays open but goes silent is not detected; only its end or an error reconnects.
 - `disconnect()` does not delete the channel on the ship; the ship removes idle channels itself.
+
+## Channel descriptor
+
+`tlonUrbitChannel` is a `ChannelDescriptor` for `createChannels` and `configFromEnv`:
+
+```typescript
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { tlonUrbitChannel } from "@theokit/gateway-tlon-urbit";
+
+const { config, missing } = configFromEnv(tlonUrbitChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: tlonUrbitChannel, config }]);
+```
+
+| Key | Env name | Required | Secret |
+| --- | --- | --- | --- |
+| `shipUrl` | `TLON_URBIT_SHIP_URL` | yes | no |
+| `ship` | `TLON_URBIT_SHIP` | yes | no |
+| `code` | `TLON_URBIT_CODE` | yes | yes |
+| `connectTimeoutMs` | `TLON_URBIT_CONNECT_TIMEOUT_MS` | no | no |
+
+`connectTimeoutMs` accepts a number or a digit string. `create` throws `ConfigurationError`
+(`invalid_config`) naming the key for any other shape. Transport is `socket`.
