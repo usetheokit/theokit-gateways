@@ -13,10 +13,11 @@ export async function deliverText(
   adapter: BasePlatformAdapter,
   channelId: string,
   text: string,
+  channelType: "dm" | "group" = "dm",
 ): Promise<string | undefined> {
   try {
     const presenter = new ChatPresenter({
-      channel: { id: channelId, type: "dm" },
+      channel: { id: channelId, type: channelType },
       ...channelRendering(adapter.platform),
     });
     presenter.present({ type: "text", text });
