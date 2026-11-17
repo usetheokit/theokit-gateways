@@ -12,8 +12,10 @@
 
 import { chunkText } from "@theokit/gateway";
 
+/** The most characters one Slack message carries here; also the splitter window. */
 export const SLACK_MAX_TEXT = 4000;
 
+/** Split `text` into chunks of at most `SLACK_MAX_TEXT` characters. */
 export function splitForSlack(text: string): string[] {
   return chunkText(text, {
     limit: SLACK_MAX_TEXT,

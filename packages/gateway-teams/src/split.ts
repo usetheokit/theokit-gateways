@@ -20,6 +20,7 @@ import { chunkText } from "@theokit/gateway";
  */
 export const __splitMarker: unique symbol = Symbol("split");
 
+/** The most characters one Teams message carries here; also the splitter window. */
 export const TEAMS_MAX_TEXT = 8000;
 
 /**
