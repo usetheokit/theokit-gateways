@@ -39,7 +39,3 @@ endpoints and event field names (`/api/channels/{id}/messages`, `/api/realtime/w
 against scripted fakes. No send-and-receive run against a real Buzz account has been recorded; the
 live suite is `integration/tests/buzz/live.test.ts`. Confirm the wire shapes against a live server
 before relying on this.
-
-## Capabilities
-
-`adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.

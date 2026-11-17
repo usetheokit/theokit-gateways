@@ -6,7 +6,6 @@
  */
 
 import {
-  type AdapterCapabilities,
   BasePlatformAdapter,
   channelRendering,
   type MessageEvent as GatewayMessageEvent,
@@ -17,7 +16,7 @@ import {
 import { type EventSubMetadata, EventSubSession } from "./eventsub.js";
 import { HelixClient } from "./helix.js";
 import { refuseAttachments } from "./refuse-attachments.js";
-import { splitForTwitch, TWITCH_MESSAGE_LIMIT } from "./split.js";
+import { splitForTwitch } from "./split.js";
 import type { FetchLike, TwitchAdapterOptions, TwitchSocket } from "./types.js";
 
 const LABEL = "gateway-twitch";
@@ -52,11 +51,6 @@ const defaultSocketFactory = (url: string): TwitchSocket =>
  */
 export class TwitchAdapter extends BasePlatformAdapter {
   readonly platform = "twitch" as const;
-
-  /** The platform facts; `maxMessageChars` is the splitter\'s limit. */
-  override get capabilities(): AdapterCapabilities {
-    return { ...super.capabilities, maxMessageChars: TWITCH_MESSAGE_LIMIT };
-  }
   private readonly opts: TwitchAdapterOptions;
   private readonly helix: HelixClient;
   private readonly session: EventSubSession;

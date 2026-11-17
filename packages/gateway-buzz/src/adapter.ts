@@ -5,11 +5,11 @@
  * @public
  */
 
-import type { AdapterCapabilities, OutboundMessage, SendResult } from "@theokit/gateway";
+import type { OutboundMessage, SendResult } from "@theokit/gateway";
 import { RealtimeBotAdapter } from "@theokit/gateway-bot-realtime";
 
 import { refuseAttachments } from "./refuse-attachments.js";
-import { BUZZ_MESSAGE_LIMIT, splitForBuzz } from "./split.js";
+import { splitForBuzz } from "./split.js";
 import type { BuzzAdapterOptions } from "./types.js";
 
 /**
@@ -25,11 +25,6 @@ import type { BuzzAdapterOptions } from "./types.js";
  */
 export class BuzzAdapter extends RealtimeBotAdapter {
   readonly platform = "buzz" as const;
-
-  /** The platform facts; `maxMessageChars` is the splitter\'s limit. */
-  override get capabilities(): AdapterCapabilities {
-    return { ...super.capabilities, maxMessageChars: BUZZ_MESSAGE_LIMIT };
-  }
 
   /** @throws Error when `baseUrl`, `token`, `workspaceId` or `botUserId` is missing */
   constructor(opts: BuzzAdapterOptions) {
