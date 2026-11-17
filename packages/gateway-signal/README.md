@@ -50,6 +50,15 @@ within `connectTimeoutMs` (10 s by default).
 - A group message has `channel.id` `"group.<groupId>"` and `channel.type` `"group"`; a reply to
   that id goes to the group.
 
+## Sender key
+
+By default `sender.id` is the sender's UUID (the number when signal-cli sends no UUID). Pass
+`senderKey: "number"` to use the phone number instead (the UUID when the sender hides their
+number), so an app that lists owners as `+5511...` matches them. `signal.sourceNumber` and
+`signal.sourceUuid` stay set either way, and a DM's `channel.id` still uses the number. Any
+other value throws a `ConfigurationError` with code `invalid_config`. Matching owners stays in
+your app.
+
 ## Formatting
 
 Signal has no markdown mode. With `format: "markdown"`, the adapter removes the markers of
