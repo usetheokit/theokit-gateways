@@ -5,7 +5,7 @@
  * @public
  */
 
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { GatewayConfigurationError } from "../errors/config-error.js";
@@ -77,9 +77,10 @@ export function createFilePairingStore(options: {
 
   function persist(next: Set<string>): void {
     mkdirSync(options.dir, { recursive: true });
-    const tmp = `${path}.${process.pid}.${random(0, 1e9)}.tmp`;
+    const tmp = `${path}.${process.pid}.${randomUUID()}.tmp`;
     writeFileSync(tmp, JSON.stringify({ paired: [...next].sort((a, b) => a.localeCompare(b)) }), {
       mode: 0o600,
+      flag: "wx",
     });
     renameSync(tmp, path);
   }

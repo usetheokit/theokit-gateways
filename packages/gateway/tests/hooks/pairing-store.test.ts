@@ -19,6 +19,14 @@ describe("pairing store", () => {
     expect(statSync(join(d, "pairing.json")).mode & 0o777).toBe(0o600);
     expect(createFilePairingStore({ dir: d }).isPaired("telegram", "1")).toBe(true);
   });
+  it("does not reuse a pre-existing temp file's permissions", async () => {
+    const d = dir();
+    writeFileSync(join(d, `pairing.json.${process.pid}.5.tmp`), "x", { mode: 0o644 });
+    const s = createFilePairingStore({ dir: d, random: () => 5 });
+    const c = s.issue("a", "1");
+    await s.approve(c);
+    expect(statSync(join(d, "pairing.json")).mode & 0o777).toBe(0o600);
+  });
   it("rejects unknown and expired codes", async () => {
     let t = 0;
     const s = createFilePairingStore({ dir: dir(), clock: () => t });
