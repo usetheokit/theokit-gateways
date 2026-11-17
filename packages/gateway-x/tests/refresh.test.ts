@@ -157,6 +157,59 @@ describe("credentialStore failures", () => {
     expect(data.get("x-refresh-token:100")).toBe("rt2");
   });
 
+  it("keeps the newer token when a held retry of an older one finishes late", async () => {
+    const data = new Map<string, string>();
+    let failFirst = true;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let heldOnce = false;
+    const store = {
+      get: async (k: string) => data.get(k),
+      set: async (k: string, v: string) => {
+        if (failFirst) {
+          failFirst = false;
+          throw new Error("disk full");
+        }
+        if (v === "rt1" && !heldOnce) {
+          heldOnce = true;
+          await gate;
+        }
+        data.set(k, v);
+      },
+    };
+    let n = 0;
+    const opts = {
+      userId: "100",
+      username: "@theobot",
+      clientId: "cid",
+      clientSecret: "csec",
+      refreshToken: "env",
+      credentialStore: store,
+      fetch: async (url: string) =>
+        url.endsWith("/2/oauth2/token")
+          ? {
+              status: 200,
+              text: async () =>
+                JSON.stringify({
+                  access_token: `at${++n}`,
+                  refresh_token: `rt${n}`,
+                  expires_in: 7200,
+                }),
+            }
+          : { status: 200, text: async () => JSON.stringify({ data: [] }) },
+    } as unknown as XAdapterOptions;
+    const api = new XApi(opts, () => 0);
+    await expect(api.refresh()).rejects.toThrow("disk full"); // rt1 unsaved
+    const a = api.mentions(undefined, 5); // retry of rt1, held
+    await new Promise((r) => setTimeout(r, 10));
+    const b = api.refresh(); // rotation to rt2, queued behind the held write
+    await new Promise((r) => setTimeout(r, 10));
+    release();
+    await Promise.all([a, b]);
+    // a restart reads the store, which must hold the newer token
+    expect(await store.get("x-refresh-token:100")).toBe("rt2");
+  });
+
   it("lets an empty stored value win over the configured token", async () => {
     const bodies: string[] = [];
     const data = new Map([["x-refresh-token:100", ""]]);

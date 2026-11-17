@@ -71,6 +71,8 @@ export class XApi {
   private storedLoaded = false;
   /** A rotated token the store has not accepted yet; retried before any further call. */
   private unsaved: string | undefined;
+  /** Tail of the chain that serialises credential store writes. */
+  private writes: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly opts: XAdapterOptions,
@@ -112,10 +114,20 @@ export class XApi {
     }
   }
 
-  private async retryUnsaved(): Promise<void> {
-    if (this.unsaved === undefined) return;
-    await this.opts.credentialStore?.set(this.credentialKey, this.unsaved);
-    this.unsaved = undefined;
+  /**
+   * Write the unsaved token. Every store write goes through one chain, so writes happen in order,
+   * and a write of a token that a newer rotation replaced is dropped.
+   */
+  private retryUnsaved(): Promise<void> {
+    const token = this.unsaved;
+    if (token === undefined) return Promise.resolve();
+    const job = this.writes.then(async () => {
+      if (this.unsaved !== token) return;
+      await this.opts.credentialStore?.set(this.credentialKey, token);
+      if (this.unsaved === token) this.unsaved = undefined;
+    });
+    this.writes = job.catch(() => {});
+    return job;
   }
 
   private async doRefresh(): Promise<string> {
