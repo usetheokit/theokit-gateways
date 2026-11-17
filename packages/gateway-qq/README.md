@@ -44,3 +44,7 @@ response.status(answer.status).json(answer.body ?? {});
 Unverified: no send-and-receive run against a real QQ Bot has been recorded. The wire shapes are
 written from the QQ Bot open platform docs. The live suite needs a QQ Bot (AppID, AppSecret) and a
 user who has messaged it.
+
+## Capabilities
+
+`adapter.capabilities.maxMessageChars` is `2000` (the splitter limit) and `threads` is `false`. See `@theokit/gateway` for the field meanings.

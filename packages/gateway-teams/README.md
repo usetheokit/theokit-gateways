@@ -152,3 +152,7 @@ message it drops.
 **Upgrading:** before this option the adapter delivered every group message. Pass
 `requireMention: false` to keep that behaviour.
 
+
+## Capabilities
+
+`adapter.capabilities.maxMessageChars` is `8000` (the splitter limit) and `threads` is `false`. See `@theokit/gateway` for the field meanings.

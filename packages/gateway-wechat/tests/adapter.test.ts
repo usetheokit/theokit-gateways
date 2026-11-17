@@ -4,6 +4,7 @@ import {
   computeWeChatSignature,
   parseWeChatXml,
   splitForWeChat,
+  WECHAT_MESSAGE_LIMIT,
   WeChatAdapter,
   type WeChatFetch,
 } from "../src/index.js";
@@ -207,5 +208,13 @@ describe("GatewayRunner drives WeChatAdapter", () => {
       msgtype: "text",
       text: { content: "hello back" },
     });
+  });
+});
+
+describe("WeChatAdapter.capabilities", () => {
+  it("reports the splitter limit and threads", () => {
+    const c = new WeChatAdapter({ appId: "wx1", appSecret: "s", token: "t" }).capabilities;
+    expect(c.maxMessageChars).toBe(WECHAT_MESSAGE_LIMIT);
+    expect(c.threads).toBe(false);
   });
 });

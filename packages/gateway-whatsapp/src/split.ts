@@ -13,8 +13,10 @@
 
 import { chunkText } from "@theokit/gateway";
 
-const WHATSAPP_MAX_TEXT = 4096;
+/** The most characters one WhatsApp message carries here; also the splitter window. */
+export const WHATSAPP_MAX_TEXT = 4096;
 
+/** Split `text` into chunks of at most `WHATSAPP_MAX_TEXT` characters. */
 export function splitForWhatsApp(text: string): string[] {
   return chunkText(text, {
     limit: WHATSAPP_MAX_TEXT,
