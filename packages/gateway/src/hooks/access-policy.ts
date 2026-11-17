@@ -103,9 +103,17 @@ export function createAccessPolicyHook(options: AccessPolicyOptions): GatewayHoo
 
   const ownerMessage = async (text: string): Promise<HookDecision | undefined> => {
     const m = /^\/approve\s+(\d{6})\s*$/.exec(text.trim());
-    if (!m?.[1] || !store) return undefined;
+    if (!m?.[1]) return undefined;
+    if (!store) return { block: true, message: "Pairing is not enabled." };
     const r = await store.approve(m[1]);
-    return { block: true, message: r.ok ? "Paired." : "Unknown or expired code." };
+    if (r.ok) return { block: true, message: "Paired." };
+    return {
+      block: true,
+      message:
+        r.reason === "write_failed"
+          ? "Saving the pairing failed. Check the storage and send the code again."
+          : "Unknown or expired code.",
+    };
   };
 
   const isPaired = (event: MessageEvent): boolean =>

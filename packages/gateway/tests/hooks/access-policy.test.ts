@@ -113,6 +113,23 @@ describe("access policy", () => {
     expect(d.block).toBe(true);
     expect(d.message).toBeUndefined();
   });
+  it("handles the owner's /approve without a store and reports a failed save", async () => {
+    const noStore = createAccessPolicyHook({ ...base, dm: "open" });
+    expect(await noStore.pre_inbound?.({ event: ev("telegram", "1", "/approve 123456") })).toEqual({
+      block: true,
+      message: "Pairing is not enabled.",
+    });
+    const failing: PairingStore = {
+      issue: () => "123456",
+      approve: async () => ({ ok: false, reason: "write_failed" }),
+      isPaired: () => false,
+    };
+    const hook = createAccessPolicyHook({ ...base, dm: "pairing", pairing: failing });
+    const r = (await hook.pre_inbound?.({ event: ev("telegram", "1", "/approve 123456") })) as {
+      message: string;
+    };
+    expect(r.message).toContain("Saving the pairing failed");
+  });
   it("matches email owners case-insensitively only when email is authenticated", async () => {
     const hook = createAccessPolicyHook({
       owners: new Set(["email:Boss@Example.com"]),
