@@ -45,9 +45,8 @@ describe("teamsChannel", () => {
   it("lists exactly the secret values in configFromEnv(...).secrets", () => {
     const env = configFromEnv(descriptor, ENV, "APP_");
     expect(env.secrets).toEqual(["secret-1"]);
-    expect(teamsChannel.config.filter((f) => f.secret).map((f) => f.key)).toEqual([
-      "clientSecret",
-    ]);
+    const secretKeys = teamsChannel.config.filter((f) => f.secret).map((f) => f.key);
+    expect(secretKeys).toEqual(["clientSecret"]);
   });
 
   it.each([

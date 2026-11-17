@@ -76,9 +76,10 @@ describe("whatsappChannel", () => {
   it("lists exactly the secret values in configFromEnv(...).secrets", () => {
     const env = configFromEnv(descriptor("cloud"), CLOUD_ENV, "APP_");
     expect(env.secrets.toSorted()).toEqual(["sec-1", "tok-1", "ver-1"]);
-    expect(whatsappChannel.variants.cloud.config.filter((f) => f.secret).map((f) => f.key)).toEqual(
-      ["accessToken", "appSecret", "verifyToken"],
-    );
+    const secretKeys = whatsappChannel.variants.cloud.config
+      .filter((field) => field.secret)
+      .map((field) => field.key);
+    expect(secretKeys).toEqual(["accessToken", "appSecret", "verifyToken"]);
     expect(whatsappChannel.variants.baileys.config.some((f) => f.secret)).toBe(false);
   });
 

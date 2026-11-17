@@ -62,9 +62,8 @@ describe("googleChatChannel", () => {
   it("lists exactly the secret values in configFromEnv(...).secrets", () => {
     const env = configFromEnv(descriptor, ENV, "APP_");
     expect(env.secrets).toEqual(["pem-key"]);
-    expect(googleChatChannel.config.filter((f) => f.secret).map((f) => f.key)).toEqual([
-      "privateKey",
-    ]);
+    const secretKeys = googleChatChannel.config.filter((f) => f.secret).map((f) => f.key);
+    expect(secretKeys).toEqual(["privateKey"]);
   });
 
   it("reads client_email and private_key from serviceAccountFile", () => {
