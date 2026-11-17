@@ -60,6 +60,11 @@ interface TurnState {
   code: string | undefined;
 }
 
+/** A configured fallback that renders to nothing would send no reply, so it yields the default. */
+function nonEmpty(configured: string | undefined, fallback: string): string {
+  return configured === undefined || configured.trim() === "" ? fallback : configured;
+}
+
 async function bestEffort(task: () => Promise<unknown>): Promise<void> {
   try {
     await task();
@@ -175,7 +180,9 @@ export function createAgentHandler(options: AgentHandlerOptions): GatewayHandler
     }
     if ("fatal" in outcome) throw outcome.fatal;
     if (outcome.failure === undefined) return;
-    await bestEffort(() => replyOnce(ctx, event, options.errorText ?? DEFAULT_ERROR, secrets));
+    await bestEffort(() =>
+      replyOnce(ctx, event, nonEmpty(options.errorText, DEFAULT_ERROR), secrets),
+    );
     throw new AgentTurnError(event.platform, outcome.failure);
   };
 }
@@ -190,7 +197,8 @@ async function answer(
   await ackReaction(options.adapter?.(event.platform), event, options.ackEmoji);
   const state = await runTurn(options, event, ctx, agent);
   if (state.failed) return { failure: state.code ?? NO_CODE };
-  const reply = state.text.trim() === "" ? (options.noAnswerText ?? DEFAULT_NO_ANSWER) : state.text;
+  const reply =
+    state.text.trim() === "" ? nonEmpty(options.noAnswerText, DEFAULT_NO_ANSWER) : state.text;
   try {
     await replyOnce(ctx, event, reply, options.secrets ?? []);
   } catch (error) {

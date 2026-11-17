@@ -154,8 +154,19 @@ describe("createAgentHandler", () => {
     const adapter = new FakeAdapter();
     adapter.reactThrows = true;
     await setup(async () => agentOf([text("ok")]), { ackEmoji: "eyes" }, adapter);
-    expect(adapter.reacts).toEqual([["1", "tg-1", "eyes"]]);
+    expect(adapter.reacts).toEqual([["1", "1", "eyes"]]);
     expect(texts(adapter)).toEqual(["ok"]);
+  });
+
+  it("falls back to the default text when noAnswerText or errorText is empty", async () => {
+    const empty = await setup(async () => agentOf([]), { noAnswerText: "  " });
+    expect(texts(empty.adapter)).toEqual(["I could not come up with an answer to that."]);
+    const failed = await setup(
+      async () => agentOf([{ type: "status", status: "ERROR", message: "x" }]),
+      { errorText: "" },
+    );
+    expect(texts(failed.adapter)).toHaveLength(1);
+    expect(texts(failed.adapter)[0]).not.toBe("");
   });
 
   it("never shows a secret split across frames", async () => {
