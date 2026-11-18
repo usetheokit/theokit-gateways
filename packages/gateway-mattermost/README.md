@@ -100,7 +100,7 @@ import { configFromEnv, createChannels } from "@theokit/gateway";
 import { mattermostChannel } from "@theokit/gateway-mattermost";
 
 const { config, missing, secrets } = configFromEnv(mattermostChannel, process.env, "APP_");
-const { adapters, rejected } = createChannels([{ descriptor: mattermostChannel, config }]);
+const { adapters, rejected } = createChannels([{ descriptor: mattermostChannel, config, envPrefix: "APP_" }]);
 ```
 
 | Config key | Env name | Required | Secret |

@@ -120,7 +120,7 @@ import { configFromEnv, createChannels } from "@theokit/gateway";
 import { matrixChannel } from "@theokit/gateway-matrix";
 
 const { config, missing, secrets } = configFromEnv(matrixChannel, process.env, "APP_");
-const { adapters, rejected } = createChannels([{ descriptor: matrixChannel, config }]);
+const { adapters, rejected } = createChannels([{ descriptor: matrixChannel, config, envPrefix: "APP_" }]);
 ```
 
 | Config key | Env name | Required | Secret |

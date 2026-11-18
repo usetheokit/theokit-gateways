@@ -19,7 +19,7 @@ import { configFromEnv, createChannels } from "@theokit/gateway";
 import { emailChannel } from "@theokit/gateway-email";
 
 const { config, missing, secrets } = configFromEnv(emailChannel, process.env, "APP_");
-const { adapters, rejected } = createChannels([{ descriptor: emailChannel, config }]);
+const { adapters, rejected } = createChannels([{ descriptor: emailChannel, config, envPrefix: "APP_" }]);
 ```
 
 | Config key | Env name | Required | Secret |
