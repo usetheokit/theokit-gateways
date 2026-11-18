@@ -66,9 +66,7 @@ import { configFromEnv, createChannels } from "@theokit/gateway";
 import { wechatChannel } from "@theokit/gateway-wechat";
 
 const { config, missing, secrets } = configFromEnv(wechatChannel, process.env, "APP_");
-const { adapters, rejected } = createChannels([
-  { descriptor: wechatChannel, config, envPrefix: "APP_" },
-]);
+const { adapters, rejected } = createChannels([{ descriptor: wechatChannel, config }]);
 ```
 
 | Config key | Env name (after your prefix) | Required | Secret |

@@ -56,9 +56,7 @@ import { configFromEnv, createChannels } from "@theokit/gateway";
 import { xChannel } from "@theokit/gateway-x";
 
 const { config, missing, secrets } = configFromEnv(xChannel, process.env, "APP_");
-const { adapters, rejected } = createChannels([
-  { descriptor: xChannel, config, envPrefix: "APP_" },
-]);
+const { adapters, rejected } = createChannels([{ descriptor: xChannel, config }]);
 ```
 
 | Config key | Env name (after your prefix) | Required | Secret |
