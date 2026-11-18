@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import {
   BasePlatformAdapter,
   GatewayRunner,
@@ -15,6 +16,7 @@ class FakeAdapter extends BasePlatformAdapter {
   reacts: Array<[string, string, string]> = [];
   typing = 0;
   reactThrows = false;
+  refuse = false;
   private handler?: (event: MessageEvent) => Promise<void>;
   override async connect(): Promise<boolean> {
     return true;
@@ -22,6 +24,7 @@ class FakeAdapter extends BasePlatformAdapter {
   override async disconnect(): Promise<void> {}
   override async sendMessage(out: OutboundMessage): Promise<SendResult> {
     this.sent.push(out);
+    if (this.refuse) return { ok: false, error: { code: "blocked", message: "no" } };
     return { ok: true, messageId: `m${this.sent.length}` };
   }
   override onInbound(handler: (event: MessageEvent) => Promise<void>): () => void {
@@ -124,6 +127,34 @@ describe("createAgentHandler", () => {
     expect((errors[0] as AgentTurnError).code).toBe("AGENT_ERROR");
     expect((errors[0] as AgentTurnError).platform).toBe("telegram");
     expect(counts.released).toBe(1);
+  });
+
+  it("a refused final reply throws a delivery error and is not retried", async () => {
+    const adapter = new FakeAdapter();
+    adapter.refuse = true;
+    const { errors, counts } = await setup(async () => agentOf([text("hello")]), {}, adapter);
+    expect(texts(adapter)).toEqual(["hello"]);
+    expect(errors[0]).toBeInstanceOf(AgentTurnError);
+    expect((errors[0] as AgentTurnError).code).toBe("reply_refused");
+    expect(counts.released).toBe(1);
+  });
+
+  it("never copies an exception's name or message into the error", async () => {
+    const secretName = "prompt: my password is hunter2";
+    const { errors } = await setup(async () => {
+      const e = new Error("hunter2");
+      e.name = secretName;
+      throw e;
+    });
+    const err = errors[0] as AgentTurnError;
+    expect(err).toBeInstanceOf(AgentTurnError);
+    expect(err.code).toBe("unexpected_error");
+    expect(`${err.name} ${err.message} ${err.code}`).not.toContain("hunter2");
+  });
+
+  it("requires a gateway whose context has react", () => {
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    expect(pkg.peerDependencies["@theokit/gateway"]).toMatch(/^>=0\.21\.0\b/);
   });
 
   it("agentFor rejecting still sends one error reply and rethrows", async () => {

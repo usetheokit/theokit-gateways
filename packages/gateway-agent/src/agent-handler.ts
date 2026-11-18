@@ -46,6 +46,9 @@ export interface AgentHandlerOptions {
 const DEFAULT_NO_ANSWER = "I could not come up with an answer to that.";
 const DEFAULT_ERROR = "Something went wrong while answering. Please try again.";
 const NO_CODE = "no error code";
+/** Fixed codes: an exception's own name or message may carry the prompt, so it is never copied. */
+const REPLY_REFUSED = "reply_refused";
+const UNEXPECTED = "unexpected_error";
 
 interface TurnState {
   text: string;
@@ -123,9 +126,10 @@ async function replyOnce(
   });
   presenter.present({ type: "text", text: maskSecrets(text, secrets) });
   for (const message of presenter.present({ type: "finish" })) {
-    await ctx.reply(maskSecrets(message.text, secrets), {
+    const sent = await ctx.reply(maskSecrets(message.text, secrets), {
       ...(message.format !== undefined ? { format: message.format } : {}),
     });
+    if (sent?.ok === false) throw new AgentTurnError(event.platform, REPLY_REFUSED);
   }
 }
 
@@ -166,8 +170,8 @@ export function createAgentHandler(options: AgentHandlerOptions): GatewayHandler
     try {
       lease = await options.agentFor(event);
       outcome = await answer(options, event, ctx, lease.agent);
-    } catch (error) {
-      outcome = { failure: error instanceof Error ? error.name : NO_CODE };
+    } catch (_error) {
+      outcome = { failure: UNEXPECTED };
     } finally {
       await bestEffort(async () => lease?.release());
     }
