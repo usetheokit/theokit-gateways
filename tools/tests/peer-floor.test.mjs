@@ -70,7 +70,10 @@ describe("check-peer-floor main", () => {
 
 describe("gateway-x peer floor", () => {
   it("is admitted by the workspace gateway version", () => {
-    const read = (p) => JSON.parse(readFileSync(new URL(`../../packages/${p}/package.json`, import.meta.url), "utf8"));
+    const read = (p) =>
+      JSON.parse(
+        readFileSync(new URL(`../../packages/${p}/package.json`, import.meta.url), "utf8"),
+      );
     const floor = floorOf(read("gateway-x").peerDependencies["@theokit/gateway"]);
     expect(floor).toBe("0.20.0");
     const num = (v) => v.split(".").map(Number);
