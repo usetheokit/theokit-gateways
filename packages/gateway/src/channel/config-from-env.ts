@@ -29,11 +29,7 @@ function readValue(env: Env, name: string): string | undefined {
  * Read a descriptor's fields from `env`, using `prefix + field.env` as the variable name. Fields
  * without `env` are skipped.
  */
-export function configFromEnv(
-  descriptor: ChannelDescriptor,
-  env: Env,
-  prefix = "",
-): EnvConfig {
+export function configFromEnv(descriptor: ChannelDescriptor, env: Env, prefix = ""): EnvConfig {
   const config: Record<string, string> = {};
   const missing: string[] = [];
   const secrets: string[] = [];
