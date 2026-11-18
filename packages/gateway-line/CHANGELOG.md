@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+### Patch Changes
+
+- 963a0ff: `@theokit/gateway` exports `channelConfigReaders(prefix)`, the config readers (`invalid`, `isAbsent`, `readString`, `requiredString`, `readBoolean`, `readFunction`) that channel packages each copied. `@theokit/gateway-line` uses them and raises its `@theokit/gateway` peer floor to `>=0.21.0`.
+
 ## 0.6.0
 
 ### Minor Changes
