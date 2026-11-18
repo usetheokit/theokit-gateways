@@ -53,10 +53,7 @@ function readIntents(config: Readonly<Record<string, unknown>>): GatewayIntentBi
   const expected = "an array of intent numbers or a comma-separated string of digits";
   const items: unknown[] | undefined =
     typeof value === "string"
-      ? value
-          .split(",")
-          .map((part) => part.trim())
-          .filter((part) => part.length > 0)
+      ? value.split(",").map((part) => part.trim())
       : Array.isArray(value)
         ? value
         : undefined;

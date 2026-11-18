@@ -66,19 +66,6 @@ describe("createChannels", () => {
     expect(rejection?.error.message).toContain("token");
   });
 
-  it("names the environment variable of a missing field that has one", () => {
-    const descriptor: ChannelDescriptor<MockAdapter> = {
-      ...socketDescriptor("telegram"),
-      config: [
-        { key: "token", env: "TELEGRAM_TOKEN", required: true, secret: true, description: "t" },
-      ],
-    };
-
-    const result = createChannels([{ descriptor, config: {} }]);
-
-    expect(result.rejected[0]?.error.message).toContain("token (TELEGRAM_TOKEN)");
-  });
-
   it("rejects an entry whose required field is null without calling create", () => {
     const build = vi.fn(() => new MockAdapter("telegram"));
 

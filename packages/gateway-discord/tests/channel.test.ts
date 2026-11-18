@@ -62,6 +62,8 @@ describe("discordChannel", () => {
   it.each([
     ["token", { token: 5 }],
     ["intents", { token: "t", intents: "1,x" }],
+    ["intents", { token: "t", intents: "," }],
+    ["intents", { token: "t", intents: "1,,2" }],
     ["intents", { token: "t", intents: { a: 1 } }],
     ["requireMention", { token: "t", requireMention: "yes" }],
     ["requireMention", { token: "t", requireMention: 1 }],

@@ -49,12 +49,9 @@ function missingRequiredKeys(
   entry: ChannelEntry,
   values: Readonly<Record<string, unknown>>,
 ): string[] {
-  return (
-    entry.descriptor.config
-      .filter((field) => field.required && isAbsent(values[field.key]))
-      // A field bound to a variable names it too (unprefixed: the app's prefix is not known here).
-      .map((field) => (field.env === undefined ? field.key : `${field.key} (${field.env})`))
-  );
+  return entry.descriptor.config
+    .filter((field) => field.required && isAbsent(values[field.key]))
+    .map((field) => field.key);
 }
 
 /** An entry that was refused, and the rejection that says why. */
