@@ -23,6 +23,16 @@ function requiredString(config: Readonly<Record<string, unknown>>, key: string):
   return config[key] === "" ? "" : readers.requiredString(config, key);
 }
 
+/** An optional boolean; `configFromEnv` yields strings, so `"true"` and `"false"` stand for the booleans. */
+function readBooleanLike(
+  config: Readonly<Record<string, unknown>>,
+  key: string,
+): boolean | undefined {
+  const value = config[key];
+  if (value === "true" || value === "false") return value === "true";
+  return readers.readBoolean(config, key);
+}
+
 function buildOptions(config: Readonly<Record<string, unknown>>): LineAdapterOptions {
   // Types are checked here, before the constructor: a numeric secret passes the constructor's
   // length check (`adapter.ts:32`) and would throw later, inside the signature HMAC, on the request
@@ -30,7 +40,7 @@ function buildOptions(config: Readonly<Record<string, unknown>>): LineAdapterOpt
   const channelSecret = requiredString(config, "channelSecret");
   const channelAccessToken = requiredString(config, "channelAccessToken");
   const botUserId = readers.readString(config, "botUserId");
-  const requireMention = readers.readBoolean(config, "requireMention");
+  const requireMention = readBooleanLike(config, "requireMention");
   return {
     channelSecret,
     channelAccessToken,
@@ -52,6 +62,7 @@ function headerValue(
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally, D4). */
 interface ConfigField {
   readonly key: string;
+  readonly env?: string;
   readonly required: boolean;
   readonly secret: boolean;
   readonly description: string;
@@ -60,12 +71,14 @@ interface ConfigField {
 const CONFIG: ReadonlyArray<ConfigField> = [
   {
     key: "channelSecret",
+    env: "LINE_CHANNEL_SECRET",
     required: true,
     secret: true,
     description: "The channel secret that signs inbound webhooks (LINE Developers Console).",
   },
   {
     key: "channelAccessToken",
+    env: "LINE_CHANNEL_ACCESS_TOKEN",
     required: true,
     secret: true,
     description: "The channel's long-lived access token (LINE Developers Console).",

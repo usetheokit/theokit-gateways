@@ -52,6 +52,31 @@ adapter.onInbound(async (event: MessageEvent) => {
 await adapter.disconnect();
 ```
 
+## Channel descriptor
+
+`slackChannel` describes this channel as data, for `createChannels` and `configFromEnv` in
+`@theokit/gateway`: a `socket` channel (Socket Mode, opened in `connect()`).
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { slackChannel } from "@theokit/gateway-slack";
+
+const { config, missing, secrets } = configFromEnv(slackChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: slackChannel, config }]);
+```
+
+| Field            | Variable                | Required | Secret |
+| ---------------- | ----------------------- | -------- | ------ |
+| `botToken`       | `SLACK_BOT_TOKEN`       | yes      | yes    |
+| `appToken`       | `SLACK_APP_TOKEN`       | yes      | yes    |
+| `transport`      | `SLACK_TRANSPORT`       | no       | no     |
+| `requireMention` | `SLACK_REQUIRE_MENTION` | no       | no     |
+| `logLevel`       | `SLACK_LOG_LEVEL`       | no       | no     |
+
+With the prefix `"APP_"` the variable is `APP_SLACK_BOT_TOKEN`. `create` accepts `requireMention`
+as a boolean or `"true"`/`"false"`. Any other shape throws `GatewayConfigurationError` coded
+`invalid_config`, naming the key. `create` makes no network call.
+
 ## v1 limitations (documented)
 
 - **Socket Mode only** (D268) — HTTP webhook deferred to v1.x (D269).
