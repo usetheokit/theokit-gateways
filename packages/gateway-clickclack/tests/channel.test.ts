@@ -45,9 +45,15 @@ describe("clickclackChannel", () => {
     expect(missing).toEqual([name]);
     const { rejected } = createChannels([{ descriptor: clickclackChannel, config }]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
-    const key = clickclackChannel.config.find((f) => `APP_${f.env}` === name)?.key;
-    expect(key).toBeDefined();
-    expect(rejected[0]?.error.message).toBe(`channel clickclack: missing required config ${key}`);
+    // The unset variable's full prefixed name maps to the config key the rejection names.
+    const field = clickclackChannel.config.find((f) => `APP_${f.env}` === name);
+    expect(field).toBeDefined();
+    expect(name).toBe(`APP_${field?.env}`);
+    expect(name.startsWith("APP_")).toBe(true);
+    expect(missing).toContain(name);
+    expect(rejected[0]?.error.message).toBe(
+      `channel clickclack: missing required config ${field?.key}`,
+    );
   });
 
   it("throws invalid_config naming the key for a wrongly typed value", () => {
