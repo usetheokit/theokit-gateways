@@ -84,19 +84,41 @@ const target = parseChannelTarget("slack:C0123"); // { platform: "slack", channe
 
 ```ts
 import { createChatApprover } from "@theokit/gateway-agent";
+import type { Plugin } from "@theokit/sdk";
 
 const approver = createChatApprover({
   conversationOf: (event) => `${event.platform}:${event.channel.id}`,
   isOwner: (event) => owners.has(`${event.platform}:${event.sender.id}`),
-  send: (event, text) => adapterFor(event.platform).send({ channelId: event.channel.id, text }),
+  // Adapters return `{ ok: false }` instead of throwing; throw so a failed question denies at once.
+  send: async (event, text) => {
+    const result = await adapterFor(event.platform).sendMessage({ channel: event.channel, text });
+    if (!result.ok) throw new Error(result.error?.code ?? "send_failed");
+  },
 });
 
-// Register the hook with the runner: new GatewayRunner({ hooks: [approver.hook], ... })
+// 1. Register the hook with the runner: new GatewayRunner({ hooks: [approver.hook], ... })
 
-// In the SDK's tool approval callback, ask the conversation the tool call came from
-// (kept by your app, for example per agent) and map the answer to the SDK's decision:
-async function approveTool(conversation: string, toolName: string, input: unknown) {
-  const { answer, by } = await approver.ask(conversation, `${toolName} ${JSON.stringify(input)}`);
-  return { allow: answer !== "deny", remember: answer === "always", by };
-}
+// 2. Register a `pre_tool_call` handler on the agent. The SDK allows a call unless the handler
+//    returns `{ block: true, message }`, so an approval is `undefined` and a denial is a block.
+const alwaysAllowed = new Set<string>(); // persist this yourself if "always" must survive restarts
+
+const approvals: Plugin = {
+  kind: "general",
+  name: "chat-approvals",
+  version: "1.0.0",
+  register(ctx) {
+    ctx.on("pre_tool_call", async ({ name, args, agentId }) => {
+      if (!needsApproval(name, args) || alwaysAllowed.has(name)) return undefined;
+      // The context carries no conversation: map the agent back to the one it answers in.
+      const conversation = conversationOfAgent(agentId);
+      const { answer } = await approver.ask(conversation, `${name} ${JSON.stringify(args)}`);
+      if (answer === "deny") {
+        return { block: true, message: `The owner did not approve ${name}. Do not retry it.` };
+      }
+      if (answer === "always") alwaysAllowed.add(name); // skip the question from now on
+      return undefined;
+    });
+  },
+};
+// Agent.create({ plugins: [approvals], ... })
 ```
