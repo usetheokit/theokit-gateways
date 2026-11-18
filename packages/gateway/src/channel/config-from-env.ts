@@ -18,23 +18,18 @@ export interface EnvConfig {
   readonly secrets: readonly string[];
 }
 
-function readValue(
-  env: Readonly<Record<string, string | undefined>>,
-  name: string,
-): string | undefined {
-  const value = env[name]?.trim();
-  return value ? value : undefined;
+type Env = Readonly<Record<string, string | undefined>>;
+
+/** The trimmed value of `name`, or undefined when it is unset, empty or whitespace. */
+function readValue(env: Env, name: string): string | undefined {
+  return env[name]?.trim() || undefined;
 }
 
 /**
  * Read a descriptor's fields from `env`, using `prefix + field.env` as the variable name. Fields
  * without `env` are skipped.
  */
-export function configFromEnv(
-  descriptor: ChannelDescriptor,
-  env: Readonly<Record<string, string | undefined>>,
-  prefix = "",
-): EnvConfig {
+export function configFromEnv(descriptor: ChannelDescriptor, env: Env, prefix = ""): EnvConfig {
   const config: Record<string, string> = {};
   const missing: string[] = [];
   const secrets: string[] = [];
