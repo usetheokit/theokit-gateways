@@ -56,10 +56,10 @@ import { configFromEnv, createChannels } from "@theokit/gateway";
 import { xChannel } from "@theokit/gateway-x";
 
 const { config, missing, secrets } = configFromEnv(xChannel, process.env, "APP_");
-const { adapters, rejected } = createChannels([
-  { descriptor: xChannel, config, envPrefix: "APP_" },
-]);
+const { adapters, rejected } = createChannels([{ descriptor: xChannel, config }]);
 ```
+
+`missing` lists the full variable names (with your prefix); `createChannels` names the config keys in its `missing_required_config` rejection.
 
 | Config key | Env name (after your prefix) | Required | Secret |
 | --- | --- | --- | --- |

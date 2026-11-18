@@ -35,11 +35,9 @@ describe("wechatChannel", () => {
       delete env[`APP_${field.env}`];
       const { config, missing } = configFromEnv(wechatChannel, env, "APP_");
       expect(missing).toEqual([`APP_${field.env}`]);
-      const { rejected } = createChannels([
-        { descriptor: wechatChannel, config, envPrefix: "APP_" },
-      ]);
+      const { rejected } = createChannels([{ descriptor: wechatChannel, config }]);
       expect(rejected[0]?.error.code).toBe("missing_required_config");
-      expect(rejected[0]?.error.message).toContain(`APP_${field.env}`);
+      expect(rejected[0]?.error.message).toContain(field.key);
     }
   });
 

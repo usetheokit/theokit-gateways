@@ -66,10 +66,10 @@ import { configFromEnv, createChannels } from "@theokit/gateway";
 import { wechatChannel } from "@theokit/gateway-wechat";
 
 const { config, missing, secrets } = configFromEnv(wechatChannel, process.env, "APP_");
-const { adapters, rejected } = createChannels([
-  { descriptor: wechatChannel, config, envPrefix: "APP_" },
-]);
+const { adapters, rejected } = createChannels([{ descriptor: wechatChannel, config }]);
 ```
+
+`missing` lists the full variable names (with your prefix); `createChannels` names the config keys in its `missing_required_config` rejection.
 
 | Config key | Env name (after your prefix) | Required | Secret |
 | --- | --- | --- | --- |
