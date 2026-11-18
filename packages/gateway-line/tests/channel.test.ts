@@ -272,9 +272,11 @@ describe("lineChannel env bindings", () => {
     delete env[variable];
     const { config, missing } = configFromEnv(lineChannel, env, "APP_");
     expect(missing).toEqual([variable]);
-    const result = createChannels([{ descriptor: lineChannel, config }]);
+    const result = createChannels([{ descriptor: lineChannel, config, envPrefix: "APP_" }]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toBe(`channel line: missing required config ${key}`);
+    expect(result.rejected[0]?.error.message).toBe(
+      `channel line: missing required config ${key} (env ${variable})`,
+    );
   });
 
   it("collects only secret values", () => {

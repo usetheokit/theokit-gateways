@@ -42,9 +42,11 @@ describe("slackChannel", () => {
     delete env[variable];
     const { config, missing } = configFromEnv(slackChannel, env, "APP_");
     expect(missing).toEqual([variable]);
-    const result = createChannels([{ descriptor: slackChannel, config }]);
+    const result = createChannels([{ descriptor: slackChannel, config, envPrefix: "APP_" }]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toBe(`channel slack: missing required config ${key}`);
+    expect(result.rejected[0]?.error.message).toBe(
+      `channel slack: missing required config ${key} (env ${variable})`,
+    );
   });
 
   it("collects only secret values", () => {

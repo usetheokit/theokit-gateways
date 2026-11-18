@@ -102,10 +102,10 @@ describe("telegramChannel env bindings", () => {
   it("reports the unset variable, and createChannels rejects it", () => {
     const { config, missing } = configFromEnv(telegramChannel, {}, "APP_");
     expect(missing).toEqual(["APP_TELEGRAM_TOKEN"]);
-    const result = createChannels([{ descriptor: telegramChannel, config }]);
+    const result = createChannels([{ descriptor: telegramChannel, config, envPrefix: "APP_" }]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
     expect(result.rejected[0]?.error.message).toBe(
-      "channel telegram: missing required config token",
+      "channel telegram: missing required config token (env APP_TELEGRAM_TOKEN)",
     );
   });
 
