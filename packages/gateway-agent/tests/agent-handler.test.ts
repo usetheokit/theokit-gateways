@@ -156,6 +156,28 @@ describe("createAgentHandler", () => {
     expect(texts(adapter)).toEqual(["ok"]);
   });
 
+  it("a ctx whose react cannot be resolved still runs the turn and sends no error reply", async () => {
+    for (const ackEmoji of ["eyes", undefined]) {
+      const sent: string[] = [];
+      const handler = createAgentHandler({
+        agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => {} }),
+        ...(ackEmoji ? { ackEmoji } : {}),
+      });
+      const ctx = {
+        event: EVENT,
+        reply: async (t: string) => {
+          sent.push(t);
+          return { ok: true };
+        },
+        get react(): never {
+          throw new Error("no adapter");
+        },
+      };
+      await handler(EVENT, ctx as never);
+      expect(sent).toEqual(["ok"]);
+    }
+  });
+
   it("called directly, reacts through ctx only and never touches typing", async () => {
     const adapter = new FakeAdapter();
     const sent: string[] = [];
@@ -168,15 +190,24 @@ describe("createAgentHandler", () => {
       sent.push(t);
       return { ok: true };
     };
-    await handler(EVENT, {
+    const touched = new Set<string>();
+    const base = {
       event: EVENT,
       reply,
       react: async (m: string, e: string) => {
         reacts.push([m, e]);
         throw new Error("nope");
       },
+    };
+    const spy = new Proxy(base, {
+      get(target, key, receiver) {
+        touched.add(String(key));
+        return Reflect.get(target, key, receiver);
+      },
     });
+    await handler(EVENT, spy);
     await handler(EVENT, { event: EVENT, reply }); // a context without react
+    expect([...touched].filter((k) => /typing/i.test(k))).toEqual([]);
     expect(sent).toEqual(["ok", "ok"]);
     expect(reacts).toEqual([["1", "eyes"]]);
     expect(adapter.typing).toBe(0);
