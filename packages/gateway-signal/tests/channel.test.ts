@@ -50,8 +50,9 @@ describe("signalChannel", () => {
     const result = createChannels([{ descriptor: signalChannel, config, envPrefix: "APP_" }]);
     expect(result.adapters).toEqual([]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toContain("account");
-    expect(result.rejected[0]?.error.message).toContain("APP_SIGNAL_ACCOUNT");
+    expect(result.rejected[0]?.error.message).toBe(
+      "channel signal: missing required config account (APP_SIGNAL_ACCOUNT)",
+    );
   });
 
   it("collects no secrets: no field is secret", () => {
