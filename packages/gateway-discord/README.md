@@ -52,6 +52,30 @@ stderr line says why. `deliver()` and the socket path apply the same rule, and `
 **Upgrading:** before this option the adapter delivered every group message. Pass
 `requireMention: false` to keep that behaviour.
 
+## Channel descriptor
+
+`discordChannel` describes this channel as data, for `createChannels` and `configFromEnv` in
+`@theokit/gateway`: a `socket` channel, since the bot opens its own websocket in `connect()`.
+
+```typescript
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { discordChannel } from "@theokit/gateway-discord";
+
+const { config, missing, secrets } = configFromEnv(discordChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: discordChannel, config }]);
+```
+
+| Field            | Variable                  | Required | Secret |
+| ---------------- | ------------------------- | -------- | ------ |
+| `token`          | `DISCORD_TOKEN`           | yes      | yes    |
+| `intents`        | `DISCORD_INTENTS`         | no       | no     |
+| `requireMention` | `DISCORD_REQUIRE_MENTION` | no       | no     |
+
+With the prefix `"APP_"` the variable is `APP_DISCORD_TOKEN`. `create` accepts `intents` as an
+array of numbers or a comma-separated string of digits, and `requireMention` as a boolean or
+`"true"`/`"false"`. Any other shape throws `GatewayConfigurationError` coded `invalid_config`,
+naming the key. `create` makes no network call.
+
 ## Limitations (v0.1)
 
 - **Text-trigger commands only.** Proper Discord slash commands (registered via Application Commands API) are out of scope — use `event.text.startsWith("!cmd")` for now.
