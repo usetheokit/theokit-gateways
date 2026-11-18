@@ -67,10 +67,10 @@ describe("mattermostChannel", () => {
 });
 
 describe("mattermostChannel null and overflow", () => {
-  it("rejects null for a supplied optional value instead of treating it as absent", () => {
+  it("treats null as absent, like the shared readers", () => {
     const { config } = configFromEnv(mattermostChannel, ENV, "APP_");
     for (const key of ["requireMention"]) {
-      expect(() => mattermostChannel.create({ ...config, [key]: null })).toThrow(new RegExp(key));
+      expect(() => mattermostChannel.create({ ...config, [key]: null })).not.toThrow();
     }
   });
 });

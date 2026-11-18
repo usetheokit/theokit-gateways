@@ -87,10 +87,10 @@ describe("emailChannel list, number and boolean values", () => {
 });
 
 describe("emailChannel null and overflow", () => {
-  it("rejects null for a supplied optional value instead of treating it as absent", () => {
+  it("treats null as absent, like the shared readers", () => {
     const { config } = configFromEnv(emailChannel, ENV, "APP_");
     for (const key of ["allowedSenders", "imapPort", "fromName", "allowAutomated", "cursorStore"]) {
-      expect(() => emailChannel.create({ ...config, [key]: null })).toThrow(new RegExp(key));
+      expect(() => emailChannel.create({ ...config, [key]: null })).not.toThrow();
     }
   });
 

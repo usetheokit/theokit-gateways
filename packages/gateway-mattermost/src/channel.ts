@@ -5,19 +5,19 @@
  * package's typecheck is where a drift between the two fails.
  */
 
+import { channelConfigReaders } from "@theokit/gateway";
 import { MattermostAdapter } from "./adapter.js";
 import { ConfigurationError } from "./errors.js";
 
-function invalid(key: string, expected: string): ConfigurationError {
-  return new ConfigurationError({
-    code: "invalid_config",
-    message: `gateway-mattermost: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
+const readers = channelConfigReaders(
+  "gateway-mattermost",
+  (options) => new ConfigurationError(options),
+);
+const { invalid, isAbsent } = readers;
 
 type Config = Readonly<Record<string, unknown>>;
 
+/** `configFromEnv` yields strings, so these readers also take the string forms. */
 function toFiniteNumber(value: unknown): number | undefined {
   if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
   if (typeof value !== "string" || !/^[0-9]+$/.test(value.trim())) return undefined;
@@ -25,56 +25,36 @@ function toFiniteNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-/** Coercing readers bound to one error factory. */
-interface ConfigReaders {
-  string(config: Config, key: string): string;
-  optionalString(config: Config, key: string): string | undefined;
-  boolean(config: Config, key: string): boolean | undefined;
-  number(config: Config, key: string): number | undefined;
-  list(config: Config, key: string): string[] | undefined;
-}
-
-function createConfigReaders(invalid: (key: string, expected: string) => Error): ConfigReaders {
-  const string = (config: Config, key: string): string => {
+const read = {
+  string: readers.requiredString,
+  optionalString: readers.readString,
+  boolean(config: Config, key: string): boolean | undefined {
     const value = config[key];
-    if (typeof value !== "string") throw invalid(key, "a string");
-    if (value.trim().length === 0) throw invalid(key, "a non-empty string");
-    return value;
-  };
-  return {
-    string,
-    optionalString: (config, key) => (config[key] === undefined ? undefined : string(config, key)),
-    boolean(config, key) {
-      const value = config[key];
-      if (value === undefined) return undefined;
-      if (typeof value === "boolean") return value;
-      if (value === "true") return true;
-      if (value === "false") return false;
-      throw invalid(key, 'a boolean or the string "true" or "false"');
-    },
-    number(config, key) {
-      const value = config[key];
-      if (value === undefined) return undefined;
-      const parsed = toFiniteNumber(value);
-      if (parsed !== undefined) return parsed;
-      throw invalid(key, "a number or a digit string");
-    },
-    list(config, key) {
-      const value = config[key];
-      if (value === undefined) return undefined;
-      if (typeof value === "string") {
-        return value
-          .split(",")
-          .map((item) => item.trim())
-          .filter((item) => item.length > 0);
-      }
-      if (Array.isArray(value) && value.every((item) => typeof item === "string")) return value;
-      throw invalid(key, "an array of strings or a comma-separated string");
-    },
-  };
-}
-
-const read = createConfigReaders(invalid);
+    if (isAbsent(value)) return undefined;
+    if (value === true || value === "true") return true;
+    if (value === false || value === "false") return false;
+    throw invalid(key, 'a boolean or the string "true" or "false"');
+  },
+  number(config: Config, key: string): number | undefined {
+    const value = config[key];
+    if (isAbsent(value)) return undefined;
+    const parsed = toFiniteNumber(value);
+    if (parsed !== undefined) return parsed;
+    throw invalid(key, "a number or a digit string");
+  },
+  list(config: Config, key: string): string[] | undefined {
+    const value = config[key];
+    if (isAbsent(value)) return undefined;
+    if (typeof value === "string") {
+      return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+    }
+    if (Array.isArray(value) && value.every((item) => typeof item === "string")) return value;
+    throw invalid(key, "an array of strings or a comma-separated string");
+  },
+};
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
 interface ConfigField {

@@ -68,10 +68,10 @@ describe("matrixChannel", () => {
 });
 
 describe("matrixChannel null and overflow", () => {
-  it("rejects null for a supplied optional value instead of treating it as absent", () => {
+  it("treats null as absent, like the shared readers", () => {
     const { config } = configFromEnv(matrixChannel, ENV, "APP_");
     for (const key of ["requireMention", "freshnessWindowMs", "acceptInvite"]) {
-      expect(() => matrixChannel.create({ ...config, [key]: null })).toThrow(new RegExp(key));
+      expect(() => matrixChannel.create({ ...config, [key]: null })).not.toThrow();
     }
   });
 
