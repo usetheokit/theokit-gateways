@@ -210,6 +210,10 @@ export class QQAdapter extends BasePlatformAdapter {
     if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
       return { status: 400, reason: "body is not a JSON object" };
     }
+    const nested = (payload as { d?: unknown }).d;
+    if (nested !== undefined && (typeof nested !== "object" || nested === null)) {
+      return { status: 400, reason: "d is not a JSON object" };
+    }
     const event = toMessageEvent(payload as QQWebhookPayload);
     if (event === undefined) return { status: 200, reason: "not a direct text message" };
     // Before dispatch: the handler's reply is the one that answers this message.

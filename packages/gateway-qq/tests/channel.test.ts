@@ -56,6 +56,8 @@ describe("qqChannel", () => {
     expect(await qqChannel.webhook.ingest(adapter, { op: 11 })).toBe("delivered");
     expect(await qqChannel.webhook.ingest(adapter, null)).toBe("malformed");
     expect(await qqChannel.webhook.ingest(adapter, "x")).toBe("malformed");
+    const nullNested = { op: 0, t: "C2C_MESSAGE_CREATE", d: null };
+    expect(await qqChannel.webhook.ingest(adapter, nullNested)).toBe("malformed");
     expect(seen).toHaveLength(1);
   });
 

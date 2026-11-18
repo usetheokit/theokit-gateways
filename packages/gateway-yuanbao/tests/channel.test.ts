@@ -56,6 +56,8 @@ describe("yuanbaoChannel", () => {
     expect(await yuanbaoChannel.webhook.ingest(adapter, { type: "other" })).toBe("delivered");
     expect(await yuanbaoChannel.webhook.ingest(adapter, "x")).toBe("malformed");
     expect(await yuanbaoChannel.webhook.ingest(adapter, [])).toBe("malformed");
+    const nullNested = { type: "message", message: null };
+    expect(await yuanbaoChannel.webhook.ingest(adapter, nullNested)).toBe("malformed");
     expect(seen).toHaveLength(1);
   });
 });
