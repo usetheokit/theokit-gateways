@@ -33,7 +33,9 @@ describe("buzzChannel", () => {
   it("builds the adapter from configFromEnv with every required variable set", () => {
     const { config, missing } = configFromEnv(buzzChannel, ENV, "APP_");
     expect(missing).toEqual([]);
-    const { adapters, rejected } = createChannels([{ descriptor: buzzChannel, config }]);
+    const { adapters, rejected } = createChannels([
+      { envPrefix: "APP_", descriptor: buzzChannel, config },
+    ]);
     expect(rejected).toEqual([]);
     expect(adapters[0]).toBeInstanceOf(BuzzAdapter);
   });
@@ -43,7 +45,7 @@ describe("buzzChannel", () => {
     delete env[name];
     const { config, missing } = configFromEnv(buzzChannel, env, "APP_");
     expect(missing).toEqual([name]);
-    const { rejected } = createChannels([{ descriptor: buzzChannel, config }]);
+    const { rejected } = createChannels([{ envPrefix: "APP_", descriptor: buzzChannel, config }]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
     // The unset variable's full prefixed name maps to the config key the rejection names.
     const field = buzzChannel.config.find((f) => `APP_${f.env}` === name);
@@ -51,7 +53,7 @@ describe("buzzChannel", () => {
     expect(name).toBe(`APP_${field?.env}`);
     expect(name.startsWith("APP_")).toBe(true);
     expect(missing).toContain(name);
-    expect(rejected[0]?.error.message).toBe(`channel buzz: missing required config ${field?.key}`);
+    expect(rejected[0]?.error.message).toBe(`channel buzz: missing required config ${name}`);
   });
 
   it("throws invalid_config naming the key for a wrongly typed value", () => {
