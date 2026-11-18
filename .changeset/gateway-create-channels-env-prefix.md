@@ -1,5 +1,5 @@
 ---
-"@theokit/gateway": minor
+"@theokit/gateway": patch
 ---
 
-`ChannelEntry` takes an optional `envPrefix`; `createChannels` then names a missing required field by its full environment variable (for example `APP_BUZZ_TOKEN`) in the `missing_required_config` rejection.
+`createChannels` now builds the environment variable names in its missing-config rejections with the same internal `envVarName` helper as `configFromEnv`, so both report the same full names.

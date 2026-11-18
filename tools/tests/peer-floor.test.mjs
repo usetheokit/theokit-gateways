@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import { floorOf, main, publishableAdapters, runChecks } from "../../scripts/check-peer-floor.mjs";
@@ -65,5 +67,20 @@ describe("check-peer-floor main", () => {
 
   it("rejects --adapter without --core", async () => {
     await expect(main(["--adapter", "x@1.0.0"], { install: () => {} })).rejects.toThrow("--core");
+  });
+});
+
+describe("gateway-x peer floor", () => {
+  it("is admitted by the workspace gateway version", () => {
+    const read = (p) =>
+      JSON.parse(
+        readFileSync(new URL(`../../packages/${p}/package.json`, import.meta.url), "utf8"),
+      );
+    const floor = floorOf(read("gateway-x").peerDependencies["@theokit/gateway"]);
+    expect(floor).toBe("0.20.0");
+    const num = (v) => v.split(".").map(Number);
+    const [a, b] = [num(read("gateway").version), num(floor)];
+    const cmp = a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+    expect(cmp).toBeGreaterThanOrEqual(0);
   });
 });

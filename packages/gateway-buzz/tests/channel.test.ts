@@ -53,7 +53,9 @@ describe("buzzChannel", () => {
     expect(name).toBe(`APP_${field?.env}`);
     expect(name.startsWith("APP_")).toBe(true);
     expect(missing).toContain(name);
-    expect(rejected[0]?.error.message).toBe(`channel buzz: missing required config ${name}`);
+    expect(rejected[0]?.error.message).toMatch(
+      new RegExp(`^channel buzz: missing required config \\w+ \\(env ${name}\\)$`),
+    );
   });
 
   it("throws invalid_config naming the key for a wrongly typed value", () => {

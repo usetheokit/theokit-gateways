@@ -13,6 +13,7 @@ import type { BasePlatformAdapter } from "../adapter/base.js";
 import { GatewayConfigurationError } from "../errors/config-error.js";
 import type { PlatformName } from "../types/message-event.js";
 import type { ChannelDescriptor } from "./channel-descriptor.js";
+import { envVarName } from "./config-from-env.js";
 
 /** One channel to build: its descriptor and the configuration the app supplies for it. */
 export interface ChannelEntry {
@@ -20,8 +21,8 @@ export interface ChannelEntry {
   /** Values keyed by the descriptor's field keys. Absent means every required field is missing. */
   readonly config?: Readonly<Record<string, unknown>>;
   /**
-   * The prefix the app gave `configFromEnv`. When set, a missing required field is reported by its
-   * full variable name (`prefix + field.env`) instead of its key.
+   * The prefix passed to `configFromEnv` for this entry, so a missing field's rejection names its
+   * full environment variable. Defaults to `""`.
    */
   readonly envPrefix?: string;
 }
@@ -56,7 +57,10 @@ function missingRequiredKeys(
 ): string[] {
   return entry.descriptor.config
     .filter((field) => field.required && isAbsent(values[field.key]))
-    .map((field) => (entry.envPrefix === undefined ? field.key : entry.envPrefix + field.env));
+    .map((field) => {
+      const name = envVarName(field, entry.envPrefix);
+      return name === undefined ? field.key : `${field.key} (env ${name})`;
+    });
 }
 
 /** An entry that was refused, and the rejection that says why. */

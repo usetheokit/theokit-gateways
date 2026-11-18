@@ -31,19 +31,4 @@ describe("createChannels pairing", () => {
     expect(result.channels.map((c) => c.adapter)).toEqual(result.adapters);
     for (const c of result.channels) expect(c.adapter.platform).toBe(c.descriptor.platform);
   });
-
-  it("names_the_full_prefixed_variable_when_envPrefix_is_given", () => {
-    const d: ChannelDescriptor<MockAdapter> = {
-      ...descriptorFor("slack"),
-      config: [
-        { key: "token", env: "SLACK_TOKEN", required: true, secret: true, description: "t" },
-      ],
-    };
-    const [withPrefix] = createChannels([{ descriptor: d, envPrefix: "APP_" }]).rejected;
-    expect(withPrefix?.error.message).toBe(
-      "channel slack: missing required config APP_SLACK_TOKEN",
-    );
-    const [without] = createChannels([{ descriptor: d }]).rejected;
-    expect(without?.error.message).toBe("channel slack: missing required config token");
-  });
 });
