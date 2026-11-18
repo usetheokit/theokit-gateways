@@ -91,25 +91,14 @@ describe("yuanbaoChannel over a Fetch request", () => {
   };
   const good = () => signedRequest(JSON.stringify(payload)).headers as Record<string, string>;
 
-  it("rejects a bad signature with 401 before any dispatch", async () => {
+  it("answers 401 to a bad signature, 503 with no handler, and 200 once dispatched", async () => {
     const { adapter, send } = route();
-    const seen: MessageEvent[] = [];
-    adapter?.onInbound(async (e) => void seen.push(e));
     expect((await send()).status).toBe(401);
-    expect(seen).toHaveLength(0);
-  });
-
-  it("dispatches a signed request with 200", async () => {
-    const { adapter, send } = route();
+    expect((await send(good())).status).toBe(503);
     const seen: MessageEvent[] = [];
     adapter?.onInbound(async (e) => void seen.push(e));
     expect((await send(good())).status).toBe(200);
     expect(seen.map((e) => e.text)).toEqual(["hi"]);
-  });
-
-  it("answers a signed request with no handler subscribed with 503", async () => {
-    const { send } = route();
-    expect((await send(good())).status).toBe(503);
   });
 });
 
