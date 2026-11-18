@@ -55,6 +55,13 @@ describe("signalChannel", () => {
     expect(result.rejected[0]?.error.message).toContain("account");
   });
 
+  it("createChannels names APP_SIGNAL_ACCOUNT when the entry carries the same envPrefix", () => {
+    const { config } = configFromEnv(signalChannel, {}, "APP_");
+    const result = createChannels([{ descriptor: signalChannel, config, envPrefix: "APP_" }]);
+    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
+    expect(result.rejected[0]?.error.message).toContain("APP_SIGNAL_ACCOUNT");
+  });
+
   it("documented flow: the missing guard names APP_SIGNAL_ACCOUNT and nothing is built", () => {
     const { config, missing } = configFromEnv(signalChannel, {}, "APP_");
     const entries = missing.length === 0 ? [{ descriptor: signalChannel, config }] : [];
