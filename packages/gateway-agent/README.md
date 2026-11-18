@@ -77,3 +77,30 @@ const scheduler = createScheduler({ store, run, deliver });
 // A schedule line reads "0 9 * * * slack:C0123"; split its target with:
 const target = parseChannelTarget("slack:C0123"); // { platform: "slack", channelId: "C0123" }
 ```
+
+## `createTrigger(options)` and `frameUntrusted(tag, body, attributes?)`
+
+`createTrigger` runs a fresh agent on each signed webhook and sends the answer to a channel. `handle(request)` answers 401 for a bad signature (the body is not read), 400 for a delivery id over 256 chars, 503 while the reply adapter is not started (the id is not remembered, so the sender's retry runs), 200 for a delivery id seen before (the last `rememberDeliveries`, default 1000, are kept), and otherwise 202 at once while the run continues in the background. The prompt is `instructions`, a fixed untrusted-data notice, then the body framed by `frameUntrusted("payload", body)`, which escapes a forged closing tag. A failed run or undelivered reply is written as one line holding a code only. `idle()` resolves when every started run has ended. `verify` takes any function of theokit's `VerifyFn` shape, so this package does not depend on `theokit`.
+
+```ts
+import { github } from "theokit/server/webhook";
+import { createTrigger } from "@theokit/gateway-agent";
+
+const trigger = createTrigger({
+  name: "github",
+  verify: github({ secret: process.env.GITHUB_WEBHOOK_SECRET ?? "" }),
+  dedupeHeader: "x-github-delivery",
+  instructions: "Summarise this GitHub event in two sentences.",
+  deliverTo: () => ({ adapter: slackAdapter, channelId: "C0123" }),
+  agent: async () => {
+    const agent = await registry.agentFor("github-trigger");
+    return { agent, release: () => registry.release(agent) };
+  },
+  secrets: [apiKey],
+  write: (line) => console.error(line),
+});
+
+// In your host's route for /hooks/github:
+//   return trigger.handle(request);
+await trigger.idle(); // on shutdown
+```
