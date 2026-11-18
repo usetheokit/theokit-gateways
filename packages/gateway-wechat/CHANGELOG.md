@@ -1,5 +1,11 @@
 # @theokit/gateway-wechat
 
+## 0.2.0
+
+### Minor Changes
+
+- 2831ca3: Report `capabilities.maxMessageChars` from the splitter limit, and `capabilities.threads` (true for Discord, Telegram and Slack).
+
 ## 0.1.1
 
 ### Patch Changes
