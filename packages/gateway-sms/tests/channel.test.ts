@@ -28,7 +28,7 @@ function withPrefix(env: Record<string, string>): Record<string, string> {
 }
 
 describe("smsChannel", () => {
-  it("declares webhook transport with a webhook part", () => {
+  it("declares webhook transport and a POST-only webhook part", () => {
     expect(smsChannel.transport).toBe("webhook");
     expect(smsChannel.webhook.methods).toEqual(["POST"]);
   });

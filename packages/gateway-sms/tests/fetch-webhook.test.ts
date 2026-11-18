@@ -3,7 +3,7 @@
 import { createHmac } from "node:crypto";
 
 import { type ChannelDescriptor, createChannels, createWebhookHandler } from "@theokit/gateway";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { smsChannel } from "../src/channel.js";
 
@@ -28,7 +28,7 @@ function setup(subscribe: boolean) {
   const delivered: unknown[] = [];
   if (subscribe) adapter.onInbound(async (e) => void delivered.push(e));
   const handler = createWebhookHandler({ channels: result.channels, isStarted: () => true });
-  return { handler, delivered };
+  return { handler, delivered, adapter, webhook: result.channels[0]?.descriptor.webhook };
 }
 
 const fields: Array<[string, string]> = [
@@ -94,5 +94,28 @@ describe("sms Twilio webhook through createWebhookHandler", () => {
   it("does not take a GET", async () => {
     const { handler } = setup(true);
     expect((await handler(new Request("https://h.test/webhooks/sms"))).status).toBe(405);
+  });
+
+  it("verify agrees with handle before the adapter has connected", () => {
+    const { adapter, webhook } = setup(true);
+    const req = (signature: string) => ({
+      rawBody: body,
+      headers: { "X-Twilio-Signature": signature },
+    });
+    expect(webhook?.verify(adapter as never, req(sign(PUBLIC_URL)))).toBe(true);
+    expect(webhook?.verify(adapter as never, req(sign(PUBLIC_URL, "other")))).toBe(false);
+  });
+
+  it("logs a throwing handler without its message", async () => {
+    const { handler, adapter } = setup(false);
+    adapter.onInbound(async () => {
+      throw new Error("secret body text hello");
+    });
+    const write = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const res = await handler(post(sign(PUBLIC_URL)));
+    const logged = write.mock.calls.map((c) => String(c[0])).join("");
+    write.mockRestore();
+    expect(res.status).toBe(500);
+    expect(logged).not.toContain("secret body text");
   });
 });

@@ -3,7 +3,7 @@
 import { createHmac } from "node:crypto";
 
 import { type ChannelDescriptor, createChannels, createWebhookHandler } from "@theokit/gateway";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { whatsappChannel } from "../src/channel.js";
 
@@ -30,7 +30,7 @@ function setup(subscribe: boolean) {
   const delivered: unknown[] = [];
   if (subscribe) adapter.onInbound(async (e) => void delivered.push(e));
   const handler = createWebhookHandler({ channels: result.channels, isStarted: () => true });
-  return { handler, delivered };
+  return { handler, delivered, adapter, webhook: result.channels[0]?.descriptor.webhook };
 }
 
 const envelope = JSON.stringify({
@@ -134,5 +134,31 @@ describe("whatsapp Cloud webhook through createWebhookHandler", () => {
       new Request("https://host.test/webhooks/whatsapp", { method: "PUT" }),
     );
     expect(res.status).toBe(405);
+  });
+
+  it("verify answers the same as handle, per method, and fails closed without a method", () => {
+    const { adapter, webhook } = setup(true);
+    const url = `https://host.test/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=${VERIFY_TOKEN}&hub.challenge=c`;
+    const check = (r: object) =>
+      webhook?.verify(adapter as never, { rawBody: "", headers: {}, ...r });
+    expect(check({ method: "GET", url })).toBe(true);
+    expect(check({ method: "GET" })).toBe(false);
+    expect(check({ method: "GET", url: url.replace(VERIFY_TOKEN, "bad") })).toBe(false);
+    const headers = { "x-hub-signature-256": sign(envelope) };
+    expect(check({ method: "POST", rawBody: envelope, headers })).toBe(true);
+    expect(check({ rawBody: envelope, headers })).toBe(false);
+  });
+
+  it("logs a throwing handler without its message", async () => {
+    const { handler, adapter } = setup(false);
+    adapter.onInbound(async () => {
+      throw new Error("secret body text hello");
+    });
+    const write = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const res = await handler(post(envelope, sign(envelope)));
+    const logged = write.mock.calls.map((c) => String(c[0])).join("");
+    write.mockRestore();
+    expect(res.status).toBe(500);
+    expect(logged).not.toContain("secret body text");
   });
 });

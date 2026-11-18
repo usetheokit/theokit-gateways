@@ -12,7 +12,7 @@
 
 import type { SMSAdapter } from "./adapter.js";
 import { parseInbound } from "./parse-inbound.js";
-import { twilioRequestVerifier } from "./twilio-verifier.js";
+import { verifyTwilioSignature } from "./twilio-verifier.js";
 import type { SMSAdapterOptions } from "./types.js";
 
 type TwilioOptions = Extract<SMSAdapterOptions, { backend: "twilio" }>;
@@ -57,24 +57,15 @@ function lowerHeaders(
   return out;
 }
 
-async function verified(
-  opts: TwilioOptions | undefined,
-  request: WebhookRequestShape,
-): Promise<boolean> {
+/** The one check `verify` and `handle` share: Twilio's signature over the configured public URL. */
+function verified(opts: TwilioOptions | undefined, request: WebhookRequestShape): boolean {
   if (opts === undefined || opts.authToken.trim().length === 0) return false;
-  const signature = lowerHeaders(request.headers)["x-twilio-signature"];
-  if (signature === undefined) return false;
-  // The request is rebuilt on the configured public URL: that string is what Twilio signed.
-  const rebuilt = new Request(opts.publicUrl, {
-    method: "POST",
-    headers: { "x-twilio-signature": signature },
-    body: request.rawBody,
-  });
-  const result = await twilioRequestVerifier({
-    authToken: opts.authToken,
-    publicUrl: opts.publicUrl,
-  })(rebuilt);
-  return result.ok;
+  return verifyTwilioSignature(
+    opts.authToken,
+    opts.publicUrl,
+    request.rawBody,
+    lowerHeaders(request.headers)["x-twilio-signature"],
+  );
 }
 
 function toEvent(opts: TwilioOptions, rawBody: string, headers: Record<string, string>) {
@@ -84,15 +75,9 @@ function toEvent(opts: TwilioOptions, rawBody: string, headers: Record<string, s
 /** The webhook half of the Twilio descriptor. */
 export const twilioWebhook = {
   methods: ["POST"] as const,
-  /** Synchronous check through the connected backend, on the configured `publicUrl`. */
+  /** The same check `handle` makes; needs no connection. */
   verify(adapter: SMSAdapter, request: WebhookRequestShape): boolean {
-    const opts = options.get(adapter);
-    if (opts === undefined) return false;
-    return adapter.verifySignature({
-      headers: lowerHeaders(request.headers),
-      rawBody: request.rawBody,
-      url: opts.publicUrl,
-    });
+    return verified(options.get(adapter), request);
   },
   /** A payload of form fields (as an object) is parsed like the form body and delivered. */
   async ingest(
@@ -107,13 +92,13 @@ export const twilioWebhook = {
     }
     const event = toEvent(opts, form.toString(), {});
     if (event === null) return "malformed";
-    return statusFor([await adapter.deliver(event)]) === 200 ? "delivered" : "no_handler";
+    return statusFor([await adapter.deliverQuietly(event)]) === 200 ? "delivered" : "no_handler";
   },
   async handle(adapter: SMSAdapter, request: WebhookRequestShape): Promise<WebhookAnswerShape> {
     const opts = options.get(adapter);
-    if (opts === undefined || !(await verified(opts, request))) return { status: 401 };
+    if (opts === undefined || !verified(opts, request)) return { status: 401 };
     const event = toEvent(opts, request.rawBody, lowerHeaders(request.headers));
     if (event === null) return { status: 400 };
-    return { status: statusFor([await adapter.deliver(event)]) };
+    return { status: statusFor([await adapter.deliverQuietly(event)]) };
   },
 };

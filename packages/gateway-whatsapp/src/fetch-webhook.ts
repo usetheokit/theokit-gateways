@@ -79,25 +79,32 @@ function signatureValid(adapter: object, request: WebhookRequestShape): boolean 
   return verifyWebhookSignature(request.rawBody, header, config.appSecret);
 }
 
-function answerSubscription(adapter: object, request: WebhookRequestShape): WebhookAnswerShape {
-  const config = configs.get(adapter);
-  const expected = config?.verifyToken;
+/** The subscription challenge for a valid GET, `undefined` for anything else. */
+function subscriptionChallenge(adapter: object, request: WebhookRequestShape): string | undefined {
+  const expected = configs.get(adapter)?.verifyToken;
   if (expected === undefined || expected.length === 0 || request.url === undefined) {
-    return { status: 403 };
+    return undefined;
   }
   let params: URLSearchParams;
   try {
     params = new URL(request.url).searchParams;
   } catch {
-    return { status: 403 };
+    return undefined;
   }
   const token = params.get("hub.verify_token");
   const challenge = params.get("hub.challenge");
   if (params.get("hub.mode") !== "subscribe" || token === null || !safeEqual(token, expected)) {
-    return { status: 403 };
+    return undefined;
   }
-  if (challenge === null || challenge.length === 0) return { status: 403 };
-  return { status: 200, body: challenge, contentType: "text/plain" };
+  return challenge === null || challenge.length === 0 ? undefined : challenge;
+}
+
+/** One check for both methods; a missing method (or a GET without a URL) fails closed. */
+function requestValid(adapter: object, request: WebhookRequestShape): boolean {
+  const method = request.method?.toUpperCase();
+  if (method === "GET") return subscriptionChallenge(adapter, request) !== undefined;
+  if (method === "POST") return signatureValid(adapter, request);
+  return false;
 }
 
 function isEnvelope(payload: unknown): payload is MetaWebhookEnvelope {
@@ -120,7 +127,7 @@ async function deliverAll(
   if (!isEnvelope(payload)) return undefined;
   const outcomes: Outcome[] = [];
   for (const event of adapter.toDeliverableEvents(payload)) {
-    outcomes.push(await adapter.deliver(event));
+    outcomes.push(await adapter.deliverQuietly(event));
   }
   return outcomes;
 }
@@ -129,7 +136,7 @@ async function deliverAll(
 export const cloudWebhook = {
   methods: ["GET", "POST"] as const,
   verify(adapter: WhatsAppAdapter, request: WebhookRequestShape): boolean {
-    return signatureValid(adapter, request);
+    return requestValid(adapter, request);
   },
   async ingest(
     adapter: WhatsAppAdapter,
@@ -141,10 +148,15 @@ export const cloudWebhook = {
     adapter: WhatsAppAdapter,
     request: WebhookRequestShape,
   ): Promise<WebhookAnswerShape> {
-    if ((request.method ?? "POST").toUpperCase() === "GET") {
-      return answerSubscription(adapter, request);
+    const isGet = request.method?.toUpperCase() === "GET";
+    if (!requestValid(adapter, request)) return { status: isGet ? 403 : 401 };
+    if (isGet) {
+      return {
+        status: 200,
+        body: subscriptionChallenge(adapter, request) as string,
+        contentType: "text/plain",
+      };
     }
-    if (!signatureValid(adapter, request)) return { status: 401 };
     let payload: unknown;
     try {
       payload = JSON.parse(request.rawBody);
