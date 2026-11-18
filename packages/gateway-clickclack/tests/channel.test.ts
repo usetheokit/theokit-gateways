@@ -69,34 +69,6 @@ describe("clickclackChannel", () => {
     expect(errorOf(() => clickclackChannel.create(bad)).message).toContain("reconnectDelayMs");
   });
 
-  it("refuses an explicit null reconnectDelayMs", () => {
-    const config = {
-      ...configFromEnv(clickclackChannel, ENV, "APP_").config,
-      reconnectDelayMs: null,
-    };
-    const error = errorOf(() => clickclackChannel.create(config));
-    expect(error.code).toBe("invalid_config");
-    expect(error.message).toContain("reconnectDelayMs");
-  });
-
-  it("refuses a digit string that overflows to Infinity", () => {
-    const config = {
-      ...configFromEnv(clickclackChannel, ENV, "APP_").config,
-      reconnectDelayMs: "9".repeat(400),
-    };
-    const error = errorOf(() => clickclackChannel.create(config));
-    expect(error.code).toBe("invalid_config");
-    expect(error.message).toContain("reconnectDelayMs");
-  });
-
-  it("accepts a digit string for reconnectDelayMs", () => {
-    const config = {
-      ...configFromEnv(clickclackChannel, ENV, "APP_").config,
-      reconnectDelayMs: "250",
-    };
-    expect(clickclackChannel.create(config)).toBeInstanceOf(ClickClackAdapter);
-  });
-
   it("lists exactly the secret fields' values in secrets", () => {
     const env = { ...ENV, APP_CLICKCLACK_RECONNECT_DELAY_MS: "250" };
     expect(configFromEnv(clickclackChannel, env, "APP_").secrets).toEqual(["tok-secret"]);

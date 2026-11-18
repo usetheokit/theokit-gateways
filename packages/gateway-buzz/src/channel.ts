@@ -1,106 +1,19 @@
-/**
- * `buzzChannel` — the channel described as data, with environment bindings.
- *
- * Typed locally on purpose: the object is structurally a `ChannelDescriptor`, but a published
- * `.d.ts` must not name core types an older peer lacks.
- */
+/** `buzzChannel`: the channel as data, with `BUZZ_*` environment bindings. */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { type RealtimeBotChannel, realtimeBotChannel } from "@theokit/gateway-bot-realtime";
 import { BuzzAdapter } from "./adapter.js";
-
-type Config = Readonly<Record<string, unknown>>;
-
-function invalid(key: string, expected: string): GatewayConfigurationError {
-  return new GatewayConfigurationError("gateway-buzz", {
-    code: "invalid_config",
-    message: `gateway-buzz: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-function requiredString(config: Config, key: string): string {
-  const value = config[key];
-  if (typeof value !== "string" || value === "") throw invalid(key, "a non-empty string");
-  return value;
-}
-
-function readDelay(config: Config): number | undefined {
-  const value = config.reconnectDelayMs;
-  if (value === undefined) return undefined;
-  const parsed = typeof value === "string" && /^\d+$/.test(value.trim()) ? Number(value) : value;
-  if (typeof parsed === "number" && Number.isFinite(parsed) && parsed >= 0) return parsed;
-  throw invalid("reconnectDelayMs", "a non-negative number or a digit string");
-}
-
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly description: string;
-  readonly env: string;
-}
-
-const CONFIG: ReadonlyArray<ConfigField> = [
-  {
-    key: "baseUrl",
-    required: true,
-    secret: false,
-    env: "BUZZ_BASE_URL",
-    description: "Base URL of the server, e.g. https://chat.example.com.",
-  },
-  {
-    key: "token",
-    required: true,
-    secret: true,
-    env: "BUZZ_TOKEN",
-    description: "The bot token for this bot.",
-  },
-  {
-    key: "workspaceId",
-    required: true,
-    secret: false,
-    env: "BUZZ_WORKSPACE_ID",
-    description: "Id of the workspace whose realtime stream the adapter follows.",
-  },
-  {
-    key: "botUserId",
-    required: true,
-    secret: false,
-    env: "BUZZ_BOT_USER_ID",
-    description: "User id of the bot; events it authored are ignored.",
-  },
-  {
-    key: "reconnectDelayMs",
-    required: false,
-    secret: false,
-    env: "BUZZ_RECONNECT_DELAY_MS",
-    description: "Milliseconds to wait before reopening a dropped socket.",
-  },
-];
 
 /**
  * The channel: it opens its own realtime socket in `connect()`, so it needs no webhook route.
  *
- * `create` refuses a missing or wrongly typed value with `GatewayConfigurationError` (prefix `gateway-buzz`)
- * (code `invalid_config`, the key in the message); it performs no network call. A number or
- * a digit string is accepted for `reconnectDelayMs`.
+ * `create` refuses a missing or wrongly typed value with `GatewayConfigurationError` (prefix
+ * `gateway-buzz`, code `invalid_config`, the key in the message); it performs no network call.
  *
  * @public
  */
-export const buzzChannel = {
-  platform: "buzz" as const,
-  transport: "socket" as const,
-  senderIdentity: "authenticated" as const,
-  config: CONFIG,
-  create(config: Config): BuzzAdapter {
-    const delay = readDelay(config);
-    return new BuzzAdapter({
-      baseUrl: requiredString(config, "baseUrl"),
-      token: requiredString(config, "token"),
-      workspaceId: requiredString(config, "workspaceId"),
-      botUserId: requiredString(config, "botUserId"),
-      ...(delay === undefined ? {} : { reconnectDelayMs: delay }),
-    });
-  },
-};
+export const buzzChannel: RealtimeBotChannel<BuzzAdapter> = realtimeBotChannel(
+  "gateway-buzz",
+  "buzz",
+  "BUZZ",
+  (options) => new BuzzAdapter(options),
+);
