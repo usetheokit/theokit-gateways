@@ -51,6 +51,8 @@ describe("signalChannel", () => {
     expect(result.adapters).toEqual([]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
     expect(result.rejected[0]?.error.message).toContain("account");
+    // The core knows only option keys, so the full variable name comes from configFromEnv.
+    expect(missing.join(", ")).toContain("APP_SIGNAL_ACCOUNT");
   });
 
   it("collects no secrets: no field is secret", () => {
