@@ -61,6 +61,23 @@ describe("scopedStrategy", () => {
     expect(s(ev("a", "1"))).not.toBe(s(ev("_p", "x")));
   });
 
+  it("keeps DM, group and thread keys apart with hyphenated platforms and labels", () => {
+    const s = scopedStrategy({
+      dmScope: "per-account-channel-peer",
+      accountLabel: "grp-x",
+      groupScope: "channel-sender",
+    });
+    const p = "my-platform";
+    const keys = [
+      s(ev(p, "u", "dm")),
+      s(ev(p, "u", "group", "u")),
+      s(ev(p, "u", "thread", "u", "u")),
+      s(ev("foo-dm", "x")),
+      s(ev("foo", "dm-x")),
+    ];
+    expect(new Set(keys).size).toBe(5);
+  });
+
   it("gives a-b and a_b different keys under every scope", () => {
     for (const s of scopes) {
       const st = make(s);
