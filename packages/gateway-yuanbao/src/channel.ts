@@ -5,21 +5,11 @@
  * integration package assigns it to one, so a drift between the two fails there.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 
 import { YuanbaoAdapter } from "./adapter.js";
 
-function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
-  const value = config[key];
-  if (typeof value !== "string") {
-    throw new GatewayConfigurationError("gateway-yuanbao", {
-      code: "invalid_config",
-      message: `gateway-yuanbao: config.${key} must be a string`,
-      detail: key,
-    });
-  }
-  return value;
-}
+const readers = channelConfigReaders("gateway-yuanbao");
 
 type Headers = Readonly<Record<string, string | undefined>>;
 
@@ -64,9 +54,9 @@ export const yuanbaoChannel = {
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): YuanbaoAdapter {
     return new YuanbaoAdapter({
-      appId: requiredString(config, "appId"),
-      appSecret: requiredString(config, "appSecret"),
-      callbackSecret: requiredString(config, "callbackSecret"),
+      appId: readers.requiredString(config, "appId"),
+      appSecret: readers.requiredString(config, "appSecret"),
+      callbackSecret: readers.requiredString(config, "callbackSecret"),
     });
   },
   webhook: {

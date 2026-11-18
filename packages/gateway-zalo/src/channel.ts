@@ -5,21 +5,11 @@
  * integration package assigns it to one, so a drift between the two fails there.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 
 import { ZaloAdapter } from "./adapter.js";
 
-function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
-  const value = config[key];
-  if (typeof value !== "string") {
-    throw new GatewayConfigurationError("gateway-zalo", {
-      code: "invalid_config",
-      message: `gateway-zalo: config.${key} must be a string`,
-      detail: key,
-    });
-  }
-  return value;
-}
+const readers = channelConfigReaders("gateway-zalo");
 
 type Headers = Readonly<Record<string, string | undefined>>;
 
@@ -64,9 +54,9 @@ export const zaloChannel = {
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): ZaloAdapter {
     return new ZaloAdapter({
-      appId: requiredString(config, "appId"),
-      oaSecretKey: requiredString(config, "oaSecretKey"),
-      accessToken: requiredString(config, "accessToken"),
+      appId: readers.requiredString(config, "appId"),
+      oaSecretKey: readers.requiredString(config, "oaSecretKey"),
+      accessToken: readers.requiredString(config, "accessToken"),
     });
   },
   webhook: {

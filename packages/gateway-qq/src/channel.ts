@@ -5,21 +5,11 @@
  * integration package assigns it to one, so a drift between the two fails there.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 
 import { QQAdapter } from "./adapter.js";
 
-function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
-  const value = config[key];
-  if (typeof value !== "string") {
-    throw new GatewayConfigurationError("gateway-qq", {
-      code: "invalid_config",
-      message: `gateway-qq: config.${key} must be a string`,
-      detail: key,
-    });
-  }
-  return value;
-}
+const readers = channelConfigReaders("gateway-qq");
 
 type Headers = Readonly<Record<string, string | undefined>>;
 
@@ -58,8 +48,8 @@ export const qqChannel = {
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): QQAdapter {
     return new QQAdapter({
-      appId: requiredString(config, "appId"),
-      appSecret: requiredString(config, "appSecret"),
+      appId: readers.requiredString(config, "appId"),
+      appSecret: readers.requiredString(config, "appSecret"),
     });
   },
   webhook: {
