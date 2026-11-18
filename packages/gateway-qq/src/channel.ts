@@ -78,7 +78,8 @@ export const qqChannel = {
       payload: unknown,
     ): Promise<"delivered" | "malformed" | "no_handler"> {
       const { status } = await adapter.dispatchWebhookPayload(payload);
-      return ({ 400: "malformed", 503: "no_handler" } as const)[status as 400 | 503] ?? "delivered";
+      if (status === 400) return "malformed";
+      return status === 503 ? "no_handler" : "delivered";
     },
     async handle(
       adapter: QQAdapter,

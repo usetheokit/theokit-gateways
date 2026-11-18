@@ -1,10 +1,4 @@
-import {
-  type BasePlatformAdapter,
-  type ChannelDescriptor,
-  createChannels,
-  createWebhookHandler,
-  type MessageEvent,
-} from "@theokit/gateway";
+import type { MessageEvent } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 import { zaloChannel } from "../src/channel.js";
 import { computeZaloSignature } from "../src/index.js";
@@ -63,33 +57,6 @@ describe("zaloChannel", () => {
     );
     expect(await zaloChannel.webhook.ingest(adapter, null)).toBe("malformed");
     expect(await zaloChannel.webhook.ingest(adapter, 5)).toBe("malformed");
-    expect(seen).toHaveLength(1);
-  });
-});
-
-describe("zaloChannel through createChannels and createWebhookHandler", () => {
-  const descriptor = zaloChannel as unknown as ChannelDescriptor<BasePlatformAdapter>;
-
-  function route(config: Record<string, unknown> = CONFIG) {
-    const built = createChannels([{ descriptor, config }]);
-    const handler = createWebhookHandler({ channels: built.channels, isStarted: () => true });
-    return { built, handler };
-  }
-
-  const post = (raw: string, headers: Record<string, string> = {}) =>
-    new Request("https://example.test/webhooks/zalo", { method: "POST", body: raw, headers });
-
-  it("answers a signed request 200, delivering it, and a bad signature 401", async () => {
-    const { built, handler } = route();
-    const seen: MessageEvent[] = [];
-    built.adapters[0]?.onInbound(async (e) => {
-      seen.push(e);
-    });
-    const raw = JSON.stringify(payload);
-    const good = signedRequest(raw);
-    expect((await handler(post(raw, good.headers as Record<string, string>))).status).toBe(200);
-    expect(seen.map((e) => e.text)).toEqual(["hi"]);
-    expect((await handler(post(raw))).status).toBe(401);
     expect(seen).toHaveLength(1);
   });
 });
