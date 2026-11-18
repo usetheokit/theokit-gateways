@@ -21,10 +21,11 @@ function invalid(key: string, expected: string): GatewayConfigurationError {
   });
 }
 
-/** Reads `key` as a string; `""`, `null` and `undefined` count as absent. */
+/** Reads `key` as a string; `""` and `undefined` count as absent, `null` is a wrong shape. */
 function readString(config: Config, key: string, required: boolean): string | undefined {
   const value = config[key];
-  if (value === undefined || value === null || value === "") {
+  if (value === null) throw invalid(key, required ? "a non-empty string" : "a string");
+  if (value === undefined || value === "") {
     if (required) throw invalid(key, "a non-empty string");
     return undefined;
   }

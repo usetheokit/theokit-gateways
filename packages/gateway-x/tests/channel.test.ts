@@ -82,6 +82,12 @@ describe("xChannel", () => {
     },
   );
 
+  it("refuses a null bearerToken with invalid_config", () => {
+    const error = refusal({ ...VALUES, bearerToken: null });
+    expect(error.code).toBe("invalid_config");
+    expect(error.message).toContain("bearerToken");
+  });
+
   it("builds with the optional guest limit as a digit string or number", () => {
     expect(xChannel.create({ ...VALUES, guestDailyLimit: "5" })).toBeInstanceOf(XAdapter);
     expect(xChannel.create({ ...VALUES, allowFrom: ["1"], guestDailyLimit: 5 })).toBeInstanceOf(
