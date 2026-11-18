@@ -235,6 +235,9 @@ describe("live-test readiness", () => {
       createWebhookHandler:
         "a Fetch Request -> Response router with no network I/O of its own; a live run would need a " +
         "public URL the platform can reach. Covered by packages/gateway/tests/fetch-webhook-handler.test.ts",
+      channelConfigReaders:
+        "pure config validation, no I/O. Covered by " +
+        "packages/gateway/tests/channel/channel-config-readers.test.ts and the LINE channel tests",
       statusForDeliver:
         "pure outcomes -> status, no I/O. Covered by packages/gateway/tests/deliver-status.test.ts",
       parseFlatXml:
@@ -243,6 +246,10 @@ describe("live-test readiness", () => {
       maskSecrets:
         "pure string masking, no I/O. Covered by packages/gateway/tests/runner-adapter-lookup.test.ts " +
         "and packages/gateway/tests/runner-connect-timeout.test.ts",
+      createFileCredentialStore:
+        "writes files in a local directory, no network and no platform. Covered by " +
+        "packages/gateway/tests/credential-store.test.ts and the rotation test in " +
+        "packages/gateway-x/tests/refresh.test.ts",
       maskShapes:
         "pure string -> string, no I/O. What a live run could add is whether a REAL credential " +
         "matches the shape, and no live test may carry one — the tests use synthetic values built " +
@@ -391,5 +398,45 @@ describe("live-test readiness", () => {
       stale,
       `NOT_DRIVEN_LIVE names exports the core no longer has: ${stale.join(", ")}`,
     ).toEqual([]);
+  });
+});
+
+describe("gateway configuration readiness (offline, synthetic values)", () => {
+  const field = (key: string, env: string, required: boolean, secret: boolean) => ({
+    key,
+    env,
+    required,
+    secret,
+    description: key,
+  });
+  const descriptor = {
+    platform: "telegram",
+    transport: "socket",
+    config: [
+      field("token", "BOT_TOKEN", true, true),
+      field("apiUrl", "API_URL", true, false),
+      field("note", "NOTE", false, false),
+    ],
+  } as unknown as Parameters<typeof import("@theokit/gateway").configFromEnv>[0];
+
+  it("names unset and blank required variables with their prefix", async () => {
+    const { configFromEnv } = await import("@theokit/gateway");
+    const env = { DEMO_BOT_TOKEN: "   ", BOT_TOKEN: "unprefixed" };
+    const r = configFromEnv(descriptor, env, "DEMO_");
+    expect(r.missing).toEqual(["DEMO_BOT_TOKEN", "DEMO_API_URL"]);
+    expect(r.config).toEqual({});
+    expect(r.secrets).toEqual([]);
+  });
+
+  it("is ready when every required variable is present, and masks only secrets", async () => {
+    const { configFromEnv } = await import("@theokit/gateway");
+    const r = configFromEnv(
+      descriptor,
+      { DEMO_BOT_TOKEN: " synthetic-token \n", DEMO_API_URL: "https://example.invalid" },
+      "DEMO_",
+    );
+    expect(r.missing).toEqual([]);
+    expect(r.config).toEqual({ token: "synthetic-token", apiUrl: "https://example.invalid" });
+    expect(r.secrets).toEqual(["synthetic-token"]);
   });
 });

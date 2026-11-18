@@ -136,3 +136,27 @@ The live smoke sends one real SMS through Twilio's API (test creds work; they co
 ## ADRs
 
 D389 – D396 in `.claude/knowledge-base/adrs/`.
+
+## Channel descriptor
+
+`smsChannel` is a `ChannelDescriptor` for `createChannels` and `configFromEnv`. It builds the
+Twilio backend only; use `new SMSAdapter(...)` directly for Plivo, Vonage or `defaultCountry`.
+
+```typescript
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { smsChannel } from "@theokit/gateway-sms";
+
+const { config, missing } = configFromEnv(smsChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: smsChannel, config }]);
+```
+
+| Key | Env name | Required | Secret |
+| --- | --- | --- | --- |
+| `accountSid` | `SMS_ACCOUNT_SID` | yes | no |
+| `authToken` | `SMS_AUTH_TOKEN` | yes | yes |
+| `fromNumber` | `SMS_FROM_NUMBER` | yes | no |
+| `publicUrl` | `SMS_PUBLIC_URL` | yes | no |
+
+`create` throws `ConfigurationError` (`invalid_config`) naming the key for a missing or non-string
+value. The descriptor declares `transport: "socket"`; inbound messages still arrive through a
+webhook you host (`createWebhookServer`), which this descriptor does not set up.

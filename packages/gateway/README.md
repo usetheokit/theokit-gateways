@@ -348,6 +348,14 @@ const router = new SessionRouter(
 
 Creation throws `GatewayConfigurationError` with code `invalid_session_scope` for `per-account-channel-peer` without a non-empty `accountLabel`, or for an empty peer name. It never throws per event.
 
+## Keeping a credential across restarts
+
+`CredentialStore` is a `get(key)` / `set(key, value)` interface. `createFileCredentialStore(dir)`
+keeps one file per key under `dir` (mode 0600, written to a temp file and renamed). Keys match
+`[A-Za-z0-9._:-]+`, otherwise `set` and `get` throw `GatewayConfigurationError` with code
+`invalid_credential_key`. `get` returns `undefined` for a missing key; any other read error throws
+code `credential_store_unreadable`. `@theokit/gateway-x` uses it to keep a rotated refresh token.
+
 ## Architecture (5 pieces)
 
 | Module | Responsibility |
@@ -437,13 +445,13 @@ const descriptor = selectVariant(whatsappChannel, process.env.APP_WHATSAPP_BACKE
 const { config, missing, secrets } = configFromEnv(descriptor, process.env, "APP_");
 if (missing.length > 0) console.error(`skipped: set ${missing.join(", ")}`);
 else {
-  const { adapters } = createChannels([{ descriptor, config }]);
+  const { adapters } = createChannels([{ descriptor, config, envPrefix: "APP_" }]);
   // pass `secrets` to your log mask
 }
 ```
 
 - `createChannels` rejects an entry whose required field is absent, `null` or `""` with a
-  `GatewayConfigurationError` coded `missing_required_config` that names the keys, and reports a
+  `GatewayConfigurationError` coded `missing_required_config` that names the missing variables (`envPrefix` + the field's `env`, or the config key when the field has no `env`), and reports a
   configuration error thrown by `create` the same way. Any other error propagates. It performs no
   network call.
 - `createChannels` also returns `channels`: each built adapter paired with the descriptor that built it, in the order of `adapters`.
