@@ -66,21 +66,22 @@ describe("createChannels", () => {
     expect(rejection?.error.message).toContain("token");
   });
 
-  it("names the prefixed environment variable of a missing field, else its config key", () => {
+  it("names the prefixed environment variable of each missing field", () => {
     const descriptor: ChannelDescriptor<MockAdapter> = {
       ...socketDescriptor("telegram"),
       config: [
         { key: "token", required: true, secret: true, description: "t", env: "TELEGRAM_TOKEN" },
-        { key: "room", required: true, secret: false, description: "r" },
+        { key: "plain", required: true, secret: false, description: "no env" },
       ],
     };
-
     const prefixed = createChannels([{ descriptor, config: {}, envPrefix: "APP_" }]);
-    expect(prefixed.rejected[0]?.error.message).toContain("APP_TELEGRAM_TOKEN, room");
+    const message = prefixed.rejected[0]?.error.message ?? "";
+    expect(message).toContain("token (env APP_TELEGRAM_TOKEN)");
+    expect(message).toContain("plain");
+    expect(message).not.toContain("plain (env");
 
-    const plain = createChannels([{ descriptor, config: {} }]);
-    expect(plain.rejected[0]?.error.message).toContain("TELEGRAM_TOKEN, room");
-    expect(plain.rejected[0]?.error.message).not.toContain("APP_");
+    const bare = createChannels([{ descriptor, config: {} }]);
+    expect(bare.rejected[0]?.error.message).toContain("token (env TELEGRAM_TOKEN)");
   });
 
   it("rejects an entry whose required field is null without calling create", () => {

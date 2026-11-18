@@ -409,6 +409,8 @@ const { adapters, rejected } = createChannels([
   },
 ]);
 for (const { platform, error } of rejected) console.error(`${platform}: ${error.message}`);
+// A rejection names each missing field's environment variable when the descriptor declares `env`.
+// Pass `envPrefix` (the prefix you give `configFromEnv`) on an entry for the full variable name.
 
 const runner = new GatewayRunner({
   adapters,
