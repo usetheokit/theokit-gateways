@@ -280,6 +280,34 @@ const hook = commandHook([
 
 A command declared `arg: "none"` given an argument (or `"required"` given none) replies with its usage line instead of running. Two commands with the same name throw `GatewayConfigurationError` with code `duplicate_command`. `parseChatCommand(text, { prefixes })` is exported for apps that parse on their own.
 
+## Access policy and pairing
+
+`createAccessPolicyHook` decides who may talk to the agent. Owners (`<platform>:<senderId>` keys),
+allowlisted and paired senders pass, only on platforms where `isAuthenticated` is true; an owner or
+allowlist key on any other platform makes the constructor throw `unauthenticated_owner`. A DM from
+anyone else follows `dm`: `open` passes, `disabled` is silent, `allowlist` answers `refusalText`,
+`pairing` answers a 6-digit code and tells the sender to ask the owner for `/approve <code>`. A
+refused sender is answered at most once per `refusalIntervalMs` (default one hour). An
+unauthenticated sender is never answered. In a group a stranger gets no reply unless `groups: "open"`.
+The owner's `/approve <code>` is answered "Paired." and never reaches the agent. A failure inside
+the hook is logged (redacted) and becomes a silent block.
+
+```typescript
+import { createAccessPolicyHook, createFilePairingStore } from "@theokit/gateway";
+
+const hook = createAccessPolicyHook({
+  owners: new Set(["telegram:12345"]),
+  dm: "pairing",
+  isAuthenticated: (p) => p === "telegram",
+  pairing: createFilePairingStore({ dir: "./state" }),
+});
+```
+
+`createFilePairingStore` keeps paired senders in `pairing.json` (mode 0600, written through a temp
+file and a rename) and pending codes in memory for one hour. A missing file is an empty store; an
+unreadable or malformed one throws `pairing_store_unreadable`. `senderKey(platform, id)` builds the
+key; email ids compare case-insensitively.
+
 ## Agent bindings
 
 When one gateway serves several agents, `createAgentBindings` picks the agent per message. A rule names an `agent` and any of `platform`, `account` and `peer` (the sender id in a DM, the channel id otherwise). A rule matches when every field it sets equals the message's. The most specific match wins (peer 4, account 2, platform 1), ties go to the earlier rule, and no match gives `defaultAgent`.
@@ -370,6 +398,23 @@ const runner = new GatewayRunner({
 const { connected, failed } = await runner.start();
 if (connected.length === 0) throw new Error("no channel connected");
 for (const { platform, reason } of failed) console.error(`${platform} did not connect: ${reason}`);
+```
+
+To build channels from environment variables, give each descriptor field an `env` name and read it
+with `configFromEnv`. It trims values, treats empty or whitespace as unset, lists unset required
+variables by full name in `missing`, and returns secret values in `secrets` for a log mask.
+`selectVariant` picks one of a descriptor's `variants` (for example a WhatsApp backend).
+
+```typescript
+import { configFromEnv, createChannels, selectVariant } from "@theokit/gateway";
+
+const descriptor = selectVariant(whatsappChannel, process.env.APP_WHATSAPP_BACKEND);
+const { config, missing, secrets } = configFromEnv(descriptor, process.env, "APP_");
+if (missing.length > 0) console.error(`skipped: set ${missing.join(", ")}`);
+else {
+  const { adapters } = createChannels([{ descriptor, config }]);
+  // pass `secrets` to your log mask
+}
 ```
 
 - `createChannels` rejects an entry whose required field is absent, `null` or `""` with a

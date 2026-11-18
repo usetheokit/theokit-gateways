@@ -27,6 +27,7 @@ export type {
   WebhookRequest,
 } from "./channel/channel-descriptor.js";
 export { isAuthenticatedSender } from "./channel/channel-descriptor.js";
+export { configFromEnv, type EnvConfig, selectVariant } from "./channel/config-from-env.js";
 export {
   type BuiltChannel,
   type ChannelEntry,
@@ -49,6 +50,11 @@ export {
   GatewayLifecycleError,
   type GatewayLifecycleErrorOptions,
 } from "./errors/lifecycle-error.js";
+export {
+  type AccessPolicyOptions,
+  createAccessPolicyHook,
+  type DmPolicy,
+} from "./hooks/access-policy.js";
 // Hooks
 export {
   type ChatCommand,
@@ -58,6 +64,11 @@ export {
   parseChatCommand,
 } from "./hooks/chat-command.js";
 export { HookExecutor } from "./hooks/executor.js";
+export {
+  createFilePairingStore,
+  type PairingStore,
+  senderKey,
+} from "./hooks/pairing-store.js";
 export type {
   GatewayHook,
   HookDecision,
