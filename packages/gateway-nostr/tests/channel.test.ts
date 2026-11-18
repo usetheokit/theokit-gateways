@@ -100,6 +100,11 @@ describe("nostrChannel null and programmatic fields", () => {
   it("refuses a client without the relay methods", () => {
     expect(() => nostrChannel.create({ ...base, client: {} })).toThrow(/client/);
   });
+  it("refuses empty or non-ws relays even with a custom client", () => {
+    const client = { open: () => {}, subscribe: () => {}, publish: () => {}, close: () => {} };
+    expect(() => nostrChannel.create({ ...base, relays: [], client })).toThrow(/relays/);
+    expect(() => nostrChannel.create({ ...base, relays: ["http://x"], client })).toThrow(/relays/);
+  });
   it("passes client to the adapter", () => {
     const client = { open: () => {}, subscribe: () => {}, publish: () => {}, close: () => {} };
     const adapter = nostrChannel.create({ ...base, client });

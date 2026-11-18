@@ -10,11 +10,11 @@
  */
 
 import {
-  channelConfigReaders,
   GatewayConfigurationError,
   type GatewayConfigurationErrorOptions,
 } from "@theokit/gateway";
 
+import { channelConfigReaders } from "./config-readers.js";
 import { IrcAdapter } from "./adapter.js";
 import type { IrcAdapterOptions } from "./types.js";
 

@@ -10,11 +10,11 @@
  */
 
 import {
-  channelConfigReaders,
   GatewayConfigurationError,
   type GatewayConfigurationErrorOptions,
 } from "@theokit/gateway";
 
+import { channelConfigReaders } from "./config-readers.js";
 import { NostrAdapter } from "./adapter.js";
 import { NostrKeyError } from "./keys.js";
 import { NostrRelayError } from "./relay-client.js";
@@ -157,6 +157,9 @@ export const nostrChannel = {
     const relays = readList(config, "relays");
     if (relays === undefined)
       throw invalid("relays", "an array of strings or a comma-separated string");
+    // Validated here too: the adapter skips its own relay client when a custom `client` is given.
+    if (relays.length === 0 || relays.some((url) => !/^wss?:\/\//.test(url)))
+      throw invalid("relays", "a non-empty list of ws: or wss: URLs");
     const options: NostrAdapterOptions = defined({
       secretKey: readRequiredString(config, "secretKey"),
       relays,
