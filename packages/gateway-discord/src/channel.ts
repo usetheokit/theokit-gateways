@@ -18,8 +18,6 @@ function invalid(key: string, expected: string): GatewayConfigurationError {
   });
 }
 
-const isAbsent = (value: unknown): boolean => value === undefined || value === null || value === "";
-
 function readToken(config: Readonly<Record<string, unknown>>): string {
   const token = config.token;
   if (typeof token !== "string") throw invalid("token", "a string");

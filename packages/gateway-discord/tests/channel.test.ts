@@ -37,11 +37,11 @@ describe("discordChannel", () => {
   it("reports the unset variable, and createChannels rejects it", () => {
     const { config, missing } = configFromEnv(discordChannel, {}, "APP_");
     expect(missing).toEqual(["APP_DISCORD_TOKEN"]);
-    const result = createChannels([{ descriptor: discordChannel, config }]);
+    const result = createChannels([{ descriptor: discordChannel, config, envPrefix: "APP_" }]);
     expect(result.adapters).toEqual([]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
     expect(result.rejected[0]?.error.message).toBe(
-      "channel discord: missing required config token",
+      "channel discord: missing required config token (env APP_DISCORD_TOKEN)",
     );
   });
 
