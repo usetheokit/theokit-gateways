@@ -6,9 +6,10 @@
  * its own, so a refused value throws the core `GatewayConfigurationError` tagged `gateway-email`.
  */
 
-import { createConfigReaders, GatewayConfigurationError } from "@theokit/gateway";
+import { GatewayConfigurationError } from "@theokit/gateway";
 
 import { EmailAdapter } from "./adapter.js";
+import { createConfigReaders } from "./config-readers.js";
 import type { EmailCursorStore } from "./types.js";
 
 function invalid(key: string, expected: string): GatewayConfigurationError {

@@ -25,7 +25,7 @@ export interface ConfigReaders {
 /**
  * Build the readers. `invalid(key, expected)` returns the error to throw for a refused value.
  *
- * @public
+ * @internal
  */
 export function createConfigReaders(
   invalid: (key: string, expected: string) => Error,

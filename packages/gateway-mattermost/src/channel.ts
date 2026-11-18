@@ -5,9 +5,8 @@
  * package's typecheck is where a drift between the two fails.
  */
 
-import { createConfigReaders } from "@theokit/gateway";
-
 import { MattermostAdapter } from "./adapter.js";
+import { createConfigReaders } from "./config-readers.js";
 import { ConfigurationError } from "./errors.js";
 
 function invalid(key: string, expected: string): ConfigurationError {
