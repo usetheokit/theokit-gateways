@@ -1,4 +1,10 @@
-import type { MessageEvent } from "@theokit/gateway";
+import {
+  type BasePlatformAdapter,
+  type ChannelDescriptor,
+  createChannels,
+  createWebhookHandler,
+  type MessageEvent,
+} from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 import { yuanbaoChannel } from "../src/channel.js";
 import { computeYuanbaoSignature } from "../src/index.js";
@@ -51,5 +57,45 @@ describe("yuanbaoChannel", () => {
     expect(await yuanbaoChannel.webhook.ingest(adapter, "x")).toBe("malformed");
     expect(await yuanbaoChannel.webhook.ingest(adapter, [])).toBe("malformed");
     expect(seen).toHaveLength(1);
+  });
+});
+
+describe("yuanbaoChannel through createChannels and createWebhookHandler", () => {
+  const descriptor = yuanbaoChannel as unknown as ChannelDescriptor<BasePlatformAdapter>;
+
+  function route(config: Record<string, unknown> = CONFIG) {
+    const built = createChannels([{ descriptor, config }]);
+    const handler = createWebhookHandler({ channels: built.channels, isStarted: () => true });
+    return { built, handler };
+  }
+
+  const post = (raw: string, headers: Record<string, string> = {}) =>
+    new Request("https://example.test/webhooks/yuanbao", { method: "POST", body: raw, headers });
+
+  it("reports a wrongly typed credential as a rejected channel instead of throwing", () => {
+    const built = createChannels([{ descriptor, config: { ...CONFIG, appId: 1 } }]);
+    expect(built.channels).toHaveLength(0);
+    expect(built.rejected).toHaveLength(1);
+  });
+
+  it("answers a signed request 200, delivering it, and a bad signature 401", async () => {
+    const { built, handler } = route();
+    const seen: MessageEvent[] = [];
+    built.adapters[0]?.onInbound(async (e) => {
+      seen.push(e);
+    });
+    const raw = JSON.stringify(payload);
+    const good = signedRequest(raw);
+    expect((await handler(post(raw, good.headers as Record<string, string>))).status).toBe(200);
+    expect(seen.map((e) => e.text)).toEqual(["hi"]);
+    expect((await handler(post(raw))).status).toBe(401);
+    expect(seen).toHaveLength(1);
+  });
+
+  it("does not acknowledge a signed request while no handler is subscribed", async () => {
+    const { handler } = route();
+    const raw = JSON.stringify(payload);
+    const res = await handler(post(raw, signedRequest(raw).headers as Record<string, string>));
+    expect(res.status).not.toBe(200);
   });
 });

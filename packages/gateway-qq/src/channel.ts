@@ -5,11 +5,19 @@
  * integration package assigns it to one, so a drift between the two fails there.
  */
 
+import { GatewayConfigurationError } from "@theokit/gateway";
+
 import { QQAdapter } from "./adapter.js";
 
 function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
   const value = config[key];
-  if (typeof value !== "string") throw new Error(`gateway-qq: config.${key} must be a string`);
+  if (typeof value !== "string") {
+    throw new GatewayConfigurationError("gateway-qq", {
+      code: "invalid_config",
+      message: `gateway-qq: config.${key} must be a string`,
+      detail: key,
+    });
+  }
   return value;
 }
 

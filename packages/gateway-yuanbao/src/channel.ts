@@ -5,11 +5,19 @@
  * integration package assigns it to one, so a drift between the two fails there.
  */
 
+import { GatewayConfigurationError } from "@theokit/gateway";
+
 import { YuanbaoAdapter } from "./adapter.js";
 
 function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
   const value = config[key];
-  if (typeof value !== "string") throw new Error(`gateway-yuanbao: config.${key} must be a string`);
+  if (typeof value !== "string") {
+    throw new GatewayConfigurationError("gateway-yuanbao", {
+      code: "invalid_config",
+      message: `gateway-yuanbao: config.${key} must be a string`,
+      detail: key,
+    });
+  }
   return value;
 }
 
