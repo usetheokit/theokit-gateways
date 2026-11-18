@@ -30,6 +30,34 @@ code, or the thrown error's name. It never returns an error message or an id.
 const failure = await deliverText(adapter, "C123", result.text);
 ```
 
+## `createAgentHandler(options)`
+
+Turns an SDK agent into a `GatewayHandler`: one agent turn per message and exactly one reply,
+rendered with `ChatPresenter` and `channelRendering(event.platform)`. An empty answer replies
+`noAnswerText` ("I could not come up with an answer to that."). A failed turn replies `errorText`
+once and then throws `AgentTurnError` (`platform` and SDK `code`, no prompt text), so `on_error`
+hooks fire. The lease from `agentFor` is always released. Values in `secrets` are masked from the
+streamed text, including a value split across frames, and again from the final text. The handler
+starts no typing indicator: `GatewayRunner` already shows and renews one.
+`ackEmoji` reacts through `GatewayContext.react` when the context has one (a gateway release that adds it; the 0.20.x context has none). Otherwise pass `adapters` (the list you give `GatewayRunner`) and the reaction goes through the adapter for the event's platform. With neither path the reaction is skipped, a warning naming the gateway version is logged once, and the turn still runs and replies.
+
+```ts
+const runner = new GatewayRunner({
+  adapters: [telegram],
+  secrets: [apiKey],
+  handler: createAgentHandler({
+    agentFor: async (event) => {
+      const agent = await registry.agentFor(router.sessionKey(event));
+      return { agent, release: () => registry.release(agent) };
+    },
+    adapters: [telegram],
+    ackEmoji: "eyes", // best effort; a failing reaction never fails the turn
+    secrets: [apiKey],
+    progress: (output) => (output.type === "tool-call" ? `Running ${output.name}…` : undefined),
+  }),
+});
+```
+
 ## `gatewayDeliverPort(adapters, options?)` and `parseChannelTarget(spec)`
 
 `gatewayDeliverPort` adapts gateway adapters to the `DeliverPort` of the `@theokit/agents` scheduler. `adapters` is read on every send, so a platform that connects later is reached. The text is masked with `options.secrets`, rendered for the platform and sent to the channel as a group. A failure is `{ ok: false, error: { code } }`: `not_started` (no adapter for the platform), the adapter's refusal code, or `adapter_threw`.
