@@ -44,9 +44,17 @@ describe("zaloPersonalChannel", () => {
       ...zaloPersonalChannel,
       config: zaloPersonalChannel.config.map((f) => ({ ...f, key: `APP_${f.env}` })),
     };
-    const named = createChannels([{ descriptor: byVariable, config: {} }]).rejected[0]?.error;
+    // Present variables stay set under their full names, so only the unset one is missing.
+    const present = Object.fromEntries(
+      byVariable.config
+        .filter((f) => f.env && `APP_${f.env}` !== missing[0])
+        .map((f) => [f.key, "x"]),
+    );
+    const named = createChannels([{ descriptor: byVariable, config: present }]).rejected[0]?.error;
     expect(named?.code).toBe("missing_required_config");
-    expect(named?.message).toContain(missing[0] as string);
+    expect(named?.message).toBe(
+      `channel ${byVariable.platform}: missing required config ${missing[0]}`,
+    );
   });
 
   it("accepts credentials as an object", () => {
