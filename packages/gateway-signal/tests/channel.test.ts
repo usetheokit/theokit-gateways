@@ -108,11 +108,9 @@ describe("signalChannel", () => {
     expect(error.message).toContain("requestTimeoutMs");
   });
 
-  it("rejects null for an optional value, naming the key", () => {
+  it("treats null as absent for an optional value, like the shared readers", () => {
     for (const key of ["signalCliPath", "requestTimeoutMs", "senderKey"]) {
-      const error = errorOf(() => signalChannel.create({ account: "+5511999990000", [key]: null }));
-      expect(error.code).toBe("invalid_config");
-      expect(error.message).toContain(key);
+      expect(() => signalChannel.create({ account: "+5511999990000", [key]: null })).not.toThrow();
     }
   });
 });

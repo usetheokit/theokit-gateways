@@ -99,12 +99,10 @@ describe("imessageChannel", () => {
     expect(error.message).toContain("requestTimeoutMs");
   });
 
-  it("rejects null for an optional value, naming the key", () => {
+  it("treats null as absent for an optional value, like the shared readers", () => {
     onPlatform("darwin");
     for (const key of ["cliPath", "requestTimeoutMs"]) {
-      const error = errorOf(() => imessageChannel.create({ [key]: null }));
-      expect(error.code).toBe("invalid_config");
-      expect(error.message).toContain(key);
+      expect(() => imessageChannel.create({ [key]: null })).not.toThrow();
     }
   });
 });

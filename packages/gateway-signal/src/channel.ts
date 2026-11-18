@@ -7,30 +7,19 @@
  * every value before the constructor runs and starts no process (signal-cli starts in `connect()`).
  */
 
+import { channelConfigReaders } from "@theokit/gateway";
+
 import { SignalAdapter } from "./adapter.js";
 import { ConfigurationError } from "./errors.js";
 import type { SignalAdapterOptions } from "./types.js";
 
-function invalid(key: string, expected: string): ConfigurationError {
-  return new ConfigurationError({
-    code: "invalid_config",
-    message: `gateway-signal: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
 type Config = Readonly<Record<string, unknown>>;
 
-function isAbsent(value: unknown): boolean {
-  return value === undefined || value === "";
-}
-
-function readString(config: Config, key: string): string | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return value;
-}
+const readers = channelConfigReaders(
+  "gateway-signal",
+  (options) => new ConfigurationError(options),
+);
+const { invalid, isAbsent, readString, requiredString } = readers;
 
 /** A number, or a string of digits (what `configFromEnv` yields). */
 function readNumber(config: Config, key: string): number | undefined {
@@ -102,8 +91,7 @@ const CONFIG: ReadonlyArray<ConfigField> = [
 ];
 
 function buildOptions(config: Config): SignalAdapterOptions {
-  const account = readString(config, "account");
-  if (account === undefined) throw invalid("account", "a string");
+  const account = requiredString(config, "account");
   if (!E164.test(account))
     throw invalid("account", 'a phone number in E.164 form (e.g. "+5511999990000")');
   const signalCliPath = readString(config, "signalCliPath");

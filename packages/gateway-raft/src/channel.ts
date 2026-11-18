@@ -7,31 +7,14 @@
  * options `replyArgs` and `spawn` are not configurable from the environment.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 
 import { RaftAdapter } from "./adapter.js";
 import type { RaftAdapterOptions } from "./types.js";
 
 type Config = Readonly<Record<string, unknown>>;
 
-function invalid(key: string, expected: string): GatewayConfigurationError {
-  return new GatewayConfigurationError("gateway-raft", {
-    code: "invalid_config",
-    message: `gateway-raft: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-function isAbsent(value: unknown): boolean {
-  return value === undefined || value === "";
-}
-
-function readString(config: Config, key: string): string | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return value;
-}
+const { invalid, isAbsent, readString } = channelConfigReaders("gateway-raft");
 
 /** A number, or a string of digits (what `configFromEnv` yields). */
 function readNumber(config: Config, key: string): number | undefined {
