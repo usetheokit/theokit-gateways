@@ -75,7 +75,7 @@ describe("gateway-x peer floor", () => {
         readFileSync(new URL(`../../packages/${p}/package.json`, import.meta.url), "utf8"),
       );
     const floor = floorOf(read("gateway-x").peerDependencies["@theokit/gateway"]);
-    expect(floor).toBe("0.20.0");
+    expect(floor).toBe("0.21.0");
     const num = (v) => v.split(".").map(Number);
     const [a, b] = [num(read("gateway").version), num(floor)];
     const cmp = a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
