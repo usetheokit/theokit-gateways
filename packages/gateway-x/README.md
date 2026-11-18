@@ -8,6 +8,7 @@ the tweet they quote. Replies are public replies. No DMs, likes or media uploads
 
 ```ts
 import { GatewayRunner } from "@theokit/gateway";
+import { createFileCredentialStore } from "@theokit/gateway";
 import { XAdapter } from "@theokit/gateway-x";
 
 const adapter = new XAdapter({
@@ -18,11 +19,20 @@ const adapter = new XAdapter({
   refreshToken: process.env.X_REFRESH_TOKEN!,
   allowFrom: ["alice"], // handles or user ids; everyone else gets no reply
   guest: { dailyLimit: 3 }, // optional: other authors, per author per UTC day
-  onRefreshToken: (token) => saveSomewhere(token), // X rotates it on every refresh
+  credentialStore: createFileCredentialStore("./state"), // keeps the rotated refresh token
+  onRefreshToken: (token) => console.log("rotated"), // optional; still called
 });
 const runner = new GatewayRunner({ adapters: [adapter], handler: async (_e, ctx) => ctx.reply("hello") });
 await runner.start();
 ```
+
+## Keeping the rotated refresh token
+
+X rotates the refresh token on every refresh and the old one stops working. Pass a
+`credentialStore` (`createFileCredentialStore(dir)` from `@theokit/gateway`) and the adapter reads
+the saved token before its first refresh (it wins over `refreshToken`) and saves each new one.
+`credentialKey` names the entry; the default is `x-refresh-token:<userId>`. `onRefreshToken` is
+still called.
 
 ## Behaviour
 

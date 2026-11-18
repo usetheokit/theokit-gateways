@@ -1,5 +1,11 @@
 # @theokit/gateway-signal
 
+## 0.2.0
+
+### Minor Changes
+
+- ad2816a: Add a `senderKey` option (`"uuid"` default, or `"number"`) to choose whether `sender.id` is the sender's UUID or phone number. An invalid value throws `GatewayConfigurationError` (`invalid_config`).
+
 ## 0.1.0
 
 ### Minor Changes
