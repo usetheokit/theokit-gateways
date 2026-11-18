@@ -17,7 +17,9 @@ const secretKeys = smsChannel.config.filter((f) => f.secret).map((f) => f.key);
 
 function built(env: Record<string, string | undefined>) {
   const read = configFromEnv(descriptor, env, "APP_");
-  const result = createChannels([{ descriptor: descriptor as never, config: read.config }]);
+  const result = createChannels([
+    { descriptor: descriptor as never, config: read.config, envPrefix: "APP_" },
+  ]);
   return { read, result };
 }
 
@@ -48,7 +50,7 @@ describe("smsChannel", () => {
       expect(read.missing).toEqual(["APP_" + name]);
       const key = required.find((f) => f.env === name)?.key as string;
       expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-      expect(result.rejected[0]?.error.message).toContain(key);
+      expect(result.rejected[0]?.error.message).toContain(`${key} (env APP_${name})`);
     },
   );
 
