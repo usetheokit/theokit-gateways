@@ -100,8 +100,8 @@ describe("ircChannel conversions", () => {
 describe("ircChannel null and programmatic fields", () => {
   const base = { host: "irc.example.org", nick: "theobot", channels: ["#a"] };
   for (const key of ["port", "tls", "username", "password", "connectTimeoutMs", "socketFactory"]) {
-    it(`refuses an explicit null ${key}`, () => {
-      expect(() => ircChannel.create({ ...base, [key]: null })).toThrow(new RegExp(key));
+    it(`treats an explicit null ${key} as not set`, () => {
+      expect(() => ircChannel.create({ ...base, [key]: null })).not.toThrow();
     });
   }
   it("refuses a socketFactory that is not a function", () => {

@@ -1,6 +1,7 @@
 // Public API for @theokit/gateway-google-chat.
 
 export { GoogleChatAdapter, type GoogleChatInbound } from "./adapter.js";
+export { googleChatChannel } from "./channel.js";
 export { chatEventToMessageEvent, type GoogleChatEventBody } from "./normalize.js";
 export type { FetchLike, GoogleChatAdapterOptions } from "./types.js";
 export {

@@ -1,5 +1,11 @@
 # @theokit/gateway-wecom
 
+## 0.2.0
+
+### Minor Changes
+
+- d4f0bc5: Report `capabilities.maxMessageChars` from the splitter's limit. IRC leaves it undefined because its limit is in bytes. None of these adapters produces thread events, so `threads` stays `false`.
+
 ## 0.1.0
 
 ### Minor Changes

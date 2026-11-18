@@ -9,7 +9,11 @@
  * string, a boolean as a boolean or `"true"`/`"false"`, and a number as a number or a digit string.
  */
 
-import { GatewayConfigurationError, type GatewayConfigurationErrorOptions } from "@theokit/gateway";
+import {
+  channelConfigReaders,
+  GatewayConfigurationError,
+  type GatewayConfigurationErrorOptions,
+} from "@theokit/gateway";
 
 import { NostrAdapter } from "./adapter.js";
 import { NostrKeyError } from "./keys.js";
@@ -26,34 +30,12 @@ export class ConfigurationError extends GatewayConfigurationError {
 
 type Config = Readonly<Record<string, unknown>>;
 
-function invalid(key: string, expected: string): ConfigurationError {
-  return new ConfigurationError({
-    code: "invalid_config",
-    message: `gateway-nostr: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-function absent(value: unknown): boolean {
-  return value === undefined;
-}
-
-function readString(config: Config, key: string): string | undefined {
-  const value = config[key];
-  if (absent(value)) return undefined;
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return value;
-}
-
-function readRequiredString(config: Config, key: string): string {
-  const value = readString(config, key);
-  if (value === undefined) throw invalid(key, "a string");
-  return value;
-}
+const readers = channelConfigReaders("gateway-nostr", (options) => new ConfigurationError(options));
+const { invalid, isAbsent, requiredString: readRequiredString } = readers;
 
 function readList(config: Config, key: string): string[] | undefined {
   const value = config[key];
-  if (absent(value)) return undefined;
+  if (isAbsent(value)) return undefined;
   if (typeof value === "string") {
     return value
       .split(",")
@@ -68,22 +50,15 @@ function readList(config: Config, key: string): string[] | undefined {
 
 function readNumber(config: Config, key: string): number | undefined {
   const value = config[key];
-  if (absent(value)) return undefined;
+  if (isAbsent(value)) return undefined;
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && /^\d+$/.test(value)) return Number(value);
   throw invalid(key, "a number or a digit string");
 }
 
-function readFunction(config: Config, key: string): ((...args: never[]) => unknown) | undefined {
-  const value = config[key];
-  if (value === undefined) return undefined;
-  if (typeof value !== "function") throw invalid(key, "a function");
-  return value as (...args: never[]) => unknown;
-}
-
 function readClient(config: Config): NostrAdapterOptions["client"] {
   const value = config.client;
-  if (value === undefined) return undefined;
+  if (isAbsent(value)) return undefined;
   const methods = ["open", "subscribe", "publish", "close"];
   if (
     typeof value !== "object" ||
@@ -166,7 +141,10 @@ export const nostrChannel = {
       secretKey: readRequiredString(config, "secretKey"),
       relays,
       ignoreBefore: readNumber(config, "ignoreBefore"),
-      socketFactory: readFunction(config, "socketFactory") as NostrAdapterOptions["socketFactory"],
+      socketFactory: readers.readFunction(
+        config,
+        "socketFactory",
+      ) as NostrAdapterOptions["socketFactory"],
       client: readClient(config),
     });
     try {

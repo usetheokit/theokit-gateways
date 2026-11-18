@@ -15,6 +15,7 @@ export type {
 } from "./activity-verifier.js";
 export { teamsActivityVerifier } from "./activity-verifier.js";
 export { TeamsAdapter } from "./adapter.js";
+export { teamsChannel } from "./channel.js";
 
 export { mapTeamsError } from "./errors.js";
 export { normalizeTeamsActivity, stripTeamsMentions } from "./normalize.js";

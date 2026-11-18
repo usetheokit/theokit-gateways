@@ -9,7 +9,11 @@
  * string, a boolean as a boolean or `"true"`/`"false"`, and a number as a number or a digit string.
  */
 
-import { GatewayConfigurationError, type GatewayConfigurationErrorOptions } from "@theokit/gateway";
+import {
+  channelConfigReaders,
+  GatewayConfigurationError,
+  type GatewayConfigurationErrorOptions,
+} from "@theokit/gateway";
 
 import { IrcAdapter } from "./adapter.js";
 import type { IrcAdapterOptions } from "./types.js";
@@ -24,34 +28,12 @@ export class ConfigurationError extends GatewayConfigurationError {
 
 type Config = Readonly<Record<string, unknown>>;
 
-function invalid(key: string, expected: string): ConfigurationError {
-  return new ConfigurationError({
-    code: "invalid_config",
-    message: `gateway-irc: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-function absent(value: unknown): boolean {
-  return value === undefined;
-}
-
-function readString(config: Config, key: string): string | undefined {
-  const value = config[key];
-  if (absent(value)) return undefined;
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return value;
-}
-
-function readRequiredString(config: Config, key: string): string {
-  const value = readString(config, key);
-  if (value === undefined) throw invalid(key, "a string");
-  return value;
-}
+const readers = channelConfigReaders("gateway-irc", (options) => new ConfigurationError(options));
+const { invalid, isAbsent, readString, requiredString: readRequiredString } = readers;
 
 function readList(config: Config, key: string): string[] | undefined {
   const value = config[key];
-  if (absent(value)) return undefined;
+  if (isAbsent(value)) return undefined;
   if (typeof value === "string") {
     return value
       .split(",")
@@ -64,28 +46,20 @@ function readList(config: Config, key: string): string[] | undefined {
   return value;
 }
 
-function readBoolean(config: Config, key: string): boolean | undefined {
+/** `configFromEnv` yields strings: map `"true"`/`"false"` to booleans before the shared reader. */
+function booleanStrings(config: Config, key: string): Config {
   const value = config[key];
-  if (absent(value)) return undefined;
-  if (typeof value === "boolean") return value;
-  if (value === "true") return true;
-  if (value === "false") return false;
-  throw invalid(key, 'a boolean or the string "true" or "false"');
+  if (value === "true") return { ...config, [key]: true };
+  if (value === "false") return { ...config, [key]: false };
+  return config;
 }
 
 function readNumber(config: Config, key: string): number | undefined {
   const value = config[key];
-  if (absent(value)) return undefined;
+  if (isAbsent(value)) return undefined;
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && /^\d+$/.test(value)) return Number(value);
   throw invalid(key, "a number or a digit string");
-}
-
-function readFunction(config: Config, key: string): ((...args: never[]) => unknown) | undefined {
-  const value = config[key];
-  if (value === undefined) return undefined;
-  if (typeof value !== "function") throw invalid(key, "a function");
-  return value as (...args: never[]) => unknown;
 }
 
 /** Keep only the keys whose value is defined. */
@@ -208,14 +182,17 @@ export const ircChannel = {
       nick: readRequiredString(config, "nick"),
       channels,
       port: readNumber(config, "port"),
-      tls: readBoolean(config, "tls"),
+      tls: readers.readBoolean(booleanStrings(config, "tls"), "tls"),
       username: readString(config, "username"),
       realname: readString(config, "realname"),
       password: readString(config, "password"),
       saslAccount: readString(config, "saslAccount"),
       saslPassword: readString(config, "saslPassword"),
       connectTimeoutMs: readNumber(config, "connectTimeoutMs"),
-      socketFactory: readFunction(config, "socketFactory") as IrcAdapterOptions["socketFactory"],
+      socketFactory: readers.readFunction(
+        config,
+        "socketFactory",
+      ) as IrcAdapterOptions["socketFactory"],
     });
     try {
       return new IrcAdapter(options);

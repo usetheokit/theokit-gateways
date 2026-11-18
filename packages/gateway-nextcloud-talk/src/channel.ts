@@ -9,7 +9,11 @@
  * string, a boolean as a boolean or `"true"`/`"false"`, and a number as a number or a digit string.
  */
 
-import { GatewayConfigurationError, type GatewayConfigurationErrorOptions } from "@theokit/gateway";
+import {
+  channelConfigReaders,
+  GatewayConfigurationError,
+  type GatewayConfigurationErrorOptions,
+} from "@theokit/gateway";
 
 import { NextcloudTalkAdapter } from "./adapter.js";
 import type { NextcloudTalkAdapterOptions } from "./types.js";
@@ -24,49 +28,23 @@ export class ConfigurationError extends GatewayConfigurationError {
 
 type Config = Readonly<Record<string, unknown>>;
 
-function invalid(key: string, expected: string): ConfigurationError {
-  return new ConfigurationError({
-    code: "invalid_config",
-    message: `gateway-nextcloud-talk: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-function absent(value: unknown): boolean {
-  return value === undefined;
-}
-
-function readString(config: Config, key: string): string | undefined {
-  const value = config[key];
-  if (absent(value)) return undefined;
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return value;
-}
-
-function readRequiredString(config: Config, key: string): string {
-  const value = readString(config, key);
-  if (value === undefined) throw invalid(key, "a string");
-  return value;
-}
+const readers = channelConfigReaders(
+  "gateway-nextcloud-talk",
+  (options) => new ConfigurationError(options),
+);
+const { invalid, isAbsent, readString, requiredString: readRequiredString } = readers;
 
 function readNumber(config: Config, key: string): number | undefined {
   const value = config[key];
-  if (absent(value)) return undefined;
+  if (isAbsent(value)) return undefined;
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && /^\d+$/.test(value)) return Number(value);
   throw invalid(key, "a number or a digit string");
 }
 
-function readFunction(config: Config, key: string): ((...args: never[]) => unknown) | undefined {
-  const value = config[key];
-  if (value === undefined) return undefined;
-  if (typeof value !== "function") throw invalid(key, "a function");
-  return value as (...args: never[]) => unknown;
-}
-
 /** An Express app: a function with the `post` method the adapter mounts its route with. */
 function readApp(config: Config): NextcloudTalkAdapterOptions["app"] {
-  const app = readFunction(config, "app");
+  const app = readers.readFunction(config, "app");
   if (app === undefined) return undefined;
   if (typeof (app as { post?: unknown }).post !== "function") {
     throw invalid("app", "an Express app (a function with a post method)");
@@ -157,7 +135,7 @@ export const nextcloudTalkChannel = {
       path: readString(config, "path"),
       connectTimeoutMs: readNumber(config, "connectTimeoutMs"),
       app: readApp(config),
-      fetch: readFunction(config, "fetch") as NextcloudTalkAdapterOptions["fetch"],
+      fetch: readers.readFunction(config, "fetch") as NextcloudTalkAdapterOptions["fetch"],
     });
     try {
       return new NextcloudTalkAdapter(options);

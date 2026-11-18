@@ -93,8 +93,8 @@ describe("nostrChannel conversions", () => {
 describe("nostrChannel null and programmatic fields", () => {
   const base = { secretKey: KEY, relays: ["wss://r.example"] };
   for (const key of ["ignoreBefore", "socketFactory", "client"]) {
-    it(`refuses an explicit null ${key}`, () => {
-      expect(() => nostrChannel.create({ ...base, [key]: null })).toThrow(new RegExp(key));
+    it(`treats an explicit null ${key} as not set`, () => {
+      expect(() => nostrChannel.create({ ...base, [key]: null })).not.toThrow();
     });
   }
   it("refuses a client without the relay methods", () => {
