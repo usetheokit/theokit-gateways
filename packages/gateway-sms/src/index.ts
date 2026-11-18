@@ -1,6 +1,7 @@
 // Public API for @theokit/gateway-sms (ADRs D389-D396).
 
 export { SMSAdapter } from "./adapter.js";
+export { smsChannel } from "./channel.js";
 export { BackendNotInstalledError, ConfigurationError } from "./errors.js";
 export { parseInbound } from "./parse-inbound.js";
 export { normalizeE164 } from "./phone.js";
