@@ -100,7 +100,13 @@ const approver = createChatApprover({
 
 // 2. Register a `pre_tool_call` handler on the agent. The SDK allows a call unless the handler
 //    returns `{ block: true, message }`, so an approval is `undefined` and a denial is a block.
-const alwaysAllowed = new Set<string>(); // persist this yourself if "always" must survive restarts
+// "Always" is remembered per conversation AND per exact operation (tool name plus arguments), never
+// per tool: approving `rm build/` must not approve `rm -rf /`, nor the same call in another chat.
+// The set lives in memory, so it is forgotten on restart; persist it yourself only if the owner
+// should keep such grants, and let the owner revoke them.
+const alwaysAllowed = new Set<string>();
+const grantKey = (conversation: string, name: string, args: unknown) =>
+  JSON.stringify([conversation, name, args]);
 
 const approvals: Plugin = {
   kind: "general",
@@ -108,14 +114,16 @@ const approvals: Plugin = {
   version: "1.0.0",
   register(ctx) {
     ctx.on("pre_tool_call", async ({ name, args, agentId }) => {
-      if (!needsApproval(name, args) || alwaysAllowed.has(name)) return undefined;
+      if (!needsApproval(name, args)) return undefined;
       // The context carries no conversation: map the agent back to the one it answers in.
       const conversation = conversationOfAgent(agentId);
+      const key = grantKey(conversation, name, args);
+      if (alwaysAllowed.has(key)) return undefined;
       const { answer } = await approver.ask(conversation, `${name} ${JSON.stringify(args)}`);
       if (answer === "deny") {
         return { block: true, message: `The owner did not approve ${name}. Do not retry it.` };
       }
-      if (answer === "always") alwaysAllowed.add(name); // skip the question from now on
+      if (answer === "always") alwaysAllowed.add(key); // only this exact call, in this conversation
       return undefined;
     });
   },
