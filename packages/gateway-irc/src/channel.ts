@@ -9,13 +9,9 @@
  * string, a boolean as a boolean or `"true"`/`"false"`, and a number as a number or a digit string.
  */
 
-import {
-  GatewayConfigurationError,
-  type GatewayConfigurationErrorOptions,
-} from "@theokit/gateway";
-
-import { channelConfigReaders } from "./config-readers.js";
+import { GatewayConfigurationError, type GatewayConfigurationErrorOptions } from "@theokit/gateway";
 import { IrcAdapter } from "./adapter.js";
+import { channelConfigReaders } from "./config-readers.js";
 import type { IrcAdapterOptions } from "./types.js";
 
 /** Misconfiguration of the IRC channel, raised before any network call. */

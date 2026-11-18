@@ -9,13 +9,9 @@
  * string, a boolean as a boolean or `"true"`/`"false"`, and a number as a number or a digit string.
  */
 
-import {
-  GatewayConfigurationError,
-  type GatewayConfigurationErrorOptions,
-} from "@theokit/gateway";
-
-import { channelConfigReaders } from "./config-readers.js";
+import { GatewayConfigurationError, type GatewayConfigurationErrorOptions } from "@theokit/gateway";
 import { NostrAdapter } from "./adapter.js";
+import { channelConfigReaders } from "./config-readers.js";
 import { NostrKeyError } from "./keys.js";
 import { NostrRelayError } from "./relay-client.js";
 import type { NostrAdapterOptions } from "./types.js";

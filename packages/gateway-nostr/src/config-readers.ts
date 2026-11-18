@@ -43,7 +43,10 @@ export function channelConfigReaders(
       if (typeof value !== "boolean") throw invalid(key, "a boolean");
       return value;
     },
-    readFunction<T extends (...args: never[]) => unknown>(config: Input, key: string): T | undefined {
+    readFunction<T extends (...args: never[]) => unknown>(
+      config: Input,
+      key: string,
+    ): T | undefined {
       const value = config[key];
       if (isAbsent(value)) return undefined;
       if (typeof value !== "function") throw invalid(key, "a function");
