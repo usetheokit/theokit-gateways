@@ -1,7 +1,7 @@
 /**
  * `lineChannel` — the LINE channel described as data (FR-005 of B-018).
  *
- * Typed locally on purpose (ADR D4 of B-018): this package declares `@theokit/gateway >=0.9.0` as
+ * Typed locally on purpose (ADR D4 of B-018): this package declares `@theokit/gateway >=0.21.0` as
  * its peer, and a published `.d.ts` naming a core type that 0.9.0 lacks would break a consumer on
  * that floor with no gate here to catch it. The object is structurally a `ChannelDescriptor`; the
  * integration package assigns it to one, and its typecheck is where a drift between the two fails.
@@ -44,7 +44,17 @@ function optional<T>(
 }
 
 const isString = (value: unknown): value is string => typeof value === "string";
+/** `configFromEnv` yields strings, so `"true"` and `"false"` stand for the booleans. */
 const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
+
+function optionalBooleanLike(
+  config: Readonly<Record<string, unknown>>,
+  key: string,
+): boolean | undefined {
+  const value = config[key];
+  if (value === "true" || value === "false") return value === "true";
+  return optional(config, key, isBoolean, "a boolean");
+}
 
 function buildOptions(config: Readonly<Record<string, unknown>>): LineAdapterOptions {
   // Types are checked here, before the constructor: a numeric secret passes the constructor's
@@ -53,7 +63,7 @@ function buildOptions(config: Readonly<Record<string, unknown>>): LineAdapterOpt
   const channelSecret = requiredString(config, "channelSecret");
   const channelAccessToken = requiredString(config, "channelAccessToken");
   const botUserId = optional(config, "botUserId", isString, "a string");
-  const requireMention = optional(config, "requireMention", isBoolean, "a boolean");
+  const requireMention = optionalBooleanLike(config, "requireMention");
   return {
     channelSecret,
     channelAccessToken,
@@ -75,6 +85,7 @@ function headerValue(
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally, D4). */
 interface ConfigField {
   readonly key: string;
+  readonly env?: string;
   readonly required: boolean;
   readonly secret: boolean;
   readonly description: string;
@@ -83,12 +94,14 @@ interface ConfigField {
 const CONFIG: ReadonlyArray<ConfigField> = [
   {
     key: "channelSecret",
+    env: "LINE_CHANNEL_SECRET",
     required: true,
     secret: true,
     description: "The channel secret that signs inbound webhooks (LINE Developers Console).",
   },
   {
     key: "channelAccessToken",
+    env: "LINE_CHANNEL_ACCESS_TOKEN",
     required: true,
     secret: true,
     description: "The channel's long-lived access token (LINE Developers Console).",
