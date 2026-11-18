@@ -1,5 +1,11 @@
 # @theokit/gateway-google-chat
 
+## 0.2.0
+
+### Minor Changes
+
+- 9abcd96: Add `webhook: "external"`: `connect()` fetches the first access token and opens no listener, so a host can serve the webhook from its own route through `handleRequest`. Combining it with `app` or `port` throws `conflicting_webhook_options`.
+
 ## 0.1.0
 
 ### Minor Changes

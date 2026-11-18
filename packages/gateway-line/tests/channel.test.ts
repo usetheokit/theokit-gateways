@@ -7,7 +7,7 @@
  */
 
 import type { MessageEvent } from "@theokit/gateway";
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { configFromEnv, createChannels, GatewayConfigurationError } from "@theokit/gateway";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LineAdapter } from "../src/adapter.js";
@@ -243,9 +243,70 @@ describe("lineChannel", () => {
     ).toBe("access_token_required");
   });
 
-  it("treats a null or empty optional field as absent", () => {
-    expect(lineChannel.create({ ...CONFIG, botUserId: "", requireMention: null })).toBeInstanceOf(
-      LineAdapter,
+  it("treats an empty botUserId as absent", () => {
+    expect(
+      lineChannel.create({ ...CONFIG, botUserId: "", requireMention: undefined }),
+    ).toBeInstanceOf(LineAdapter);
+  });
+});
+
+describe("lineChannel env bindings", () => {
+  const ENV = {
+    APP_LINE_CHANNEL_SECRET: "env-secret",
+    APP_LINE_CHANNEL_ACCESS_TOKEN: "env-token",
+  };
+
+  it("builds the adapter from configFromEnv", () => {
+    const { config, missing } = configFromEnv(lineChannel, ENV, "APP_");
+    expect(missing).toEqual([]);
+    const result = createChannels([{ descriptor: lineChannel, config }]);
+    expect(result.rejected).toEqual([]);
+    expect(result.adapters[0]).toBeInstanceOf(LineAdapter);
+  });
+
+  it.each([
+    ["APP_LINE_CHANNEL_SECRET", "channelSecret"],
+    ["APP_LINE_CHANNEL_ACCESS_TOKEN", "channelAccessToken"],
+  ])("reports %s unset, and createChannels rejects it", (variable, key) => {
+    const env: Record<string, string> = { ...ENV };
+    delete env[variable];
+    const { config, missing } = configFromEnv(lineChannel, env, "APP_");
+    expect(missing).toEqual([variable]);
+    const result = createChannels([{ descriptor: lineChannel, config, envPrefix: "APP_" }]);
+    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
+    expect(result.rejected[0]?.error.message).toBe(
+      `channel line: missing required config ${key} (env ${variable})`,
     );
+  });
+
+  it("collects only secret values", () => {
+    expect(configFromEnv(lineChannel, ENV, "APP_").secrets).toEqual(["env-secret", "env-token"]);
+  });
+
+  it("accepts a boolean string", () => {
+    expect(lineChannel.create({ ...CONFIG, requireMention: "false" })).toBeInstanceOf(LineAdapter);
+  });
+
+  it("treats a null or empty requireMention as absent, as the core's readers do", () => {
+    for (const requireMention of [null, ""]) {
+      expect(lineChannel.create({ ...CONFIG, requireMention })).toBeInstanceOf(LineAdapter);
+    }
+  });
+
+  it("throws invalid_config naming the key for a wrongly typed value", () => {
+    for (const [key, config] of [
+      ["channelSecret", { ...CONFIG, channelSecret: 5 }],
+      ["requireMention", { ...CONFIG, requireMention: "yes" }],
+      ["requireMention", { ...CONFIG, requireMention: 1 }],
+    ] as const) {
+      try {
+        lineChannel.create(config);
+        throw new Error("expected a throw");
+      } catch (err) {
+        expect(err).toBeInstanceOf(ConfigurationError);
+        expect((err as ConfigurationError).code).toBe("invalid_config");
+        expect((err as ConfigurationError).message).toContain(key);
+      }
+    }
   });
 });

@@ -4,6 +4,8 @@
  * @public
  */
 
+import type { CredentialStore } from "@theokit/gateway";
+
 /** A `fetch`-shaped function; the adapter's only network seam. @public */
 export type XFetch = (
   url: string,
@@ -62,6 +64,13 @@ export interface XAdapterOptions {
   readonly guest?: XGuestOptions;
   /** Called with each new refresh token X issues; persist it, the old one stops working. */
   readonly onRefreshToken?: (refreshToken: string) => void | Promise<void>;
+  /**
+   * Where the rotated refresh token is kept. Read before the first refresh (it wins over
+   * `refreshToken`), written on every rotation. `onRefreshToken` still fires.
+   */
+  readonly credentialStore?: CredentialStore;
+  /** Key in `credentialStore`. Default `x-refresh-token:<userId>`. */
+  readonly credentialKey?: string;
   /** Milliseconds between polls for mentions. Default 60000; `0` turns the timer off (`poll()` only). */
   readonly pollIntervalMs?: number;
   /** The most ancestor tweets read for one mention. Default 5. */
