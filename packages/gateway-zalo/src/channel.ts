@@ -5,11 +5,14 @@
  * integration package assigns it to one, so a drift between the two fails there.
  */
 
-import { channelConfigReaders } from "@theokit/gateway";
-
 import { ZaloAdapter } from "./adapter.js";
 
-const readers = channelConfigReaders("gateway-zalo");
+/** A required string; an empty one is left for the adapter's own check, which names it. */
+function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
+  const value = config[key];
+  if (typeof value !== "string") throw new Error(`gateway-zalo: config.${key} must be a string`);
+  return value;
+}
 
 type Headers = Readonly<Record<string, string | undefined>>;
 
@@ -19,18 +22,21 @@ const header = (headers: Headers, name: string): string | undefined =>
 const CONFIG = [
   {
     key: "appId",
+    env: "ZALO_APP_ID",
     required: true,
     secret: true,
     description: "The Zalo app id.",
   },
   {
     key: "oaSecretKey",
+    env: "ZALO_OA_SECRET_KEY",
     required: true,
     secret: true,
     description: "The OA secret key that signs inbound webhooks.",
   },
   {
     key: "accessToken",
+    env: "ZALO_ACCESS_TOKEN",
     required: true,
     secret: true,
     description: "The OA access token (not refreshed by the adapter).",
@@ -54,9 +60,9 @@ export const zaloChannel = {
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): ZaloAdapter {
     return new ZaloAdapter({
-      appId: readers.requiredString(config, "appId"),
-      oaSecretKey: readers.requiredString(config, "oaSecretKey"),
-      accessToken: readers.requiredString(config, "accessToken"),
+      appId: requiredString(config, "appId"),
+      oaSecretKey: requiredString(config, "oaSecretKey"),
+      accessToken: requiredString(config, "accessToken"),
     });
   },
   webhook: {

@@ -5,11 +5,14 @@
  * integration package assigns it to one, so a drift between the two fails there.
  */
 
-import { channelConfigReaders } from "@theokit/gateway";
-
 import { QQAdapter } from "./adapter.js";
 
-const readers = channelConfigReaders("gateway-qq");
+/** A required string; an empty one is left for the adapter's own check, which names it. */
+function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
+  const value = config[key];
+  if (typeof value !== "string") throw new Error(`gateway-qq: config.${key} must be a string`);
+  return value;
+}
 
 type Headers = Readonly<Record<string, string | undefined>>;
 
@@ -19,12 +22,14 @@ const header = (headers: Headers, name: string): string | undefined =>
 const CONFIG = [
   {
     key: "appId",
+    env: "QQ_APP_ID",
     required: true,
     secret: true,
     description: "The bot's AppID.",
   },
   {
     key: "appSecret",
+    env: "QQ_APP_SECRET",
     required: true,
     secret: true,
     description: "The bot's AppSecret; also seeds the webhook signing key.",
@@ -48,8 +53,8 @@ export const qqChannel = {
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): QQAdapter {
     return new QQAdapter({
-      appId: readers.requiredString(config, "appId"),
-      appSecret: readers.requiredString(config, "appSecret"),
+      appId: requiredString(config, "appId"),
+      appSecret: requiredString(config, "appSecret"),
     });
   },
   webhook: {

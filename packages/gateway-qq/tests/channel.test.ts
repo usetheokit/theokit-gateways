@@ -1,6 +1,7 @@
 import {
   type BasePlatformAdapter,
   type ChannelDescriptor,
+  configFromEnv,
   createChannels,
   createWebhookHandler,
   type MessageEvent,
@@ -121,5 +122,13 @@ describe("qqChannel through createChannels and createWebhookHandler", () => {
     const res = await handler(post(raw));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ plain_token: "tok", signature: signQQ("secret", "123tok") });
+  });
+});
+
+describe("qqChannel environment binding", () => {
+  it("reads every credential from its environment variable", () => {
+    const config = configFromEnv(qqChannel as unknown as ChannelDescriptor, { QQ_APP_ID: "v-appId", QQ_APP_SECRET: "v-appSecret" });
+    expect(config).toEqual({ appId: "v-appId", appSecret: "v-appSecret" });
+    expect(() => qqChannel.create(config)).not.toThrow();
   });
 });

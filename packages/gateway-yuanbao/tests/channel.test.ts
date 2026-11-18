@@ -1,6 +1,7 @@
 import {
   type BasePlatformAdapter,
   type ChannelDescriptor,
+  configFromEnv,
   createChannels,
   createWebhookHandler,
   type MessageEvent,
@@ -109,5 +110,13 @@ describe("yuanbaoChannel over a Fetch request", () => {
   it("answers a signed request with no handler subscribed with 503", async () => {
     const { send } = route();
     expect((await send(good())).status).toBe(503);
+  });
+});
+
+describe("yuanbaoChannel environment binding", () => {
+  it("reads every credential from its environment variable", () => {
+    const config = configFromEnv(yuanbaoChannel as unknown as ChannelDescriptor, { YUANBAO_APP_ID: "v-appId", YUANBAO_APP_SECRET: "v-appSecret", YUANBAO_CALLBACK_SECRET: "v-callbackSecret" });
+    expect(config).toEqual({ appId: "v-appId", appSecret: "v-appSecret", callbackSecret: "v-callbackSecret" });
+    expect(() => yuanbaoChannel.create(config)).not.toThrow();
   });
 });

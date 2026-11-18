@@ -5,11 +5,14 @@
  * integration package assigns it to one, so a drift between the two fails there.
  */
 
-import { channelConfigReaders } from "@theokit/gateway";
-
 import { YuanbaoAdapter } from "./adapter.js";
 
-const readers = channelConfigReaders("gateway-yuanbao");
+/** A required string; an empty one is left for the adapter's own check, which names it. */
+function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
+  const value = config[key];
+  if (typeof value !== "string") throw new Error(`gateway-yuanbao: config.${key} must be a string`);
+  return value;
+}
 
 type Headers = Readonly<Record<string, string | undefined>>;
 
@@ -19,18 +22,21 @@ const header = (headers: Headers, name: string): string | undefined =>
 const CONFIG = [
   {
     key: "appId",
+    env: "YUANBAO_APP_ID",
     required: true,
     secret: true,
     description: "The bot's app id.",
   },
   {
     key: "appSecret",
+    env: "YUANBAO_APP_SECRET",
     required: true,
     secret: true,
     description: "The bot's app secret.",
   },
   {
     key: "callbackSecret",
+    env: "YUANBAO_CALLBACK_SECRET",
     required: true,
     secret: true,
     description: "The secret that signs inbound callbacks.",
@@ -54,9 +60,9 @@ export const yuanbaoChannel = {
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): YuanbaoAdapter {
     return new YuanbaoAdapter({
-      appId: readers.requiredString(config, "appId"),
-      appSecret: readers.requiredString(config, "appSecret"),
-      callbackSecret: readers.requiredString(config, "callbackSecret"),
+      appId: requiredString(config, "appId"),
+      appSecret: requiredString(config, "appSecret"),
+      callbackSecret: requiredString(config, "callbackSecret"),
     });
   },
   webhook: {
