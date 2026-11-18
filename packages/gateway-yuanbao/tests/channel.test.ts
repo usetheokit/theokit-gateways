@@ -1,8 +1,4 @@
-import {
-  configFromEnv,
-  createChannels,
-  GatewayConfigurationError,
-} from "@theokit/gateway";
+import { configFromEnv, createChannels, GatewayConfigurationError } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 import { YuanbaoAdapter } from "../src/adapter.js";
@@ -46,40 +42,27 @@ describe("yuanbaoChannel", () => {
     );
   });
 
-  it.each(REQUIRED)(
-    "rejects with missing_required_config when %s is unset",
-    (key) => {
-      const env = { ...ENV };
-      delete env[envName(key)];
-      const read = configFromEnv(yuanbaoChannel, env, "APP_");
-      expect(read.missing).toEqual([envName(key)]);
-      const result = createChannels([
-        { descriptor: yuanbaoChannel, config: read.config },
-      ]);
-      expect(result.adapters).toEqual([]);
-      expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-      expect(result.rejected[0]?.error.message).toContain(key);
-    },
-  );
+  it.each(REQUIRED)("rejects with missing_required_config when %s is unset", (key) => {
+    const env = { ...ENV };
+    delete env[envName(key)];
+    const read = configFromEnv(yuanbaoChannel, env, "APP_");
+    expect(read.missing).toEqual([envName(key)]);
+    const result = createChannels([{ descriptor: yuanbaoChannel, config: read.config }]);
+    expect(result.adapters).toEqual([]);
+    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
+    expect(result.rejected[0]?.error.message).toContain(key);
+  });
 
-  it.each([...REQUIRED, ...OPTIONAL, "fetch"])(
-    "refuses a wrongly typed %s with invalid_config naming the key",
-    (key) => {
-      const thrown = thrownBy({
-        ...VALID,
-        [key]: key === "fetch" ? "nope" : 42,
-      });
-      expect(thrown).toBeInstanceOf(GatewayConfigurationError);
-      expect((thrown as GatewayConfigurationError).code).toBe("invalid_config");
-      expect((thrown as Error).message).toContain(key);
-    },
-  );
+  it.each([...REQUIRED, ...OPTIONAL, "fetch"])("%s of the wrong type is invalid_config", (key) => {
+    const thrown = thrownBy({ ...VALID, [key]: key === "fetch" ? "nope" : 42 });
+    expect(thrown).toBeInstanceOf(GatewayConfigurationError);
+    expect((thrown as GatewayConfigurationError).code).toBe("invalid_config");
+    expect((thrown as Error).message).toContain(key);
+  });
 
   it("collects exactly the secret values", () => {
     const { secrets } = configFromEnv(yuanbaoChannel, ENV, "APP_");
-    expect([...secrets].sort()).toEqual(
-      SECRET.map((key) => key + "-value").sort(),
-    );
+    expect([...secrets].sort()).toEqual(SECRET.map((key) => key + "-value").sort());
   });
 
   it("passes a supplied fetch through to the adapter", async () => {
