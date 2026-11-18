@@ -51,6 +51,30 @@ function sign(authToken: string, url: string, pairs: Array<[string, string]>): s
 }
 
 /**
+ * Whether `signature` is Twilio's signature of `url` plus the form fields in `rawBody`, compared in
+ * constant time. Synchronous, needs no adapter and no SDK; `twilioRequestVerifier` is built on it.
+ *
+ * @internal
+ */
+export function verifyTwilioSignature(
+  authToken: string,
+  url: string,
+  rawBody: string,
+  signature: string | undefined,
+): boolean {
+  if (signature === undefined || signature.length === 0) return false;
+  let pairs: Array<[string, string]>;
+  try {
+    pairs = parseForm(rawBody);
+  } catch {
+    return false;
+  }
+  const expected = Buffer.from(sign(authToken, url, pairs));
+  const actual = Buffer.from(signature);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
+/**
  * Build a verifier for Twilio webhooks (SMS or voice).
  *
  * The request body is READ; pass a clone if it is needed afterwards.
@@ -65,17 +89,13 @@ export function twilioRequestVerifier(
     if (header === null || header.length === 0) {
       return { ok: false, reason: "missing X-Twilio-Signature header" };
     }
-    let pairs: Array<[string, string]>;
-    try {
-      pairs = parseForm(await request.text());
-    } catch {
-      return { ok: false, reason: "unparseable body" };
-    }
-    const expected = Buffer.from(sign(opts.authToken, opts.publicUrl ?? request.url, pairs));
-    const actual = Buffer.from(header);
-    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
-      return { ok: false, reason: "signature mismatch" };
-    }
+    const ok = verifyTwilioSignature(
+      opts.authToken,
+      opts.publicUrl ?? request.url,
+      await request.text(),
+      header,
+    );
+    if (!ok) return { ok: false, reason: "signature mismatch" };
     return { ok: true };
   };
 }

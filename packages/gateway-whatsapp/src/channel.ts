@@ -12,6 +12,7 @@
 
 import { WhatsAppAdapter } from "./adapter.js";
 import { ConfigurationError } from "./errors.js";
+import { cloudWebhook, rememberWebhookConfig } from "./fetch-webhook.js";
 
 type Config = Readonly<Record<string, unknown>>;
 
@@ -87,7 +88,7 @@ const CLOUD_CONFIG: ReadonlyArray<ConfigField> = [
     secret: true,
     env: "WHATSAPP_VERIFY_TOKEN",
     description:
-      "The token Meta's webhook subscription check sends; not an adapter option, kept so the webhook half can answer it.",
+      "The token Meta's webhook subscription check sends; the webhook's GET answers 403 without it.",
   },
   REQUIRE_MENTION,
 ];
@@ -124,12 +125,17 @@ function createCloud(config: Config): WhatsAppAdapter {
   const accessToken = requiredString(config, "accessToken");
   const phoneNumberId = requiredString(config, "phoneNumberId");
   const appSecret = requiredString(config, "appSecret");
-  read(config, "verifyToken", "string");
+  const verifyToken = read(config, "verifyToken", "string") as string | undefined;
   const opts = common(config);
-  return WhatsAppAdapter.from(
+  const adapter = WhatsAppAdapter.from(
     { backend: "cloud", cloud: { accessToken, phoneNumberId, appSecret } },
     opts,
   );
+  rememberWebhookConfig(adapter, {
+    appSecret,
+    ...(verifyToken === undefined ? {} : { verifyToken }),
+  });
+  return adapter;
 }
 
 function createBaileys(config: Config): WhatsAppAdapter {
@@ -140,7 +146,8 @@ function createBaileys(config: Config): WhatsAppAdapter {
 
 const cloudChannel = {
   platform: "whatsapp" as const,
-  transport: "socket" as const,
+  transport: "webhook" as const,
+  webhook: cloudWebhook,
   senderIdentity: "authenticated" as const,
   config: CLOUD_CONFIG,
   create: createCloud,

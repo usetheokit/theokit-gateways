@@ -158,5 +158,20 @@ const { adapters, rejected } = createChannels([{ descriptor: smsChannel, config 
 | `publicUrl` | `SMS_PUBLIC_URL` | yes | no |
 
 `create` throws `ConfigurationError` (`invalid_config`) naming the key for a missing or non-string
-value. The descriptor declares `transport: "socket"`; inbound messages still arrive through a
-webhook you host (`createWebhookServer`), which this descriptor does not set up.
+value. The descriptor declares `transport: "webhook"`; `createWebhookServer` (Express) keeps working.
+
+### Mounting the route
+
+`webhook.handle` verifies `X-Twilio-Signature` against the configured `publicUrl` (never the
+request's Host header), answers 401 on a bad signature, 400 when the form body holds no message,
+and otherwise delivers and answers 200 (500 or 503 when the handler threw or none is subscribed).
+
+```ts
+import { createChannels, createWebhookHandler } from "@theokit/gateway";
+import { smsChannel } from "@theokit/gateway-sms";
+
+const { channels } = createChannels([{ descriptor: smsChannel, config }]);
+const handle = createWebhookHandler({ channels, isStarted: () => true });
+// POST /webhooks/sms -> handle(request)
+```
+
