@@ -1,4 +1,5 @@
 ---
+"@theokit/gateway": minor
 "@theokit/gateway-yuanbao": minor
 "@theokit/gateway-qq": minor
 "@theokit/gateway-zalo": minor
