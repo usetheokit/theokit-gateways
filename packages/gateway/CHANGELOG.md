@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.21.0
+
+### Minor Changes
+
+- 6cad27f: Add `scopedStrategy` with four DM scopes (`main`, `per-peer`, `per-channel-peer`, `per-account-channel-peer`), peer links, an account label and a group scope.
+
+### Patch Changes
+
+- 9b4ca9f: `createChannels` rejections for missing required config now name each field's environment variable; pass `envPrefix` on a `ChannelEntry` to match the prefix given to `configFromEnv`.
+
 ## 0.20.0
 
 ### Minor Changes
