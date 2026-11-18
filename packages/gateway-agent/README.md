@@ -39,6 +39,7 @@ once and then throws `AgentTurnError` (`platform` and SDK `code`, no prompt text
 hooks fire. The lease from `agentFor` is always released. Values in `secrets` are masked from the
 streamed text, including a value split across frames, and again from the final text. The handler
 starts no typing indicator: `GatewayRunner` already shows and renews one.
+`ackEmoji` reacts through `GatewayContext.react`, which `@theokit/gateway` provides from 0.21.0; this package's peer range requires it, so the reaction is sent on every supported version.
 
 ```ts
 const runner = new GatewayRunner({
