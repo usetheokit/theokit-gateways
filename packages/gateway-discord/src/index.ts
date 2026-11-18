@@ -2,4 +2,5 @@
 // Implementation lands in Phase 6 (T6.1) of the gateway-v0.1 plan.
 
 export { DiscordAdapter, type DiscordAdapterOptions } from "./adapter.js";
+export { discordChannel } from "./channel.js";
 export { splitForDiscord } from "./split.js";
