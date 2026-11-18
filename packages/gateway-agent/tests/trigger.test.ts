@@ -148,6 +148,10 @@ describe("createTrigger", () => {
     await trigger.idle();
     expect(state.lines).toHaveLength(1);
     expect(state.lines[0]).not.toContain("PRIVATE_DATA");
+    const embedded = setup({}, { fail: "ERR_PRIVATE_DATA" });
+    await embedded.post("b", "PRIVATE_DATA");
+    await embedded.trigger.idle();
+    expect(embedded.state.lines[0]).not.toContain("PRIVATE_DATA");
     const header = setup({}, { fail: "id-777" });
     await header.post("id-777");
     await header.trigger.idle();
@@ -162,6 +166,13 @@ describe("createTrigger", () => {
     await trigger.idle();
     expect(state.lines).toHaveLength(1);
     expect(state.lines[0]).not.toContain("PRIVATE_DATA");
+  });
+
+  it("writes an app-allowed failure code as it is", async () => {
+    const { post, trigger, state } = setup({ failureCodes: ["MY_CODE"] }, { fail: "MY_CODE" });
+    await post("a");
+    await trigger.idle();
+    expect(state.lines[0]).toContain("MY_CODE");
   });
 
   it("masks secrets in the reply", async () => {
