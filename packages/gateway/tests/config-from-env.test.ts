@@ -53,6 +53,28 @@ describe("configFromEnv", () => {
   });
 });
 
+describe("configFromEnv edge cases", () => {
+  it("collects a secret shared by two fields once", () => {
+    const d = make([field("a", "A", true, true), field("b", "B", true, true)]);
+    const r = configFromEnv(d, { A: "same", B: " same " });
+    expect(r.config).toEqual({ a: "same", b: "same" });
+    expect(r.secrets).toEqual(["same"]);
+  });
+
+  it("omits an optional unset field without reporting it missing", () => {
+    const d = make([field("opt", "OPT", false, true)]);
+    const r = configFromEnv(d, {});
+    expect(r).toEqual({ config: {}, missing: [], secrets: [] });
+  });
+
+  it("does not read a variable without the prefix", () => {
+    const d = make([field("token", "TOKEN", true, true)]);
+    const r = configFromEnv(d, { TOKEN: "t" }, "APP_");
+    expect(r.missing).toEqual(["APP_TOKEN"]);
+    expect(r.config).toEqual({});
+  });
+});
+
 describe("selectVariant", () => {
   const cloud = make([]);
   const d = make([], { variants: { cloud } });
