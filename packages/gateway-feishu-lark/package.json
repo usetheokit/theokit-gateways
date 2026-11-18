@@ -42,7 +42,7 @@
   },
   "peerDependencies": {
     "@larksuiteoapi/node-sdk": "^1.76.0",
-    "@theokit/gateway": ">=0.22.0 <1.0.0"
+    "@theokit/gateway": ">=0.21.0 <1.0.0"
   },
   "peerDependenciesMeta": {
     "@larksuiteoapi/node-sdk": {

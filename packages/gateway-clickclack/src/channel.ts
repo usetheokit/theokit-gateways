@@ -5,22 +5,31 @@
  * `.d.ts` must not name core types an older peer lacks.
  */
 
-import { channelConfigReaders } from "@theokit/gateway";
+import { GatewayConfigurationError } from "@theokit/gateway";
 import { ClickClackAdapter } from "./adapter.js";
 
 type Config = Readonly<Record<string, unknown>>;
 
-const readers = channelConfigReaders("gateway-clickclack");
+function invalid(key: string, expected: string): GatewayConfigurationError {
+  return new GatewayConfigurationError("gateway-clickclack", {
+    code: "invalid_config",
+    message: `gateway-clickclack: config.${key} must be ${expected}`,
+    detail: key,
+  });
+}
+
+function requiredString(config: Config, key: string): string {
+  const value = config[key];
+  if (typeof value !== "string" || value === "") throw invalid(key, "a non-empty string");
+  return value;
+}
 
 function readDelay(config: Config): number | undefined {
   const value = config.reconnectDelayMs;
   if (value === undefined) return undefined;
-  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
-  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
-    const parsed = Number(value.trim());
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  throw readers.invalid("reconnectDelayMs", "a non-negative number or a digit string");
+  const parsed = typeof value === "string" && /^\d+$/.test(value.trim()) ? Number(value) : value;
+  if (typeof parsed === "number" && Number.isFinite(parsed) && parsed >= 0) return parsed;
+  throw invalid("reconnectDelayMs", "a non-negative number or a digit string");
 }
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
@@ -87,10 +96,10 @@ export const clickclackChannel = {
   create(config: Config): ClickClackAdapter {
     const delay = readDelay(config);
     return new ClickClackAdapter({
-      baseUrl: readers.requiredString(config, "baseUrl"),
-      token: readers.requiredString(config, "token"),
-      workspaceId: readers.requiredString(config, "workspaceId"),
-      botUserId: readers.requiredString(config, "botUserId"),
+      baseUrl: requiredString(config, "baseUrl"),
+      token: requiredString(config, "token"),
+      workspaceId: requiredString(config, "workspaceId"),
+      botUserId: requiredString(config, "botUserId"),
       ...(delay === undefined ? {} : { reconnectDelayMs: delay }),
     });
   },
