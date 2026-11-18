@@ -393,3 +393,43 @@ describe("live-test readiness", () => {
     ).toEqual([]);
   });
 });
+
+describe("gateway configuration readiness (offline, synthetic values)", () => {
+  const field = (key: string, env: string, required: boolean, secret: boolean) => ({
+    key,
+    env,
+    required,
+    secret,
+    description: key,
+  });
+  const descriptor = {
+    platform: "telegram",
+    transport: "socket",
+    config: [
+      field("token", "BOT_TOKEN", true, true),
+      field("apiUrl", "API_URL", true, false),
+      field("note", "NOTE", false, false),
+    ],
+  } as unknown as Parameters<typeof import("@theokit/gateway").configFromEnv>[0];
+
+  it("names unset and blank required variables with their prefix", async () => {
+    const { configFromEnv } = await import("@theokit/gateway");
+    const env = { DEMO_BOT_TOKEN: "   ", BOT_TOKEN: "unprefixed" };
+    const r = configFromEnv(descriptor, env, "DEMO_");
+    expect(r.missing).toEqual(["DEMO_BOT_TOKEN", "DEMO_API_URL"]);
+    expect(r.config).toEqual({});
+    expect(r.secrets).toEqual([]);
+  });
+
+  it("is ready when every required variable is present, and masks only secrets", async () => {
+    const { configFromEnv } = await import("@theokit/gateway");
+    const r = configFromEnv(
+      descriptor,
+      { DEMO_BOT_TOKEN: " synthetic-token \n", DEMO_API_URL: "https://example.invalid" },
+      "DEMO_",
+    );
+    expect(r.missing).toEqual([]);
+    expect(r.config).toEqual({ token: "synthetic-token", apiUrl: "https://example.invalid" });
+    expect(r.secrets).toEqual(["synthetic-token"]);
+  });
+});
