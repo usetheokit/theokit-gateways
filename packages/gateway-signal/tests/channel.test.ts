@@ -44,15 +44,13 @@ describe("signalChannel", () => {
     expect(result.adapters[0]).toBeInstanceOf(SignalAdapter);
   });
 
-  it("rejects a missing account, naming the variable and the key", () => {
+  it("names the full variable through configFromEnv, and createChannels rejects the entry", () => {
     const { config, missing } = configFromEnv(signalChannel, {}, "APP_");
     expect(missing).toEqual(["APP_SIGNAL_ACCOUNT"]);
-    const result = createChannels([{ descriptor: signalChannel, config, envPrefix: "APP_" }]);
+    const result = createChannels([{ descriptor: signalChannel, config }]);
     expect(result.adapters).toEqual([]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toBe(
-      "channel signal: missing required config account (APP_SIGNAL_ACCOUNT)",
-    );
+    expect(result.rejected[0]?.error.message).toContain("account");
   });
 
   it("collects no secrets: no field is secret", () => {

@@ -19,11 +19,6 @@ export interface ChannelEntry {
   readonly descriptor: ChannelDescriptor<BasePlatformAdapter>;
   /** Values keyed by the descriptor's field keys. Absent means every required field is missing. */
   readonly config?: Readonly<Record<string, unknown>>;
-  /**
-   * The prefix the app gave `configFromEnv`. When set, a missing required field is reported with
-   * its full environment variable name (`prefix + field.env`) next to its key.
-   */
-  readonly envPrefix?: string;
 }
 
 /** A channel that was not built, and the configuration error that says why. */
@@ -56,11 +51,7 @@ function missingRequiredKeys(
 ): string[] {
   return entry.descriptor.config
     .filter((field) => field.required && isAbsent(values[field.key]))
-    .map((field) =>
-      field.env !== undefined && entry.envPrefix !== undefined
-        ? `${field.key} (${entry.envPrefix}${field.env})`
-        : field.key,
-    );
+    .map((field) => field.key);
 }
 
 /** An entry that was refused, and the rejection that says why. */
