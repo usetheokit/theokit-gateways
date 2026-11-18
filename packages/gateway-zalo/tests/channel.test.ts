@@ -113,7 +113,7 @@ describe("zaloChannel over a Fetch request", () => {
 
 describe("zaloChannel environment binding", () => {
   it("reads every credential from its environment variable", () => {
-    const config = configFromEnv(zaloChannel as unknown as ChannelDescriptor, {
+    const { config } = configFromEnv(zaloChannel as unknown as ChannelDescriptor, {
       ZALO_APP_ID: "v-appId",
       ZALO_OA_SECRET_KEY: "v-oaSecretKey",
       ZALO_ACCESS_TOKEN: "v-accessToken",

@@ -127,7 +127,7 @@ describe("qqChannel through createChannels and createWebhookHandler", () => {
 
 describe("qqChannel environment binding", () => {
   it("reads every credential from its environment variable", () => {
-    const config = configFromEnv(qqChannel as unknown as ChannelDescriptor, {
+    const { config } = configFromEnv(qqChannel as unknown as ChannelDescriptor, {
       QQ_APP_ID: "v-appId",
       QQ_APP_SECRET: "v-appSecret",
     });

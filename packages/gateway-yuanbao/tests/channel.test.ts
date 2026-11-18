@@ -115,7 +115,7 @@ describe("yuanbaoChannel over a Fetch request", () => {
 
 describe("yuanbaoChannel environment binding", () => {
   it("reads every credential from its environment variable", () => {
-    const config = configFromEnv(yuanbaoChannel as unknown as ChannelDescriptor, {
+    const { config } = configFromEnv(yuanbaoChannel as unknown as ChannelDescriptor, {
       YUANBAO_APP_ID: "v-appId",
       YUANBAO_APP_SECRET: "v-appSecret",
       YUANBAO_CALLBACK_SECRET: "v-callbackSecret",
