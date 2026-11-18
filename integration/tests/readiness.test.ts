@@ -232,6 +232,9 @@ describe("live-test readiness", () => {
       DEFAULT_WEBHOOK_MAX_BYTES:
         "a constant, no I/O. Its effect (413 past 1 MiB) is covered by " +
         "packages/gateway/tests/webhook/raw-body-capture.test.ts and the LINE and SMS webhook tests",
+      createConfigReaders:
+        "pure config coercion, no I/O. Covered by the channel.test.ts of the matrix, mattermost and " +
+        "email packages, which build their descriptors through it",
       createWebhookHandler:
         "a Fetch Request -> Response router with no network I/O of its own; a live run would need a " +
         "public URL the platform can reach. Covered by packages/gateway/tests/fetch-webhook-handler.test.ts",
