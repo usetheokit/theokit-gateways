@@ -221,20 +221,11 @@ describe("createAgentHandler", () => {
     expect(texts(adapter)).toEqual(["ok"]);
   });
 
-  it("ackEmoji without adapters fails at configuration on a gateway without ctx.react", () => {
-    expect(() =>
-      createAgentHandler({
-        agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => {} }),
-        ackEmoji: "eyes",
-      }),
-    ).toThrow(/ackEmoji.*0\.\d+\.\d+/);
-  });
-
   it("a missing reaction path never stops the turn from replying", async () => {
     const sent: string[] = [];
     const handler = createAgentHandler({
       agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => {} }),
-      adapters: [new FakeAdapter()],
+      adapters: [Object.assign(new FakeAdapter(), { platform: "other" })],
       ackEmoji: "eyes",
     });
     await handler(EVENT, {

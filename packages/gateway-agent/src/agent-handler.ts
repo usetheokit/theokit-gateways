@@ -15,7 +15,7 @@ import {
 import { AgentTurnError } from "./errors.js";
 import type { TurnAgent } from "./run-agent-text.js";
 import { createStreamMasker } from "./stream-mask.js";
-import { ackReaction, assertAckConfigured } from "./typing.js";
+import { ackReaction } from "./typing.js";
 
 /**
  * An agent for one event, and how to give it back.
@@ -41,8 +41,8 @@ export interface AgentHandlerOptions {
   ackEmoji?: string;
   /**
    * The runner's adapters. Used to send the ack reaction on `@theokit/gateway` 0.20.x, whose
-   * context has no `react`. `createAgentHandler` throws
-   * `AckReactionUnavailableError` when `ackEmoji` is set without `adapters` on such a gateway.
+   * context has no `react`. With neither, the reaction is skipped (logged once) and the turn
+   * still replies.
    */
   adapters?: ReadonlyArray<BasePlatformAdapter>;
   /** Called with each progress line; return a line to send, or undefined to skip. Default: none sent. */
@@ -174,7 +174,6 @@ async function runTurn(
  * @public
  */
 export function createAgentHandler(options: AgentHandlerOptions): GatewayHandler {
-  assertAckConfigured(options.ackEmoji, options.adapters);
   const secrets = options.secrets ?? [];
   return async (event, ctx) => {
     let lease: AgentLease | undefined;

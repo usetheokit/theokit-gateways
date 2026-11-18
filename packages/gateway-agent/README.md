@@ -39,7 +39,7 @@ once and then throws `AgentTurnError` (`platform` and SDK `code`, no prompt text
 hooks fire. The lease from `agentFor` is always released. Values in `secrets` are masked from the
 streamed text, including a value split across frames, and again from the final text. The handler
 starts no typing indicator: `GatewayRunner` already shows and renews one.
-`ackEmoji` reacts through `GatewayContext.react` when the runner provides it (gateway 0.20+). On older gateways, pass `adapters` (the list you give `GatewayRunner`) and the reaction goes through the adapter for the event's platform. With neither, the handler throws `AckReactionUnavailableError` naming the gateway version instead of skipping the reaction.
+`ackEmoji` reacts through `GatewayContext.react` when the context has one (a gateway release that adds it; the 0.20.x context has none). Otherwise pass `adapters` (the list you give `GatewayRunner`) and the reaction goes through the adapter for the event's platform. With neither path the reaction is skipped, a warning naming the gateway version is logged once, and the turn still runs and replies.
 
 ```ts
 const runner = new GatewayRunner({

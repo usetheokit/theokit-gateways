@@ -15,24 +15,3 @@ export class AgentTurnError extends Error {
     this.code = code;
   }
 }
-
-/**
- * `ackEmoji` is set but the reaction cannot be sent: the context has no `react` (gateway below
- * 0.20) and no adapter for the platform was given in `adapters`. A configuration error, raised
- * before the turn runs rather than skipping the reaction silently.
- *
- * @public
- */
-export class AckReactionUnavailableError extends Error {
-  readonly platform: string;
-  readonly gatewayVersion: string;
-
-  constructor(platform: string, gatewayVersion: string) {
-    super(
-      `ackEmoji is set but @theokit/gateway ${gatewayVersion} gives no ctx.react and no adapter for ${platform} was passed in \`adapters\``,
-    );
-    this.name = "AckReactionUnavailableError";
-    this.platform = platform;
-    this.gatewayVersion = gatewayVersion;
-  }
-}
