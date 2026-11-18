@@ -435,13 +435,13 @@ const descriptor = selectVariant(whatsappChannel, process.env.APP_WHATSAPP_BACKE
 const { config, missing, secrets } = configFromEnv(descriptor, process.env, "APP_");
 if (missing.length > 0) console.error(`skipped: set ${missing.join(", ")}`);
 else {
-  const { adapters } = createChannels([{ descriptor, config }]);
+  const { adapters } = createChannels([{ descriptor, config, envPrefix: "APP_" }]);
   // pass `secrets` to your log mask
 }
 ```
 
 - `createChannels` rejects an entry whose required field is absent, `null` or `""` with a
-  `GatewayConfigurationError` coded `missing_required_config` that names the keys, and reports a
+  `GatewayConfigurationError` coded `missing_required_config` that names the missing variables (`envPrefix` + the field's `env`, or the config key when the field has no `env`), and reports a
   configuration error thrown by `create` the same way. Any other error propagates. It performs no
   network call.
 - `createChannels` also returns `channels`: each built adapter paired with the descriptor that built it, in the order of `adapters`.

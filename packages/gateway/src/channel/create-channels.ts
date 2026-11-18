@@ -19,6 +19,11 @@ export interface ChannelEntry {
   readonly descriptor: ChannelDescriptor<BasePlatformAdapter>;
   /** Values keyed by the descriptor's field keys. Absent means every required field is missing. */
   readonly config?: Readonly<Record<string, unknown>>;
+  /**
+   * The prefix the app passed to `configFromEnv` for this entry. A missing required field that
+   * declares an `env` name is reported as `envPrefix + env`; other fields keep their config key.
+   */
+  readonly envPrefix?: string;
 }
 
 /** A channel that was not built, and the configuration error that says why. */
@@ -51,7 +56,7 @@ function missingRequiredKeys(
 ): string[] {
   return entry.descriptor.config
     .filter((field) => field.required && isAbsent(values[field.key]))
-    .map((field) => field.key);
+    .map((field) => (field.env === undefined ? field.key : (entry.envPrefix ?? "") + field.env));
 }
 
 /** An entry that was refused, and the rejection that says why. */
@@ -134,7 +139,7 @@ function createAdapter(
  *
  * An entry missing a required field (absent, `null` or `""`; `0` and `false` count as present) is
  * rejected with a `GatewayConfigurationError` coded `missing_required_config` that names every
- * missing key, and its `create` is never called. A `GatewayConfigurationError` thrown by `create`
+ * missing key (the prefixed environment variable for fields with an `env` name), and its `create` is never called. A `GatewayConfigurationError` thrown by `create`
  * is reported the same way. Any other throw is a defect, not a configuration fault, and propagates.
  *
  * Only one adapter per platform is built, because the runner routes replies and `stop()` by
