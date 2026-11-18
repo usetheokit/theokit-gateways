@@ -348,6 +348,14 @@ const router = new SessionRouter(
 
 Creation throws `GatewayConfigurationError` with code `invalid_session_scope` for `per-account-channel-peer` without a non-empty `accountLabel`, or for an empty peer name. It never throws per event.
 
+## Keeping a credential across restarts
+
+`CredentialStore` is a `get(key)` / `set(key, value)` interface. `createFileCredentialStore(dir)`
+keeps one file per key under `dir` (mode 0600, written to a temp file and renamed). Keys match
+`[A-Za-z0-9._:-]+`, otherwise `set` and `get` throw `GatewayConfigurationError` with code
+`invalid_credential_key`. `get` returns `undefined` for a missing key; any other read error throws
+code `credential_store_unreadable`. `@theokit/gateway-x` uses it to keep a rotated refresh token.
+
 ## Architecture (5 pieces)
 
 | Module | Responsibility |
