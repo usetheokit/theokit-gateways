@@ -1,5 +1,15 @@
 # @theokit/gateway-x
 
+## 0.3.0
+
+### Minor Changes
+
+- 4e7c21b: Add `CredentialStore` and `createFileCredentialStore` to `@theokit/gateway`, and `credentialStore` / `credentialKey` to `XAdapterOptions` so a rotated X refresh token survives a restart.
+
+### Patch Changes
+
+- a12e04c: Raise the `@theokit/gateway` peer floor of `@theokit/gateway-x` to 0.20.0 and bump the workspace `@theokit/gateway` version to match.
+
 ## 0.2.0
 
 ### Minor Changes
