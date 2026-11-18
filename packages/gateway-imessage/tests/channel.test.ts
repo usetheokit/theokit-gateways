@@ -28,13 +28,16 @@ const ENV = {
   APP_IMESSAGE_REQUEST_TIMEOUT_MS: "5000",
 };
 
+const REAL_PLATFORM = Object.getOwnPropertyDescriptor(process, "platform");
+
 function onPlatform(name: NodeJS.Platform): void {
-  vi.spyOn(process, "platform", "get").mockReturnValue(name);
+  Object.defineProperty(process, "platform", { value: name, configurable: true });
 }
 
 describe("imessageChannel", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    if (REAL_PLATFORM) Object.defineProperty(process, "platform", REAL_PLATFORM);
   });
 
   it("declares a socket transport and env names", () => {
@@ -90,14 +93,14 @@ describe("imessageChannel", () => {
   });
 
   it("rejects a digit string too long to be a finite number", () => {
-    vi.spyOn(process, "platform", "get").mockReturnValue("darwin");
+    onPlatform("darwin");
     const error = errorOf(() => imessageChannel.create({ requestTimeoutMs: "9".repeat(400) }));
     expect(error.code).toBe("invalid_config");
     expect(error.message).toContain("requestTimeoutMs");
   });
 
   it("rejects null for an optional value, naming the key", () => {
-    vi.spyOn(process, "platform", "get").mockReturnValue("darwin");
+    onPlatform("darwin");
     for (const key of ["cliPath", "requestTimeoutMs"]) {
       const error = errorOf(() => imessageChannel.create({ [key]: null }));
       expect(error.code).toBe("invalid_config");
