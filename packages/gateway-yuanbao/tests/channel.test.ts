@@ -1,4 +1,10 @@
-import type { MessageEvent } from "@theokit/gateway";
+import {
+  type BasePlatformAdapter,
+  type ChannelDescriptor,
+  createChannels,
+  createWebhookHandler,
+  type MessageEvent,
+} from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 import { yuanbaoChannel } from "../src/channel.js";
 import { computeYuanbaoSignature } from "../src/index.js";
@@ -60,5 +66,45 @@ describe("yuanbaoChannel", () => {
     expect(await yuanbaoChannel.webhook.ingest(adapter, { type: "other", message: null })).toBe(
       "delivered",
     );
+  });
+});
+
+describe("yuanbaoChannel over a Fetch request", () => {
+  const route = () => {
+    const built = createChannels([
+      { descriptor: yuanbaoChannel as unknown as ChannelDescriptor<BasePlatformAdapter>, config: CONFIG },
+    ]);
+    const handler = createWebhookHandler({ channels: built.channels, isStarted: () => true });
+    const send = (headers: Record<string, string> = {}) =>
+      handler(
+        new Request("https://example.test/webhooks/yuanbao", {
+          method: "POST",
+          body: JSON.stringify(payload),
+          headers,
+        }),
+      );
+    return { adapter: built.adapters[0], send };
+  };
+  const good = () => signedRequest(JSON.stringify(payload)).headers as Record<string, string>;
+
+  it("rejects a bad signature with 401 before any dispatch", async () => {
+    const { adapter, send } = route();
+    const seen: MessageEvent[] = [];
+    adapter?.onInbound(async (e) => void seen.push(e));
+    expect((await send()).status).toBe(401);
+    expect(seen).toHaveLength(0);
+  });
+
+  it("dispatches a signed request with 200", async () => {
+    const { adapter, send } = route();
+    const seen: MessageEvent[] = [];
+    adapter?.onInbound(async (e) => void seen.push(e));
+    expect((await send(good())).status).toBe(200);
+    expect(seen.map((e) => e.text)).toEqual(["hi"]);
+  });
+
+  it("answers a signed request with no handler subscribed with 503", async () => {
+    const { send } = route();
+    expect((await send(good())).status).toBe(503);
   });
 });
