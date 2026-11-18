@@ -170,7 +170,30 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return { status: 400, reason: "body is not a JSON object" };
     }
-    const event = toMessageEvent(parsed as YuanbaoWebhookEvent);
+    return this.dispatchParsed(parsed as YuanbaoWebhookEvent);
+  }
+
+  /** Whether the request carries a valid signature for this adapter's callback secret. */
+  verifyWebhook(rawBody: string, signature: string | undefined, timestamp: string | undefined) {
+    return verifyYuanbaoSignature(this.opts.callbackSecret, rawBody, signature, timestamp);
+  }
+
+  /**
+   * Dispatch an already verified and parsed callback body. `"malformed"` for anything that is not
+   * a JSON object; a body that is not a text message is acknowledged as `"delivered"`.
+   */
+  async dispatchWebhookPayload(
+    payload: unknown,
+  ): Promise<"delivered" | "malformed" | "no_handler"> {
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      return "malformed";
+    }
+    const answer = await this.dispatchParsed(payload as YuanbaoWebhookEvent);
+    return answer.status === 503 ? "no_handler" : "delivered";
+  }
+
+  private async dispatchParsed(parsed: YuanbaoWebhookEvent): Promise<YuanbaoWebhookAnswer> {
+    const event = toMessageEvent(parsed);
     if (event === undefined) return { status: 200, reason: "not a text message" };
     const outcome = await this.dispatchOnce(this.seen, event, LABEL);
     if (outcome === "no_handler") return { status: 503, reason: "no handler subscribed" };

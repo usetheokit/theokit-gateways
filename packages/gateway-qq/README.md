@@ -27,6 +27,13 @@ const answer = await adapter.handleWebhook(
 response.status(answer.status).json(answer.body ?? {});
 ```
 
+## Webhook descriptor
+
+`qqChannel` is a `ChannelDescriptor` with `transport: "webhook"`: the platform pushes inbound events to your HTTPS route, so there is no socket to open. Pass it to `createChannels` and `createWebhookHandler` from `@theokit/gateway`, or call `webhook.verify(adapter, request)` and then `webhook.ingest(adapter, payload)` yourself. `create` reads `appId`, `appSecret` (and an optional `apiBase`).
+
+- `verify` checks the signature headers (`x-signature-ed25519` and `x-signature-timestamp`, any case) against the raw body and returns `false` for a missing or bad signature.
+- `ingest` returns `"malformed"` for a payload that is not a JSON object, `"no_handler"` when a message arrives and nothing is subscribed (answer non-2xx so the platform redelivers), and `"delivered"` otherwise; repeats and events that are not text messages are acknowledged as `"delivered"` without a second dispatch. The callback URL validation (`op` 13) is unsigned, so the descriptor also defines `handle`, which answers it with `{ plain_token, signature }` (JSON) and otherwise runs `QQAdapter.handleWebhook`.
+
 ## Behaviour
 
 - Callback URL validation (`op` 13): answered with `{ plain_token, signature }` in `answer.body`.

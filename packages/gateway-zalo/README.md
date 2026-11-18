@@ -24,6 +24,13 @@ const answer = await adapter.handleWebhook(rawBody, request.headers["x-zevent-si
 response.status(answer.status).end();
 ```
 
+## Webhook descriptor
+
+`zaloChannel` is a `ChannelDescriptor` with `transport: "webhook"`: the platform pushes inbound events to your HTTPS route, so there is no socket to open. Pass it to `createChannels` and `createWebhookHandler` from `@theokit/gateway`, or call `webhook.verify(adapter, request)` and then `webhook.ingest(adapter, payload)` yourself. `create` reads `appId`, `oaSecretKey`, `accessToken` (and an optional `apiBase`).
+
+- `verify` checks the signature headers (`x-zevent-signature`, any case) against the raw body and returns `false` for a missing or bad signature.
+- `ingest` returns `"malformed"` for a payload that is not a JSON object, `"no_handler"` when a message arrives and nothing is subscribed (answer non-2xx so the platform redelivers), and `"delivered"` otherwise; repeats and events that are not text messages are acknowledged as `"delivered"` without a second dispatch.
+
 ## Behaviour
 
 - Signature: `X-ZEvent-Signature: mac=sha256(appId + rawBody + timestamp + oaSecretKey)`, compared in

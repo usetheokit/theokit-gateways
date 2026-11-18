@@ -141,7 +141,7 @@ export class ZaloAdapter extends BasePlatformAdapter {
    * or Zalo does not redeliver and the message is lost.
    */
   async handleWebhook(rawBody: string, signature: string | undefined): Promise<ZaloWebhookAnswer> {
-    if (!verifyZaloSignature(this.opts, rawBody, signature)) {
+    if (!this.verifyWebhook(rawBody, signature)) {
       return { status: 401, reason: "signature mismatch" };
     }
     let payload: ZaloWebhookEvent;
@@ -150,6 +150,30 @@ export class ZaloAdapter extends BasePlatformAdapter {
     } catch {
       return { status: 400, reason: "body is not JSON" };
     }
+    return this.dispatchParsed(payload);
+  }
+
+  /** Whether the request carries a valid signature for this adapter's app id and secret. */
+  verifyWebhook(rawBody: string, signature: string | undefined): boolean {
+    return verifyZaloSignature(this.opts, rawBody, signature);
+  }
+
+  /**
+   * Dispatch an already verified and parsed event. `"malformed"` for anything that is not a JSON
+   * object; an event for another app or that is not a text message is acknowledged as
+   * `"delivered"`.
+   */
+  async dispatchWebhookPayload(
+    payload: unknown,
+  ): Promise<"delivered" | "malformed" | "no_handler"> {
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      return "malformed";
+    }
+    const answer = await this.dispatchParsed(payload as ZaloWebhookEvent);
+    return answer.status === 503 ? "no_handler" : "delivered";
+  }
+
+  private async dispatchParsed(payload: ZaloWebhookEvent): Promise<ZaloWebhookAnswer> {
     const skipped = this.skipReason(payload);
     if (skipped !== undefined) return { status: 200, reason: skipped };
     const event = toMessageEvent(payload) as GatewayMessageEvent;
