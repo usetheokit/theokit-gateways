@@ -41,7 +41,8 @@ export interface AgentHandlerOptions {
   ackEmoji?: string;
   /**
    * The runner's adapters. Used to send the ack reaction on `@theokit/gateway` 0.20.x, whose
-   * context has no `react`; without it the reaction is skipped there.
+   * context has no `react`. With `ackEmoji` set and neither, the handler throws
+   * `AckReactionUnavailableError`.
    */
   adapters?: ReadonlyArray<BasePlatformAdapter>;
   /** Called with each progress line; return a line to send, or undefined to skip. Default: none sent. */
@@ -175,6 +176,8 @@ async function runTurn(
 export function createAgentHandler(options: AgentHandlerOptions): GatewayHandler {
   const secrets = options.secrets ?? [];
   return async (event, ctx) => {
+    // A misconfigured ackEmoji throws here, before the turn: never skipped silently.
+    await ackReaction(ctx, event, options.ackEmoji, options.adapters);
     let lease: AgentLease | undefined;
     let outcome: { failure?: string; fatal?: unknown };
     try {
@@ -201,7 +204,6 @@ async function answer(
   ctx: GatewayContext,
   agent: TurnAgent,
 ): Promise<{ failure?: string; fatal?: unknown }> {
-  await ackReaction(ctx, event, options.ackEmoji, options.adapters);
   const state = await runTurn(options, event, ctx, agent);
   if (state.failed) return { failure: state.code ?? NO_CODE };
   const reply =

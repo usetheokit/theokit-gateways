@@ -1,4 +1,6 @@
+import { createRequire } from "node:module";
 import type { BasePlatformAdapter, GatewayContext, MessageEvent } from "@theokit/gateway";
+import { AckReactionUnavailableError } from "./errors.js";
 
 /**
  * The id the platform gave the inbound message, which is what `react` takes: `event.id` is the
@@ -17,9 +19,33 @@ export function inboundMessageId(event: MessageEvent): string {
   return event.id;
 }
 
+function gatewayVersion(): string {
+  try {
+    const pkg = createRequire(import.meta.url)("@theokit/gateway/package.json") as {
+      version?: string;
+    };
+    return pkg.version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+type React = (id: string, emoji: string) => Promise<unknown>;
+
+/** `GatewayContext.react` only exists on gateway 0.20+, so it is read through a local type. */
+function ctxReact(ctx: GatewayContext): React | undefined {
+  try {
+    return (ctx as { react?: React }).react?.bind(ctx);
+  } catch {
+    return undefined;
+  }
+}
+
 /**
- * Reacts to the inbound message with `emoji` through `ctx.react`. Best effort: a missing `react`
- * (older runner, no `adapters` given), a refusal or a throw is swallowed. Typing is not started here; `GatewayRunner`
+ * Reacts to the inbound message with `emoji`: through `ctx.react` when present, otherwise
+ * through the adapter for the event's platform. When neither exists it throws
+ * `AckReactionUnavailableError` (a configuration error, never a silent skip). A refusal or a
+ * throw from the reaction itself is swallowed. Typing is not started here; `GatewayRunner`
  * already shows it around every handler call.
  */
 export async function ackReaction(
@@ -29,16 +55,15 @@ export async function ackReaction(
   adapters: ReadonlyArray<BasePlatformAdapter> = [],
 ): Promise<void> {
   if (emoji === undefined || emoji === "") return;
+  const viaCtx = ctxReact(ctx);
+  const adapter =
+    viaCtx === undefined ? adapters.find((a) => a.platform === event.platform) : undefined;
+  if (viaCtx === undefined && adapter === undefined) {
+    throw new AckReactionUnavailableError(event.platform, gatewayVersion());
+  }
   try {
-    // `GatewayContext.react` only exists on newer gateways, so it is read through a local type.
-    const react = (ctx as { react?: (id: string, emoji: string) => Promise<unknown> }).react;
-    if (react !== undefined) {
-      await react.call(ctx, inboundMessageId(event), emoji);
-      return;
-    }
-    // Gateway 0.20.x contexts have no `react`: go through the adapter for the event's platform.
-    const adapter = adapters.find((a) => a.platform === event.platform);
-    await adapter?.react(event.channel.id, inboundMessageId(event), emoji);
+    if (viaCtx !== undefined) await viaCtx(inboundMessageId(event), emoji);
+    else await adapter?.react(event.channel.id, inboundMessageId(event), emoji);
   } catch {
     /* best effort */
   }

@@ -220,8 +220,30 @@ describe("createAgentHandler", () => {
     expect(texts(adapter)).toEqual(["ok"]);
   });
 
-  it("a ctx whose react cannot be resolved still runs the turn and sends no error reply", async () => {
-    for (const ackEmoji of ["eyes", undefined]) {
+  it("ackEmoji with no ctx.react and no adapter throws a typed configuration error", async () => {
+    const sent: string[] = [];
+    let released = 0;
+    const handler = createAgentHandler({
+      agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => void released++ }),
+      ackEmoji: "eyes",
+    });
+    const ctx = {
+      event: EVENT,
+      reply: async (t: string) => {
+        sent.push(t);
+        return { ok: true };
+      },
+    };
+    await expect(handler(EVENT, ctx as never)).rejects.toMatchObject({
+      name: "AckReactionUnavailableError",
+      platform: EVENT.platform,
+    });
+    expect(sent).toEqual([]);
+    expect(released).toBe(0);
+  });
+
+  it("a ctx whose react getter throws still runs the turn without ackEmoji", async () => {
+    for (const ackEmoji of [undefined]) {
       const sent: string[] = [];
       const handler = createAgentHandler({
         agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => {} }),
@@ -270,9 +292,9 @@ describe("createAgentHandler", () => {
       },
     });
     await handler(EVENT, spy);
-    await handler(EVENT, { event: EVENT, reply }); // a context without react
+    await expect(handler(EVENT, { event: EVENT, reply })).rejects.toThrow(/ackEmoji/); // no react
     expect([...touched].filter((k) => /typing/i.test(k))).toEqual([]);
-    expect(sent).toEqual(["ok", "ok"]);
+    expect(sent).toEqual(["ok"]);
     expect(reacts).toEqual([["1", "eyes"]]);
     expect(adapter.typing).toBe(0);
   });

@@ -9,5 +9,5 @@ export {
   parseChannelTarget,
 } from "./deliver-port.js";
 export { deliverText } from "./deliver-text.js";
-export { AgentTurnError } from "./errors.js";
+export { AckReactionUnavailableError, AgentTurnError } from "./errors.js";
 export { type AgentTextResult, runAgentText, type TurnAgent } from "./run-agent-text.js";
