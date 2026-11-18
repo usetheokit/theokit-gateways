@@ -1,4 +1,9 @@
-import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent } from "@theokit/gateway";
+import type {
+  BasePlatformAdapter,
+  GatewayContext,
+  GatewayHandler,
+  MessageEvent,
+} from "@theokit/gateway";
 import { channelRendering, maskSecrets } from "@theokit/gateway";
 import {
   type AgentOutputEvent,

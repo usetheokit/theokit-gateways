@@ -30,8 +30,10 @@ export async function ackReaction(
 ): Promise<void> {
   if (emoji === undefined || emoji === "") return;
   try {
-    if (ctx.react !== undefined) {
-      await ctx.react(inboundMessageId(event), emoji);
+    // `GatewayContext.react` only exists on newer gateways, so it is read through a local type.
+    const react = (ctx as { react?: (id: string, emoji: string) => Promise<unknown> }).react;
+    if (react !== undefined) {
+      await react.call(ctx, inboundMessageId(event), emoji);
       return;
     }
     // Gateway 0.20.x contexts have no `react`: go through the adapter for the event's platform.

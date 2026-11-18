@@ -163,14 +163,15 @@ describe("createAgentHandler", () => {
       agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => {} }),
       ackEmoji: "eyes",
     });
-    await handler(event, {
+    const ctx = {
       event,
       reply: async () => ({ ok: true }),
       react: async (m: string, e: string) => {
         reacts.push([m, e]);
         return { ok: true };
       },
-    });
+    };
+    await handler(event, ctx as never);
     expect(reacts).toEqual([["wamid.ABC", "eyes"]]);
   });
 
@@ -210,7 +211,11 @@ describe("createAgentHandler", () => {
   it("reacts once with the inbound id, survives a throwing react, starts no typing itself", async () => {
     const adapter = new FakeAdapter();
     adapter.reactThrows = true;
-    await setup(async () => agentOf([text("ok")]), { ackEmoji: "eyes" }, adapter);
+    await setup(
+      async () => agentOf([text("ok")]),
+      { ackEmoji: "eyes", adapters: [adapter] },
+      adapter,
+    );
     expect(adapter.reacts).toEqual([["1", "1", "eyes"]]);
     expect(texts(adapter)).toEqual(["ok"]);
   });
