@@ -243,10 +243,10 @@ describe("lineChannel", () => {
     ).toBe("access_token_required");
   });
 
-  it("treats a null or empty optional field as absent", () => {
-    expect(lineChannel.create({ ...CONFIG, botUserId: "", requireMention: null })).toBeInstanceOf(
-      LineAdapter,
-    );
+  it("treats an empty botUserId as absent", () => {
+    expect(
+      lineChannel.create({ ...CONFIG, botUserId: "", requireMention: undefined }),
+    ).toBeInstanceOf(LineAdapter);
   });
 });
 
@@ -289,6 +289,8 @@ describe("lineChannel env bindings", () => {
     for (const [key, config] of [
       ["channelSecret", { ...CONFIG, channelSecret: 5 }],
       ["requireMention", { ...CONFIG, requireMention: "yes" }],
+      ["requireMention", { ...CONFIG, requireMention: null }],
+      ["requireMention", { ...CONFIG, requireMention: "" }],
     ] as const) {
       try {
         lineChannel.create(config);

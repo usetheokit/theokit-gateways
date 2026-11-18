@@ -50,7 +50,7 @@ function readAllowedUsers(config: Readonly<Record<string, unknown>>): string[] |
 
 function readRequireMention(config: Readonly<Record<string, unknown>>): boolean | undefined {
   const value = config.requireMention;
-  if (value === undefined || value === null) return undefined;
+  if (value === undefined) return undefined;
   if (value === "true") return true;
   if (value === "false") return false;
   if (typeof value !== "boolean") throw invalid("requireMention", "a boolean");

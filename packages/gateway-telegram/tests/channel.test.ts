@@ -129,6 +129,8 @@ describe("telegramChannel env bindings", () => {
     ["allowedUsers", { token: "1:a", allowedUsers: "  " }],
     ["allowedUsers", { token: "1:a", allowedUsers: ["1", ""] }],
     ["requireMention", { token: "1:a", requireMention: "yes" }],
+    ["requireMention", { token: "1:a", requireMention: null }],
+    ["requireMention", { token: "1:a", requireMention: "" }],
   ])("throws invalid_config naming %s", (key, config) => {
     const err = configurationErrorOf(() => telegramChannel.create(config));
     expect(err.code).toBe("invalid_config");

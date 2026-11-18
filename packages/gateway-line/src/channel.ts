@@ -56,7 +56,10 @@ function buildOptions(config: Readonly<Record<string, unknown>>): LineAdapterOpt
   const channelSecret = requiredString(config, "channelSecret");
   const channelAccessToken = requiredString(config, "channelAccessToken");
   const botUserId = optional(config, "botUserId", isString, "a string");
-  const rawMention = optional(config, "requireMention", isBooleanLike, "a boolean");
+  const rawMention = config.requireMention;
+  if (rawMention !== undefined && !isBooleanLike(rawMention)) {
+    throw invalid("requireMention", "a boolean");
+  }
   const requireMention =
     rawMention === undefined ? undefined : rawMention === true || rawMention === "true";
   return {
