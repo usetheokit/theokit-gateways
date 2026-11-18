@@ -39,7 +39,7 @@ once and then throws `AgentTurnError` (`platform` and SDK `code`, no prompt text
 hooks fire. The lease from `agentFor` is always released. Values in `secrets` are masked from the
 streamed text, including a value split across frames, and again from the final text. The handler
 starts no typing indicator: `GatewayRunner` already shows and renews one.
-`ackEmoji` reacts through `GatewayContext.react`, which `@theokit/gateway` provides from 0.21.0; this package's peer range requires it, so the reaction is sent on every supported version.
+`ackEmoji` reacts through `GatewayContext.react` when the runner provides it. On `@theokit/gateway` 0.20.x, which has none, pass `adapters` (the list you give `GatewayRunner`) and the reaction goes through the adapter for the event's platform.
 
 ```ts
 const runner = new GatewayRunner({
@@ -50,6 +50,7 @@ const runner = new GatewayRunner({
       const agent = await registry.agentFor(router.sessionKey(event));
       return { agent, release: () => registry.release(agent) };
     },
+    adapters: [telegram],
     ackEmoji: "eyes", // best effort; a failing reaction never fails the turn
     secrets: [apiKey],
     progress: (output) => (output.type === "tool-call" ? `Running ${output.name}…` : undefined),

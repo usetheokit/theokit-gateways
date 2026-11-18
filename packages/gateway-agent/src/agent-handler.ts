@@ -1,4 +1,4 @@
-import type { GatewayContext, GatewayHandler, MessageEvent } from "@theokit/gateway";
+import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent } from "@theokit/gateway";
 import { channelRendering, maskSecrets } from "@theokit/gateway";
 import {
   type AgentOutputEvent,
@@ -34,6 +34,11 @@ export interface AgentHandlerOptions {
   prompt?(event: MessageEvent): string;
   /** React to the inbound message when the turn starts. Typing is the runner's job. */
   ackEmoji?: string;
+  /**
+   * The runner's adapters. Used to send the ack reaction on `@theokit/gateway` 0.20.x, whose
+   * context has no `react`; without it the reaction is skipped there.
+   */
+  adapters?: ReadonlyArray<BasePlatformAdapter>;
   /** Called with each progress line; return a line to send, or undefined to skip. Default: none sent. */
   progress?(output: AgentOutputEvent): string | undefined;
   /** Exact values masked out of every reply and progress line. */
@@ -191,7 +196,7 @@ async function answer(
   ctx: GatewayContext,
   agent: TurnAgent,
 ): Promise<{ failure?: string; fatal?: unknown }> {
-  await ackReaction(ctx, event, options.ackEmoji);
+  await ackReaction(ctx, event, options.ackEmoji, options.adapters);
   const state = await runTurn(options, event, ctx, agent);
   if (state.failed) return { failure: state.code ?? NO_CODE };
   const reply =

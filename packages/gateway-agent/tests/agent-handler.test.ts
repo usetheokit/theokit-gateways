@@ -174,6 +174,17 @@ describe("createAgentHandler", () => {
     expect(reacts).toEqual([["wamid.ABC", "eyes"]]);
   });
 
+  it("reacts through the adapter when the context has no react (gateway 0.20.x)", async () => {
+    const adapter = new FakeAdapter();
+    const handler = createAgentHandler({
+      agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => {} }),
+      ackEmoji: "eyes",
+      adapters: [adapter],
+    });
+    await handler(EVENT, { event: EVENT, reply: async () => ({ ok: true }) });
+    expect(adapter.reacts).toEqual([["1", "1", "eyes"]]);
+  });
+
   it("agentFor rejecting still sends one error reply and rethrows", async () => {
     const adapter = new FakeAdapter();
     const errors: Error[] = [];

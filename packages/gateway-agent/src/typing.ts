@@ -1,4 +1,4 @@
-import type { GatewayContext, MessageEvent } from "@theokit/gateway";
+import type { BasePlatformAdapter, GatewayContext, MessageEvent } from "@theokit/gateway";
 
 /**
  * The id the platform gave the inbound message, which is what `react` takes: `event.id` is the
@@ -19,17 +19,24 @@ export function inboundMessageId(event: MessageEvent): string {
 
 /**
  * Reacts to the inbound message with `emoji` through `ctx.react`. Best effort: a missing `react`
- * (older runner), a refusal or a throw is swallowed. Typing is not started here; `GatewayRunner`
+ * (older runner, no `adapters` given), a refusal or a throw is swallowed. Typing is not started here; `GatewayRunner`
  * already shows it around every handler call.
  */
 export async function ackReaction(
   ctx: GatewayContext,
   event: MessageEvent,
   emoji: string | undefined,
+  adapters: ReadonlyArray<BasePlatformAdapter> = [],
 ): Promise<void> {
   if (emoji === undefined || emoji === "") return;
   try {
-    await ctx.react?.(inboundMessageId(event), emoji);
+    if (ctx.react !== undefined) {
+      await ctx.react(inboundMessageId(event), emoji);
+      return;
+    }
+    // Gateway 0.20.x contexts have no `react`: go through the adapter for the event's platform.
+    const adapter = adapters.find((a) => a.platform === event.platform);
+    await adapter?.react(event.channel.id, inboundMessageId(event), emoji);
   } catch {
     /* best effort */
   }
