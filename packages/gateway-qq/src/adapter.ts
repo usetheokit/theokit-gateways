@@ -211,7 +211,9 @@ export class QQAdapter extends BasePlatformAdapter {
       return { status: 400, reason: "body is not a JSON object" };
     }
     const nested = (payload as { d?: unknown }).d;
-    if (nested !== undefined && (typeof nested !== "object" || nested === null)) {
+    const { op, t } = payload as { op?: unknown; t?: unknown };
+    const supported = op === 0 && t === "C2C_MESSAGE_CREATE";
+    if (supported && nested !== undefined && (typeof nested !== "object" || nested === null)) {
       return { status: 400, reason: "d is not a JSON object" };
     }
     const event = toMessageEvent(payload as QQWebhookPayload);

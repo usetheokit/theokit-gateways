@@ -60,6 +60,13 @@ describe("yuanbaoChannel", () => {
     expect(await yuanbaoChannel.webhook.ingest(adapter, nullNested)).toBe("malformed");
     expect(seen).toHaveLength(1);
   });
+
+  it("acknowledges an unsupported event whose nested data is null", async () => {
+    const adapter = yuanbaoChannel.create(CONFIG);
+    expect(await yuanbaoChannel.webhook.ingest(adapter, { type: "other", message: null })).toBe(
+      "delivered",
+    );
+  });
 });
 
 describe("yuanbaoChannel through createChannels and createWebhookHandler", () => {

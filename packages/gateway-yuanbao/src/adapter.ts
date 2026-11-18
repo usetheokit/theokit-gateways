@@ -185,7 +185,8 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
       return { status: 400, reason: "body is not a JSON object" };
     }
     const nested = (parsed as { message?: unknown }).message;
-    if (nested !== undefined && (typeof nested !== "object" || nested === null)) {
+    const supported = (parsed as { type?: unknown }).type === "message";
+    if (supported && nested !== undefined && (typeof nested !== "object" || nested === null)) {
       return { status: 400, reason: "message is not a JSON object" };
     }
     const event = toMessageEvent(parsed as YuanbaoWebhookEvent);

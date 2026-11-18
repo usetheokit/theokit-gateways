@@ -61,6 +61,13 @@ describe("qqChannel", () => {
     expect(seen).toHaveLength(1);
   });
 
+  it("acknowledges an unsupported event whose nested data is null", async () => {
+    const adapter = qqChannel.create(CONFIG);
+    expect(await qqChannel.webhook.ingest(adapter, { op: 0, t: "OTHER", d: null })).toBe(
+      "delivered",
+    );
+  });
+
   it("handle answers the callback URL validation with a signed body", async () => {
     const adapter = qqChannel.create(CONFIG);
     const raw = JSON.stringify({ op: 13, d: { plain_token: "tok", event_ts: "123" } });
