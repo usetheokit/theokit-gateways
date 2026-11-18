@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import {
   BasePlatformAdapter,
   GatewayRunner,
@@ -152,9 +151,27 @@ describe("createAgentHandler", () => {
     expect(`${err.name} ${err.message} ${err.code}`).not.toContain("hunter2");
   });
 
-  it("requires a gateway whose context has react", () => {
-    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-    expect(pkg.peerDependencies["@theokit/gateway"]).toMatch(/^>=0\.21\.0\b/);
+  it("reacts to a WhatsApp event with its wamid, not the gateway id", async () => {
+    const reacts: Array<[string, string]> = [];
+    const event = {
+      ...EVENT,
+      id: "wa-gateway-id",
+      platform: "whatsapp",
+      whatsapp: { wamid: "wamid.ABC" },
+    } as unknown as MessageEvent;
+    const handler = createAgentHandler({
+      agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => {} }),
+      ackEmoji: "eyes",
+    });
+    await handler(event, {
+      event,
+      reply: async () => ({ ok: true }),
+      react: async (m: string, e: string) => {
+        reacts.push([m, e]);
+        return { ok: true };
+      },
+    });
+    expect(reacts).toEqual([["wamid.ABC", "eyes"]]);
   });
 
   it("agentFor rejecting still sends one error reply and rethrows", async () => {

@@ -7,12 +7,12 @@ import type { GatewayContext, MessageEvent } from "@theokit/gateway";
  */
 export function inboundMessageId(event: MessageEvent): string {
   const payload = (event as unknown as Record<string, unknown>)[event.platform];
-  if (typeof payload === "object" && payload !== null) {
-    const { messageId, ts } = payload as { messageId?: unknown; ts?: unknown };
-    if (typeof messageId === "number" || (typeof messageId === "string" && messageId !== "")) {
-      return String(messageId);
-    }
-    if (typeof ts === "string" && ts !== "") return ts;
+  if (typeof payload !== "object" || payload === null) return event.id;
+  const fields = payload as Record<string, unknown>;
+  for (const key of ["messageId", "wamid", "ts"]) {
+    const value = fields[key];
+    if (typeof value === "number" && key === "messageId") return String(value);
+    if (typeof value === "string" && value !== "") return value;
   }
   return event.id;
 }
