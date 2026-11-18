@@ -21,15 +21,10 @@ function requiredString(config: Readonly<Record<string, unknown>>, key: string):
   return value;
 }
 
-function headerValue(
-  headers: Readonly<Record<string, string | undefined>>,
-  name: string,
-): string | undefined {
-  for (const [key, value] of Object.entries(headers)) {
-    if (key.toLowerCase() === name) return value;
-  }
-  return undefined;
-}
+type Headers = Readonly<Record<string, string | undefined>>;
+
+const header = (headers: Headers, name: string): string | undefined =>
+  Object.entries(headers).find(([key]) => key.toLowerCase() === name)?.[1];
 
 const CONFIG = [
   {
@@ -70,36 +65,29 @@ export const qqChannel = {
   webhook: {
     verify(
       adapter: QQAdapter,
-      request: {
-        readonly rawBody: string;
-        readonly headers: Readonly<Record<string, string | undefined>>;
-      },
+      request: { readonly rawBody: string; readonly headers: Headers },
     ): boolean {
       return adapter.verifyWebhook(
         request.rawBody,
-        headerValue(request.headers, "x-signature-ed25519"),
-        headerValue(request.headers, "x-signature-timestamp"),
+        header(request.headers, "x-signature-ed25519"),
+        header(request.headers, "x-signature-timestamp"),
       );
     },
     async ingest(
       adapter: QQAdapter,
       payload: unknown,
     ): Promise<"delivered" | "malformed" | "no_handler"> {
-      const answer = await adapter.dispatchWebhookPayload(payload);
-      if (answer.status === 400) return "malformed";
-      return answer.status === 503 ? "no_handler" : "delivered";
+      const { status } = await adapter.dispatchWebhookPayload(payload);
+      return ({ 400: "malformed", 503: "no_handler" } as const)[status as 400 | 503] ?? "delivered";
     },
     async handle(
       adapter: QQAdapter,
-      request: {
-        readonly rawBody: string;
-        readonly headers: Readonly<Record<string, string | undefined>>;
-      },
+      request: { readonly rawBody: string; readonly headers: Headers },
     ): Promise<{ status: number; body?: string; contentType?: string }> {
       const answer = await adapter.handleWebhook(
         request.rawBody,
-        headerValue(request.headers, "x-signature-ed25519"),
-        headerValue(request.headers, "x-signature-timestamp"),
+        header(request.headers, "x-signature-ed25519"),
+        header(request.headers, "x-signature-timestamp"),
       );
       return {
         status: answer.status,

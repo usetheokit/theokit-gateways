@@ -21,15 +21,10 @@ function requiredString(config: Readonly<Record<string, unknown>>, key: string):
   return value;
 }
 
-function headerValue(
-  headers: Readonly<Record<string, string | undefined>>,
-  name: string,
-): string | undefined {
-  for (const [key, value] of Object.entries(headers)) {
-    if (key.toLowerCase() === name) return value;
-  }
-  return undefined;
-}
+type Headers = Readonly<Record<string, string | undefined>>;
+
+const header = (headers: Headers, name: string): string | undefined =>
+  Object.entries(headers).find(([key]) => key.toLowerCase() === name)?.[1];
 
 const CONFIG = [
   {
@@ -77,24 +72,20 @@ export const yuanbaoChannel = {
   webhook: {
     verify(
       adapter: YuanbaoAdapter,
-      request: {
-        readonly rawBody: string;
-        readonly headers: Readonly<Record<string, string | undefined>>;
-      },
+      request: { readonly rawBody: string; readonly headers: Headers },
     ): boolean {
       return adapter.verifyWebhook(
         request.rawBody,
-        headerValue(request.headers, "x-signature"),
-        headerValue(request.headers, "x-timestamp"),
+        header(request.headers, "x-signature"),
+        header(request.headers, "x-timestamp"),
       );
     },
     async ingest(
       adapter: YuanbaoAdapter,
       payload: unknown,
     ): Promise<"delivered" | "malformed" | "no_handler"> {
-      const answer = await adapter.dispatchWebhookPayload(payload);
-      if (answer.status === 400) return "malformed";
-      return answer.status === 503 ? "no_handler" : "delivered";
+      const { status } = await adapter.dispatchWebhookPayload(payload);
+      return ({ 400: "malformed", 503: "no_handler" } as const)[status as 400 | 503] ?? "delivered";
     },
   },
 };
