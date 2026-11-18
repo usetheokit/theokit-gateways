@@ -77,10 +77,10 @@ describe("yuanbaoChannel", () => {
 
   it("is a webhook channel whose handle refuses an unsigned request with 401", async () => {
     expect(yuanbaoChannel.transport).toBe("webhook");
-    const answer = await yuanbaoChannel.webhook.handle(
-      yuanbaoChannel.create(VALID),
-      { rawBody: "{}", headers: {} },
-    );
+    const answer = await yuanbaoChannel.webhook.handle(yuanbaoChannel.create(VALID), {
+      rawBody: "{}",
+      headers: {},
+    });
     expect(answer.status).toBe(401);
   });
 });
