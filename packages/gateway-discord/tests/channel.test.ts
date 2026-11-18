@@ -40,7 +40,9 @@ describe("discordChannel", () => {
     const result = createChannels([{ descriptor: discordChannel, config }]);
     expect(result.adapters).toEqual([]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toBe("missing required config token");
+    expect(result.rejected[0]?.error.message).toBe(
+      "channel discord: missing required config token",
+    );
   });
 
   it("collects only secret values", () => {
