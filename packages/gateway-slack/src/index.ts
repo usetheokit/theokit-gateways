@@ -5,6 +5,7 @@
  */
 
 export { SlackAdapter, type SlackAdapterOptions } from "./adapter.js";
+export { slackChannel } from "./channel.js";
 export { mapSlackError } from "./errors.js";
 export { type BoltMessageBody, type NormalizeOptions, normalizeSlackEvent } from "./normalize.js";
 export { splitForSlack } from "./split.js";
