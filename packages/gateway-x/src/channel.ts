@@ -32,7 +32,7 @@ function readString(config: Config, key: string, required: boolean): string | un
   return value;
 }
 
-/** An array of strings or a comma-separated string; an empty element or an empty list is refused. */
+/** An array of strings or a comma-separated string; an entry that is empty once trimmed and stripped of a leading @, or an empty list, is refused. */
 function readAllowFrom(config: Config): string[] {
   const value = config.allowFrom;
   const expected = "a non-empty array of user id strings or a comma-separated string of user ids";
@@ -41,7 +41,7 @@ function readAllowFrom(config: Config): string[] {
   if (
     !Array.isArray(ids) ||
     ids.length === 0 ||
-    !ids.every((id) => typeof id === "string" && id.length > 0)
+    !ids.every((id) => typeof id === "string" && id.trim().replace(/^@/, "").trim().length > 0)
   ) {
     throw invalid("allowFrom", expected);
   }
@@ -50,7 +50,7 @@ function readAllowFrom(config: Config): string[] {
 
 function readLimit(config: Config): number | undefined {
   const value = config.guestDailyLimit;
-  if (value === undefined || value === null || value === "") return undefined;
+  if (value === undefined) return undefined;
   const expected = "a positive integer or a string of digits";
   const n =
     typeof value === "number"

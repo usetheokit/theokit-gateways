@@ -89,15 +89,18 @@ describe("xChannel", () => {
     );
   });
 
-  it.each(["0", "-1", "1.5", "abc", 0, true])("refuses guestDailyLimit %j", (value) => {
+  it.each(["0", "-1", "1.5", "abc", "", null, 0, true])("refuses guestDailyLimit %j", (value) => {
     const error = refusal({ ...VALUES, guestDailyLimit: value });
     expect(error.code).toBe("invalid_config");
     expect(error.message).toContain("guestDailyLimit");
   });
 
-  it.each([[], "", " , ", "1,,2"])("refuses allowFrom %j", (value) => {
-    const error = refusal({ ...VALUES, allowFrom: value });
-    expect(error.code).toBe("invalid_config");
-    expect(error.message).toContain("allowFrom");
-  });
+  it.each([[], "", " , ", "1,,2", [" "], ["@"], ["1", " @ "], "@"])(
+    "refuses allowFrom %j",
+    (value) => {
+      const error = refusal({ ...VALUES, allowFrom: value });
+      expect(error.code).toBe("invalid_config");
+      expect(error.message).toContain("allowFrom");
+    },
+  );
 });
