@@ -6,6 +6,13 @@
 
 type Config = Readonly<Record<string, unknown>>;
 
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== "string" || !/^[0-9]+$/.test(value.trim())) return undefined;
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 /** Coercing readers bound to one error factory. */
 export interface ConfigReaders {
   string(config: Config, key: string): string;
@@ -43,11 +50,8 @@ export function createConfigReaders(
     number(config, key) {
       const value = config[key];
       if (value === undefined) return undefined;
-      if (typeof value === "number" && Number.isFinite(value)) return value;
-      if (typeof value === "string" && /^[0-9]+$/.test(value.trim())) {
-        const parsed = Number(value.trim());
-        if (Number.isFinite(parsed)) return parsed;
-      }
+      const parsed = toFiniteNumber(value);
+      if (parsed !== undefined) return parsed;
       throw invalid(key, "a number or a digit string");
     },
     list(config, key) {
