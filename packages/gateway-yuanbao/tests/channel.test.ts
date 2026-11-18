@@ -72,7 +72,10 @@ describe("yuanbaoChannel", () => {
 describe("yuanbaoChannel over a Fetch request", () => {
   const route = () => {
     const built = createChannels([
-      { descriptor: yuanbaoChannel as unknown as ChannelDescriptor<BasePlatformAdapter>, config: CONFIG },
+      {
+        descriptor: yuanbaoChannel as unknown as ChannelDescriptor<BasePlatformAdapter>,
+        config: CONFIG,
+      },
     ]);
     const handler = createWebhookHandler({ channels: built.channels, isStarted: () => true });
     const send = (headers: Record<string, string> = {}) =>

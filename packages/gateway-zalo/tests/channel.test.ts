@@ -70,7 +70,10 @@ describe("zaloChannel", () => {
 describe("zaloChannel over a Fetch request", () => {
   const route = () => {
     const built = createChannels([
-      { descriptor: zaloChannel as unknown as ChannelDescriptor<BasePlatformAdapter>, config: CONFIG },
+      {
+        descriptor: zaloChannel as unknown as ChannelDescriptor<BasePlatformAdapter>,
+        config: CONFIG,
+      },
     ]);
     const handler = createWebhookHandler({ channels: built.channels, isStarted: () => true });
     const send = (headers: Record<string, string> = {}) =>
