@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.20.0
+
+### Minor Changes
+
+- 80bbb11: Add `createAccessPolicyHook`, `createFilePairingStore` and `senderKey`: a `pre_inbound` hook that lets owners, paired and allowlisted senders through on platforms that authenticate the sender, applies a DM policy (`pairing`, `allowlist`, `open`, `disabled`) to strangers, and rate limits refusals.
+- 295d6fa: Add `configFromEnv` and `selectVariant`: bind channel config fields to environment variables (`ChannelConfigField.env`), collect secret values for log masking, and pick a descriptor variant.
+
 ## 0.19.0
 
 ### Minor Changes
