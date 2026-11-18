@@ -66,6 +66,11 @@ describe("synologyChatChannel", () => {
     ["app", "x"],
     ["app", {}],
     ["fetch", "x"],
+    ["port", null],
+    ["path", null],
+    ["port", ""],
+    ["fetch", null],
+    ["app", null],
   ])("throws invalid_config naming %s for a wrongly typed value", (key, value) => {
     const error = errorOf(() =>
       synologyChatChannel.create({ botToken: BOT_TOKEN, incomingUrl: INCOMING_URL, [key]: value }),

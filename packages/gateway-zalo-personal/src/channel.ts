@@ -18,6 +18,17 @@ type Config = Readonly<Record<string, unknown>>;
 const readers = channelConfigReaders(PREFIX);
 const { invalid } = readers;
 
+/**
+ * The shared readers treat `null` (and `""`) as absent. A value the caller supplied must not fall
+ * back to a default silently: `null` is refused for every key, `""` for those that are not strings.
+ */
+function refuseSuppliedAbsent(config: Config, keys: Readonly<Record<string, string>>): void {
+  for (const [key, expected] of Object.entries(keys)) {
+    const value = config[key];
+    if (value === null || (value === "" && expected !== "a string")) throw invalid(key, expected);
+  }
+}
+
 const EXPECTED_CREDENTIALS = "an object with a cookie, an imei and a userAgent, or its JSON text";
 
 /** The credentials as an object, or the JSON text of one (what an environment variable gives). */
@@ -49,6 +60,7 @@ function readCredentials(config: Config): ZaloCredentials {
 }
 
 function buildOptions(config: Config): ZaloPersonalAdapterOptions {
+  refuseSuppliedAbsent(config, { login: "a function" });
   const login = readers.readFunction<NonNullable<ZaloPersonalAdapterOptions["login"]>>(
     config,
     "login",

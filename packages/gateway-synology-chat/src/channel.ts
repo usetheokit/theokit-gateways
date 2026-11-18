@@ -16,12 +16,23 @@ const PREFIX = "gateway-synology-chat";
 type Config = Readonly<Record<string, unknown>>;
 
 const readers = channelConfigReaders(PREFIX);
-const { invalid, isAbsent, readString, requiredString } = readers;
+const { invalid, readString, requiredString } = readers;
+
+/**
+ * The shared readers treat `null` (and `""`) as absent. A value the caller supplied must not fall
+ * back to a default silently: `null` is refused for every key, `""` for those that are not strings.
+ */
+function refuseSuppliedAbsent(config: Config, keys: Readonly<Record<string, string>>): void {
+  for (const [key, expected] of Object.entries(keys)) {
+    const value = config[key];
+    if (value === null || (value === "" && expected !== "a string")) throw invalid(key, expected);
+  }
+}
 
 /** A number, or a string of digits (what an environment variable gives). */
 function readNumber(config: Config, key: string): number | undefined {
   const value = config[key];
-  if (isAbsent(value)) return undefined;
+  if (value === undefined) return undefined;
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value.trim());
   throw invalid(key, "a number or a string of digits");
@@ -29,7 +40,7 @@ function readNumber(config: Config, key: string): number | undefined {
 
 function readApp(config: Config): SynologyChatAdapterOptions["app"] {
   const value = config.app;
-  if (isAbsent(value)) return undefined;
+  if (value === undefined) return undefined;
   // The adapter mounts its route with `app.post(...)` in connect(); anything else fails there.
   const post = (value as { post?: unknown } | null)?.post;
   if (
@@ -42,6 +53,13 @@ function readApp(config: Config): SynologyChatAdapterOptions["app"] {
 }
 
 function buildOptions(config: Config): SynologyChatAdapterOptions {
+  refuseSuppliedAbsent(config, {
+    path: "a string",
+    port: "a number or a string of digits",
+    connectTimeoutMs: "a number or a string of digits",
+    app: "an Express app (an object with a post method)",
+    fetch: "a function",
+  });
   const path = readString(config, "path");
   const port = readNumber(config, "port");
   const connectTimeoutMs = readNumber(config, "connectTimeoutMs");

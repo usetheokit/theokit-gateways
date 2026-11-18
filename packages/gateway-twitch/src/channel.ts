@@ -18,6 +18,17 @@ type Config = Readonly<Record<string, unknown>>;
 const readers = channelConfigReaders(PREFIX);
 const { invalid, readString, requiredString } = readers;
 
+/**
+ * The shared readers treat `null` (and `""`) as absent. A value the caller supplied must not fall
+ * back to a default silently: `null` is refused for every key, `""` for those that are not strings.
+ */
+function refuseSuppliedAbsent(config: Config, keys: Readonly<Record<string, string>>): void {
+  for (const [key, expected] of Object.entries(keys)) {
+    const value = config[key];
+    if (value === null || (value === "" && expected !== "a string")) throw invalid(key, expected);
+  }
+}
+
 /** An array of strings, or a comma-separated string (what an environment variable gives). */
 function readIds(config: Config, key: string): string[] {
   const value = config[key];
@@ -38,6 +49,11 @@ function readIds(config: Config, key: string): string[] {
 }
 
 function buildOptions(config: Config): TwitchAdapterOptions {
+  refuseSuppliedAbsent(config, {
+    eventSubUrl: "a string",
+    fetch: "a function",
+    socketFactory: "a function",
+  });
   const eventSubUrl = readString(config, "eventSubUrl");
   const fetchFn = readers.readFunction<NonNullable<TwitchAdapterOptions["fetch"]>>(config, "fetch");
   const socketFactory = readers.readFunction<NonNullable<TwitchAdapterOptions["socketFactory"]>>(
