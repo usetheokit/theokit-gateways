@@ -11,9 +11,10 @@ import { ClickClackAdapter } from "./adapter.js";
  *
  * @public
  */
-export const clickclackChannel: RealtimeBotChannel<ClickClackAdapter, "clickclack"> = realtimeBotChannel(
-  "gateway-clickclack",
-  "clickclack",
-  "CLICKCLACK",
-  (options) => new ClickClackAdapter(options),
-);
+export const clickclackChannel: RealtimeBotChannel<ClickClackAdapter, "clickclack"> =
+  realtimeBotChannel(
+    "gateway-clickclack",
+    "clickclack",
+    "CLICKCLACK",
+    (options) => new ClickClackAdapter(options),
+  );
