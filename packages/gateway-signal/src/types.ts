@@ -57,6 +57,12 @@ export interface SignalAdapterOptions {
   readonly connectTimeoutMs?: number;
   /** How long a `send` may stay unanswered before it fails with `timeout`. Default 30000 ms. */
   readonly requestTimeoutMs?: number;
+  /**
+   * Which envelope field becomes sender.id. "uuid" (default, today's behaviour) uses sourceUuid
+   * and falls back to the number; "number" uses sourceNumber and falls back to the UUID when the
+   * sender hides their number.
+   */
+  readonly senderKey?: "uuid" | "number";
   /** Test seam: starts the child. Default `node:child_process` `spawn`. */
   readonly spawn?: SpawnLike;
 }

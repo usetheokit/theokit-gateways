@@ -12,7 +12,12 @@
  */
 
 import type { DiscordMessageEvent, MessageEvent as GatewayMessageEvent } from "@theokit/gateway";
-import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "@theokit/gateway";
+import {
+  type AdapterCapabilities,
+  BasePlatformAdapter,
+  type OutboundMessage,
+  type SendResult,
+} from "@theokit/gateway";
 import {
   Client,
   DiscordAPIError,
@@ -70,6 +75,10 @@ export const DEFAULT_DISCORD_INTENTS: ReadonlyArray<GatewayIntentBits> = [
  * empty and nothing in the API says why. `DEFAULT_DISCORD_INTENTS` requests it.
  */
 export class DiscordAdapter extends BasePlatformAdapter {
+  override get capabilities(): AdapterCapabilities {
+    return { ...super.capabilities, maxMessageChars: DISCORD_MAX_MESSAGE, threads: true };
+  }
+
   readonly platform = "discord" as const;
   private readonly client: Client;
   private readonly token: string;

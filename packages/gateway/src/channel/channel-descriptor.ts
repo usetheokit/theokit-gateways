@@ -22,6 +22,8 @@ export interface ChannelConfigField {
   readonly secret: boolean;
   /** What the field is, for a human configuring the channel. */
   readonly description: string;
+  /** Variable name without the app prefix, e.g. `"TELEGRAM_TOKEN"`. Read by `configFromEnv`. */
+  readonly env?: string;
 }
 
 /** A webhook request as the app's HTTP layer received it, before anything parsed the body. */
@@ -100,6 +102,11 @@ interface ChannelDescriptorBase<TAdapter extends BasePlatformAdapter> {
    * authenticated (fail closed); it is optional only so descriptors in other packages keep compiling.
    */
   readonly senderIdentity?: SenderIdentity;
+  /**
+   * Alternative config shapes for the same platform (for example WhatsApp cloud versus baileys),
+   * chosen by name with `selectVariant`. Each variant reports the parent's `platform`.
+   */
+  readonly variants?: Readonly<Record<string, ChannelDescriptor>>;
 }
 
 /**

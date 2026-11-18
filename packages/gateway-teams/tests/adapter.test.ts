@@ -6,6 +6,7 @@ import { BasePlatformAdapter } from "@theokit/gateway";
 import { describe, expect, it, vi } from "vitest";
 
 import { TeamsAdapter } from "../src/adapter.js";
+import { TEAMS_MAX_TEXT } from "../src/split.js";
 
 /** Minimal fake App matching the TeamsAppLike contract from adapter.ts. */
 function makeFakeApp() {
@@ -498,5 +499,13 @@ describe("TeamsAdapter — html is not markdown, and a rejected activity degrade
 
     expect(res.ok).toBe(false);
     expect(attempt, "retried a failure that was never about formatting").toBe(1);
+  });
+});
+
+describe("TeamsAdapter.capabilities", () => {
+  it("reports the splitter limit and threads", () => {
+    const c = new TeamsAdapter({ clientId: "c", clientSecret: "s", tenantId: "t" }).capabilities;
+    expect(c.maxMessageChars).toBe(TEAMS_MAX_TEXT);
+    expect(c.threads).toBe(false);
   });
 });

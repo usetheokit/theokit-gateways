@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- 2831ca3: Report `capabilities.maxMessageChars` from the splitter limit, and `capabilities.threads` (true for Discord, Telegram and Slack).
+
 ## 0.5.0
 
 ### Minor Changes

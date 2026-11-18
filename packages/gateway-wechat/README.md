@@ -52,3 +52,7 @@ response.status(answer.status).send(answer.body);
 
 Unverified: no send-and-receive run against a real WeChat account has been recorded. Wire shapes
 are written from WeChat's Official Account documentation and tested against a scripted fake.
+
+## Capabilities
+
+`adapter.capabilities.maxMessageChars` is `600` (the splitter limit) and `threads` is `false`. See `@theokit/gateway` for the field meanings.
