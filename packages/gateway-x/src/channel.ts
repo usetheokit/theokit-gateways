@@ -57,7 +57,7 @@ function readLimit(config: Config): number | undefined {
       ? value
       : typeof value === "string" && /^\d+$/.test(value)
         ? Number(value)
-        : NaN;
+        : Number.NaN;
   if (!Number.isSafeInteger(n) || n <= 0) throw invalid("guestDailyLimit", expected);
   return n;
 }
