@@ -22,11 +22,14 @@ describe("createChannels envPrefix", () => {
     expect(result.rejected[0]?.error.message).toContain("APP_TELEGRAM_TOKEN");
   });
 
-  it("falls back to the key without envPrefix or without an env binding", () => {
+  it("names the unprefixed variable without envPrefix, and only the key without an env binding", () => {
     const plain = createChannels([{ descriptor, config: { nick: "n" } }]);
-    expect(plain.rejected[0]?.error.message).toContain("token");
-    expect(plain.rejected[0]?.error.message).not.toContain("TELEGRAM_TOKEN");
+    expect(plain.rejected[0]?.error.message).toBe(
+      "channel telegram: missing required config token (env TELEGRAM_TOKEN)",
+    );
     const unbound = createChannels([{ descriptor, config: { token: "t" }, envPrefix: "APP_" }]);
-    expect(unbound.rejected[0]?.error.message).toContain("nick");
+    expect(unbound.rejected[0]?.error.message).toBe(
+      "channel telegram: missing required config nick",
+    );
   });
 });

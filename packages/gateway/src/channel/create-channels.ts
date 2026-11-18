@@ -13,6 +13,7 @@ import type { BasePlatformAdapter } from "../adapter/base.js";
 import { GatewayConfigurationError } from "../errors/config-error.js";
 import type { PlatformName } from "../types/message-event.js";
 import type { ChannelDescriptor } from "./channel-descriptor.js";
+import { envVarName } from "./config-from-env.js";
 
 /** One channel to build: its descriptor and the configuration the app supplies for it. */
 export interface ChannelEntry {
@@ -20,8 +21,8 @@ export interface ChannelEntry {
   /** Values keyed by the descriptor's field keys. Absent means every required field is missing. */
   readonly config?: Readonly<Record<string, unknown>>;
   /**
-   * The prefix the app gave `configFromEnv`. When set, a missing required field that has an `env`
-   * is reported by its full variable name (`envPrefix + env`) instead of its config key.
+   * The prefix passed to `configFromEnv` for this entry, so a missing field's rejection names its
+   * full environment variable. Defaults to `""`.
    */
   readonly envPrefix?: string;
 }
@@ -56,11 +57,10 @@ function missingRequiredKeys(
 ): string[] {
   return entry.descriptor.config
     .filter((field) => field.required && isAbsent(values[field.key]))
-    .map((field) =>
-      entry.envPrefix !== undefined && field.env !== undefined
-        ? entry.envPrefix + field.env
-        : field.key,
-    );
+    .map((field) => {
+      const name = envVarName(field, entry.envPrefix);
+      return name === undefined ? field.key : `${field.key} (env ${name})`;
+    });
 }
 
 /** An entry that was refused, and the rejection that says why. */
@@ -143,7 +143,7 @@ function createAdapter(
  *
  * An entry missing a required field (absent, `null` or `""`; `0` and `false` count as present) is
  * rejected with a `GatewayConfigurationError` coded `missing_required_config` that names every
- * missing key (or, with `envPrefix`, every missing variable), and its `create` is never called. A `GatewayConfigurationError` thrown by `create`
+ * missing key, and its `create` is never called. A `GatewayConfigurationError` thrown by `create`
  * is reported the same way. Any other throw is a defect, not a configuration fault, and propagates.
  *
  * Only one adapter per platform is built, because the runner routes replies and `stop()` by
