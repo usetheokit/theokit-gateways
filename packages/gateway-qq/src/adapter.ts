@@ -190,10 +190,27 @@ export class QQAdapter extends BasePlatformAdapter {
     }
     // The URL validation (op 13) is signed by us, not by QQ: QQ checks our answer.
     if (payload.op === 13) return this.validation(payload);
-    if (!verifyQQSignature(this.opts.appSecret, rawBody, signature, timestamp)) {
+    if (!this.verifyWebhook(rawBody, signature, timestamp)) {
       return { status: 401, reason: "signature mismatch" };
     }
-    const event = toMessageEvent(payload);
+    return this.dispatchWebhookPayload(payload);
+  }
+
+  /** Whether `signature` and `timestamp` are valid for `rawBody` under the app secret. */
+  verifyWebhook(
+    rawBody: string,
+    signature: string | undefined,
+    timestamp: string | undefined,
+  ): boolean {
+    return verifyQQSignature(this.opts.appSecret, rawBody, signature, timestamp);
+  }
+
+  /** Dispatch an already verified and parsed webhook payload; 400 when it is not an object. */
+  async dispatchWebhookPayload(payload: unknown): Promise<QQWebhookAnswer> {
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      return { status: 400, reason: "body is not a JSON object" };
+    }
+    const event = toMessageEvent(payload as QQWebhookPayload);
     if (event === undefined) return { status: 200, reason: "not a direct text message" };
     // Before dispatch: the handler's reply is the one that answers this message.
     this.rememberReplyRef(event.channel.id, event.id);

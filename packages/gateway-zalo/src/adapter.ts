@@ -141,15 +141,29 @@ export class ZaloAdapter extends BasePlatformAdapter {
    * or Zalo does not redeliver and the message is lost.
    */
   async handleWebhook(rawBody: string, signature: string | undefined): Promise<ZaloWebhookAnswer> {
-    if (!verifyZaloSignature(this.opts, rawBody, signature)) {
+    if (!this.verifyWebhook(rawBody, signature)) {
       return { status: 401, reason: "signature mismatch" };
     }
-    let payload: ZaloWebhookEvent;
+    let parsed: unknown;
     try {
-      payload = JSON.parse(rawBody) as ZaloWebhookEvent;
+      parsed = JSON.parse(rawBody);
     } catch {
       return { status: 400, reason: "body is not JSON" };
     }
+    return this.dispatchWebhookPayload(parsed);
+  }
+
+  /** Whether `signature` is valid for `rawBody` under the app id and OA secret key. */
+  verifyWebhook(rawBody: string, signature: string | undefined): boolean {
+    return verifyZaloSignature(this.opts, rawBody, signature);
+  }
+
+  /** Dispatch an already verified and parsed webhook payload; 400 when it is not an object. */
+  async dispatchWebhookPayload(parsed: unknown): Promise<ZaloWebhookAnswer> {
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { status: 400, reason: "body is not a JSON object" };
+    }
+    const payload = parsed as ZaloWebhookEvent;
     const skipped = this.skipReason(payload);
     if (skipped !== undefined) return { status: 200, reason: skipped };
     const event = toMessageEvent(payload) as GatewayMessageEvent;

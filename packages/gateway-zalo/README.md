@@ -36,6 +36,15 @@ response.status(answer.status).end();
   `zalo_send_failed` (for instance, the user is outside the 48-hour reply window).
 - The access token expires; this adapter does not refresh it.
 
+## Channel descriptor
+
+`zaloChannel` describes the channel as data: `transport` is `"webhook"` (inbound events arrive by HTTP
+callback, there is no socket), and `webhook.verify` / `webhook.ingest` implement the contract
+`createWebhookHandler` from `@theokit/gateway` calls. `verify` reads `x-zevent-signature` (any case).
+`ingest` answers `"malformed"` for a payload that is not a JSON object, `"no_handler"` when a text
+message arrives with no handler subscribed (answer non-200 so the platform redelivers), and
+`"delivered"` otherwise. `create` refuses a credential that is not a string.
+
 ## Status
 
 Unverified: no send-and-receive run against a real Zalo OA account has been recorded. Wire shapes

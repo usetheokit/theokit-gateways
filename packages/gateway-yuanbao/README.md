@@ -38,6 +38,15 @@ response.status(answer.status).end();
   Attachments are refused with `attachments_unsupported`. A non-zero `code` becomes
   `yuanbao_send_failed`.
 
+## Channel descriptor
+
+`yuanbaoChannel` describes the channel as data: `transport` is `"webhook"` (inbound events arrive by HTTP
+callback, there is no socket), and `webhook.verify` / `webhook.ingest` implement the contract
+`createWebhookHandler` from `@theokit/gateway` calls. `verify` reads the `x-signature` and `x-timestamp` headers (any case); as the Status section says, these header names and the payload shape are an unverified assumption.
+`ingest` answers `"malformed"` for a payload that is not a JSON object, `"no_handler"` when a text
+message arrives with no handler subscribed (answer non-200 so the platform redelivers), and
+`"delivered"` otherwise. `create` refuses a credential that is not a string.
+
 ## Status
 
 Unverified: no send-and-receive run against a real Yuanbao bot has been recorded, and no public

@@ -39,6 +39,15 @@ response.status(answer.status).json(answer.body ?? {});
   A reply to a user whose message was just received is a passive reply (`msg_id`, `msg_seq`).
   Attachments are refused with `attachments_unsupported`. An error `code` becomes `qq_send_failed`.
 
+## Channel descriptor
+
+`qqChannel` describes the channel as data: `transport` is `"webhook"` (inbound events arrive by HTTP
+callback, there is no socket), and `webhook.verify` / `webhook.ingest` implement the contract
+`createWebhookHandler` from `@theokit/gateway` calls. `verify` reads `x-signature-ed25519` and `x-signature-timestamp`. The callback URL validation (op 13) is signed by the adapter rather than by QQ, so the descriptor also provides `handle`, which answers it with the signed JSON body.
+`ingest` answers `"malformed"` for a payload that is not a JSON object, `"no_handler"` when a text
+message arrives with no handler subscribed (answer non-200 so the platform redelivers), and
+`"delivered"` otherwise. `create` refuses a credential that is not a string.
+
 ## Status
 
 Unverified: no send-and-receive run against a real QQ Bot has been recorded. The wire shapes are

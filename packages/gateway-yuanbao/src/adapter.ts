@@ -158,7 +158,7 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     signature: string | undefined,
     timestamp: string | undefined,
   ): Promise<YuanbaoWebhookAnswer> {
-    if (!verifyYuanbaoSignature(this.opts.callbackSecret, rawBody, signature, timestamp)) {
+    if (!this.verifyWebhook(rawBody, signature, timestamp)) {
       return { status: 401, reason: "signature mismatch" };
     }
     let parsed: unknown;
@@ -167,6 +167,20 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     } catch {
       return { status: 400, reason: "body is not JSON" };
     }
+    return this.dispatchWebhookPayload(parsed);
+  }
+
+  /** Whether `signature` and `timestamp` are valid for `rawBody` under the callback secret. */
+  verifyWebhook(
+    rawBody: string,
+    signature: string | undefined,
+    timestamp: string | undefined,
+  ): boolean {
+    return verifyYuanbaoSignature(this.opts.callbackSecret, rawBody, signature, timestamp);
+  }
+
+  /** Dispatch an already verified and parsed webhook payload; 400 when it is not an object. */
+  async dispatchWebhookPayload(parsed: unknown): Promise<YuanbaoWebhookAnswer> {
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return { status: 400, reason: "body is not a JSON object" };
     }
