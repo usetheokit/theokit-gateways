@@ -4,4 +4,4 @@
 "@theokit/gateway-zalo-personal": minor
 ---
 
-Export `synologyChatChannel`, `twitchChannel` and `zaloPersonalChannel`: `ChannelDescriptor`s with env bindings for `createChannels` and `configFromEnv`. Requires `@theokit/gateway >=0.20.0`.
+Export `synologyChatChannel`, `twitchChannel` and `zaloPersonalChannel`: `ChannelDescriptor`s with env bindings for `createChannels` and `configFromEnv`. Requires `@theokit/gateway >=0.22.0`.

@@ -6,7 +6,7 @@
  * `ChannelDescriptor`.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 
 import { ZaloPersonalAdapter } from "./adapter.js";
 import type { ZaloCredentials, ZaloPersonalAdapterOptions } from "./types.js";
@@ -15,17 +15,8 @@ const PREFIX = "gateway-zalo-personal";
 
 type Config = Readonly<Record<string, unknown>>;
 
-function invalid(key: string, expected: string): GatewayConfigurationError {
-  return new GatewayConfigurationError(PREFIX, {
-    code: "invalid_config",
-    message: `${PREFIX}: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-function isAbsent(value: unknown): boolean {
-  return value === undefined || value === "";
-}
+const readers = channelConfigReaders(PREFIX);
+const { invalid } = readers;
 
 const EXPECTED_CREDENTIALS = "an object with a cookie, an imei and a userAgent, or its JSON text";
 
@@ -58,11 +49,13 @@ function readCredentials(config: Config): ZaloCredentials {
 }
 
 function buildOptions(config: Config): ZaloPersonalAdapterOptions {
-  const login = config.login;
-  if (!isAbsent(login) && typeof login !== "function") throw invalid("login", "a function");
+  const login = readers.readFunction<NonNullable<ZaloPersonalAdapterOptions["login"]>>(
+    config,
+    "login",
+  );
   return {
     credentials: readCredentials(config),
-    ...(isAbsent(login) ? {} : { login: login as ZaloPersonalAdapterOptions["login"] }),
+    ...(login === undefined ? {} : { login }),
   };
 }
 

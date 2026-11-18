@@ -52,7 +52,7 @@ scripted fake. No send-and-receive run against a real account has been recorded.
 
 ## Channel descriptor
 
-`zaloPersonalChannel` is a `ChannelDescriptor` (transport `socket`) for `createChannels`; bind it to the environment with `configFromEnv` (needs `@theokit/gateway >=0.20.0`).
+`zaloPersonalChannel` is a `ChannelDescriptor` (transport `socket`) for `createChannels`; bind it to the environment with `configFromEnv` (needs `@theokit/gateway >=0.22.0`).
 
 ```ts
 import { configFromEnv, createChannels } from "@theokit/gateway";

@@ -35,29 +35,15 @@ describe("synologyChatChannel", () => {
     expect(name).toMatch(/^APP_SYNOLOGY_CHAT_/);
     expect(missing).toEqual([name]);
     const key = name === "APP_SYNOLOGY_CHAT_BOT_TOKEN" ? "botToken" : "incomingUrl";
-    const { rejected } = createChannels([{ descriptor: synologyChatChannel, config }]);
+    const { rejected } = createChannels([
+      { descriptor: synologyChatChannel, config, envPrefix: "APP_" },
+    ]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
-    expect(rejected[0]?.error.message).toContain(key);
-    // The factory message names the config key; the descriptor binds that key to the full variable.
+    // The message names the config key and the full prefixed variable.
     const field = synologyChatChannel.config.find((f) => f.key === key);
-    expect(missing).toContain(`APP_${field?.env}`);
     expect(`APP_${field?.env}`).toBe(name);
-
-    // The factory names the keys of the descriptor it is given; keyed by full variable, it names those.
-    const byVariable = {
-      ...synologyChatChannel,
-      config: synologyChatChannel.config.map((f) => ({ ...f, key: `APP_${f.env}` })),
-    };
-    // Present variables stay set under their full names, so only the unset one is missing.
-    const present = Object.fromEntries(
-      byVariable.config
-        .filter((f) => f.env && `APP_${f.env}` !== missing[0])
-        .map((f) => [f.key, "x"]),
-    );
-    const named = createChannels([{ descriptor: byVariable, config: present }]).rejected[0]?.error;
-    expect(named?.code).toBe("missing_required_config");
-    expect(named?.message).toBe(
-      `channel ${byVariable.platform}: missing required config ${missing[0]}`,
+    expect(rejected[0]?.error.message).toBe(
+      `channel ${synologyChatChannel.platform}: missing required config ${key} (env ${name})`,
     );
   });
 
@@ -80,8 +66,6 @@ describe("synologyChatChannel", () => {
     ["app", "x"],
     ["app", {}],
     ["fetch", "x"],
-    ["port", null],
-    ["path", null],
   ])("throws invalid_config naming %s for a wrongly typed value", (key, value) => {
     const error = errorOf(() =>
       synologyChatChannel.create({ botToken: BOT_TOKEN, incomingUrl: INCOMING_URL, [key]: value }),

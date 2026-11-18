@@ -6,7 +6,7 @@
  * `ChannelDescriptor`.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders, GatewayConfigurationError } from "@theokit/gateway";
 
 import { SynologyChatAdapter } from "./adapter.js";
 import { type SynologyChatAdapterOptions, SynologyChatConfigError } from "./types.js";
@@ -15,30 +15,8 @@ const PREFIX = "gateway-synology-chat";
 
 type Config = Readonly<Record<string, unknown>>;
 
-function invalid(key: string, expected: string): GatewayConfigurationError {
-  return new GatewayConfigurationError(PREFIX, {
-    code: "invalid_config",
-    message: `${PREFIX}: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-function isAbsent(value: unknown): boolean {
-  return value === undefined || value === "";
-}
-
-function readString(config: Config, key: string): string | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return value;
-}
-
-function requiredString(config: Config, key: string): string {
-  const value = readString(config, key);
-  if (value === undefined) throw invalid(key, "a string");
-  return value;
-}
+const readers = channelConfigReaders(PREFIX);
+const { invalid, isAbsent, readString, requiredString } = readers;
 
 /** A number, or a string of digits (what an environment variable gives). */
 function readNumber(config: Config, key: string): number | undefined {
@@ -63,19 +41,15 @@ function readApp(config: Config): SynologyChatAdapterOptions["app"] {
   return value as SynologyChatAdapterOptions["app"];
 }
 
-function readFetch(config: Config): SynologyChatAdapterOptions["fetch"] {
-  const value = config.fetch;
-  if (isAbsent(value)) return undefined;
-  if (typeof value !== "function") throw invalid("fetch", "a function");
-  return value as SynologyChatAdapterOptions["fetch"];
-}
-
 function buildOptions(config: Config): SynologyChatAdapterOptions {
   const path = readString(config, "path");
   const port = readNumber(config, "port");
   const connectTimeoutMs = readNumber(config, "connectTimeoutMs");
   const app = readApp(config);
-  const fetchFn = readFetch(config);
+  const fetchFn = readers.readFunction<NonNullable<SynologyChatAdapterOptions["fetch"]>>(
+    config,
+    "fetch",
+  );
   return {
     botToken: requiredString(config, "botToken"),
     incomingUrl: requiredString(config, "incomingUrl"),

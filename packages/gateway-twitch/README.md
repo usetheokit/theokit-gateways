@@ -83,7 +83,7 @@ This status is not evidence of a shipped real-account surface.
 
 ## Channel descriptor
 
-`twitchChannel` is a `ChannelDescriptor` (transport `socket`) for `createChannels`; bind it to the environment with `configFromEnv` (needs `@theokit/gateway >=0.20.0`).
+`twitchChannel` is a `ChannelDescriptor` (transport `socket`) for `createChannels`; bind it to the environment with `configFromEnv` (needs `@theokit/gateway >=0.22.0`).
 
 ```ts
 import { configFromEnv, createChannels } from "@theokit/gateway";

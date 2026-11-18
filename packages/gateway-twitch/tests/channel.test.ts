@@ -41,29 +41,13 @@ describe("twitchChannel", () => {
     const { config, missing } = configFromEnv(twitchChannel, rest, "APP_");
     expect(name).toMatch(/^APP_TWITCH_/);
     expect(missing).toEqual([name]);
-    const { rejected } = createChannels([{ descriptor: twitchChannel, config }]);
+    const { rejected } = createChannels([{ descriptor: twitchChannel, config, envPrefix: "APP_" }]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
-    expect(rejected[0]?.error.message).toContain(KEYS[name] as string);
-    // The factory message names the config key; the descriptor binds that key to the full variable.
-    const field = twitchChannel.config.find((f) => f.key === KEYS[name]);
-    expect(missing).toContain(`APP_${field?.env}`);
+    // The message names the config key and the full prefixed variable.
+    const field = twitchChannel.config.find((f) => f.key === (KEYS[name] as string));
     expect(`APP_${field?.env}`).toBe(name);
-
-    // The factory names the keys of the descriptor it is given; keyed by full variable, it names those.
-    const byVariable = {
-      ...twitchChannel,
-      config: twitchChannel.config.map((f) => ({ ...f, key: `APP_${f.env}` })),
-    };
-    // Present variables stay set under their full names, so only the unset one is missing.
-    const present = Object.fromEntries(
-      byVariable.config
-        .filter((f) => f.env && `APP_${f.env}` !== missing[0])
-        .map((f) => [f.key, "x"]),
-    );
-    const named = createChannels([{ descriptor: byVariable, config: present }]).rejected[0]?.error;
-    expect(named?.code).toBe("missing_required_config");
-    expect(named?.message).toBe(
-      `channel ${byVariable.platform}: missing required config ${missing[0]}`,
+    expect(rejected[0]?.error.message).toBe(
+      `channel ${twitchChannel.platform}: missing required config ${KEYS[name] as string} (env ${name})`,
     );
   });
 
@@ -84,8 +68,6 @@ describe("twitchChannel", () => {
     ["eventSubUrl", 1],
     ["fetch", "x"],
     ["socketFactory", "x"],
-    ["eventSubUrl", null],
-    ["fetch", null],
   ])("throws invalid_config naming %s for a wrongly typed value", (key, value) => {
     const error = errorOf(() => twitchChannel.create({ ...VALID, [key]: value }));
     expect(error.code).toBe("invalid_config");

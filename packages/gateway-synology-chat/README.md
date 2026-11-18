@@ -73,7 +73,7 @@ reply (with tokens redacted) before claiming live verification.
 
 ## Channel descriptor
 
-`synologyChatChannel` is a `ChannelDescriptor` (transport `socket`) for `createChannels`; bind it to the environment with `configFromEnv` (needs `@theokit/gateway >=0.20.0`).
+`synologyChatChannel` is a `ChannelDescriptor` (transport `socket`) for `createChannels`; bind it to the environment with `configFromEnv` (needs `@theokit/gateway >=0.22.0`).
 
 ```ts
 import { configFromEnv, createChannels } from "@theokit/gateway";

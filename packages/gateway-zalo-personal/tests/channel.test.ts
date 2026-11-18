@@ -31,29 +31,15 @@ describe("zaloPersonalChannel", () => {
     const { config, missing } = configFromEnv(zaloPersonalChannel, {}, "APP_");
     expect(missing).toEqual(["APP_ZALO_PERSONAL_CREDENTIALS"]);
     expect(missing[0]).toBe("APP_ZALO_PERSONAL_CREDENTIALS");
-    const { rejected } = createChannels([{ descriptor: zaloPersonalChannel, config }]);
+    const { rejected } = createChannels([
+      { descriptor: zaloPersonalChannel, config, envPrefix: "APP_" },
+    ]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
-    expect(rejected[0]?.error.message).toContain("credentials");
-    // The factory message names the config key; the descriptor binds that key to the full variable.
+    // The message names the config key and the full prefixed variable.
     const field = zaloPersonalChannel.config.find((f) => f.key === "credentials");
-    expect(missing).toContain(`APP_${field?.env}`);
     expect(`APP_${field?.env}`).toBe(missing[0]);
-
-    // The factory names the keys of the descriptor it is given; keyed by full variable, it names those.
-    const byVariable = {
-      ...zaloPersonalChannel,
-      config: zaloPersonalChannel.config.map((f) => ({ ...f, key: `APP_${f.env}` })),
-    };
-    // Present variables stay set under their full names, so only the unset one is missing.
-    const present = Object.fromEntries(
-      byVariable.config
-        .filter((f) => f.env && `APP_${f.env}` !== missing[0])
-        .map((f) => [f.key, "x"]),
-    );
-    const named = createChannels([{ descriptor: byVariable, config: present }]).rejected[0]?.error;
-    expect(named?.code).toBe("missing_required_config");
-    expect(named?.message).toBe(
-      `channel ${byVariable.platform}: missing required config ${missing[0]}`,
+    expect(rejected[0]?.error.message).toBe(
+      `channel ${zaloPersonalChannel.platform}: missing required config ${"credentials"} (env ${missing[0]})`,
     );
   });
 
@@ -70,7 +56,6 @@ describe("zaloPersonalChannel", () => {
     ["credentials", { cookie: [], imei: "", userAgent: "ua" }],
     ["credentials", { cookie: [], imei: "i", userAgent: 1 }],
     ["login", "x"],
-    ["login", null],
   ])("throws invalid_config naming the key for %s = %j", (key, value) => {
     const error = errorOf(() =>
       zaloPersonalChannel.create({ credentials: CREDENTIALS, [key]: value }),

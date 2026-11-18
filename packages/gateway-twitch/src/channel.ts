@@ -6,7 +6,7 @@
  * `ChannelDescriptor`.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 
 import { TwitchAdapter } from "./adapter.js";
 import type { TwitchAdapterOptions } from "./types.js";
@@ -15,30 +15,8 @@ const PREFIX = "gateway-twitch";
 
 type Config = Readonly<Record<string, unknown>>;
 
-function invalid(key: string, expected: string, code = "invalid_config") {
-  return new GatewayConfigurationError(PREFIX, {
-    code,
-    message: `${PREFIX}: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-function isAbsent(value: unknown): boolean {
-  return value === undefined || value === "";
-}
-
-function readString(config: Config, key: string): string | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return value;
-}
-
-function requiredString(config: Config, key: string): string {
-  const value = readString(config, key);
-  if (value === undefined) throw invalid(key, "a string");
-  return value;
-}
+const readers = channelConfigReaders(PREFIX);
+const { invalid, readString, requiredString } = readers;
 
 /** An array of strings, or a comma-separated string (what an environment variable gives). */
 function readIds(config: Config, key: string): string[] {
@@ -59,24 +37,13 @@ function readIds(config: Config, key: string): string[] {
   return list;
 }
 
-function readSocketFactory(config: Config): TwitchAdapterOptions["socketFactory"] {
-  const value = config.socketFactory;
-  if (isAbsent(value)) return undefined;
-  if (typeof value !== "function") throw invalid("socketFactory", "a function");
-  return value as TwitchAdapterOptions["socketFactory"];
-}
-
-function readFetch(config: Config): TwitchAdapterOptions["fetch"] {
-  const value = config.fetch;
-  if (isAbsent(value)) return undefined;
-  if (typeof value !== "function") throw invalid("fetch", "a function");
-  return value as TwitchAdapterOptions["fetch"];
-}
-
 function buildOptions(config: Config): TwitchAdapterOptions {
   const eventSubUrl = readString(config, "eventSubUrl");
-  const fetchFn = readFetch(config);
-  const socketFactory = readSocketFactory(config);
+  const fetchFn = readers.readFunction<NonNullable<TwitchAdapterOptions["fetch"]>>(config, "fetch");
+  const socketFactory = readers.readFunction<NonNullable<TwitchAdapterOptions["socketFactory"]>>(
+    config,
+    "socketFactory",
+  );
   return {
     accessToken: requiredString(config, "accessToken"),
     botUserId: requiredString(config, "botUserId"),
