@@ -11,7 +11,7 @@ import { BuzzAdapter } from "./adapter.js";
  *
  * @public
  */
-export const buzzChannel: RealtimeBotChannel<BuzzAdapter> = realtimeBotChannel(
+export const buzzChannel: RealtimeBotChannel<BuzzAdapter, "buzz"> = realtimeBotChannel(
   "gateway-buzz",
   "buzz",
   "BUZZ",

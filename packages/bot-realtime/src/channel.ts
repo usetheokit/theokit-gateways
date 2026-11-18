@@ -34,8 +34,8 @@ const FIELDS: ReadonlyArray<readonly [string, boolean, string, string]> = [
 ];
 
 /** The descriptor of a realtime-bot platform. */
-export interface RealtimeBotChannel<A> {
-  readonly platform: string;
+export interface RealtimeBotChannel<A, P extends string = string> {
+  readonly platform: P;
   readonly transport: "socket";
   readonly senderIdentity: "authenticated";
   readonly config: ReadonlyArray<RealtimeBotConfigField>;
@@ -43,12 +43,12 @@ export interface RealtimeBotChannel<A> {
 }
 
 /** Builds the descriptor of a realtime-bot platform; `build` constructs its adapter. */
-export function realtimeBotChannel<A>(
+export function realtimeBotChannel<A, P extends string>(
   pkg: string,
-  platform: string,
+  platform: P,
   envPlatform: string,
   build: (options: RealtimeBotOptions) => A,
-): RealtimeBotChannel<A> {
+): RealtimeBotChannel<A, P> {
   const invalid = (key: string, expected: string) =>
     new GatewayConfigurationError(pkg, {
       code: "invalid_config",
