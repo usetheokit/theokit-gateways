@@ -121,6 +121,18 @@ refuses a token that is not a string or is empty, and an `allowedUsers` that is 
 strings, with this package's `ConfigurationError` (also a `GatewayConfigurationError`), so
 `createChannels` lists that channel in `rejected` too.
 
+### Environment variables
+
+| Field          | Variable                 | Required | Secret |
+| -------------- | ------------------------ | -------- | ------ |
+| `token`        | `TELEGRAM_TOKEN`         | yes      | yes    |
+| `allowedUsers` | `TELEGRAM_ALLOWED_USERS` | no       | no     |
+
+`configFromEnv(telegramChannel, process.env, "APP_")` reads `APP_TELEGRAM_TOKEN` and the rest into
+`config`, lists unset required variables in `missing`, and puts the secret values in `secrets`.
+`create` accepts `allowedUsers` as an array or a comma-separated string, and `requireMention` as a
+boolean or `"true"`/`"false"`.
+
 ## Capabilities
 
 `adapter.capabilities` reports `edit`, `typing` and `reactions` as `true` and

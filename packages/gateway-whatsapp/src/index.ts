@@ -67,6 +67,7 @@ export type {
   WhatsAppSendResult,
   WhatsAppStatusReceipt,
 } from "./backend-types.js";
+export { whatsappChannel } from "./channel.js";
 
 // Errors.
 export {

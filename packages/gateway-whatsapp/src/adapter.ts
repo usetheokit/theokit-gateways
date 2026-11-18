@@ -464,4 +464,22 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
     return this.runHandler(this.handler, event);
   }
+
+  /**
+   * Deliver like {@link deliver}, but a throwing handler is logged by name only: its message can
+   * carry the inbound text, which the webhook route must not write to a log line.
+   *
+   * @internal
+   */
+  async deliverQuietly(event: GatewayMessageEvent): Promise<"ok" | "no_handler" | "handler_threw"> {
+    const handler = this.handler;
+    if (handler === undefined) return "no_handler";
+    try {
+      await handler(event);
+    } catch {
+      process.stderr.write(`[whatsapp] handler threw\n`);
+      return "handler_threw";
+    }
+    return "ok";
+  }
 }

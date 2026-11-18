@@ -131,6 +131,17 @@ async function onLineWebhook(rawBody: string, headers: Record<string, string | u
 - `lineChannel.create` refuses a field of the wrong type with `ConfigurationError` coded
   `invalid_config`, the key in `detail`; the adapter still refuses an empty secret or token.
 
+### Environment variables
+
+| Field                | Variable                    | Required | Secret |
+| -------------------- | --------------------------- | -------- | ------ |
+| `channelSecret`      | `LINE_CHANNEL_SECRET`       | yes      | yes    |
+| `channelAccessToken` | `LINE_CHANNEL_ACCESS_TOKEN` | yes      | yes    |
+
+`configFromEnv(lineChannel, process.env, "APP_")` reads `APP_LINE_CHANNEL_SECRET` and
+`APP_LINE_CHANNEL_ACCESS_TOKEN` into `config`, lists unset ones in `missing`, and puts both values
+in `secrets`. `create` accepts `requireMention` as a boolean or `"true"`/`"false"`.
+
 ## Reply token vs Push (D407)
 
 LINE distinguishes two outbound APIs:
