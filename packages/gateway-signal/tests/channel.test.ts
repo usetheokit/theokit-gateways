@@ -55,6 +55,15 @@ describe("signalChannel", () => {
     expect(result.rejected[0]?.error.message).toContain("account");
   });
 
+  it("documented flow: the missing guard names APP_SIGNAL_ACCOUNT and nothing is built", () => {
+    const { config, missing } = configFromEnv(signalChannel, {}, "APP_");
+    const entries = missing.length === 0 ? [{ descriptor: signalChannel, config }] : [];
+    const result = createChannels(entries);
+    expect(missing).toEqual(["APP_SIGNAL_ACCOUNT"]);
+    expect(result.adapters).toEqual([]);
+    expect(result.rejected).toEqual([]);
+  });
+
   it("collects no secrets: no field is secret", () => {
     expect(signalChannel.config.filter((f) => f.secret)).toEqual([]);
     expect(configFromEnv(signalChannel, ENV, "APP_").secrets).toEqual([]);
