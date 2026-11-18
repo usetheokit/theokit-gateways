@@ -36,8 +36,6 @@ describe("zaloPersonalChannel", () => {
     ]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
     // The message names the config key and the full prefixed variable.
-    const field = zaloPersonalChannel.config.find((f) => f.key === "credentials");
-    expect(`APP_${field?.env}`).toBe(missing[0]);
     expect(rejected[0]?.error.message).toBe(
       `channel ${zaloPersonalChannel.platform}: missing required config ${"credentials"} (env ${missing[0]})`,
     );

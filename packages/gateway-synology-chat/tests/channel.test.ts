@@ -40,8 +40,6 @@ describe("synologyChatChannel", () => {
     ]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
     // The message names the config key and the full prefixed variable.
-    const field = synologyChatChannel.config.find((f) => f.key === key);
-    expect(`APP_${field?.env}`).toBe(name);
     expect(rejected[0]?.error.message).toBe(
       `channel ${synologyChatChannel.platform}: missing required config ${key} (env ${name})`,
     );

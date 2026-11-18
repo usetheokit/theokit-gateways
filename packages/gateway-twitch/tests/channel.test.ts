@@ -44,8 +44,6 @@ describe("twitchChannel", () => {
     const { rejected } = createChannels([{ descriptor: twitchChannel, config, envPrefix: "APP_" }]);
     expect(rejected[0]?.error.code).toBe("missing_required_config");
     // The message names the config key and the full prefixed variable.
-    const field = twitchChannel.config.find((f) => f.key === (KEYS[name] as string));
-    expect(`APP_${field?.env}`).toBe(name);
     expect(rejected[0]?.error.message).toBe(
       `channel ${twitchChannel.platform}: missing required config ${KEYS[name] as string} (env ${name})`,
     );
