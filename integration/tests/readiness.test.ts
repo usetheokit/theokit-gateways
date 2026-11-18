@@ -270,6 +270,14 @@ describe("live-test readiness", () => {
         "a handler wrapper that makes no network call; the transcribe function is the caller's. " +
         "Covered by packages/gateway/tests/runner/media-understanding.test.ts, and no adapter " +
         "but Telegram fills the audio it reads",
+      createAccessPolicyHook:
+        "a pre_inbound decision over an in-memory event, no network I/O. Covered by " +
+        "packages/gateway/tests/hooks/access-policy.test.ts",
+      createFilePairingStore:
+        "reads and writes one local pairing.json, no network I/O. Covered by " +
+        "packages/gateway/tests/hooks/pairing-store.test.ts",
+      senderKey:
+        "pure string -> string, no I/O. Covered by packages/gateway/tests/hooks/pairing-store.test.ts",
       parseChatCommand:
         "pure string -> record, no I/O. Covered by packages/gateway/tests/hooks/chat-command.test.ts",
       commandHook:
@@ -277,6 +285,8 @@ describe("live-test readiness", () => {
         "Covered by packages/gateway/tests/hooks/chat-command.test.ts",
       helpText:
         "pure function, no I/O. Covered by packages/gateway/tests/hooks/chat-command.test.ts",
+      scopedStrategy:
+        "pure event -> session key, no I/O. Covered by packages/gateway/tests/session/scoped-strategy.test.ts",
       createAgentBindings:
         "pure rule matching, no I/O. Covered by packages/gateway/tests/agent-bindings.test.ts",
       bindingStrategy:
@@ -381,5 +391,45 @@ describe("live-test readiness", () => {
       stale,
       `NOT_DRIVEN_LIVE names exports the core no longer has: ${stale.join(", ")}`,
     ).toEqual([]);
+  });
+});
+
+describe("gateway configuration readiness (offline, synthetic values)", () => {
+  const field = (key: string, env: string, required: boolean, secret: boolean) => ({
+    key,
+    env,
+    required,
+    secret,
+    description: key,
+  });
+  const descriptor = {
+    platform: "telegram",
+    transport: "socket",
+    config: [
+      field("token", "BOT_TOKEN", true, true),
+      field("apiUrl", "API_URL", true, false),
+      field("note", "NOTE", false, false),
+    ],
+  } as unknown as Parameters<typeof import("@theokit/gateway").configFromEnv>[0];
+
+  it("names unset and blank required variables with their prefix", async () => {
+    const { configFromEnv } = await import("@theokit/gateway");
+    const env = { DEMO_BOT_TOKEN: "   ", BOT_TOKEN: "unprefixed" };
+    const r = configFromEnv(descriptor, env, "DEMO_");
+    expect(r.missing).toEqual(["DEMO_BOT_TOKEN", "DEMO_API_URL"]);
+    expect(r.config).toEqual({});
+    expect(r.secrets).toEqual([]);
+  });
+
+  it("is ready when every required variable is present, and masks only secrets", async () => {
+    const { configFromEnv } = await import("@theokit/gateway");
+    const r = configFromEnv(
+      descriptor,
+      { DEMO_BOT_TOKEN: " synthetic-token \n", DEMO_API_URL: "https://example.invalid" },
+      "DEMO_",
+    );
+    expect(r.missing).toEqual([]);
+    expect(r.config).toEqual({ token: "synthetic-token", apiUrl: "https://example.invalid" });
+    expect(r.secrets).toEqual(["synthetic-token"]);
   });
 });
