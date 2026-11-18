@@ -34,9 +34,7 @@ interface ConfigReaders {
   list(config: Config, key: string): string[] | undefined;
 }
 
-function createConfigReaders(
-  invalid: (key: string, expected: string) => Error,
-): ConfigReaders {
+function createConfigReaders(invalid: (key: string, expected: string) => Error): ConfigReaders {
   const string = (config: Config, key: string): string => {
     const value = config[key];
     if (typeof value !== "string") throw invalid(key, "a string");
