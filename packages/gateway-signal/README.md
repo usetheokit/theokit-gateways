@@ -99,10 +99,12 @@ import { configFromEnv, createChannels } from "@theokit/gateway";
 import { signalChannel } from "@theokit/gateway-signal";
 
 const { config, missing } = configFromEnv(signalChannel, process.env, "APP_");
+// Pass the same prefix as `envPrefix`: a missing `account` is then rejected as
+// `missing_required_config` naming `APP_SIGNAL_ACCOUNT`.
+const { adapters, rejected } = createChannels([
+  { descriptor: signalChannel, config, envPrefix: "APP_" },
+]);
 if (missing.length > 0) console.error(`skipped: set ${missing.join(", ")}`); // APP_SIGNAL_ACCOUNT
-else {
-  const { adapters, rejected } = createChannels([{ descriptor: signalChannel, config }]);
-}
 ```
 
 | Key | Variable | Required |
