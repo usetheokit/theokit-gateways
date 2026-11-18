@@ -50,6 +50,11 @@ export {
   GatewayLifecycleError,
   type GatewayLifecycleErrorOptions,
 } from "./errors/lifecycle-error.js";
+export {
+  type AccessPolicyOptions,
+  createAccessPolicyHook,
+  type DmPolicy,
+} from "./hooks/access-policy.js";
 // Hooks
 export {
   type ChatCommand,
@@ -59,6 +64,11 @@ export {
   parseChatCommand,
 } from "./hooks/chat-command.js";
 export { HookExecutor } from "./hooks/executor.js";
+export {
+  createFilePairingStore,
+  type PairingStore,
+  senderKey,
+} from "./hooks/pairing-store.js";
 export type {
   GatewayHook,
   HookDecision,
@@ -102,6 +112,11 @@ export {
   defaultStrategy,
   SessionRouter,
 } from "./session/router.js";
+export {
+  type DmScope,
+  type ScopedStrategyOptions,
+  scopedStrategy,
+} from "./session/scoped-strategy.js";
 // Text
 export { type ChannelRendering, channelRendering } from "./text/channel-rendering.js";
 export {

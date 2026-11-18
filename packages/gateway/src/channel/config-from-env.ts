@@ -18,29 +18,29 @@ export interface EnvConfig {
   readonly secrets: readonly string[];
 }
 
-function readValue(
-  env: Readonly<Record<string, string | undefined>>,
-  name: string,
-): string | undefined {
-  const value = env[name]?.trim();
-  return value ? value : undefined;
+type Env = Readonly<Record<string, string | undefined>>;
+
+/** The full environment variable name for a field: `prefix + field.env`, or `undefined` without `env`. */
+export function envVarName(field: ChannelConfigField, prefix = ""): string | undefined {
+  return field.env === undefined ? undefined : prefix + field.env;
+}
+
+/** The trimmed value of `name`, or undefined when it is unset, empty or whitespace. */
+function readValue(env: Env, name: string): string | undefined {
+  return env[name]?.trim() || undefined;
 }
 
 /**
  * Read a descriptor's fields from `env`, using `prefix + field.env` as the variable name. Fields
  * without `env` are skipped.
  */
-export function configFromEnv(
-  descriptor: ChannelDescriptor,
-  env: Readonly<Record<string, string | undefined>>,
-  prefix = "",
-): EnvConfig {
+export function configFromEnv(descriptor: ChannelDescriptor, env: Env, prefix = ""): EnvConfig {
   const config: Record<string, string> = {};
   const missing: string[] = [];
   const secrets: string[] = [];
   for (const field of descriptor.config) {
-    if (field.env === undefined) continue;
-    const name = prefix + field.env;
+    const name = envVarName(field, prefix);
+    if (name === undefined) continue;
     const value = readValue(env, name);
     if (value === undefined) {
       if (field.required) missing.push(name);
