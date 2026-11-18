@@ -28,6 +28,8 @@ describe("mattermostChannel", () => {
       expect(result.adapters).toEqual([]);
       expect(result.rejected[0]?.error).toMatchObject({ code: "missing_required_config" });
       expect(result.rejected[0]?.error.message).toContain(field.key);
+      // createChannels (shared package) only knows config keys; the prefixed variable name is reported by configFromEnv.
+      expect(missing[0]).toBe(`APP_${field.env}`);
     });
   }
 
