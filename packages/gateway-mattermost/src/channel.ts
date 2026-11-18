@@ -13,7 +13,10 @@ const readers = channelConfigReaders(
   "gateway-mattermost",
   (options) => new ConfigurationError(options),
 );
-const { invalid, isAbsent } = readers;
+const { invalid } = readers;
+
+/** Only `undefined` is absent: `null` and `""` are wrong shapes and throw `invalid_config`. */
+const isAbsent = (value: unknown): boolean => value === undefined;
 
 type Config = Readonly<Record<string, unknown>>;
 
@@ -27,7 +30,8 @@ function toFiniteNumber(value: unknown): number | undefined {
 
 const read = {
   string: readers.requiredString,
-  optionalString: readers.readString,
+  optionalString: (config: Config, key: string): string | undefined =>
+    isAbsent(config[key]) ? undefined : readers.requiredString(config, key),
   boolean(config: Config, key: string): boolean | undefined {
     const value = config[key];
     if (isAbsent(value)) return undefined;

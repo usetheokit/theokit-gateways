@@ -15,7 +15,7 @@ describe("emailChannel", () => {
   it("builds the adapter from configFromEnv with every required variable set", () => {
     const { config, missing } = configFromEnv(emailChannel, ENV, "APP_");
     expect(missing).toEqual([]);
-    const result = createChannels([{ descriptor: emailChannel, config }]);
+    const result = createChannels([{ descriptor: emailChannel, config, envPrefix: "APP_" }]);
     expect(result.rejected).toEqual([]);
     expect(result.adapters[0]).toBeInstanceOf(EmailAdapter);
   });
@@ -26,11 +26,10 @@ describe("emailChannel", () => {
       delete env[`APP_${field.env}`];
       const { config, missing } = configFromEnv(emailChannel, env, "APP_");
       expect(missing).toEqual([`APP_${field.env}`]);
-      const result = createChannels([{ descriptor: emailChannel, config }]);
+      const result = createChannels([{ descriptor: emailChannel, config, envPrefix: "APP_" }]);
       expect(result.adapters).toEqual([]);
       expect(result.rejected[0]?.error).toMatchObject({ code: "missing_required_config" });
-      expect(result.rejected[0]?.error.message).toContain(field.key);
-      // createChannels (shared package) only knows config keys; the prefixed variable name is reported by configFromEnv.
+      expect(result.rejected[0]?.error.message).toContain(`APP_${field.env}`);
       expect(missing[0]).toBe(`APP_${field.env}`);
     });
   }
@@ -87,10 +86,13 @@ describe("emailChannel list, number and boolean values", () => {
 });
 
 describe("emailChannel null and overflow", () => {
-  it("treats null as absent, like the shared readers", () => {
+  it("rejects null and an empty string for a supplied optional value", () => {
     const { config } = configFromEnv(emailChannel, ENV, "APP_");
     for (const key of ["allowedSenders", "imapPort", "fromName", "allowAutomated", "cursorStore"]) {
-      expect(() => emailChannel.create({ ...config, [key]: null })).not.toThrow();
+      expect(() => emailChannel.create({ ...config, [key]: null })).toThrow(new RegExp(key));
+      if (key !== "allowedSenders") {
+        expect(() => emailChannel.create({ ...config, [key]: "" })).toThrow(new RegExp(key));
+      }
     }
   });
 

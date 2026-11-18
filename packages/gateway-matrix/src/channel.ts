@@ -14,7 +14,10 @@ const readers = channelConfigReaders(
   "gateway-matrix",
   (options) => new ConfigurationError(options),
 );
-const { invalid, isAbsent } = readers;
+const { invalid } = readers;
+
+/** Only `undefined` is absent: `null` and `""` are wrong shapes and throw `invalid_config`. */
+const isAbsent = (value: unknown): boolean => value === undefined;
 
 type Config = Readonly<Record<string, unknown>>;
 
@@ -28,7 +31,8 @@ function toFiniteNumber(value: unknown): number | undefined {
 
 const read = {
   string: readers.requiredString,
-  optionalString: readers.readString,
+  optionalString: (config: Config, key: string): string | undefined =>
+    isAbsent(config[key]) ? undefined : readers.requiredString(config, key),
   boolean(config: Config, key: string): boolean | undefined {
     const value = config[key];
     if (isAbsent(value)) return undefined;
@@ -57,8 +61,12 @@ const read = {
   },
 };
 
-const readAcceptInvite = (config: Config): MatrixAdapterOptions["acceptInvite"] =>
-  readers.readFunction<NonNullable<MatrixAdapterOptions["acceptInvite"]>>(config, "acceptInvite");
+function readAcceptInvite(config: Config): MatrixAdapterOptions["acceptInvite"] {
+  const value = config.acceptInvite;
+  if (isAbsent(value)) return undefined;
+  if (typeof value !== "function") throw invalid("acceptInvite", "a function");
+  return value as MatrixAdapterOptions["acceptInvite"];
+}
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
 interface ConfigField {

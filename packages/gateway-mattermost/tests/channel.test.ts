@@ -13,7 +13,7 @@ describe("mattermostChannel", () => {
   it("builds the adapter from configFromEnv with every required variable set", () => {
     const { config, missing } = configFromEnv(mattermostChannel, ENV, "APP_");
     expect(missing).toEqual([]);
-    const result = createChannels([{ descriptor: mattermostChannel, config }]);
+    const result = createChannels([{ descriptor: mattermostChannel, config, envPrefix: "APP_" }]);
     expect(result.rejected).toEqual([]);
     expect(result.adapters[0]).toBeInstanceOf(MattermostAdapter);
   });
@@ -24,11 +24,10 @@ describe("mattermostChannel", () => {
       delete env[`APP_${field.env}`];
       const { config, missing } = configFromEnv(mattermostChannel, env, "APP_");
       expect(missing).toEqual([`APP_${field.env}`]);
-      const result = createChannels([{ descriptor: mattermostChannel, config }]);
+      const result = createChannels([{ descriptor: mattermostChannel, config, envPrefix: "APP_" }]);
       expect(result.adapters).toEqual([]);
       expect(result.rejected[0]?.error).toMatchObject({ code: "missing_required_config" });
-      expect(result.rejected[0]?.error.message).toContain(field.key);
-      // createChannels (shared package) only knows config keys; the prefixed variable name is reported by configFromEnv.
+      expect(result.rejected[0]?.error.message).toContain(`APP_${field.env}`);
       expect(missing[0]).toBe(`APP_${field.env}`);
     });
   }
@@ -67,10 +66,11 @@ describe("mattermostChannel", () => {
 });
 
 describe("mattermostChannel null and overflow", () => {
-  it("treats null as absent, like the shared readers", () => {
+  it("rejects null and an empty string for a supplied optional value", () => {
     const { config } = configFromEnv(mattermostChannel, ENV, "APP_");
     for (const key of ["requireMention"]) {
-      expect(() => mattermostChannel.create({ ...config, [key]: null })).not.toThrow();
+      expect(() => mattermostChannel.create({ ...config, [key]: null })).toThrow(new RegExp(key));
+      expect(() => mattermostChannel.create({ ...config, [key]: "" })).toThrow(new RegExp(key));
     }
   });
 });

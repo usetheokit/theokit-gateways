@@ -14,7 +14,7 @@ describe("matrixChannel", () => {
   it("builds the adapter from configFromEnv with every required variable set", () => {
     const { config, missing } = configFromEnv(matrixChannel, ENV, "APP_");
     expect(missing).toEqual([]);
-    const result = createChannels([{ descriptor: matrixChannel, config }]);
+    const result = createChannels([{ descriptor: matrixChannel, config, envPrefix: "APP_" }]);
     expect(result.rejected).toEqual([]);
     expect(result.adapters[0]).toBeInstanceOf(MatrixAdapter);
   });
@@ -25,11 +25,10 @@ describe("matrixChannel", () => {
       delete env[`APP_${field.env}`];
       const { config, missing } = configFromEnv(matrixChannel, env, "APP_");
       expect(missing).toEqual([`APP_${field.env}`]);
-      const result = createChannels([{ descriptor: matrixChannel, config }]);
+      const result = createChannels([{ descriptor: matrixChannel, config, envPrefix: "APP_" }]);
       expect(result.adapters).toEqual([]);
       expect(result.rejected[0]?.error).toMatchObject({ code: "missing_required_config" });
-      expect(result.rejected[0]?.error.message).toContain(field.key);
-      // createChannels (shared package) only knows config keys; the prefixed variable name is reported by configFromEnv.
+      expect(result.rejected[0]?.error.message).toContain(`APP_${field.env}`);
       expect(missing[0]).toBe(`APP_${field.env}`);
     });
   }
@@ -68,10 +67,11 @@ describe("matrixChannel", () => {
 });
 
 describe("matrixChannel null and overflow", () => {
-  it("treats null as absent, like the shared readers", () => {
+  it("rejects null and an empty string for a supplied optional value", () => {
     const { config } = configFromEnv(matrixChannel, ENV, "APP_");
     for (const key of ["requireMention", "freshnessWindowMs", "acceptInvite"]) {
-      expect(() => matrixChannel.create({ ...config, [key]: null })).not.toThrow();
+      expect(() => matrixChannel.create({ ...config, [key]: null })).toThrow(new RegExp(key));
+      expect(() => matrixChannel.create({ ...config, [key]: "" })).toThrow(new RegExp(key));
     }
   });
 
