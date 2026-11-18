@@ -99,8 +99,10 @@ import { configFromEnv, createChannels } from "@theokit/gateway";
 import { signalChannel } from "@theokit/gateway-signal";
 
 const { config, missing } = configFromEnv(signalChannel, process.env, "APP_");
-// `missing` holds the full variable names, e.g. ["APP_SIGNAL_ACCOUNT"]; report them to the operator.
-const { adapters, rejected } = createChannels([{ descriptor: signalChannel, config }]);
+if (missing.length > 0) console.error(`skipped: set ${missing.join(", ")}`); // APP_SIGNAL_ACCOUNT
+else {
+  const { adapters, rejected } = createChannels([{ descriptor: signalChannel, config }]);
+}
 ```
 
 | Key | Variable | Required |

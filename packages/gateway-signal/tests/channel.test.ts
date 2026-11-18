@@ -47,6 +47,8 @@ describe("signalChannel", () => {
   it("names the full variable through configFromEnv, and createChannels rejects the entry", () => {
     const { config, missing } = configFromEnv(signalChannel, {}, "APP_");
     expect(missing).toEqual(["APP_SIGNAL_ACCOUNT"]);
+    // The documented flow reports `missing` and does not build; createChannels itself only
+    // knows the key, so a caller that skips the guard is still rejected, naming `account`.
     const result = createChannels([{ descriptor: signalChannel, config }]);
     expect(result.adapters).toEqual([]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
