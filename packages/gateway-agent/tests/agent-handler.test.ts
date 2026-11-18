@@ -106,7 +106,7 @@ describe("createAgentHandler", () => {
     const { adapter, counts } = await setup(async () => agentOf([text("Hello "), text("world")]));
     expect(texts(adapter)).toEqual(["Hello world"]);
     expect(counts.released).toBe(1);
-      });
+  });
 
   it("replies noAnswerText for an empty answer", async () => {
     const { adapter } = await setup(async () => agentOf([]));
