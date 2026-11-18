@@ -68,6 +68,11 @@ export class XApi {
   private accessToken: { value: string; expiresAt: number } | undefined;
   private refreshToken: string;
   private refreshing: Promise<string> | undefined;
+  private storedLoaded = false;
+  /** A rotated token the store has not accepted yet; retried before any further call. */
+  private unsaved: string | undefined;
+  /** Tail of the chain that serialises credential store writes. */
+  private writes: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly opts: XAdapterOptions,
@@ -86,7 +91,48 @@ export class XApi {
     return this.refreshing;
   }
 
+  private get credentialKey(): string {
+    return this.opts.credentialKey ?? `x-refresh-token:${this.opts.userId}`;
+  }
+
+  /** The saved refresh token, when there is one, wins over the configured one. Read once. */
+  private async loadStored(): Promise<void> {
+    const store = this.opts.credentialStore;
+    if (store === undefined || this.storedLoaded) return;
+    const stored = await store.get(this.credentialKey);
+    this.storedLoaded = true;
+    if (stored !== undefined) this.refreshToken = stored;
+  }
+
+  private async persist(token: string): Promise<void> {
+    this.refreshToken = token;
+    this.unsaved = this.opts.credentialStore === undefined ? undefined : token;
+    try {
+      await this.retryUnsaved();
+    } finally {
+      await this.opts.onRefreshToken?.(token);
+    }
+  }
+
+  /**
+   * Write the unsaved token. Every store write goes through one chain, so writes happen in order,
+   * and a write of a token that a newer rotation replaced is dropped.
+   */
+  private retryUnsaved(): Promise<void> {
+    const token = this.unsaved;
+    if (token === undefined) return Promise.resolve();
+    const job = this.writes.then(async () => {
+      if (this.unsaved !== token) return;
+      await this.opts.credentialStore?.set(this.credentialKey, token);
+      if (this.unsaved === token) this.unsaved = undefined;
+    });
+    this.writes = job.catch(() => {});
+    return job;
+  }
+
   private async doRefresh(): Promise<string> {
+    await this.loadStored();
+    await this.retryUnsaved();
     const basic = Buffer.from(`${this.opts.clientId}:${this.opts.clientSecret}`).toString("base64");
     const form = new URLSearchParams({
       grant_type: "refresh_token",
@@ -103,18 +149,18 @@ export class XApi {
       form.toString(),
     );
     if (status !== 200 || !body?.access_token) throw new XApiError(status, describe(status, body));
+    if (body.refresh_token && body.refresh_token !== this.refreshToken) {
+      await this.persist(body.refresh_token);
+    }
     this.accessToken = {
       value: body.access_token,
       expiresAt: this.now() + (body.expires_in ?? 7200) * 1000,
     };
-    if (body.refresh_token && body.refresh_token !== this.refreshToken) {
-      this.refreshToken = body.refresh_token;
-      await this.opts.onRefreshToken?.(body.refresh_token);
-    }
     return body.access_token;
   }
 
   private async userToken(): Promise<string> {
+    await this.retryUnsaved();
     const cached = this.accessToken;
     if (cached !== undefined && cached.expiresAt - TOKEN_MARGIN_MS > this.now())
       return cached.value;

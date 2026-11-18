@@ -5,33 +5,19 @@
  * `.d.ts` must not name core types an older peer lacks.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 import { FeishuLarkAdapter } from "./adapter.js";
 
 type Config = Readonly<Record<string, unknown>>;
 
 const APP_ID = /^cli_[0-9a-fA-F]{16}$/;
 
-function invalid(key: string, expected: string): GatewayConfigurationError {
-  return new GatewayConfigurationError("gateway-feishu-lark", {
-    code: "invalid_config",
-    message: `gateway-feishu-lark: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-function readString(config: Config, key: string): string {
-  const value = config[key];
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw invalid(key, "a non-empty string");
-  }
-  return value;
-}
+const readers = channelConfigReaders("gateway-feishu-lark");
 
 function readAppId(config: Config): string {
-  const appId = readString(config, "appId");
+  const appId = readers.requiredString(config, "appId");
   // The adapter throws a plain Error for this, which createChannels would rethrow as a defect.
-  if (!APP_ID.test(appId)) throw invalid("appId", "cli_ followed by 16 hex characters");
+  if (!APP_ID.test(appId)) throw readers.invalid("appId", "cli_ followed by 16 hex characters");
   return appId;
 }
 
@@ -39,7 +25,7 @@ function readDomain(config: Config): "feishu" | "lark" | undefined {
   const value = config.domain;
   if (value === undefined) return undefined;
   if (value === "feishu" || value === "lark") return value;
-  throw invalid("domain", '"feishu" or "lark"');
+  throw readers.invalid("domain", '"feishu" or "lark"');
 }
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
@@ -94,7 +80,7 @@ export const feishuLarkChannel = {
     const domain = readDomain(config);
     return new FeishuLarkAdapter({
       appId: readAppId(config),
-      appSecret: readString(config, "appSecret"),
+      appSecret: readers.requiredString(config, "appSecret"),
       ...(domain === undefined ? {} : { domain }),
     });
   },

@@ -5,26 +5,12 @@
  * `.d.ts` must not name core types an older peer lacks.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 import { ClickClackAdapter } from "./adapter.js";
 
 type Config = Readonly<Record<string, unknown>>;
 
-function invalid(key: string, expected: string): GatewayConfigurationError {
-  return new GatewayConfigurationError("gateway-clickclack", {
-    code: "invalid_config",
-    message: `gateway-clickclack: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-function readString(config: Config, key: string): string {
-  const value = config[key];
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw invalid(key, "a non-empty string");
-  }
-  return value;
-}
+const readers = channelConfigReaders("gateway-clickclack");
 
 function readDelay(config: Config): number | undefined {
   const value = config.reconnectDelayMs;
@@ -34,7 +20,7 @@ function readDelay(config: Config): number | undefined {
     const parsed = Number(value.trim());
     if (Number.isFinite(parsed)) return parsed;
   }
-  throw invalid("reconnectDelayMs", "a non-negative number or a digit string");
+  throw readers.invalid("reconnectDelayMs", "a non-negative number or a digit string");
 }
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
@@ -101,10 +87,10 @@ export const clickclackChannel = {
   create(config: Config): ClickClackAdapter {
     const delay = readDelay(config);
     return new ClickClackAdapter({
-      baseUrl: readString(config, "baseUrl"),
-      token: readString(config, "token"),
-      workspaceId: readString(config, "workspaceId"),
-      botUserId: readString(config, "botUserId"),
+      baseUrl: readers.requiredString(config, "baseUrl"),
+      token: readers.requiredString(config, "token"),
+      workspaceId: readers.requiredString(config, "workspaceId"),
+      botUserId: readers.requiredString(config, "botUserId"),
       ...(delay === undefined ? {} : { reconnectDelayMs: delay }),
     });
   },

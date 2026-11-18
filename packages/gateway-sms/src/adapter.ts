@@ -242,6 +242,24 @@ export class SMSAdapter extends BasePlatformAdapter {
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
     return this.runHandler(this.inboundHandler, event);
   }
+
+  /**
+   * Deliver like {@link deliver}, but a throwing handler is logged by name only: its message can
+   * carry the inbound text, which the webhook route must not write to a log line.
+   *
+   * @internal
+   */
+  async deliverQuietly(event: GatewayMessageEvent): Promise<"ok" | "no_handler" | "handler_threw"> {
+    const handler = this.inboundHandler;
+    if (handler === undefined) return "no_handler";
+    try {
+      await handler(event);
+    } catch {
+      process.stderr.write(`[sms] handler threw\n`);
+      return "handler_threw";
+    }
+    return "ok";
+  }
 }
 
 function secretFromOpts(opts: SMSAdapterOptions): string {
