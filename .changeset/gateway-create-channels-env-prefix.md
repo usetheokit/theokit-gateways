@@ -1,5 +1,5 @@
 ---
-"@theokit/gateway": minor
+"@theokit/gateway": patch
 ---
 
-Add `envVarName` and the optional `ChannelEntry.envPrefix`: `createChannels` and `configFromEnv` now build full environment variable names with the same helper, so a missing-config rejection names the same variables `configFromEnv` reports. Entries without `envPrefix` behave as before.
+`createChannels` now builds the environment variable names in its missing-config rejections with the same internal `envVarName` helper as `configFromEnv`, so both report the same full names.
