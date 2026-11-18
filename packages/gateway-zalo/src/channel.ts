@@ -6,44 +6,14 @@
  * object is structurally a `ChannelDescriptor`.
  */
 
-import type { WebhookAnswer, WebhookRequest } from "@theokit/gateway";
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders, type WebhookAnswer, type WebhookRequest } from "@theokit/gateway";
 
 import { ZaloAdapter } from "./adapter.js";
 import type { ZaloFetch } from "./types.js";
 
 const ORIGIN = "gateway-zalo";
 
-function invalid(key: string, expected: string): GatewayConfigurationError {
-  return new GatewayConfigurationError(ORIGIN, {
-    code: "invalid_config",
-    message: `${ORIGIN}: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-function readString(config: Readonly<Record<string, unknown>>, key: string): string {
-  const value = config[key];
-  if (typeof value !== "string" || value.length === 0) throw invalid(key, "a non-empty string");
-  return value;
-}
-
-function optionalString(
-  config: Readonly<Record<string, unknown>>,
-  key: string,
-): Record<string, string> {
-  const value = config[key];
-  if (value === undefined || value === "") return {};
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return { [key]: value };
-}
-
-function optionalFetch(config: Readonly<Record<string, unknown>>): { fetch?: ZaloFetch } {
-  const value = config.fetch;
-  if (value === undefined) return {};
-  if (typeof value !== "function") throw invalid("fetch", "a function");
-  return { fetch: value as ZaloFetch };
-}
+const readers = channelConfigReaders(ORIGIN);
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
 interface ConfigField {
@@ -113,11 +83,11 @@ export const zaloChannel = {
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): ZaloAdapter {
     return new ZaloAdapter({
-      appId: readString(config, "appId"),
-      oaSecretKey: readString(config, "oaSecretKey"),
-      accessToken: readString(config, "accessToken"),
-      ...optionalString(config, "apiBase"),
-      ...optionalFetch(config),
+      appId: readers.requiredString(config, "appId"),
+      oaSecretKey: readers.requiredString(config, "oaSecretKey"),
+      accessToken: readers.requiredString(config, "accessToken"),
+      apiBase: readers.readString(config, "apiBase"),
+      fetch: readers.readFunction<ZaloFetch>(config, "fetch"),
     });
   },
   webhook: {

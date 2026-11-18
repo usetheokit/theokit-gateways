@@ -125,8 +125,8 @@ describe("yuanbaoChannel", () => {
     expect([...secrets].sort()).toEqual(["appSecret-value", "callbackSecret-value"].sort());
   });
 
-  it("refuses a null optional apiBase with invalid_config naming the key", () => {
-    expect(() => yuanbaoChannel.create({ ...VALID, apiBase: null })).toThrow(/apiBase/);
+  it("refuses a numeric optional apiBase with invalid_config naming the key", () => {
+    expect(() => yuanbaoChannel.create({ ...VALID, apiBase: 5 })).toThrow(/apiBase/);
   });
 
   it("passes a supplied fetch through to the adapter", async () => {

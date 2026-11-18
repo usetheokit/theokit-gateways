@@ -6,44 +6,14 @@
  * object is structurally a `ChannelDescriptor`.
  */
 
-import type { WebhookAnswer, WebhookRequest } from "@theokit/gateway";
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders, type WebhookAnswer, type WebhookRequest } from "@theokit/gateway";
 
 import { QQAdapter } from "./adapter.js";
 import type { QQFetch } from "./types.js";
 
 const ORIGIN = "gateway-qq";
 
-function invalid(key: string, expected: string): GatewayConfigurationError {
-  return new GatewayConfigurationError(ORIGIN, {
-    code: "invalid_config",
-    message: `${ORIGIN}: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-function readString(config: Readonly<Record<string, unknown>>, key: string): string {
-  const value = config[key];
-  if (typeof value !== "string" || value.length === 0) throw invalid(key, "a non-empty string");
-  return value;
-}
-
-function optionalString(
-  config: Readonly<Record<string, unknown>>,
-  key: string,
-): Record<string, string> {
-  const value = config[key];
-  if (value === undefined || value === "") return {};
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return { [key]: value };
-}
-
-function optionalFetch(config: Readonly<Record<string, unknown>>): { fetch?: QQFetch } {
-  const value = config.fetch;
-  if (value === undefined) return {};
-  if (typeof value !== "function") throw invalid("fetch", "a function");
-  return { fetch: value as QQFetch };
-}
+const readers = channelConfigReaders(ORIGIN);
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
 interface ConfigField {
@@ -114,11 +84,11 @@ export const qqChannel = {
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): QQAdapter {
     return new QQAdapter({
-      appId: readString(config, "appId"),
-      appSecret: readString(config, "appSecret"),
-      ...optionalString(config, "apiBase"),
-      ...optionalString(config, "tokenUrl"),
-      ...optionalFetch(config),
+      appId: readers.requiredString(config, "appId"),
+      appSecret: readers.requiredString(config, "appSecret"),
+      apiBase: readers.readString(config, "apiBase"),
+      tokenUrl: readers.readString(config, "tokenUrl"),
+      fetch: readers.readFunction<QQFetch>(config, "fetch"),
     });
   },
   webhook: {
