@@ -59,7 +59,9 @@ import { configFromEnv, createChannels } from "@theokit/gateway";
 import { wecomChannel } from "@theokit/gateway-wecom";
 
 const { config, missing, secrets } = configFromEnv(wecomChannel, process.env, "APP_");
-const { adapters, rejected } = createChannels([{ descriptor: wecomChannel, config }]);
+const { adapters, rejected } = createChannels([
+  { descriptor: wecomChannel, config, envPrefix: "APP_" },
+]);
 ```
 
 | Config key | Env name (after your prefix) | Required | Secret |
