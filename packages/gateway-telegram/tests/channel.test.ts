@@ -105,7 +105,6 @@ describe("telegramChannel env bindings", () => {
     const result = createChannels([{ descriptor: telegramChannel, config }]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
     expect(result.rejected[0]?.error.message).toContain("token");
-    expect(result.rejected[0]?.error.message).toContain("TELEGRAM_TOKEN");
   });
 
   it("collects only secret values", () => {

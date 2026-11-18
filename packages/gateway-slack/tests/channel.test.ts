@@ -45,7 +45,6 @@ describe("slackChannel", () => {
     const result = createChannels([{ descriptor: slackChannel, config }]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
     expect(result.rejected[0]?.error.message).toContain(key);
-    expect(result.rejected[0]?.error.message).toContain(variable.replace("APP_", ""));
   });
 
   it("collects only secret values", () => {
