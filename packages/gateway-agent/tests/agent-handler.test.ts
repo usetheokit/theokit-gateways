@@ -162,6 +162,7 @@ describe("createAgentHandler", () => {
     const handler = createAgentHandler({
       agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => {} }),
       ackEmoji: "eyes",
+      adapters: [new FakeAdapter()],
     });
     const ctx = {
       event,
@@ -220,26 +221,30 @@ describe("createAgentHandler", () => {
     expect(texts(adapter)).toEqual(["ok"]);
   });
 
-  it("ackEmoji with no ctx.react and no adapter throws a typed configuration error", async () => {
+  it("ackEmoji without adapters fails at configuration on a gateway without ctx.react", () => {
+    expect(() =>
+      createAgentHandler({
+        agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => {} }),
+        ackEmoji: "eyes",
+      }),
+    ).toThrow(/ackEmoji.*0\.\d+\.\d+/);
+  });
+
+  it("a missing reaction path never stops the turn from replying", async () => {
     const sent: string[] = [];
-    let released = 0;
     const handler = createAgentHandler({
-      agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => void released++ }),
+      agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => {} }),
+      adapters: [new FakeAdapter()],
       ackEmoji: "eyes",
     });
-    const ctx = {
+    await handler(EVENT, {
       event: EVENT,
       reply: async (t: string) => {
         sent.push(t);
         return { ok: true };
       },
-    };
-    await expect(handler(EVENT, ctx as never)).rejects.toMatchObject({
-      name: "AckReactionUnavailableError",
-      platform: EVENT.platform,
-    });
-    expect(sent).toEqual([]);
-    expect(released).toBe(0);
+    } as never);
+    expect(sent).toEqual(["ok"]);
   });
 
   it("a ctx whose react getter throws still runs the turn without ackEmoji", async () => {
@@ -271,6 +276,7 @@ describe("createAgentHandler", () => {
     const handler = createAgentHandler({
       agentFor: async () => ({ agent: agentOf([text("ok")]), release: () => {} }),
       ackEmoji: "eyes",
+      adapters: [new FakeAdapter()],
     });
     const reply = async (t: string) => {
       sent.push(t);
@@ -292,9 +298,9 @@ describe("createAgentHandler", () => {
       },
     });
     await handler(EVENT, spy);
-    await expect(handler(EVENT, { event: EVENT, reply })).rejects.toThrow(/ackEmoji/); // no react
+    await handler(EVENT, { event: EVENT, reply }); // no react, adapter is another instance
     expect([...touched].filter((k) => /typing/i.test(k))).toEqual([]);
-    expect(sent).toEqual(["ok"]);
+    expect(sent).toEqual(["ok", "ok"]);
     expect(reacts).toEqual([["1", "eyes"]]);
     expect(adapter.typing).toBe(0);
   });
