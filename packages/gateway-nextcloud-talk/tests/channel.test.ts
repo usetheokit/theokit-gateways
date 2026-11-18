@@ -94,8 +94,8 @@ describe("nextcloudTalkChannel conversions", () => {
 describe("nextcloudTalkChannel null and programmatic fields", () => {
   const base = { baseUrl: "https://c.example", secret: SECRET };
   for (const key of ["port", "path", "connectTimeoutMs", "app", "fetch"]) {
-    it(`treats an explicit null ${key} as not set`, () => {
-      expect(() => nextcloudTalkChannel.create({ ...base, [key]: null })).not.toThrow();
+    it(`refuses an explicit null ${key}`, () => {
+      expect(() => nextcloudTalkChannel.create({ ...base, [key]: null })).toThrow(new RegExp(key));
     });
   }
   it("refuses a function that is not an Express app (no post method)", () => {
@@ -113,4 +113,13 @@ describe("nextcloudTalkChannel null and programmatic fields", () => {
     expect((adapter as unknown as { opts: { app: unknown } }).opts.app).toBe(app);
     expect((adapter as unknown as { fetchFn: unknown }).fetchFn).toBeTypeOf("function");
   });
+});
+
+describe("nextcloudTalkChannel empty values for non-string fields", () => {
+  const base = { baseUrl: "https://c.example", secret: SECRET };
+  for (const key of ["port", "connectTimeoutMs", "app"]) {
+    it(`refuses an empty string for ${key}`, () => {
+      expect(() => nextcloudTalkChannel.create({ ...base, [key]: "" })).toThrow(new RegExp(key));
+    });
+  }
 });

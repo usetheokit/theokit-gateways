@@ -31,6 +31,26 @@ type Config = Readonly<Record<string, unknown>>;
 const readers = channelConfigReaders("gateway-irc", (options) => new ConfigurationError(options));
 const { invalid, isAbsent, readString, requiredString: readRequiredString } = readers;
 
+/**
+ * The shared readers treat `null` and `""` as absent. An explicit `null` is never a valid value,
+ * and `""` is not one for a field that is not a string, so both are refused rather than defaulted.
+ */
+const NON_STRING_KEYS: ReadonlySet<string> = new Set([
+  "port",
+  "tls",
+  "connectTimeoutMs",
+  "socketFactory",
+  "channels",
+]);
+
+function rejectBlank(config: Config): void {
+  for (const [key, value] of Object.entries(config)) {
+    if (value === null || (value === "" && NON_STRING_KEYS.has(key))) {
+      throw invalid(key, "set to a value of its type, not null or empty");
+    }
+  }
+}
+
 function readList(config: Config, key: string): string[] | undefined {
   const value = config[key];
   if (isAbsent(value)) return undefined;
@@ -174,6 +194,7 @@ export const ircChannel = {
   transport: "socket" as const,
   config: CONFIG,
   create(config: Config): IrcAdapter {
+    rejectBlank(config);
     const channels = readList(config, "channels");
     if (channels === undefined)
       throw invalid("channels", "an array of strings or a comma-separated string");

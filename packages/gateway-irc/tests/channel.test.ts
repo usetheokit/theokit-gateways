@@ -100,8 +100,8 @@ describe("ircChannel conversions", () => {
 describe("ircChannel null and programmatic fields", () => {
   const base = { host: "irc.example.org", nick: "theobot", channels: ["#a"] };
   for (const key of ["port", "tls", "username", "password", "connectTimeoutMs", "socketFactory"]) {
-    it(`treats an explicit null ${key} as not set`, () => {
-      expect(() => ircChannel.create({ ...base, [key]: null })).not.toThrow();
+    it(`refuses an explicit null ${key}`, () => {
+      expect(() => ircChannel.create({ ...base, [key]: null })).toThrow(new RegExp(key));
     });
   }
   it("refuses a socketFactory that is not a function", () => {
@@ -119,4 +119,13 @@ describe("ircChannel null and programmatic fields", () => {
     await adapter.connect();
     expect(called).toBe(true);
   });
+});
+
+describe("ircChannel empty values for non-string fields", () => {
+  const base = { host: "irc.example.org", nick: "theobot", channels: ["#a"] };
+  for (const key of ["port", "tls", "connectTimeoutMs", "socketFactory"]) {
+    it(`refuses an empty string for ${key}`, () => {
+      expect(() => ircChannel.create({ ...base, [key]: "" })).toThrow(new RegExp(key));
+    });
+  }
 });

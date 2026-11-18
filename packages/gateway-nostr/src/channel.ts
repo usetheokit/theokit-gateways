@@ -33,6 +33,25 @@ type Config = Readonly<Record<string, unknown>>;
 const readers = channelConfigReaders("gateway-nostr", (options) => new ConfigurationError(options));
 const { invalid, isAbsent, requiredString: readRequiredString } = readers;
 
+/**
+ * The shared readers treat `null` and `""` as absent. An explicit `null` is never a valid value,
+ * and `""` is not one for a field that is not a string, so both are refused rather than defaulted.
+ */
+const NON_STRING_KEYS: ReadonlySet<string> = new Set([
+  "ignoreBefore",
+  "socketFactory",
+  "client",
+  "relays",
+]);
+
+function rejectBlank(config: Config): void {
+  for (const [key, value] of Object.entries(config)) {
+    if (value === null || (value === "" && NON_STRING_KEYS.has(key))) {
+      throw invalid(key, "set to a value of its type, not null or empty");
+    }
+  }
+}
+
 function readList(config: Config, key: string): string[] | undefined {
   const value = config[key];
   if (isAbsent(value)) return undefined;
@@ -134,6 +153,7 @@ export const nostrChannel = {
   transport: "socket" as const,
   config: CONFIG,
   create(config: Config): NostrAdapter {
+    rejectBlank(config);
     const relays = readList(config, "relays");
     if (relays === undefined)
       throw invalid("relays", "an array of strings or a comma-separated string");

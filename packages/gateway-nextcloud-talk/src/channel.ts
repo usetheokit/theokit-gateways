@@ -34,6 +34,20 @@ const readers = channelConfigReaders(
 );
 const { invalid, isAbsent, readString, requiredString: readRequiredString } = readers;
 
+/**
+ * The shared readers treat `null` and `""` as absent. An explicit `null` is never a valid value,
+ * and `""` is not one for a field that is not a string, so both are refused rather than defaulted.
+ */
+const NON_STRING_KEYS: ReadonlySet<string> = new Set(["port", "connectTimeoutMs", "app", "fetch"]);
+
+function rejectBlank(config: Config): void {
+  for (const [key, value] of Object.entries(config)) {
+    if (value === null || (value === "" && NON_STRING_KEYS.has(key))) {
+      throw invalid(key, "set to a value of its type, not null or empty");
+    }
+  }
+}
+
 function readNumber(config: Config, key: string): number | undefined {
   const value = config[key];
   if (isAbsent(value)) return undefined;
@@ -128,6 +142,7 @@ export const nextcloudTalkChannel = {
   transport: "socket" as const,
   config: CONFIG,
   create(config: Config): NextcloudTalkAdapter {
+    rejectBlank(config);
     const options: NextcloudTalkAdapterOptions = defined({
       baseUrl: readRequiredString(config, "baseUrl"),
       secret: readRequiredString(config, "secret"),
