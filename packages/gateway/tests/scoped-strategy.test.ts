@@ -81,7 +81,11 @@ describe("scopedStrategy", () => {
   it("gives a-b and a_b different keys under every scope", () => {
     for (const s of scopes) {
       const st = make(s);
-      expect(st(ev("slack", "a-b"))).not.toBe(st(ev("slack", "a_b")));
+      // `main` keys every DM as one conversation by design; the sender id
+      // still separates keys wherever a key carries it.
+      if (s !== "main") expect(st(ev("slack", "a-b"))).not.toBe(st(ev("slack", "a_b")));
+      const grp = make(s, { groupScope: "channel-sender" });
+      expect(grp(ev("slack", "a-b", "group"))).not.toBe(grp(ev("slack", "a_b", "group")));
     }
     const linked = scopedStrategy({
       dmScope: "per-peer",
