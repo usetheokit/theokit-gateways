@@ -77,3 +77,26 @@ const scheduler = createScheduler({ store, run, deliver });
 // A schedule line reads "0 9 * * * slack:C0123"; split its target with:
 const target = parseChannelTarget("slack:C0123"); // { platform: "slack", channelId: "C0123" }
 ```
+
+## `createChatApprover(options)`
+
+Asks an owner in chat to approve a tool call and waits for `/approve`, `/approve always` or `/deny`. Silence for `timeoutMs` (default 120 s), a failed send, an unknown conversation, or a question already pending in the same conversation all resolve `deny`. A non-owner is answered "Only an owner can do that." and the question stays pending. The three commands never reach the agent. `ask` takes the conversation key explicitly, so it does not depend on the SDK's approval context carrying one.
+
+```ts
+import { createChatApprover } from "@theokit/gateway-agent";
+
+const approver = createChatApprover({
+  conversationOf: (event) => `${event.platform}:${event.channel.id}`,
+  isOwner: (event) => owners.has(`${event.platform}:${event.sender.id}`),
+  send: (event, text) => adapterFor(event.platform).send({ channelId: event.channel.id, text }),
+});
+
+// Register the hook with the runner: new GatewayRunner({ hooks: [approver.hook], ... })
+
+// In the SDK's tool approval callback, ask the conversation the tool call came from
+// (kept by your app, for example per agent) and map the answer to the SDK's decision:
+async function approveTool(conversation: string, toolName: string, input: unknown) {
+  const { answer, by } = await approver.ask(conversation, `${toolName} ${JSON.stringify(input)}`);
+  return { allow: answer !== "deny", remember: answer === "always", by };
+}
+```

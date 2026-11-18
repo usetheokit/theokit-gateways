@@ -4,6 +4,12 @@ export {
   createAgentHandler,
 } from "./agent-handler.js";
 export {
+  type ApprovalAnswer,
+  type ChatApprover,
+  type ChatApproverOptions,
+  createChatApprover,
+} from "./chat-approver.js";
+export {
   type GatewayDeliverPort,
   gatewayDeliverPort,
   parseChannelTarget,
