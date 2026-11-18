@@ -437,7 +437,7 @@ const descriptor = selectVariant(whatsappChannel, process.env.APP_WHATSAPP_BACKE
 const { config, missing, secrets } = configFromEnv(descriptor, process.env, "APP_");
 if (missing.length > 0) console.error(`skipped: set ${missing.join(", ")}`);
 else {
-  const { adapters } = createChannels([{ descriptor, config }]);
+  const { adapters } = createChannels([{ descriptor, config, envPrefix: "APP_" }]);
   // pass `secrets` to your log mask
 }
 ```

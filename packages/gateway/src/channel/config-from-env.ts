@@ -18,6 +18,11 @@ export interface EnvConfig {
   readonly secrets: readonly string[];
 }
 
+/** The full environment variable name for a field: `prefix + field.env`, or `undefined` without `env`. */
+export function envVarName(field: ChannelConfigField, prefix = ""): string | undefined {
+  return field.env === undefined ? undefined : prefix + field.env;
+}
+
 function readValue(
   env: Readonly<Record<string, string | undefined>>,
   name: string,
@@ -39,8 +44,8 @@ export function configFromEnv(
   const missing: string[] = [];
   const secrets: string[] = [];
   for (const field of descriptor.config) {
-    if (field.env === undefined) continue;
-    const name = prefix + field.env;
+    const name = envVarName(field, prefix);
+    if (name === undefined) continue;
     const value = readValue(env, name);
     if (value === undefined) {
       if (field.required) missing.push(name);

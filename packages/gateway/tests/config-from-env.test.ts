@@ -87,3 +87,21 @@ describe("selectVariant", () => {
     );
   });
 });
+
+describe("configFromEnv with createChannels", () => {
+  it("reports the same full variable names in both APIs", async () => {
+    const { createChannels } = await import("../src/channel/create-channels.js");
+    const d = make([
+      field("token", "X_TOKEN", true, true),
+      field("secret", "X_SECRET", true, true),
+      field("label", undefined, true, false),
+    ]);
+    const env = configFromEnv(d, {}, "APP_");
+    const { rejected } = createChannels([{ descriptor: d, config: env.config, envPrefix: "APP_" }]);
+    const message = rejected[0]?.error.message ?? "";
+    expect(env.missing).toEqual(["APP_X_TOKEN", "APP_X_SECRET"]);
+    for (const name of env.missing) expect(message).toContain(`(env ${name})`);
+    expect(message).toContain("label");
+    expect(message).not.toContain("label (env");
+  });
+});
