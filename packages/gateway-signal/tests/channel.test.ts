@@ -47,12 +47,11 @@ describe("signalChannel", () => {
   it("rejects a missing account, naming the variable and the key", () => {
     const { config, missing } = configFromEnv(signalChannel, {}, "APP_");
     expect(missing).toEqual(["APP_SIGNAL_ACCOUNT"]);
-    const result = createChannels([{ descriptor: signalChannel, config }]);
+    const result = createChannels([{ descriptor: signalChannel, config, envPrefix: "APP_" }]);
     expect(result.adapters).toEqual([]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
     expect(result.rejected[0]?.error.message).toContain("account");
-    // The core knows only option keys, so the full variable name comes from configFromEnv.
-    expect(missing.join(", ")).toContain("APP_SIGNAL_ACCOUNT");
+    expect(result.rejected[0]?.error.message).toContain("APP_SIGNAL_ACCOUNT");
   });
 
   it("collects no secrets: no field is secret", () => {
