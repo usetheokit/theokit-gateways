@@ -1,16 +1,31 @@
-import { configFromEnv, createChannels, GatewayConfigurationError } from "@theokit/gateway";
+import {
+  configFromEnv,
+  createChannels,
+  GatewayConfigurationError,
+} from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 import { QQAdapter } from "../src/adapter.js";
 import { qqChannel } from "../src/channel.js";
 
-const ENV: Record<string, string> = {
-  APP_QQ_APP_ID: "appId-value",
-  APP_QQ_APP_SECRET: "appSecret-value",
-  APP_QQ_TOKEN_URL: "https://example.test",
-};
+const REQUIRED = ["appId", "appSecret"];
+const OPTIONAL = ["apiBase", "tokenUrl"];
+const SECRET = ["appSecret"];
+const envName = (key: string): string =>
+  "APP_QQ_" + key.replace(/[A-Z]/g, (c) => "_" + c).toUpperCase();
+const ENV: Record<string, string> = Object.fromEntries(
+  [...REQUIRED, ...OPTIONAL].map((key) => [envName(key), key + "-value"]),
+);
+const VALID = Object.fromEntries(REQUIRED.map((key) => [key, "x"]));
 
-const VALID = { appId: "x", appSecret: "x" };
+function thrownBy(config: Record<string, unknown>): unknown {
+  try {
+    qqChannel.create(config);
+  } catch (err) {
+    return err;
+  }
+  return undefined;
+}
 
 describe("qqChannel", () => {
   it("builds the adapter from the environment through createChannels", () => {
@@ -26,95 +41,45 @@ describe("qqChannel", () => {
 
   it("declares platform and the env names", () => {
     expect(qqChannel.platform).toBe("qq");
-    expect(qqChannel.config.map((f) => f.env)).toEqual([
-      "QQ_APP_ID",
-      "QQ_APP_SECRET",
-      "QQ_API_BASE",
-      "QQ_TOKEN_URL",
-    ]);
+    expect(qqChannel.config.map((f) => f.env)).toEqual(
+      [...REQUIRED, ...OPTIONAL].map((key) => envName(key).replace("APP_", "")),
+    );
   });
 
-  it("reports QQ_APP_ID as missing and rejects with missing_required_config", () => {
-    const env = { ...ENV };
-    delete env.APP_QQ_APP_ID;
-    const read = configFromEnv(qqChannel, env, "APP_");
-    expect(read.missing).toEqual(["APP_QQ_APP_ID"]);
-    const result = createChannels([{ descriptor: qqChannel, config: read.config }]);
-    expect(result.adapters).toEqual([]);
-    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toContain("appId");
-  });
+  it.each(REQUIRED)(
+    "rejects with missing_required_config when %s is unset",
+    (key) => {
+      const env = { ...ENV };
+      delete env[envName(key)];
+      const read = configFromEnv(qqChannel, env, "APP_");
+      expect(read.missing).toEqual([envName(key)]);
+      const result = createChannels([
+        { descriptor: qqChannel, config: read.config },
+      ]);
+      expect(result.adapters).toEqual([]);
+      expect(result.rejected[0]?.error.code).toBe("missing_required_config");
+      expect(result.rejected[0]?.error.message).toContain(key);
+    },
+  );
 
-  it("reports QQ_APP_SECRET as missing and rejects with missing_required_config", () => {
-    const env = { ...ENV };
-    delete env.APP_QQ_APP_SECRET;
-    const read = configFromEnv(qqChannel, env, "APP_");
-    expect(read.missing).toEqual(["APP_QQ_APP_SECRET"]);
-    const result = createChannels([{ descriptor: qqChannel, config: read.config }]);
-    expect(result.adapters).toEqual([]);
-    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toContain("appSecret");
-  });
-
-  it("refuses a numeric appId with invalid_config naming the key", () => {
-    const config = { ...VALID, appId: 42 };
-    let thrown: unknown;
-    try {
-      qqChannel.create(config);
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(GatewayConfigurationError);
-    expect((thrown as GatewayConfigurationError).code).toBe("invalid_config");
-    expect((thrown as Error).message).toContain("appId");
-  });
-
-  it("refuses a numeric appSecret with invalid_config naming the key", () => {
-    const config = { ...VALID, appSecret: 42 };
-    let thrown: unknown;
-    try {
-      qqChannel.create(config);
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(GatewayConfigurationError);
-    expect((thrown as GatewayConfigurationError).code).toBe("invalid_config");
-    expect((thrown as Error).message).toContain("appSecret");
-  });
-
-  it("refuses a numeric apiBase with invalid_config naming the key", () => {
-    const config = { ...VALID, apiBase: 42 };
-    let thrown: unknown;
-    try {
-      qqChannel.create(config);
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(GatewayConfigurationError);
-    expect((thrown as GatewayConfigurationError).code).toBe("invalid_config");
-    expect((thrown as Error).message).toContain("apiBase");
-  });
-
-  it("refuses a numeric tokenUrl with invalid_config naming the key", () => {
-    const config = { ...VALID, tokenUrl: 42 };
-    let thrown: unknown;
-    try {
-      qqChannel.create(config);
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(GatewayConfigurationError);
-    expect((thrown as GatewayConfigurationError).code).toBe("invalid_config");
-    expect((thrown as Error).message).toContain("tokenUrl");
-  });
+  it.each([...REQUIRED, ...OPTIONAL, "fetch"])(
+    "refuses a wrongly typed %s with invalid_config naming the key",
+    (key) => {
+      const thrown = thrownBy({
+        ...VALID,
+        [key]: key === "fetch" ? "nope" : 42,
+      });
+      expect(thrown).toBeInstanceOf(GatewayConfigurationError);
+      expect((thrown as GatewayConfigurationError).code).toBe("invalid_config");
+      expect((thrown as Error).message).toContain(key);
+    },
+  );
 
   it("collects exactly the secret values", () => {
     const { secrets } = configFromEnv(qqChannel, ENV, "APP_");
-    expect([...secrets].sort()).toEqual(["appSecret-value"].sort());
-  });
-
-  it("refuses a numeric optional apiBase with invalid_config naming the key", () => {
-    expect(() => qqChannel.create({ ...VALID, apiBase: 5 })).toThrow(/apiBase/);
+    expect([...secrets].sort()).toEqual(
+      SECRET.map((key) => key + "-value").sort(),
+    );
   });
 
   it("passes a supplied fetch through to the adapter", async () => {
@@ -123,27 +88,16 @@ describe("qqChannel", () => {
       calls.push(url);
       return { status: 200, text: async () => "{}" };
     };
-    const adapter = qqChannel.create({ ...VALID, fetch });
-    await adapter.connect();
+    await qqChannel.create({ ...VALID, fetch }).connect();
     expect(calls.length).toBeGreaterThan(0);
-  });
-
-  it("refuses a fetch that is not a function with invalid_config naming the key", () => {
-    let thrown: unknown;
-    try {
-      qqChannel.create({ ...VALID, fetch: "nope" });
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(GatewayConfigurationError);
-    expect((thrown as GatewayConfigurationError).code).toBe("invalid_config");
-    expect((thrown as Error).message).toContain("fetch");
   });
 
   it("is a webhook channel whose handle refuses an unsigned request with 401", async () => {
     expect(qqChannel.transport).toBe("webhook");
-    const adapter = qqChannel.create(VALID);
-    const answer = await qqChannel.webhook.handle(adapter, { rawBody: "{}", headers: {} });
+    const answer = await qqChannel.webhook.handle(qqChannel.create(VALID), {
+      rawBody: "{}",
+      headers: {},
+    });
     expect(answer.status).toBe(401);
   });
 });
