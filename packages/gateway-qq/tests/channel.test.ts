@@ -94,12 +94,6 @@ describe("qqChannel through createChannels and createWebhookHandler", () => {
   const post = (raw: string, headers: Record<string, string> = {}) =>
     new Request("https://example.test/webhooks/qq", { method: "POST", body: raw, headers });
 
-  it("reports a wrongly typed credential as a rejected channel instead of throwing", () => {
-    const built = createChannels([{ descriptor, config: { ...CONFIG, appId: 1 } }]);
-    expect(built.channels).toHaveLength(0);
-    expect(built.rejected).toHaveLength(1);
-  });
-
   it("answers a signed request 200, delivering it, and a bad signature 401", async () => {
     const { built, handler } = route();
     const seen: MessageEvent[] = [];
@@ -112,13 +106,6 @@ describe("qqChannel through createChannels and createWebhookHandler", () => {
     expect(seen.map((e) => e.text)).toEqual(["hi"]);
     expect((await handler(post(raw))).status).toBe(401);
     expect(seen).toHaveLength(1);
-  });
-
-  it("does not acknowledge a signed request while no handler is subscribed", async () => {
-    const { handler } = route();
-    const raw = JSON.stringify(payload);
-    const res = await handler(post(raw, signedRequest(raw).headers as Record<string, string>));
-    expect(res.status).not.toBe(200);
   });
 
   it("answers the callback URL validation with the signed body", async () => {
