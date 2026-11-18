@@ -287,12 +287,17 @@ describe("lineChannel env bindings", () => {
     expect(lineChannel.create({ ...CONFIG, requireMention: "false" })).toBeInstanceOf(LineAdapter);
   });
 
+  it("treats a null or empty requireMention as absent, as the core's readers do", () => {
+    for (const requireMention of [null, ""]) {
+      expect(lineChannel.create({ ...CONFIG, requireMention })).toBeInstanceOf(LineAdapter);
+    }
+  });
+
   it("throws invalid_config naming the key for a wrongly typed value", () => {
     for (const [key, config] of [
       ["channelSecret", { ...CONFIG, channelSecret: 5 }],
       ["requireMention", { ...CONFIG, requireMention: "yes" }],
-      ["requireMention", { ...CONFIG, requireMention: null }],
-      ["requireMention", { ...CONFIG, requireMention: "" }],
+      ["requireMention", { ...CONFIG, requireMention: 1 }],
     ] as const) {
       try {
         lineChannel.create(config);
