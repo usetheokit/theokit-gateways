@@ -142,6 +142,28 @@ describe("createTrigger", () => {
     expect(state.released).toBe(1);
   });
 
+  it("does not write a failure code that echoes the request body or headers", async () => {
+    const { post, trigger, state } = setup({}, { fail: "PRIVATE_DATA" });
+    await post("a", "contains PRIVATE_DATA here");
+    await trigger.idle();
+    expect(state.lines).toHaveLength(1);
+    expect(state.lines[0]).not.toContain("PRIVATE_DATA");
+    const header = setup({}, { fail: "id-777" });
+    await header.post("id-777");
+    await header.trigger.idle();
+    expect(header.state.lines[0]).not.toContain("id-777");
+  });
+
+  it("does not write a delivery failure code that echoes the request body", async () => {
+    const adapter = new FakeAdapter();
+    adapter.sendMessage = async () => ({ ok: false, error: { code: "PRIVATE_DATA", message: "" } });
+    const { post, trigger, state } = setup({ deliverTo: () => ({ adapter, channelId: "1" }) });
+    await post("a", "PRIVATE_DATA");
+    await trigger.idle();
+    expect(state.lines).toHaveLength(1);
+    expect(state.lines[0]).not.toContain("PRIVATE_DATA");
+  });
+
   it("masks secrets in the reply", async () => {
     const { post, trigger, adapter } = setup({ secrets: ["answer"] });
     await post("a");
