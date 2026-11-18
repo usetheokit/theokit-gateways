@@ -6,11 +6,20 @@
  * package assigns it to one.
  */
 
+import { GatewayConfigurationError } from "@theokit/gateway";
 import { YuanbaoAdapter } from "./adapter.js";
+
+function invalid(key: string): GatewayConfigurationError {
+  return new GatewayConfigurationError("gateway-yuanbao", {
+    code: "invalid_config",
+    message: `gateway-yuanbao: config.${key} must be a string`,
+    detail: key,
+  });
+}
 
 function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
   const value = config[key];
-  if (typeof value !== "string") throw new Error(`gateway-yuanbao: config.${key} must be a string`);
+  if (typeof value !== "string") throw invalid(key);
   return value;
 }
 
@@ -20,7 +29,7 @@ function optionalString(
 ): string | undefined {
   const value = config[key];
   if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value !== "string") throw new Error(`gateway-yuanbao: config.${key} must be a string`);
+  if (typeof value !== "string") throw invalid(key);
   return value;
 }
 
