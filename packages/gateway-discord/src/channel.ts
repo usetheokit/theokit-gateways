@@ -35,7 +35,7 @@ function readToken(config: Readonly<Record<string, unknown>>): string {
 
 function readBoolean(config: Readonly<Record<string, unknown>>, key: string): boolean | undefined {
   const value = config[key];
-  if (isAbsent(value)) return undefined;
+  if (value === undefined) return undefined;
   if (value === true || value === "true") return true;
   if (value === false || value === "false") return false;
   throw invalid(key, 'a boolean or the string "true" or "false"');

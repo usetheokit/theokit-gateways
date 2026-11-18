@@ -71,6 +71,8 @@ describe("slackChannel", () => {
     ["botToken", { botToken: "", appToken: "b" }],
     ["appToken", { botToken: "a", appToken: "" }],
     ["requireMention", { botToken: "a", appToken: "b", requireMention: "yes" }],
+    ["requireMention", { botToken: "a", appToken: "b", requireMention: null }],
+    ["requireMention", { botToken: "a", appToken: "b", requireMention: "" }],
     ["transport", { botToken: "a", appToken: "b", transport: "http" }],
     ["logLevel", { botToken: "a", appToken: "b", logLevel: "loud" }],
   ])("throws invalid_config naming %s", (key, config) => {

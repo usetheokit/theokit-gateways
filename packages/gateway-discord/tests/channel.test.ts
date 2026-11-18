@@ -69,6 +69,8 @@ describe("discordChannel", () => {
     ["intents", { token: "t", intents: { a: 1 } }],
     ["requireMention", { token: "t", requireMention: "yes" }],
     ["requireMention", { token: "t", requireMention: 1 }],
+    ["requireMention", { token: "t", requireMention: null }],
+    ["requireMention", { token: "t", requireMention: "" }],
   ])("throws invalid_config naming %s", (key, config) => {
     const err = errorOf(() => discordChannel.create(config));
     expect(err.code).toBe("invalid_config");
