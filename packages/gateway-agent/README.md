@@ -80,7 +80,7 @@ const target = parseChannelTarget("slack:C0123"); // { platform: "slack", channe
 
 ## `createChatApprover(options)`
 
-Asks an owner in chat to approve a tool call and waits for `/approve`, `/approve always` or `/deny`. Silence for `timeoutMs` (default 120 s), a failed send, an unknown conversation, or a question already pending in the same conversation all resolve `deny`. A non-owner is answered "Only an owner can do that." and the question stays pending. The three commands never reach the agent. `ask` takes the conversation key explicitly, so it does not depend on the SDK's approval context carrying one.
+`createChatApprover` takes `ChatApproverOptions` and returns a `ChatApprover` (`hook`, `ask`, `hasPending`). It asks an owner in chat to approve a tool call and waits for `/approve`, `/approve always` or `/deny`. Silence for `timeoutMs` (default 120 s), a failed send, an unknown conversation, or a question already pending in the same conversation all resolve `deny`. A non-owner is answered "Only an owner can do that." and the question stays pending. The three commands never reach the agent. `ask` takes the conversation key explicitly, so it does not depend on the SDK's approval context carrying one.
 
 ```ts
 import { createChatApprover } from "@theokit/gateway-agent";

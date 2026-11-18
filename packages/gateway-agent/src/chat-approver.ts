@@ -4,6 +4,7 @@ import { parseChatCommand } from "@theokit/gateway";
 /** What an owner answered: allow this call, allow and remember, or refuse. */
 export type ApprovalAnswer = "once" | "always" | "deny";
 
+/** Options for {@link createChatApprover}. */
 export interface ChatApproverOptions {
   /** The conversation key of an event; must match what the app passes to `ask()`. */
   conversationOf(event: MessageEvent): string;
@@ -16,6 +17,7 @@ export interface ChatApproverOptions {
   format?(question: string, timeoutMs: number): string;
 }
 
+/** A chat approver: the gateway hook plus `ask`. */
 export interface ChatApprover {
   /** Register with the gateway; answers `/approve`, `/approve always` and `/deny`. */
   readonly hook: GatewayHook;
