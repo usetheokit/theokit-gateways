@@ -325,6 +325,29 @@ const router = new SessionRouter(bindingStrategy(bindings, defaultStrategy));
 
 `accountOf(event)` says which bot account received the event when the app runs several. Creation throws `GatewayConfigurationError` with code `unknown_agent` for a default or rule naming an agent not in `agents`, and `empty_binding_rule` for a rule with no `platform`, `account` or `peer`. `bindingStrategy` prefixes the inner key with the escaped agent name, so two agents never share a session.
 
+## Session scopes
+
+`scopedStrategy` builds a `SessionRouter` strategy with a DM scope. Every segment is escaped with the shared injective `sanitize` (`_` to `__`, `-` to `_d`) and joined with `-`, so distinct inputs never share a key. `dm` is always the second key segment, so a DM key never equals a group or thread key.
+
+| `dmScope` | DM key |
+| --- | --- |
+| `main` | `_m-dm` (every DM is one conversation) |
+| `per-peer` | `_p-dm-<peer>` for a sender in `peerLinks` (`"<platform>:<senderId>"` to a peer name, shared across platforms); an unlinked sender gets the `per-channel-peer` key |
+| `per-channel-peer` | `<platform>-dm-<sender>` |
+| `per-account-channel-peer` | `<platform>-dm-<accountLabel>-<sender>` (needs `accountLabel`) |
+
+Groups ignore `dmScope`: `<platform>-grp-<channel>`, or `<platform>-grp-<channel>-<sender>` with `groupScope: "channel-sender"`. A thread with a topic is `<platform>-tpc-<channel>-<topic>`.
+
+```ts
+import { scopedStrategy, SessionRouter } from "@theokit/gateway";
+
+const router = new SessionRouter(
+  scopedStrategy({ dmScope: "per-peer", peerLinks: new Map([["telegram:42", "ana"], ["slack:U1", "ana"]]) }),
+);
+```
+
+Creation throws `GatewayConfigurationError` with code `invalid_session_scope` for `per-account-channel-peer` without a non-empty `accountLabel`, or for an empty peer name. It never throws per event.
+
 ## Architecture (5 pieces)
 
 | Module | Responsibility |

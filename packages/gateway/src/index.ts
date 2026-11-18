@@ -112,6 +112,11 @@ export {
   defaultStrategy,
   SessionRouter,
 } from "./session/router.js";
+export {
+  type DmScope,
+  type ScopedStrategyOptions,
+  scopedStrategy,
+} from "./session/scoped-strategy.js";
 // Text
 export { type ChannelRendering, channelRendering } from "./text/channel-rendering.js";
 export {

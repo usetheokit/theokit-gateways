@@ -285,6 +285,8 @@ describe("live-test readiness", () => {
         "Covered by packages/gateway/tests/hooks/chat-command.test.ts",
       helpText:
         "pure function, no I/O. Covered by packages/gateway/tests/hooks/chat-command.test.ts",
+      scopedStrategy:
+        "pure event -> session key, no I/O. Covered by packages/gateway/tests/session/scoped-strategy.test.ts",
       createAgentBindings:
         "pure rule matching, no I/O. Covered by packages/gateway/tests/agent-bindings.test.ts",
       bindingStrategy:
