@@ -12,7 +12,7 @@
 
 import { GatewayConfigurationError } from "../errors/config-error.js";
 import type { MessageEvent as GatewayMessageEvent } from "../types/message-event.js";
-import type { AgentIdStrategy } from "./router.js";
+import { type AgentIdStrategy, sanitize } from "./router.js";
 
 /** How DMs are keyed: one conversation, per peer, per channel and peer, or per account too. */
 export type DmScope = "main" | "per-peer" | "per-channel-peer" | "per-account-channel-peer";
@@ -28,8 +28,7 @@ export interface ScopedStrategyOptions {
   readonly groupScope?: "channel" | "channel-sender";
 }
 
-const enc = encodeURIComponent;
-const join = (...segments: readonly string[]): string => segments.map(enc).join(":");
+const join = (...segments: readonly string[]): string => segments.map(sanitize).join("-");
 
 function invalid(message: string, detail?: string): GatewayConfigurationError {
   return new GatewayConfigurationError("gateway", {
@@ -41,11 +40,11 @@ function invalid(message: string, detail?: string): GatewayConfigurationError {
 
 /**
  * Builds a strategy for the chosen DM scope. Keys:
- * `main` → `@main:dm`; `per-peer` linked → `@peer:dm:<peer>`, unlinked → the
- * per-channel-peer key; `per-channel-peer` → `<platform>:dm:<sender>`;
- * `per-account-channel-peer` → `<platform>:dm:<account>:<sender>`.
- * Groups are `<platform>:grp:<channel>[:<sender>]`, topic threads
- * `<platform>:tpc:<channel>:<topic>`. Every segment is URI-encoded.
+ * `main` → `_m-dm`; `per-peer` linked → `_p-dm-<peer>`, unlinked → the
+ * per-channel-peer key; `per-channel-peer` → `<platform>-dm-<sender>`;
+ * `per-account-channel-peer` → `<platform>-dm-<account>-<sender>`.
+ * Groups are `<platform>-grp-<channel>[-<sender>]`, topic threads
+ * `<platform>-tpc-<channel>-<topic>`. Every segment is escaped with `sanitize`.
  * Throws `GatewayConfigurationError` (`invalid_session_scope`) on bad options, never per event.
  */
 export function scopedStrategy(options: ScopedStrategyOptions): AgentIdStrategy {
@@ -65,10 +64,10 @@ export function scopedStrategy(options: ScopedStrategyOptions): AgentIdStrategy 
   const dmKey = (platform: string, senderId: string): string => {
     switch (dmScope) {
       case "main":
-        return "@main:dm";
+        return "_m-dm";
       case "per-peer": {
         const peer = peerLinks?.get(`${platform}:${senderId}`);
-        return peer === undefined ? join(platform, "dm", senderId) : `@peer:dm:${enc(peer)}`;
+        return peer === undefined ? join(platform, "dm", senderId) : `_p-dm-${sanitize(peer)}`;
       }
       case "per-channel-peer":
         return join(platform, "dm", senderId);

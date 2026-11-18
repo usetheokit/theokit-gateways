@@ -299,16 +299,16 @@ const router = new SessionRouter(bindingStrategy(bindings, defaultStrategy));
 
 ## Session scopes
 
-`scopedStrategy` builds a `SessionRouter` strategy with a DM scope. Every segment is `encodeURIComponent`-encoded and joined with `:`, so distinct inputs never share a key. `dm` is always the second key segment, so a DM key never equals a group or thread key.
+`scopedStrategy` builds a `SessionRouter` strategy with a DM scope. Every segment is escaped with the shared injective `sanitize` (`_` to `__`, `-` to `_d`) and joined with `-`, so distinct inputs never share a key. `dm` is always the second key segment, so a DM key never equals a group or thread key.
 
 | `dmScope` | DM key |
 | --- | --- |
-| `main` | `@main:dm` (every DM is one conversation) |
-| `per-peer` | `@peer:dm:<peer>` for a sender in `peerLinks` (`"<platform>:<senderId>"` to a peer name, shared across platforms); an unlinked sender gets the `per-channel-peer` key |
-| `per-channel-peer` | `<platform>:dm:<sender>` |
-| `per-account-channel-peer` | `<platform>:dm:<accountLabel>:<sender>` (needs `accountLabel`) |
+| `main` | `_m-dm` (every DM is one conversation) |
+| `per-peer` | `_p-dm-<peer>` for a sender in `peerLinks` (`"<platform>:<senderId>"` to a peer name, shared across platforms); an unlinked sender gets the `per-channel-peer` key |
+| `per-channel-peer` | `<platform>-dm-<sender>` |
+| `per-account-channel-peer` | `<platform>-dm-<accountLabel>-<sender>` (needs `accountLabel`) |
 
-Groups ignore `dmScope`: `<platform>:grp:<channel>`, or `<platform>:grp:<channel>:<sender>` with `groupScope: "channel-sender"`. A thread with a topic is `<platform>:tpc:<channel>:<topic>`.
+Groups ignore `dmScope`: `<platform>-grp-<channel>`, or `<platform>-grp-<channel>-<sender>` with `groupScope: "channel-sender"`. A thread with a topic is `<platform>-tpc-<channel>-<topic>`.
 
 ```ts
 import { scopedStrategy, SessionRouter } from "@theokit/gateway";
