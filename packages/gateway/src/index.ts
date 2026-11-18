@@ -16,6 +16,11 @@ export {
   type WeixinWebhookAnswer,
 } from "./adapter/weixin-base.js";
 export { parseFlatXml } from "./adapter/weixin-xml.js";
+export {
+  type ChannelConfigInput,
+  type ChannelConfigReaders,
+  channelConfigReaders,
+} from "./channel/channel-config-readers.js";
 // Channels described as data (B-018)
 export type {
   ChannelConfigField,
@@ -27,11 +32,6 @@ export type {
   WebhookRequest,
 } from "./channel/channel-descriptor.js";
 export { isAuthenticatedSender } from "./channel/channel-descriptor.js";
-export {
-  type ChannelConfigInput,
-  type ChannelConfigReaders,
-  channelConfigReaders,
-} from "./channel/channel-config-readers.js";
 export { configFromEnv, type EnvConfig, selectVariant } from "./channel/config-from-env.js";
 export {
   type BuiltChannel,

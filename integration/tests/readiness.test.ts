@@ -235,6 +235,9 @@ describe("live-test readiness", () => {
       createWebhookHandler:
         "a Fetch Request -> Response router with no network I/O of its own; a live run would need a " +
         "public URL the platform can reach. Covered by packages/gateway/tests/fetch-webhook-handler.test.ts",
+      channelConfigReaders:
+        "pure config validation, no I/O. Covered by " +
+        "packages/gateway/tests/channel/channel-config-readers.test.ts and the LINE channel tests",
       statusForDeliver:
         "pure outcomes -> status, no I/O. Covered by packages/gateway/tests/deliver-status.test.ts",
       parseFlatXml:
