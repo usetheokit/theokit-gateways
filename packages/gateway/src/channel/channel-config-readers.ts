@@ -25,10 +25,8 @@ export interface ChannelConfigReaders {
   requiredString(config: ChannelConfigInput, key: string): string;
   /** An optional boolean; absent gives `undefined`, a non-boolean throws. */
   readBoolean(config: ChannelConfigInput, key: string): boolean | undefined;
-  /**
-   * Readers for values that may arrive as env strings. Only `undefined` is absent: `null` and
-   * `""` are wrong shapes and throw `invalid_config`.
-   */
+  // The four readers below take values that may arrive as env strings. Only `undefined` is
+  // absent: `null` and `""` are wrong shapes and throw `invalid_config`.
   /** An optional non-empty string. */
   readStrictString(config: ChannelConfigInput, key: string): string | undefined;
   /** An optional boolean, given as a boolean or the string `"true"` / `"false"`. */
