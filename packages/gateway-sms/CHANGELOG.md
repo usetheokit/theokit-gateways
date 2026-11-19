@@ -1,11 +1,5 @@
 # Changelog
 
-## 0.5.0
-
-### Minor Changes
-
-- 2d91e29: Ship `tlonUrbitChannel` and `smsChannel` (Twilio) `ChannelDescriptor`s with env bindings for `createChannels` and `configFromEnv`.
-
 ## 0.4.0
 
 ### Minor Changes

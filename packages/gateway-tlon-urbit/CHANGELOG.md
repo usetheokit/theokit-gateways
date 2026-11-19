@@ -1,11 +1,5 @@
 # @theokit/gateway-tlon-urbit
 
-## 0.2.0
-
-### Minor Changes
-
-- 2d91e29: Ship `tlonUrbitChannel` and `smsChannel` (Twilio) `ChannelDescriptor`s with env bindings for `createChannels` and `configFromEnv`.
-
 ## 0.1.2
 
 ### Patch Changes

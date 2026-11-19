@@ -1,11 +1,5 @@
 # Changelog
 
-## 0.8.0
-
-### Minor Changes
-
-- 9d477da: Export a `ChannelDescriptor` with env bindings: `whatsappChannel` (variants `cloud` and `baileys`), `teamsChannel` and `googleChatChannel`, for `createChannels` and `configFromEnv`. The `@theokit/gateway` peer range is now `>=0.20.0 <1.0.0`.
-
 ## 0.7.0
 
 ### Minor Changes
