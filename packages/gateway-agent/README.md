@@ -104,3 +104,28 @@ const trigger = createTrigger({
 //   return trigger.handle(request);
 await trigger.idle(); // on shutdown
 ```
+
+## `createChatApprover(options)`
+
+Asks an owner in the chat to approve a tool call and waits for `/approve`, `/approve always` or `/deny`.
+`ask` resolves `deny` when no message was seen in the conversation, when a question is already pending
+there, when `send` throws, and after `timeoutMs` (default 120 s). Only an owner's answer counts; a
+non-owner is told "Only an owner can do that." and the question stays open. The hook blocks the three
+commands in every case. Register it before the agent handler, and use the same key in `conversationOf`
+and `ask`.
+
+```ts
+const approver = createChatApprover({
+  conversationOf: (event) => router.sessionKey(event),
+  isOwner: (event) => owners.has(`${event.platform}:${event.sender.id}`),
+  send: (event, text) => adapterFor(event.platform).send({ channelId: event.channel.id, text }),
+});
+
+// GatewayRunner({ hooks: [approver.hook], handler, ... })
+
+// In the SDK's tool approval callback, pass the conversation of the session that ran the tool:
+async function approveTool(conversation: string, toolName: string, input: unknown) {
+  const { answer, by } = await approver.ask(conversation, `${toolName} ${JSON.stringify(input)}`);
+  return { allow: answer !== "deny", remember: answer === "always", by };
+}
+```
