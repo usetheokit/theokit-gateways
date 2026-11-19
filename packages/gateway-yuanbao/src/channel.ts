@@ -5,24 +5,12 @@
  * integration package assigns it to one, so a drift between the two fails there.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders, ingestResultForStatus, webhookHeader } from "@theokit/gateway";
 import { YuanbaoAdapter } from "./adapter.js";
 
-/** A required string; absent, empty or a non-string is a refused configuration. */
-function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
-  const value = config[key];
-  if (typeof value === "string" && value !== "") return value;
-  throw new GatewayConfigurationError("gateway-yuanbao", {
-    code: "invalid_config",
-    message: `gateway-yuanbao: config.${key} must be a non-empty string`,
-    detail: key,
-  });
-}
+const { requiredString } = channelConfigReaders("gateway-yuanbao");
 
 type Headers = Readonly<Record<string, string | undefined>>;
-
-const header = (headers: Headers, name: string): string | undefined =>
-  Object.entries(headers).find(([key]) => key.toLowerCase() === name)?.[1];
 
 const CONFIG = [
   {
@@ -77,8 +65,8 @@ export const yuanbaoChannel = {
     ): boolean {
       return adapter.verifyWebhook(
         request.rawBody,
-        header(request.headers, "x-signature"),
-        header(request.headers, "x-timestamp"),
+        webhookHeader(request.headers, "x-signature"),
+        webhookHeader(request.headers, "x-timestamp"),
       );
     },
     async ingest(
@@ -86,8 +74,7 @@ export const yuanbaoChannel = {
       payload: unknown,
     ): Promise<"delivered" | "malformed" | "no_handler"> {
       const { status } = await adapter.dispatchWebhookPayload(payload);
-      if (status === 400) return "malformed";
-      return status === 503 ? "no_handler" : "delivered";
+      return ingestResultForStatus(status);
     },
   },
 };
