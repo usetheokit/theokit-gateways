@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -30,10 +31,7 @@ describe("resolveSf", () => {
   });
 });
 
-describe.each([
-  ["bot-realtime", "@theokit/gateway-bot-realtime"],
-  ["gateway-zalo", "@theokit/gateway-zalo"],
-])("sonar coverage for packages/%s", (name, pkgName) => {
+describe.each([["bot-realtime"], ["gateway-zalo"]])("sonar coverage for packages/%s", (name) => {
   const dir = `packages/${name}`;
 
   it("lists the source root, test root and LCOV report", () => {
@@ -58,12 +56,24 @@ describe.each([
   });
 
   it("generates a report whose records land on indexed Sonar source files", () => {
-    const lcov = resolve(root, dir, "coverage/lcov.info");
-    rmSync(resolve(root, dir, "coverage"), { recursive: true, force: true });
-    execFileSync("pnpm", ["--filter", pkgName, "run", "test"], { cwd: root, stdio: "pipe" });
+    // An isolated reports directory: the shared `coverage/` may be written by a concurrent
+    // `pnpm -r run test`, so this run neither deletes nor overwrites it.
+    const out = mkdtempSync(resolve(tmpdir(), "sonar-cov-"));
+    const lcov = resolve(out, "lcov.info");
+    try {
+      execFileSync(
+        "pnpm",
+        ["exec", "vitest", "run", "--coverage", `--coverage.reportsDirectory=${out}`],
+        { cwd: resolve(root, dir), stdio: "pipe" },
+      );
+    } catch (e) {
+      rmSync(out, { recursive: true, force: true });
+      throw e;
+    }
     expect(existsSync(lcov)).toBe(true);
 
     const text = readFileSync(lcov, "utf8");
+    rmSync(out, { recursive: true, force: true });
     const files = [...text.matchAll(/^SF:(.+)$/gm)].map((m) => m[1]);
     expect(files.length).toBeGreaterThan(0);
     const sources = list("sonar.sources");
@@ -79,4 +89,12 @@ describe.each([
     for (const f of src) expect(files.map(resolveSf)).toContain(f);
     expect(text).toMatch(/^LH:[1-9]\d*$/m);
   }, 120_000);
+});
+
+describe("coverage:sonar", () => {
+  it("runs the coverage suites and then the Sonar scanner on this properties file", () => {
+    const rootPkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+    const cmd = rootPkg.scripts["coverage:sonar"];
+    expect(cmd).toMatch(/^pnpm -r run test && .*@sonar\/scan/);
+  });
 });
