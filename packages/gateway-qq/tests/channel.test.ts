@@ -5,10 +5,10 @@ import { QQAdapter } from "../src/adapter.js";
 import { qqChannel } from "../src/channel.js";
 
 const ENV = {
-  "APP_QQ_APP_ID": "app-1",
-  "APP_QQ_APP_SECRET": "s3cret-qq"
+  APP_QQ_APP_ID: "app-1",
+  APP_QQ_APP_SECRET: "s3cret-qq",
 };
-const KEYS: Record<string, string> = {"APP_QQ_APP_ID": "appId", "APP_QQ_APP_SECRET": "appSecret"};
+const KEYS: Record<string, string> = { APP_QQ_APP_ID: "appId", APP_QQ_APP_SECRET: "appSecret" };
 
 describe("qqChannel", () => {
   it("builds the adapter from the environment through createChannels", () => {
@@ -21,9 +21,10 @@ describe("qqChannel", () => {
   it("binds QQ_* variables and is a webhook channel", () => {
     expect(qqChannel.platform).toBe("qq");
     expect(qqChannel.transport).toBe("webhook");
-    expect(qqChannel.config.filter((f) => f.required).map((f) => f.env)).toEqual(
-      ["QQ_APP_ID", "QQ_APP_SECRET"],
-    );
+    expect(qqChannel.config.filter((f) => f.required).map((f) => f.env)).toEqual([
+      "QQ_APP_ID",
+      "QQ_APP_SECRET",
+    ]);
   });
 
   it.each(Object.keys(ENV))("rejects with missing_required_config when %s is unset", (name) => {

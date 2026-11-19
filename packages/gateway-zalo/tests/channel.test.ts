@@ -5,11 +5,15 @@ import { ZaloAdapter } from "../src/adapter.js";
 import { zaloChannel } from "../src/channel.js";
 
 const ENV = {
-  "APP_ZALO_APP_ID": "zid",
-  "APP_ZALO_OA_SECRET_KEY": "zalo-oa-key",
-  "APP_ZALO_ACCESS_TOKEN": "zalo-token"
+  APP_ZALO_APP_ID: "zid",
+  APP_ZALO_OA_SECRET_KEY: "zalo-oa-key",
+  APP_ZALO_ACCESS_TOKEN: "zalo-token",
 };
-const KEYS: Record<string, string> = {"APP_ZALO_APP_ID": "appId", "APP_ZALO_OA_SECRET_KEY": "oaSecretKey", "APP_ZALO_ACCESS_TOKEN": "accessToken"};
+const KEYS: Record<string, string> = {
+  APP_ZALO_APP_ID: "appId",
+  APP_ZALO_OA_SECRET_KEY: "oaSecretKey",
+  APP_ZALO_ACCESS_TOKEN: "accessToken",
+};
 
 describe("zaloChannel", () => {
   it("builds the adapter from the environment through createChannels", () => {
@@ -22,9 +26,11 @@ describe("zaloChannel", () => {
   it("binds ZALO_* variables and is a webhook channel", () => {
     expect(zaloChannel.platform).toBe("zalo");
     expect(zaloChannel.transport).toBe("webhook");
-    expect(zaloChannel.config.filter((f) => f.required).map((f) => f.env)).toEqual(
-      ["ZALO_APP_ID", "ZALO_OA_SECRET_KEY", "ZALO_ACCESS_TOKEN"],
-    );
+    expect(zaloChannel.config.filter((f) => f.required).map((f) => f.env)).toEqual([
+      "ZALO_APP_ID",
+      "ZALO_OA_SECRET_KEY",
+      "ZALO_ACCESS_TOKEN",
+    ]);
   });
 
   it.each(Object.keys(ENV))("rejects with missing_required_config when %s is unset", (name) => {
@@ -46,7 +52,9 @@ describe("zaloChannel", () => {
         message: expect.stringContaining("oaSecretKey"),
       }),
     );
-    expect(() => zaloChannel.create({ ...config, oaSecretKey: 42 })).toThrow(GatewayConfigurationError);
+    expect(() => zaloChannel.create({ ...config, oaSecretKey: 42 })).toThrow(
+      GatewayConfigurationError,
+    );
   });
 
   it("collects exactly the secret values", () => {
