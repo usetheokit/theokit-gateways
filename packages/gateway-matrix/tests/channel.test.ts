@@ -33,16 +33,15 @@ describe("matrixChannel", () => {
     });
   }
 
-  it("rejects a wrongly typed value with invalid_config naming the key", () => {
+  it.each(["homeserverUrl", "accessToken", "userId"])("rejects a number for %s with invalid_config naming the key", (key) => {
     const { config } = configFromEnv(matrixChannel, ENV, "APP_");
-    expect(() => matrixChannel.create({ ...config, homeserverUrl: 42 })).toThrow(
-      GatewayConfigurationError,
-    );
+    expect.assertions(3);
     try {
-      matrixChannel.create({ ...config, homeserverUrl: 42 });
+      matrixChannel.create({ ...config, [key]: 42 });
     } catch (err) {
+      expect(err).toBeInstanceOf(GatewayConfigurationError);
       expect((err as GatewayConfigurationError).code).toBe("invalid_config");
-      expect((err as Error).message).toContain("homeserverUrl");
+      expect((err as Error).message).toContain(key);
     }
   });
 
@@ -56,7 +55,9 @@ describe("matrixChannel", () => {
 
   it("lists exactly the secret fields in configFromEnv(...).secrets", () => {
     const all = { ...ENV };
-    for (const f of matrixChannel.config) if (f.env !== undefined) all[`APP_${f.env}`] ??= "1";
+    for (const f of matrixChannel.config) {
+      if (f.env !== undefined) all[`APP_${f.env}`] ??= `value-of-${f.key}`;
+    }
     const { secrets } = configFromEnv(matrixChannel, all, "APP_");
     const expected = matrixChannel.config
       .filter((f) => f.secret && f.env !== undefined)

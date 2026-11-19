@@ -34,18 +34,20 @@ describe("emailChannel", () => {
     });
   }
 
-  it("rejects a wrongly typed value with invalid_config naming the key", () => {
-    const { config } = configFromEnv(emailChannel, ENV, "APP_");
-    expect(() => emailChannel.create({ ...config, address: 42 })).toThrow(
-      GatewayConfigurationError,
-    );
-    try {
-      emailChannel.create({ ...config, address: 42 });
-    } catch (err) {
-      expect((err as GatewayConfigurationError).code).toBe("invalid_config");
-      expect((err as Error).message).toContain("address");
-    }
-  });
+  it.each(["address", "password", "imapHost", "smtpHost"])(
+    "rejects a number for %s with invalid_config naming the key",
+    (key) => {
+      const { config } = configFromEnv(emailChannel, ENV, "APP_");
+      expect.assertions(3);
+      try {
+        emailChannel.create({ ...config, [key]: 42 });
+      } catch (err) {
+        expect(err).toBeInstanceOf(GatewayConfigurationError);
+        expect((err as GatewayConfigurationError).code).toBe("invalid_config");
+        expect((err as Error).message).toContain(key);
+      }
+    },
+  );
 
   it("rejects a malformed boolean and number", () => {
     const { config } = configFromEnv(emailChannel, ENV, "APP_");
@@ -57,7 +59,9 @@ describe("emailChannel", () => {
 
   it("lists exactly the secret fields in configFromEnv(...).secrets", () => {
     const all = { ...ENV };
-    for (const f of emailChannel.config) if (f.env !== undefined) all[`APP_${f.env}`] ??= "1";
+    for (const f of emailChannel.config) {
+      if (f.env !== undefined) all[`APP_${f.env}`] ??= `value-of-${f.key}`;
+    }
     const { secrets } = configFromEnv(emailChannel, all, "APP_");
     const expected = emailChannel.config
       .filter((f) => f.secret && f.env !== undefined)

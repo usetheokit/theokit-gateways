@@ -15,15 +15,18 @@ const readers = channelConfigReaders(
 );
 const { invalid } = readers;
 
-/** Only `undefined` is absent: `null` and `""` are wrong shapes and throw `invalid_config`. */
-const isAbsent = (value: unknown): boolean => value === undefined;
+type Config = Readonly<Record<string, unknown>>;
 
+/** Readers for values that may arrive as env strings; only `undefined` is absent. */
 const read = {
   string: readers.requiredString,
-  optionalString: readers.readStrictString,
-  boolean: readers.readFlag,
-  number: readers.readNumber,
-  list: readers.readList,
+  boolean(config: Config, key: string): boolean | undefined {
+    const value = config[key];
+    if (value === undefined) return undefined;
+    if (value === true || value === "true") return true;
+    if (value === false || value === "false") return false;
+    throw invalid(key, 'a boolean or the string "true" or "false"');
+  },
 };
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */

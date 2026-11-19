@@ -1,5 +1,6 @@
 ---
 "@theokit/gateway": minor
+"@theokit/gateway-line": patch
 ---
 
-`channelConfigReaders` also returns `readStrictString`, `readFlag`, `readNumber` and `readList`: readers for config values that may arrive as env strings (`"true"`, a digit string, a comma-separated list).
+`@theokit/gateway` exports `channelConfigReaders(prefix)`, the config readers (`invalid`, `isAbsent`, `readString`, `requiredString`, `readBoolean`, `readFunction`) that channel packages each copied. `@theokit/gateway-line` keeps its own copy of the readers until `@theokit/gateway@0.22.0` ships the export, and raises its `@theokit/gateway` peer floor to `>=0.21.0`.

@@ -1,19 +1,5 @@
 # Changelog
 
-## 0.22.0
-
-### Minor Changes
-
-- 963a0ff: `@theokit/gateway` exports `channelConfigReaders(prefix)`, the config readers (`invalid`, `isAbsent`, `readString`, `requiredString`, `readBoolean`, `readFunction`) that channel packages each copied. `@theokit/gateway-line` uses them and raises its `@theokit/gateway` peer floor to `>=0.21.0`.
-- 4e7c21b: Add `CredentialStore` and `createFileCredentialStore` to `@theokit/gateway`, and `credentialStore` / `credentialKey` to `XAdapterOptions` so a rotated X refresh token survives a restart.
-- a12e04c: Raise the `@theokit/gateway` peer floor of `@theokit/gateway-x` to 0.20.0 and bump the workspace `@theokit/gateway` version to match.
-
-### Patch Changes
-
-- 6c60bb6: Tidy the `configFromEnv` internals and cover more edge cases in its tests. No behaviour change.
-- 2c0f560: `createChannels` now builds the environment variable names in its missing-config rejections with the same internal `envVarName` helper as `configFromEnv`, so both report the same full names.
-- 8b46fb4: `createChannels` names the missing environment variable (with the optional `ChannelEntry.envPrefix`) instead of the config key in `missing_required_config` rejections.
-
 ## 0.21.0
 
 ### Minor Changes

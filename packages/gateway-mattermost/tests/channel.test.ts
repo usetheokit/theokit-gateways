@@ -32,16 +32,15 @@ describe("mattermostChannel", () => {
     });
   }
 
-  it("rejects a wrongly typed value with invalid_config naming the key", () => {
+  it.each(["baseUrl", "accessToken"])("rejects a number for %s with invalid_config naming the key", (key) => {
     const { config } = configFromEnv(mattermostChannel, ENV, "APP_");
-    expect(() => mattermostChannel.create({ ...config, baseUrl: 42 })).toThrow(
-      GatewayConfigurationError,
-    );
+    expect.assertions(3);
     try {
-      mattermostChannel.create({ ...config, baseUrl: 42 });
+      mattermostChannel.create({ ...config, [key]: 42 });
     } catch (err) {
+      expect(err).toBeInstanceOf(GatewayConfigurationError);
       expect((err as GatewayConfigurationError).code).toBe("invalid_config");
-      expect((err as Error).message).toContain("baseUrl");
+      expect((err as Error).message).toContain(key);
     }
   });
 
@@ -55,7 +54,9 @@ describe("mattermostChannel", () => {
 
   it("lists exactly the secret fields in configFromEnv(...).secrets", () => {
     const all = { ...ENV };
-    for (const f of mattermostChannel.config) if (f.env !== undefined) all[`APP_${f.env}`] ??= "1";
+    for (const f of mattermostChannel.config) {
+      if (f.env !== undefined) all[`APP_${f.env}`] ??= `value-of-${f.key}`;
+    }
     const { secrets } = configFromEnv(mattermostChannel, all, "APP_");
     const expected = mattermostChannel.config
       .filter((f) => f.secret && f.env !== undefined)

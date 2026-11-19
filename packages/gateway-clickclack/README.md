@@ -41,26 +41,3 @@ before relying on this.
 ## Capabilities
 
 `adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.
-
-## Channel descriptor
-
-`clickclackChannel` describes this channel as data for `createChannels` and `configFromEnv` in
-`@theokit/gateway`: a `socket` channel (the adapter opens its own realtime connection).
-
-| Config key | Environment variable | Required | Secret |
-| --- | --- | --- | --- |
-| `baseUrl` | `CLICKCLACK_BASE_URL` | yes | no |
-| `token` | `CLICKCLACK_TOKEN` | yes | yes |
-| `workspaceId` | `CLICKCLACK_WORKSPACE_ID` | yes | no |
-| `botUserId` | `CLICKCLACK_BOT_USER_ID` | yes | no |
-| `reconnectDelayMs` | `CLICKCLACK_RECONNECT_DELAY_MS` | no | no |
-
-```ts
-import { configFromEnv, createChannels } from "@theokit/gateway";
-import { clickclackChannel } from "@theokit/gateway-clickclack";
-
-const { config, missing, secrets } = configFromEnv(clickclackChannel, process.env, "APP_");
-const { adapters, rejected } = createChannels([{ descriptor: clickclackChannel, config }]);
-```
-
-A wrongly typed value makes `create` throw `GatewayConfigurationError` (prefix `gateway-clickclack`) with code `invalid_config`.
