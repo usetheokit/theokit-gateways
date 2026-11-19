@@ -60,6 +60,17 @@ describe("sonar analysis roots", () => {
     }
   });
 
+  it("keeps packages without an imported lcov report out of the coverage metric", () => {
+    const reports = prop("sonar.javascript.lcov.reportPaths");
+    const excluded = prop("sonar.coverage.exclusions").map(toRegExp);
+    const root = new URL("../../packages/", import.meta.url);
+    for (const pkg of readdirSync(root)) {
+      if (!existsSync(new URL(`${pkg}/src`, root))) continue;
+      if (reports.includes(`packages/${pkg}/coverage/lcov.info`)) continue;
+      expect(excluded.some((re) => re.test(`packages/${pkg}/src/index.ts`))).toBe(true);
+    }
+  });
+
   it("does not classify tests as test code, which has no duplication analysis", () => {
     expect(prop("sonar.tests")).toEqual([]);
     expect(prop("sonar.test.inclusions")).toEqual([]);
