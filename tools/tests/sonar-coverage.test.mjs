@@ -1,4 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
 const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
@@ -37,20 +40,47 @@ test.each(PACKAGES)("%s writes lcov and is known to sonar", (dir) => {
   expect(lcov.split("=")[1].split(",")).toContain(`${dir}/coverage/lcov.info`);
 });
 
-// Evidence from a real run: when coverage was generated (coverage:sonar), the lcov must
-// cover files that sonar.sources knows, so the scanner imports it rather than skipping it.
+// The CI step `pnpm -r run test` is the only path that runs for every analysis, so the
+// package `test` script must itself write the lcov. This runs that exact script and reads
+// what it wrote: a missing report, an empty one, or one whose files the scanner would not
+// resolve against sonar.sources/sonar.tests fails here (the scanner skips unmatched lcov entries).
 test.each(PACKAGES)(
-  "%s lcov, when generated, only lists files under its sonar source dir",
+  "%s: its test script generates an lcov the scanner imports",
   (dir) => {
-    const path = new URL(`../../${dir}/coverage/lcov.info`, import.meta.url);
-    if (!existsSync(path)) return;
-    const files = readFileSync(path, "utf8")
+    const name = json(`${dir}/package.json`).name;
+    expect(json(`${dir}/package.json`).scripts.test).toContain("--coverage.reporter=lcov");
+    const lcovUrl = new URL(`../../${dir}/coverage/lcov.info`, import.meta.url);
+    rmSync(lcovUrl, { force: true });
+    const run = spawnSync("pnpm", ["--filter", name, "run", "test"], {
+      cwd: fileURLToPath(new URL("../../", import.meta.url)),
+      encoding: "utf8",
+    });
+    expect(run.status, run.stdout + run.stderr).toBe(0);
+    expect(existsSync(lcovUrl), `${dir}/coverage/lcov.info was not written`).toBe(true);
+
+    const files = readFileSync(lcovUrl, "utf8")
       .split("\n")
       .filter((l) => l.startsWith("SF:"))
-      .map((l) => l.slice(3));
+      .map((l) => l.slice(3).replaceAll("\\", "/"));
     expect(files.length).toBeGreaterThan(0);
-    for (const f of files) expect(f.replaceAll("\\", "/")).toMatch(/^(src\/|\/.*\/src\/)/);
+    const sources = read("sonar-project.properties")
+      .split("\n")
+      .find((l) => l.startsWith("sonar.sources="))
+      .split("=")[1]
+      .split(",");
+    expect(sources).toContain(`${dir}/src`);
+    for (const f of files) {
+      const abs = resolve(fileURLToPath(new URL(`../../${dir}/`, import.meta.url)), f);
+      expect(
+        abs.startsWith(resolve(fileURLToPath(new URL(`../../${dir}/src/`, import.meta.url)))),
+        f,
+      ).toBe(true);
+      expect(existsSync(abs), `${f} listed in lcov does not exist`).toBe(true);
+    }
+    // The text-summary reporter prints the totals, evidence that coverage was measured.
+    expect(run.stdout).toMatch(/Coverage summary/);
   },
+  240_000,
 );
 
 test("the sonar scan runs the report generation and the scanner in one command, in order", () => {

@@ -33,7 +33,7 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --coverage --coverage.provider=v8 --coverage.reporter=lcov --coverage.reporter=text-summary --coverage.include=src/**",
     "coverage": "vitest run --coverage --coverage.provider=v8 --coverage.reporter=lcov --coverage.reporter=text-summary --coverage.include=src/**"
   },
   "devDependencies": {
