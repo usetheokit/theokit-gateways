@@ -41,7 +41,7 @@
     "test:mutation": "stryker run"
   },
   "peerDependencies": {
-    "@theokit/sdk": ">=2.18.0 <6"
+    "@theokit/sdk": ">=4.62.0 <6"
   },
   "devDependencies": {
     "@stryker-mutator/core": "10",
