@@ -90,3 +90,33 @@ test("the sonar scan runs the report generation and the scanner in one command, 
   expect(order.every((i) => i >= 0)).toBe(true);
   expect([...order].sort((a, b) => a - b)).toEqual(order);
 });
+
+// Runs the root command the Sonar scan runs first, then checks the evidence the scanner
+// needs: both lcov files exist, are non-empty, and every SF: entry sits under the
+// sonar.sources of its package and is listed in sonar.javascript.lcov.reportPaths.
+test(
+  "pnpm coverage:sonar really writes both reports the scanner is told to import",
+  () => {
+    const root = fileURLToPath(new URL("../../", import.meta.url));
+    for (const dir of PACKAGES) rmSync(resolve(root, dir, "coverage/lcov.info"), { force: true });
+    const run = spawnSync("pnpm", ["coverage:sonar"], { cwd: root, encoding: "utf8" });
+    expect(run.status, run.stdout + run.stderr).toBe(0);
+    const reportPaths = read("sonar-project.properties")
+      .split("\n")
+      .find((l) => l.startsWith("sonar.javascript.lcov.reportPaths="))
+      .split("=")[1]
+      .split(",");
+    for (const dir of PACKAGES) {
+      expect(reportPaths).toContain(`${dir}/coverage/lcov.info`);
+      const file = resolve(root, dir, "coverage/lcov.info");
+      expect(existsSync(file), `${dir} lcov missing after coverage:sonar`).toBe(true);
+      const sf = readFileSync(file, "utf8")
+        .split("\n")
+        .filter((l) => l.startsWith("SF:"))
+        .map((l) => resolve(root, dir, l.slice(3)));
+      expect(sf.length).toBeGreaterThan(0);
+      for (const f of sf) expect(f.startsWith(resolve(root, dir, "src")), f).toBe(true);
+    }
+  },
+  480_000,
+);
