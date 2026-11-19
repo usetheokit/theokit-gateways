@@ -9,5 +9,10 @@ export default defineConfig({
     maxWorkers: Math.max(2, cpus().length - 4),
     include: ["tests/**/*.test.ts"],
     environment: "node",
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.ts"],
+      reporter: ["text-summary", "lcov"],
+    },
   },
 });
