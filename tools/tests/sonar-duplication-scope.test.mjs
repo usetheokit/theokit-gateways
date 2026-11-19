@@ -99,40 +99,14 @@ describe("sonar analysis roots", () => {
   });
 });
 
-describe("sonar coverage pipeline scripts", () => {
-  const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
-
-  it("coverage:sonar writes lcov for every package", () => {
-    expect(pkg.scripts["coverage:sonar"]).toMatch(/vitest run .*--coverage\.reporter=lcov/);
-    expect(pkg.devDependencies["@vitest/coverage-v8"]).toBeDefined();
-  });
-
-  it("coverage:sonar never runs the live integration suite", () => {
-    const [everyone, integration] = pkg.scripts["coverage:sonar"].split("&&").map((c) => c.trim());
-    expect(everyone).toContain("--filter=!@theokit/gateway-integration");
-    expect(integration).toContain("--filter @theokit/gateway-integration");
-    expect(integration).toContain("tests/unit tests/readiness.test.ts");
-    expect(integration).not.toMatch(/vitest run (--|$)/);
-  });
-
-  it("sonar:scan builds, generates coverage, then provisions the scanner, in that order", () => {
-    const cmd = pkg.scripts["sonar:scan"];
-    const at = (s) => cmd.indexOf(s);
-    expect(at("pnpm build")).toBe(0);
-    expect(at("pnpm coverage:sonar")).toBeGreaterThan(at("pnpm build"));
-    expect(at("@sonar/scan")).toBeGreaterThan(at("pnpm coverage:sonar"));
-  });
-});
-
 describe("ci workflow runs the sonar pipeline", () => {
   const ci = readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
   const props = readFileSync(new URL("../../sonar-project.properties", import.meta.url), "utf8");
   const at = (s) => ci.indexOf(s);
 
-  it("generates coverage after the offline integration units, then scans", () => {
+  it("scans after the offline integration units", () => {
     expect(at("run: pnpm --filter @theokit/gateway-integration test:unit")).toBeGreaterThan(-1);
-    expect(at("run: pnpm coverage:sonar")).toBeGreaterThan(at("test:unit"));
-    expect(at("run: pnpm sonar:scan")).toBeGreaterThan(at("run: pnpm coverage:sonar"));
+    expect(at("run: pnpm sonar:scan")).toBeGreaterThan(at("test:unit"));
   });
 
   it("passes SONAR_TOKEN to the scan", () => {

@@ -142,12 +142,8 @@ jobs:
       - name: Integration package — offline units
         run: pnpm --filter @theokit/gateway-integration test:unit
 
-      # Writes `coverage/lcov.info` for every package (offline integration scope only),
-      # which `sonar.javascript.lcov.reportPaths` imports in the scan below.
-      - name: Coverage reports for Sonar
-        run: pnpm coverage:sonar
-
-      # `sonar:scan` rebuilds, regenerates coverage and provisions the scanner. Skipped
+      # `sonar:scan` builds, runs `coverage:sonar` (writing the lcov files that
+      # `sonar.javascript.lcov.reportPaths` imports) and provisions the scanner. Skipped
       # for fork pull requests, which cannot read the token.
       - name: Sonar scan
         if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
