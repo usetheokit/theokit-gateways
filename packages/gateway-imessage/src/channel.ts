@@ -6,7 +6,11 @@
  * constructor runs and starts no process (`imsg` starts in `connect()`).
  */
 
-import { channelConfigReaders, GatewayConfigurationError } from "@theokit/gateway";
+import {
+  channelConfigReaders,
+  type ChannelConfigField,
+  GatewayConfigurationError,
+} from "@theokit/gateway";
 
 import { IMessageAdapter } from "./adapter.js";
 import type { IMessageAdapterOptions } from "./types.js";
@@ -15,29 +19,16 @@ type Config = Readonly<Record<string, unknown>>;
 
 const { invalid, isAbsent, readString } = channelConfigReaders("gateway-imessage");
 
-/** A number, or a string of digits (what `configFromEnv` yields). */
+/** A number or digit string; a digit string past ~308 digits is Infinity and is rejected. */
 function readNumber(config: Config, key: string): number | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
+  const raw = config[key];
+  if (isAbsent(raw)) return undefined;
+  const value = typeof raw === "string" && /^\d+$/.test(raw.trim()) ? Number(raw) : raw;
   if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
-    const parsed = Number(value.trim());
-    // A digit string longer than ~308 digits converts to Infinity, which a timer treats as 1 ms.
-    if (Number.isFinite(parsed)) return parsed;
-  }
   throw invalid(key, "a number or a string of digits");
 }
 
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly description: string;
-  readonly env: string;
-}
-
-const CONFIG: ReadonlyArray<ConfigField> = [
+const CONFIG: ReadonlyArray<ChannelConfigField> = [
   {
     key: "cliPath",
     required: false,
