@@ -6,7 +6,11 @@
  * object is structurally a `ChannelDescriptor`.
  */
 
-import { channelConfigReaders, type WebhookAnswer, type WebhookRequest } from "@theokit/gateway";
+import {
+  channelConfigReaders,
+  type WebhookAnswer,
+  type WebhookRequest,
+} from "@theokit/gateway";
 
 import { YuanbaoAdapter } from "./adapter.js";
 import type { YuanbaoFetch } from "./types.js";
@@ -29,14 +33,16 @@ const CONFIG = [
     env: "YUANBAO_APP_SECRET",
     required: true,
     secret: true,
-    description: "The bot's app secret; exchanged for a short-lived access token.",
+    description:
+      "The bot's app secret; exchanged for a short-lived access token.",
   },
   {
     key: "callbackSecret",
     env: "YUANBAO_CALLBACK_SECRET",
     required: true,
     secret: true,
-    description: "The callback signing secret that signs each callback request.",
+    description:
+      "The callback signing secret that signs each callback request.",
   },
   {
     key: "apiBase",
@@ -76,13 +82,12 @@ export const yuanbaoChannel = {
     });
   },
   webhook: {
-    verify(): boolean {
-      return false;
-    },
-    ingest(): Promise<"malformed"> {
-      return Promise.resolve("malformed");
-    },
-    async handle(adapter: YuanbaoAdapter, request: WebhookRequest): Promise<WebhookAnswer> {
+    verify: () => false,
+    ingest: () => Promise.resolve("malformed" as const),
+    async handle(
+      adapter: YuanbaoAdapter,
+      request: WebhookRequest,
+    ): Promise<WebhookAnswer> {
       const answer = await adapter.handleWebhook(
         request.rawBody,
         request.headers["x-signature"],

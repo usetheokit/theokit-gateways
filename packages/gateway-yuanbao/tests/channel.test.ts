@@ -1,56 +1,74 @@
-import { configFromEnv, createChannels, GatewayConfigurationError } from "@theokit/gateway";
+import {
+  configFromEnv,
+  createChannels,
+  GatewayConfigurationError,
+} from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 import { YuanbaoAdapter } from "../src/adapter.js";
 import { yuanbaoChannel } from "../src/channel.js";
 
-const KEYS: Record<string, string> = {
-  APP_YUANBAO_APP_ID: "appId",
-  APP_YUANBAO_APP_SECRET: "appSecret",
-  APP_YUANBAO_CALLBACK_SECRET: "callbackSecret",
-};
-const ENV = {
-  APP_YUANBAO_APP_ID: "ybid",
-  APP_YUANBAO_APP_SECRET: "yb-app-secret",
-  APP_YUANBAO_CALLBACK_SECRET: "yb-cb-secret",
-};
+const REQUIRED = [
+  { variable: "APP_YUANBAO_APP_ID", key: "appId", value: "ybid" },
+  {
+    variable: "APP_YUANBAO_APP_SECRET",
+    key: "appSecret",
+    value: "yb-app-secret",
+  },
+  {
+    variable: "APP_YUANBAO_CALLBACK_SECRET",
+    key: "callbackSecret",
+    value: "yb-cb-secret",
+  },
+];
+const envWithout = (skip?: string) =>
+  Object.fromEntries(
+    REQUIRED.filter((r) => r.variable !== skip).map((r) => [
+      r.variable,
+      r.value,
+    ]),
+  );
 
 describe("yuanbaoChannel", () => {
   it("builds the adapter from the environment through createChannels", () => {
-    const { config } = configFromEnv(yuanbaoChannel, ENV, "APP_");
-    const result = createChannels([{ descriptor: yuanbaoChannel, config }]);
-    expect(result.rejected).toEqual([]);
-    expect(result.adapters[0]).toBeInstanceOf(YuanbaoAdapter);
+    const { config } = configFromEnv(yuanbaoChannel, envWithout(), "APP_");
+    const built = createChannels([{ descriptor: yuanbaoChannel, config }]);
+    expect(built.rejected).toEqual([]);
+    expect(built.adapters[0]).toBeInstanceOf(YuanbaoAdapter);
     expect(yuanbaoChannel.transport).toBe("webhook");
   });
 
-  it.each(Object.keys(ENV))("rejects with missing_required_config when %s is unset", (name) => {
-    const env: Record<string, string> = { ...ENV };
-    delete env[name];
-    const read = configFromEnv(yuanbaoChannel, env, "APP_");
-    expect(read.missing).toEqual([name]);
-    const result = createChannels([{ descriptor: yuanbaoChannel, config: read.config }]);
-    expect(result.adapters).toEqual([]);
-    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toContain(KEYS[name]);
-  });
+  it.each(REQUIRED)(
+    "names $key as missing_required_config when $variable is unset",
+    (entry) => {
+      const read = configFromEnv(
+        yuanbaoChannel,
+        envWithout(entry.variable),
+        "APP_",
+      );
+      expect(read.missing).toEqual([entry.variable]);
+      const [rejection] = createChannels([
+        { descriptor: yuanbaoChannel, config: read.config },
+      ]).rejected;
+      expect(rejection?.error.code).toBe("missing_required_config");
+      expect(rejection?.error.message).toContain(entry.key);
+    },
+  );
 
-  it("refuses a number for callbackSecret with invalid_config naming the key", () => {
-    const { config } = configFromEnv(yuanbaoChannel, ENV, "APP_");
-    const build = () => yuanbaoChannel.create({ ...config, callbackSecret: 42 });
+  it("refuses a number for appSecret with invalid_config naming the key", () => {
+    const { config } = configFromEnv(yuanbaoChannel, envWithout(), "APP_");
+    const build = () => yuanbaoChannel.create({ ...config, appSecret: 42 });
     expect(build).toThrow(GatewayConfigurationError);
     expect(build).toThrow(
       expect.objectContaining({
         code: "invalid_config",
-        message: expect.stringContaining("callbackSecret"),
+        message: expect.stringContaining("appSecret"),
       }),
     );
   });
 
   it("collects exactly the secret values", () => {
-    expect([...configFromEnv(yuanbaoChannel, ENV, "APP_").secrets].sort()).toEqual([
-      "yb-app-secret",
-      "yb-cb-secret",
-    ]);
+    const { secrets } = configFromEnv(yuanbaoChannel, envWithout(), "APP_");
+    expect([...secrets].sort()).toEqual(["yb-app-secret", "yb-cb-secret"]);
   });
 });

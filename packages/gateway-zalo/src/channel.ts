@@ -6,7 +6,11 @@
  * object is structurally a `ChannelDescriptor`.
  */
 
-import { channelConfigReaders, type WebhookAnswer, type WebhookRequest } from "@theokit/gateway";
+import {
+  channelConfigReaders,
+  type WebhookAnswer,
+  type WebhookRequest,
+} from "@theokit/gateway";
 
 import { ZaloAdapter } from "./adapter.js";
 import type { ZaloFetch } from "./types.js";
@@ -36,7 +40,8 @@ const CONFIG = [
     env: "ZALO_ACCESS_TOKEN",
     required: true,
     secret: true,
-    description: "A Zalo Official Account access token; it expires and is not refreshed.",
+    description:
+      "A Zalo Official Account access token; it expires and is not refreshed.",
   },
   {
     key: "apiBase",
@@ -76,13 +81,12 @@ export const zaloChannel = {
     });
   },
   webhook: {
-    verify(): boolean {
-      return false;
-    },
-    ingest(): Promise<"malformed"> {
-      return Promise.resolve("malformed");
-    },
-    async handle(adapter: ZaloAdapter, request: WebhookRequest): Promise<WebhookAnswer> {
+    verify: () => false,
+    ingest: () => Promise.resolve("malformed" as const),
+    async handle(
+      adapter: ZaloAdapter,
+      request: WebhookRequest,
+    ): Promise<WebhookAnswer> {
       const answer = await adapter.handleWebhook(
         request.rawBody,
         request.headers["x-zevent-signature"],
