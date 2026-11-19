@@ -1,14 +1,30 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// Duplication analysis must keep covering channel.ts and test files in every package.
+// Duplication analysis must keep covering every channel.ts and test file in every package.
 const FILES = ["sonar-project.properties", ".sonarcloud.properties"];
-const PATHS = [
-  "packages/gateway-line/src/channel.ts",
-  "packages/gateway-sms/src/channel.ts",
-  "packages/gateway-slack/tests/channel.test.ts",
-  "packages/gateway/tests/anything.spec.ts",
-];
+const ROOT = new URL("../../", import.meta.url);
+
+const walk = (dir, out = []) => {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const full = `${dir}/${e.name}`;
+    if (e.isDirectory()) {
+      if (e.name !== "node_modules" && e.name !== "dist" && e.name !== "coverage") walk(full, out);
+    } else out.push(full);
+  }
+  return out;
+};
+
+const analysedFiles = () => {
+  const base = fileURLToPath(ROOT);
+  const dirs = ["integration", ...readdirSync(`${base}packages`).map((p) => `packages/${p}`)];
+  return dirs
+    .flatMap((d) => ["src", "tests"].map((s) => `${d}/${s}`))
+    .filter((d) => existsSync(`${base}${d}`))
+    .flatMap((d) => walk(`${base}${d}`).map((f) => f.slice(base.length)))
+    .filter((f) => /\.(ts|tsx)$/.test(f) && !f.endsWith(".d.ts"));
+};
 
 const toRegExp = (glob) =>
   new RegExp(
@@ -21,22 +37,32 @@ const toRegExp = (glob) =>
       "$",
   );
 
-const cpdExclusions = (file) =>
+const globsOf = (file, key) =>
   readFileSync(new URL(`../../${file}`, import.meta.url), "utf8")
     .split("\n")
-    .filter((l) => l.startsWith("sonar.cpd.exclusions="))
+    .filter((l) => l.startsWith(`${key}=`))
     .flatMap((l) => l.slice(l.indexOf("=") + 1).split(","))
     .map((g) => g.trim())
     .filter(Boolean);
 
 describe("sonar duplication scope", () => {
+  const files = analysedFiles();
+
+  it("finds channel.ts and test files in every package", () => {
+    expect(files.filter((f) => f.endsWith("/src/channel.ts")).length).toBeGreaterThan(10);
+    expect(files.filter((f) => /\.test\.tsx?$/.test(f)).length).toBeGreaterThan(20);
+  });
+
   for (const file of FILES) {
-    it(`${file} does not exclude channel or test files from duplication analysis`, () => {
-      const globs = cpdExclusions(file);
-      for (const p of PATHS) {
-        expect(globs.filter((g) => toRegExp(g).test(p))).toEqual([]);
-      }
-    });
+    for (const key of ["sonar.cpd.exclusions", "sonar.exclusions"]) {
+      it(`${file} ${key} matches no channel.ts or test file`, () => {
+        const regs = globsOf(file, key).map((g) => [g, toRegExp(g)]);
+        const hits = files.flatMap((f) =>
+          regs.filter(([, r]) => r.test(f)).map(([g]) => `${f} <- ${g}`),
+        );
+        expect(hits).toEqual([]);
+      });
+    }
   }
 });
 
