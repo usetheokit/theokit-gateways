@@ -77,3 +77,70 @@ const scheduler = createScheduler({ store, run, deliver });
 // A schedule line reads "0 9 * * * slack:C0123"; split its target with:
 const target = parseChannelTarget("slack:C0123"); // { platform: "slack", channelId: "C0123" }
 ```
+
+## `createTrigger(options)` and `frameUntrusted(tag, body, attributes?)`
+
+`createTrigger` runs a fresh agent on each signed webhook and sends the answer to a channel. `handle(request)` answers 401 for a bad signature (the body is not read), 400 for a delivery id over 256 chars, 503 while the reply adapter is not started (the id is not remembered, so the sender's retry runs), 200 for a delivery id seen before (the last `rememberDeliveries`, default 1000, are kept), and otherwise 202 at once while the run continues in the background. The prompt is `instructions`, a fixed untrusted-data notice, then the body framed by `frameUntrusted("payload", body)`, which escapes a forged closing tag. A failed run or undelivered reply is written as one line holding a code only. `idle()` resolves when every started run has ended. `verify` takes any function of theokit's `VerifyFn` shape, so this package does not depend on `theokit`.
+
+```ts
+import { github } from "theokit/server/webhook";
+import { createTrigger } from "@theokit/gateway-agent";
+
+const trigger = createTrigger({
+  name: "github",
+  verify: github({ secret: process.env.GITHUB_WEBHOOK_SECRET ?? "" }),
+  dedupeHeader: "x-github-delivery",
+  instructions: "Summarise this GitHub event in two sentences.",
+  deliverTo: () => ({ adapter: slackAdapter, channelId: "C0123" }),
+  agent: async () => {
+    const agent = await registry.agentFor("github-trigger");
+    return { agent, release: () => registry.release(agent) };
+  },
+  secrets: [apiKey],
+  write: (line) => console.error(line),
+});
+
+// In your host's route for /hooks/github:
+//   return trigger.handle(request);
+await trigger.idle(); // on shutdown
+```
+
+## `createChatApprover(options)`
+
+Asks an owner in the chat to approve a tool call and waits for `/approve`, `/approve always` or `/deny`.
+`ask` resolves `deny` when no message was seen in the conversation, when a question is already pending
+there, when `send` throws, and after `timeoutMs` (default 120 s). Only an owner's answer counts; a
+non-owner is told "Only an owner can do that." and the question stays open. The hook blocks the three
+commands in every case. Register it before the agent handler, and use the same key in `conversationOf`
+and `ask`.
+
+```ts
+import { PermissionEngine, PermissionPlugin } from "@theokit/sdk";
+
+const approver = createChatApprover({
+  conversationOf: (event) => router.sessionKey(event),
+  isOwner: (event) => owners.has(`${event.platform}:${event.sender.id}`),
+  send: async (event, text) => {
+    const result = await adapterFor(event.platform).sendMessage({ channel: event.channel, text });
+    // sendMessage reports failure in its result; throw so the question resolves as a deny.
+    if (!result.ok) throw new Error(result.error?.message ?? "send failed");
+  },
+});
+
+// GatewayRunner({ hooks: [approver.hook], handler, ... })
+
+// Build the permission plugin for one conversation, so the key is explicit.
+function permissionPluginFor(conversation: string, engine: PermissionEngine) {
+  return PermissionPlugin.create(engine, {
+    canUseTool: async (toolName, input) => {
+      const { answer } = await approver.ask(conversation, `${toolName} ${JSON.stringify(input)}`);
+      return answer === "deny"
+        ? { behavior: "deny", message: "Not approved in chat." }
+        : { behavior: "allow" };
+    },
+  });
+}
+```
+
+`canUseTool` is only consulted when the permission engine's verdict is `ask`. `/approve always`
+answers `always`; remembering it (for example by adding an allow rule to the engine) is up to the app.
