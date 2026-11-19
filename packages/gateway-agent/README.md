@@ -115,17 +115,32 @@ commands in every case. Register it before the agent handler, and use the same k
 and `ask`.
 
 ```ts
+import { PermissionEngine, PermissionPlugin } from "@theokit/sdk";
+
 const approver = createChatApprover({
   conversationOf: (event) => router.sessionKey(event),
   isOwner: (event) => owners.has(`${event.platform}:${event.sender.id}`),
-  send: (event, text) => adapterFor(event.platform).send({ channelId: event.channel.id, text }),
+  send: async (event, text) => {
+    const result = await adapterFor(event.platform).sendMessage({ channel: event.channel, text });
+    // sendMessage reports failure in its result; throw so the question resolves as a deny.
+    if (!result.ok) throw new Error(result.error?.message ?? "send failed");
+  },
 });
 
 // GatewayRunner({ hooks: [approver.hook], handler, ... })
 
-// In the SDK's tool approval callback, pass the conversation of the session that ran the tool:
-async function approveTool(conversation: string, toolName: string, input: unknown) {
-  const { answer, by } = await approver.ask(conversation, `${toolName} ${JSON.stringify(input)}`);
-  return { allow: answer !== "deny", remember: answer === "always", by };
+// Build the permission plugin for one conversation, so the key is explicit.
+function permissionPluginFor(conversation: string, engine: PermissionEngine) {
+  return PermissionPlugin.create(engine, {
+    canUseTool: async (toolName, input) => {
+      const { answer } = await approver.ask(conversation, `${toolName} ${JSON.stringify(input)}`);
+      return answer === "deny"
+        ? { behavior: "deny", message: "Not approved in chat." }
+        : { behavior: "allow" };
+    },
+  });
 }
 ```
+
+`canUseTool` is only consulted when the permission engine's verdict is `ask`. `/approve always`
+answers `always`; remembering it (for example by adding an allow rule to the engine) is up to the app.
