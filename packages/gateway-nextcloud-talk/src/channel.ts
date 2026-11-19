@@ -31,7 +31,7 @@ const readers = channelConfigReaders(
   "gateway-nextcloud-talk",
   (options) => new ConfigurationError(options),
 );
-const { invalid, readString, requiredString: readRequiredString, readNumber } = readers;
+const { invalid, isAbsent, readString, requiredString: readRequiredString } = readers;
 
 /**
  * The shared readers treat `null` and `""` as absent. An explicit `null` is never a valid value,
@@ -45,6 +45,14 @@ function rejectBlank(config: Config): void {
       throw invalid(key, "set to a value of its type, not null or empty");
     }
   }
+}
+
+function readNumber(config: Config, key: string): number | undefined {
+  const value = config[key];
+  if (isAbsent(value)) return undefined;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && /^\d+$/.test(value)) return Number(value);
+  throw invalid(key, "a number or a digit string");
 }
 
 /** An Express app: a function with the `post` method the adapter mounts its route with. */
