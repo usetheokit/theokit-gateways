@@ -71,25 +71,17 @@ describe("yuanbaoChannel", () => {
 });
 
 describe("yuanbaoChannel over a Fetch request", () => {
+  const body = JSON.stringify(payload);
   const route = () => {
-    const built = createChannels([
-      {
-        descriptor: yuanbaoChannel as unknown as ChannelDescriptor<BasePlatformAdapter>,
-        config: CONFIG,
-      },
-    ]);
+    const descriptor = yuanbaoChannel as unknown as ChannelDescriptor<BasePlatformAdapter>;
+    const built = createChannels([{ descriptor, config: CONFIG }]);
     const handler = createWebhookHandler({ channels: built.channels, isStarted: () => true });
+    const url = "https://example.test/webhooks/yuanbao";
     const send = (headers: Record<string, string> = {}) =>
-      handler(
-        new Request("https://example.test/webhooks/yuanbao", {
-          method: "POST",
-          body: JSON.stringify(payload),
-          headers,
-        }),
-      );
+      handler(new Request(url, { method: "POST", body, headers }));
     return { adapter: built.adapters[0], send };
   };
-  const good = () => signedRequest(JSON.stringify(payload)).headers as Record<string, string>;
+  const good = () => signedRequest(body).headers as Record<string, string>;
 
   it("answers 401 to a bad signature, 503 with no handler, and 200 once dispatched", async () => {
     const { adapter, send } = route();
