@@ -15,46 +15,36 @@ const ORIGIN = "gateway-zalo";
 
 const readers = channelConfigReaders(ORIGIN);
 
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly env: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly description: string;
-}
-
-const field = (
-  key: string,
-  env: string,
-  required: boolean,
-  secret: boolean,
-  description: string,
-): ConfigField => ({ key, env, required, secret, description });
-
-const CONFIG: ReadonlyArray<ConfigField> = [
-  field("appId", "ZALO_APP_ID", true, false, "The Zalo app id."),
-  field(
-    "oaSecretKey",
-    "ZALO_OA_SECRET_KEY",
-    true,
-    true,
-    "The Zalo OA secret key; verifies each webhook.",
-  ),
-  field(
-    "accessToken",
-    "ZALO_ACCESS_TOKEN",
-    true,
-    true,
-    "A Zalo Official Account access token; it expires and is not refreshed.",
-  ),
-  field(
-    "apiBase",
-    "ZALO_API_BASE",
-    false,
-    false,
-    "Override the Open API base, https://openapi.zalo.me.",
-  ),
+/** Config fields, shaped like the core's `ChannelConfigField` (typed locally). */
+const CONFIG = [
+  {
+    key: "appId",
+    env: "ZALO_APP_ID",
+    required: true,
+    secret: false,
+    description: "The Zalo app id.",
+  },
+  {
+    key: "oaSecretKey",
+    env: "ZALO_OA_SECRET_KEY",
+    required: true,
+    secret: true,
+    description: "The Zalo OA secret key; verifies each webhook.",
+  },
+  {
+    key: "accessToken",
+    env: "ZALO_ACCESS_TOKEN",
+    required: true,
+    secret: true,
+    description: "A Zalo Official Account access token; it expires and is not refreshed.",
+  },
+  {
+    key: "apiBase",
+    env: "ZALO_API_BASE",
+    required: false,
+    secret: false,
+    description: "Override the Open API base, https://openapi.zalo.me.",
+  },
 ];
 
 /**
