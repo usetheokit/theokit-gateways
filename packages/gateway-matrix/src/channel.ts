@@ -27,7 +27,9 @@ const read = {
   list: readers.readList,
 };
 
-function readAcceptInvite(config: Readonly<Record<string, unknown>>): MatrixAdapterOptions["acceptInvite"] {
+function readAcceptInvite(
+  config: Readonly<Record<string, unknown>>,
+): MatrixAdapterOptions["acceptInvite"] {
   const value = config.acceptInvite;
   if (isAbsent(value)) return undefined;
   if (typeof value !== "function") throw invalid("acceptInvite", "a function");
