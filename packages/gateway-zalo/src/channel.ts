@@ -5,15 +5,15 @@
  * `.d.ts` naming a core type must not break a consumer on an older peer floor.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 
 import { ZaloAdapter } from "./adapter.js";
 
-/** A webhook request, shaped like the core's `WebhookRequest` (typed locally). */
-interface WebhookRequestShape {
+/** The request a descriptor receives (typed locally). */
+type WebhookIn = {
   readonly rawBody: string;
   readonly headers: Readonly<Record<string, string | undefined>>;
-}
+};
 
 const CONFIG = [
   {
@@ -39,35 +39,18 @@ const CONFIG = [
   },
 ];
 
-function readString(config: Readonly<Record<string, unknown>>, key: string): string {
-  const value = config[key];
-  if (typeof value === "string" && value.trim() !== "") return value;
-  const message = `gateway-zalo: config.${key} must be a non-empty string`;
-  throw new GatewayConfigurationError("gateway-zalo", {
-    code: "invalid_config",
-    message,
-    detail: key,
-  });
-}
-
-/** The header `name` (lower case), looked up without regard to the case of the request's keys. */
-function header(request: WebhookRequestShape, name: string): string | undefined {
-  const hit = Object.keys(request.headers).find((key) => key.toLowerCase() === name);
-  return hit === undefined ? undefined : request.headers[hit];
-}
+const { requiredString } = channelConfigReaders("gateway-zalo");
 
 const webhook = {
   methods: ["POST"] as const,
   /** The `X-ZEvent-Signature` check `handleWebhook` makes; needs no connection. */
-  verify(adapter: ZaloAdapter, request: WebhookRequestShape): boolean {
-    return adapter.verifyWebhook(request.rawBody, header(request, "x-zevent-signature"));
+  verify(adapter: ZaloAdapter, request: WebhookIn): boolean {
+    const entry = Object.entries(request.headers).find(
+      ([name]) => name.toLowerCase() === "x-zevent-signature",
+    );
+    return adapter.verifyWebhook(request.rawBody, entry?.[1]);
   },
-  async ingest(
-    adapter: ZaloAdapter,
-    payload: unknown,
-  ): Promise<"delivered" | "malformed" | "no_handler"> {
-    return adapter.ingestPayload(payload);
-  },
+  ingest: (adapter: ZaloAdapter, payload: unknown) => adapter.ingestPayload(payload),
 };
 
 /**
@@ -85,9 +68,9 @@ export const zaloChannel = {
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): ZaloAdapter {
     return new ZaloAdapter({
-      appId: readString(config, "appId"),
-      oaSecretKey: readString(config, "oaSecretKey"),
-      accessToken: readString(config, "accessToken"),
+      appId: requiredString(config, "appId"),
+      oaSecretKey: requiredString(config, "oaSecretKey"),
+      accessToken: requiredString(config, "accessToken"),
     });
   },
 };

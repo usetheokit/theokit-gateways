@@ -5,15 +5,15 @@
  * `.d.ts` naming a core type must not break a consumer on an older peer floor.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 
 import { QQAdapter } from "./adapter.js";
 
-/** A webhook request, shaped like the core's `WebhookRequest` (typed locally). */
-interface WebhookRequestShape {
+/** The request a descriptor receives (typed locally). */
+type WebhookIn = {
   readonly rawBody: string;
   readonly headers: Readonly<Record<string, string | undefined>>;
-}
+};
 
 /** An answer, shaped like the core's `WebhookAnswer` (typed locally). */
 interface WebhookAnswerShape {
@@ -39,48 +39,35 @@ const CONFIG = [
   },
 ];
 
-function readString(config: Readonly<Record<string, unknown>>, key: string): string {
-  const value = config[key];
-  if (typeof value === "string" && value.trim() !== "") return value;
-  const message = `gateway-qq: config.${key} must be a non-empty string`;
-  throw new GatewayConfigurationError("gateway-qq", {
-    code: "invalid_config",
-    message,
-    detail: key,
-  });
-}
+const { requiredString } = channelConfigReaders("gateway-qq");
 
-/** The header `name` (lower case), looked up without regard to the case of the request's keys. */
-function header(request: WebhookRequestShape, name: string): string | undefined {
-  const hit = Object.keys(request.headers).find((key) => key.toLowerCase() === name);
-  return hit === undefined ? undefined : request.headers[hit];
+/** Drops absent header values so `Headers` (case-insensitive) can take the rest. */
+function definedHeaders(headers: WebhookIn["headers"]): [string, string][] {
+  return Object.entries(headers).flatMap(([k, v]) => (v === undefined ? [] : [[k, v]]));
 }
 
 const webhook = {
   methods: ["POST"] as const,
   /** The Ed25519 check `handleWebhook` makes for an event; needs no connection. */
-  verify(adapter: QQAdapter, request: WebhookRequestShape): boolean {
+  verify(adapter: QQAdapter, request: WebhookIn): boolean {
+    const headers = new Headers(definedHeaders(request.headers));
     return adapter.verifyWebhook(
       request.rawBody,
-      header(request, "x-signature-ed25519"),
-      header(request, "x-signature-timestamp"),
+      headers.get("x-signature-ed25519") ?? undefined,
+      headers.get("x-signature-timestamp") ?? undefined,
     );
   },
-  async ingest(
-    adapter: QQAdapter,
-    payload: unknown,
-  ): Promise<"delivered" | "malformed" | "no_handler"> {
-    return adapter.ingestPayload(payload);
-  },
+  ingest: (adapter: QQAdapter, payload: unknown) => adapter.ingestPayload(payload),
   /**
    * Full control of one request: QQ's callback URL validation (`op` 13) is unsigned and expects
    * the signed `plain_token` back as JSON, so it cannot go through `verify`.
    */
-  async handle(adapter: QQAdapter, request: WebhookRequestShape): Promise<WebhookAnswerShape> {
+  async handle(adapter: QQAdapter, request: WebhookIn): Promise<WebhookAnswerShape> {
+    const headers = new Headers(definedHeaders(request.headers));
     const answer = await adapter.handleWebhook(
       request.rawBody,
-      header(request, "x-signature-ed25519"),
-      header(request, "x-signature-timestamp"),
+      headers.get("x-signature-ed25519") ?? undefined,
+      headers.get("x-signature-timestamp") ?? undefined,
     );
     if (answer.body === undefined) return { status: answer.status };
     return {
@@ -106,8 +93,8 @@ export const qqChannel = {
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): QQAdapter {
     return new QQAdapter({
-      appId: readString(config, "appId"),
-      appSecret: readString(config, "appSecret"),
+      appId: requiredString(config, "appId"),
+      appSecret: requiredString(config, "appSecret"),
     });
   },
 };

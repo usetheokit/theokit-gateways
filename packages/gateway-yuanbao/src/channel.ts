@@ -5,15 +5,15 @@
  * `.d.ts` naming a core type must not break a consumer on an older peer floor.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 
 import { YuanbaoAdapter } from "./adapter.js";
 
-/** A webhook request, shaped like the core's `WebhookRequest` (typed locally). */
-interface WebhookRequestShape {
+/** The request a descriptor receives (typed locally). */
+type WebhookIn = {
   readonly rawBody: string;
   readonly headers: Readonly<Record<string, string | undefined>>;
-}
+};
 
 const CONFIG = [
   {
@@ -39,39 +39,25 @@ const CONFIG = [
   },
 ];
 
-function readString(config: Readonly<Record<string, unknown>>, key: string): string {
-  const value = config[key];
-  if (typeof value === "string" && value.trim() !== "") return value;
-  const message = `gateway-yuanbao: config.${key} must be a non-empty string`;
-  throw new GatewayConfigurationError("gateway-yuanbao", {
-    code: "invalid_config",
-    message,
-    detail: key,
-  });
-}
+const { requiredString } = channelConfigReaders("gateway-yuanbao");
 
-/** The header `name` (lower case), looked up without regard to the case of the request's keys. */
-function header(request: WebhookRequestShape, name: string): string | undefined {
-  const hit = Object.keys(request.headers).find((key) => key.toLowerCase() === name);
-  return hit === undefined ? undefined : request.headers[hit];
+/** Drops absent header values so `Headers` (case-insensitive) can take the rest. */
+function definedHeaders(headers: WebhookIn["headers"]): [string, string][] {
+  return Object.entries(headers).flatMap(([k, v]) => (v === undefined ? [] : [[k, v]]));
 }
 
 const webhook = {
   methods: ["POST"] as const,
   /** The signature and timestamp check `handleWebhook` makes; needs no connection. */
-  verify(adapter: YuanbaoAdapter, request: WebhookRequestShape): boolean {
+  verify(adapter: YuanbaoAdapter, request: WebhookIn): boolean {
+    const headers = new Headers(definedHeaders(request.headers));
     return adapter.verifyWebhook(
       request.rawBody,
-      header(request, "x-signature"),
-      header(request, "x-timestamp"),
+      headers.get("x-signature") ?? undefined,
+      headers.get("x-timestamp") ?? undefined,
     );
   },
-  async ingest(
-    adapter: YuanbaoAdapter,
-    payload: unknown,
-  ): Promise<"delivered" | "malformed" | "no_handler"> {
-    return adapter.ingestPayload(payload);
-  },
+  ingest: (adapter: YuanbaoAdapter, payload: unknown) => adapter.ingestPayload(payload),
 };
 
 /**
@@ -89,9 +75,9 @@ export const yuanbaoChannel = {
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): YuanbaoAdapter {
     return new YuanbaoAdapter({
-      appId: readString(config, "appId"),
-      appSecret: readString(config, "appSecret"),
-      callbackSecret: readString(config, "callbackSecret"),
+      appId: requiredString(config, "appId"),
+      appSecret: requiredString(config, "appSecret"),
+      callbackSecret: requiredString(config, "callbackSecret"),
     });
   },
 };
