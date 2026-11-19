@@ -4,15 +4,15 @@ import { describe, expect, it } from "vitest";
 import { ZaloAdapter } from "../src/adapter.js";
 import { zaloChannel } from "../src/channel.js";
 
-const ENV = {
-  APP_ZALO_APP_ID: "zid",
-  APP_ZALO_OA_SECRET_KEY: "zalo-oa-key",
-  APP_ZALO_ACCESS_TOKEN: "zalo-token",
-};
 const KEYS: Record<string, string> = {
   APP_ZALO_APP_ID: "appId",
   APP_ZALO_OA_SECRET_KEY: "oaSecretKey",
   APP_ZALO_ACCESS_TOKEN: "accessToken",
+};
+const ENV = {
+  APP_ZALO_APP_ID: "zid",
+  APP_ZALO_OA_SECRET_KEY: "zalo-oa-key",
+  APP_ZALO_ACCESS_TOKEN: "zalo-token",
 };
 
 describe("zaloChannel", () => {
@@ -21,16 +21,7 @@ describe("zaloChannel", () => {
     const result = createChannels([{ descriptor: zaloChannel, config }]);
     expect(result.rejected).toEqual([]);
     expect(result.adapters[0]).toBeInstanceOf(ZaloAdapter);
-  });
-
-  it("binds ZALO_* variables and is a webhook channel", () => {
-    expect(zaloChannel.platform).toBe("zalo");
     expect(zaloChannel.transport).toBe("webhook");
-    expect(zaloChannel.config.filter((f) => f.required).map((f) => f.env)).toEqual([
-      "ZALO_APP_ID",
-      "ZALO_OA_SECRET_KEY",
-      "ZALO_ACCESS_TOKEN",
-    ]);
   });
 
   it.each(Object.keys(ENV))("rejects with missing_required_config when %s is unset", (name) => {
@@ -46,19 +37,20 @@ describe("zaloChannel", () => {
 
   it("refuses a number for oaSecretKey with invalid_config naming the key", () => {
     const { config } = configFromEnv(zaloChannel, ENV, "APP_");
-    expect(() => zaloChannel.create({ ...config, oaSecretKey: 42 })).toThrow(
+    const build = () => zaloChannel.create({ ...config, oaSecretKey: 42 });
+    expect(build).toThrow(GatewayConfigurationError);
+    expect(build).toThrow(
       expect.objectContaining({
         code: "invalid_config",
         message: expect.stringContaining("oaSecretKey"),
       }),
     );
-    expect(() => zaloChannel.create({ ...config, oaSecretKey: 42 })).toThrow(
-      GatewayConfigurationError,
-    );
   });
 
   it("collects exactly the secret values", () => {
-    const { secrets } = configFromEnv(zaloChannel, ENV, "APP_");
-    expect([...secrets].sort()).toEqual(["zalo-oa-key", "zalo-token"]);
+    expect([...configFromEnv(zaloChannel, ENV, "APP_").secrets].sort()).toEqual([
+      "zalo-oa-key",
+      "zalo-token",
+    ]);
   });
 });

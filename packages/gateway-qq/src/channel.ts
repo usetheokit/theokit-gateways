@@ -24,36 +24,37 @@ interface ConfigField {
   readonly description: string;
 }
 
+const field = (
+  key: string,
+  env: string,
+  required: boolean,
+  secret: boolean,
+  description: string,
+): ConfigField => ({ key, env, required, secret, description });
+
 const CONFIG: ReadonlyArray<ConfigField> = [
-  {
-    key: "appId",
-    env: "QQ_APP_ID",
-    required: true,
-    secret: false,
-    description: "The bot's AppID from q.qq.com.",
-  },
-  {
-    key: "appSecret",
-    env: "QQ_APP_SECRET",
-    required: true,
-    secret: true,
-    description:
-      "The bot's AppSecret; exchanged for an access token and the seed of the webhook signing key.",
-  },
-  {
-    key: "apiBase",
-    env: "QQ_API_BASE",
-    required: false,
-    secret: false,
-    description: "Override the API base, https://api.sgroup.qq.com.",
-  },
-  {
-    key: "tokenUrl",
-    env: "QQ_TOKEN_URL",
-    required: false,
-    secret: false,
-    description: "Override the token endpoint, https://bots.qq.com/app/getAppAccessToken.",
-  },
+  field("appId", "QQ_APP_ID", true, false, "The bot's AppID from q.qq.com."),
+  field(
+    "appSecret",
+    "QQ_APP_SECRET",
+    true,
+    true,
+    "The bot's AppSecret; exchanged for an access token and the seed of the webhook signing key.",
+  ),
+  field(
+    "apiBase",
+    "QQ_API_BASE",
+    false,
+    false,
+    "Override the API base, https://api.sgroup.qq.com.",
+  ),
+  field(
+    "tokenUrl",
+    "QQ_TOKEN_URL",
+    false,
+    false,
+    "Override the token endpoint, https://bots.qq.com/app/getAppAccessToken.",
+  ),
 ];
 
 /**
@@ -100,7 +101,11 @@ export const qqChannel = {
       const body = "body" in answer && answer.body !== undefined ? answer.body : undefined;
       return body === undefined
         ? { status: answer.status }
-        : { status: answer.status, body: JSON.stringify(body), contentType: "application/json" };
+        : {
+            status: answer.status,
+            body: JSON.stringify(body),
+            contentType: "application/json",
+          };
     },
   },
 };

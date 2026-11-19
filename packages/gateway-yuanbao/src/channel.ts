@@ -24,35 +24,37 @@ interface ConfigField {
   readonly description: string;
 }
 
+const field = (
+  key: string,
+  env: string,
+  required: boolean,
+  secret: boolean,
+  description: string,
+): ConfigField => ({ key, env, required, secret, description });
+
 const CONFIG: ReadonlyArray<ConfigField> = [
-  {
-    key: "appId",
-    env: "YUANBAO_APP_ID",
-    required: true,
-    secret: false,
-    description: "The bot's app id from the Yuanbao bot console.",
-  },
-  {
-    key: "appSecret",
-    env: "YUANBAO_APP_SECRET",
-    required: true,
-    secret: true,
-    description: "The bot's app secret; exchanged for a short-lived access token.",
-  },
-  {
-    key: "callbackSecret",
-    env: "YUANBAO_CALLBACK_SECRET",
-    required: true,
-    secret: true,
-    description: "The callback signing secret that signs each callback request.",
-  },
-  {
-    key: "apiBase",
-    env: "YUANBAO_API_BASE",
-    required: false,
-    secret: false,
-    description: "Override the API base, https://yuanbao.tencent.com.",
-  },
+  field("appId", "YUANBAO_APP_ID", true, false, "The bot's app id from the Yuanbao bot console."),
+  field(
+    "appSecret",
+    "YUANBAO_APP_SECRET",
+    true,
+    true,
+    "The bot's app secret; exchanged for a short-lived access token.",
+  ),
+  field(
+    "callbackSecret",
+    "YUANBAO_CALLBACK_SECRET",
+    true,
+    true,
+    "The callback signing secret that signs each callback request.",
+  ),
+  field(
+    "apiBase",
+    "YUANBAO_API_BASE",
+    false,
+    false,
+    "Override the API base, https://yuanbao.tencent.com.",
+  ),
 ];
 
 /**
