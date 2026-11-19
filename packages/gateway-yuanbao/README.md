@@ -27,6 +27,22 @@ const answer = await adapter.handleWebhook(
 response.status(answer.status).end();
 ```
 
+## Webhook transport
+
+`yuanbaoChannel` declares `transport: "webhook"` with a `webhook` part (`methods: ["POST"]`, `verify`,
+`ingest`), so a host mounts it with `createWebhookHandler` from `@theokit/gateway`: it
+verifies the `x-signature` and `x-timestamp` headers, dispatches the event, and answers 401 for a rejected signature, 503 when no handler
+is subscribed and 405 for other methods. `adapter.handleWebhook` stays available for a route you
+write yourself.
+
+```ts
+import { createChannels, createWebhookHandler } from "@theokit/gateway";
+import { yuanbaoChannel } from "@theokit/gateway-yuanbao";
+
+const { channels } = createChannels([{ descriptor: yuanbaoChannel, config: { /* appId, appSecret, callbackSecret */ } }]);
+const handler = createWebhookHandler({ channels, isStarted: () => true }); // POST /webhooks/yuanbao
+```
+
 ## Behaviour
 
 - Signature: hex `HMAC-SHA256(callbackSecret, timestamp + "." + rawBody)`, compared in constant

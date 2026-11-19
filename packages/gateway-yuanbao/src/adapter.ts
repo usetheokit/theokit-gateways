@@ -158,7 +158,7 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     signature: string | undefined,
     timestamp: string | undefined,
   ): Promise<YuanbaoWebhookAnswer> {
-    if (!verifyYuanbaoSignature(this.opts.callbackSecret, rawBody, signature, timestamp)) {
+    if (!this.verifyWebhook(rawBody, signature, timestamp)) {
       return { status: 401, reason: "signature mismatch" };
     }
     let parsed: unknown;
@@ -167,6 +167,29 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     } catch {
       return { status: 400, reason: "body is not JSON" };
     }
+    return this.dispatchPayload(parsed);
+  }
+
+  /** Whether `signature` and `timestamp` sign `rawBody` under the callback secret. */
+  verifyWebhook(
+    rawBody: string,
+    signature: string | undefined,
+    timestamp: string | undefined,
+  ): boolean {
+    return verifyYuanbaoSignature(this.opts.callbackSecret, rawBody, signature, timestamp);
+  }
+
+  /**
+   * Dispatch a parsed payload whose signature was already verified. A payload that is not a JSON
+   * object is `"malformed"`; an event that is not a text message is acknowledged as `"delivered"`.
+   */
+  async ingestPayload(payload: unknown): Promise<"delivered" | "malformed" | "no_handler"> {
+    const answer = await this.dispatchPayload(payload);
+    if (answer.status === 503) return "no_handler";
+    return answer.status === 200 ? "delivered" : "malformed";
+  }
+
+  private async dispatchPayload(parsed: unknown): Promise<YuanbaoWebhookAnswer> {
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return { status: 400, reason: "body is not a JSON object" };
     }

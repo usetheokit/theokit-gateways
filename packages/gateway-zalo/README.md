@@ -24,6 +24,22 @@ const answer = await adapter.handleWebhook(rawBody, request.headers["x-zevent-si
 response.status(answer.status).end();
 ```
 
+## Webhook transport
+
+`zaloChannel` declares `transport: "webhook"` with a `webhook` part (`methods: ["POST"]`, `verify`,
+`ingest`), so a host mounts it with `createWebhookHandler` from `@theokit/gateway`: it
+verifies the `X-ZEvent-Signature` header, dispatches the event, and answers 401 for a rejected signature, 503 when no handler
+is subscribed and 405 for other methods. `adapter.handleWebhook` stays available for a route you
+write yourself.
+
+```ts
+import { createChannels, createWebhookHandler } from "@theokit/gateway";
+import { zaloChannel } from "@theokit/gateway-zalo";
+
+const { channels } = createChannels([{ descriptor: zaloChannel, config: { /* appId, oaSecretKey, accessToken */ } }]);
+const handler = createWebhookHandler({ channels, isStarted: () => true }); // POST /webhooks/zalo
+```
+
 ## Behaviour
 
 - Signature: `X-ZEvent-Signature: mac=sha256(appId + rawBody + timestamp + oaSecretKey)`, compared in

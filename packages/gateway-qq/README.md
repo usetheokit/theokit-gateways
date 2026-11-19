@@ -27,6 +27,22 @@ const answer = await adapter.handleWebhook(
 response.status(answer.status).json(answer.body ?? {});
 ```
 
+## Webhook transport
+
+`qqChannel` declares `transport: "webhook"` with a `webhook` part (`methods: ["POST"]`, `verify`,
+`ingest`, and a `handle` for QQ's unsigned callback URL validation (`op` 13), which it answers with the signed token as JSON), so a host mounts it with `createWebhookHandler` from `@theokit/gateway`: it
+verifies the `x-signature-ed25519` and `x-signature-timestamp` headers, dispatches the event, and answers 401 for a rejected signature, 503 when no handler
+is subscribed and 405 for other methods. `adapter.handleWebhook` stays available for a route you
+write yourself.
+
+```ts
+import { createChannels, createWebhookHandler } from "@theokit/gateway";
+import { qqChannel } from "@theokit/gateway-qq";
+
+const { channels } = createChannels([{ descriptor: qqChannel, config: { /* appId, appSecret */ } }]);
+const handler = createWebhookHandler({ channels, isStarted: () => true }); // POST /webhooks/qq
+```
+
 ## Behaviour
 
 - Callback URL validation (`op` 13): answered with `{ plain_token, signature }` in `answer.body`.

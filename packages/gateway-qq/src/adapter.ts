@@ -190,9 +190,35 @@ export class QQAdapter extends BasePlatformAdapter {
     }
     // The URL validation (op 13) is signed by us, not by QQ: QQ checks our answer.
     if (payload.op === 13) return this.validation(payload);
-    if (!verifyQQSignature(this.opts.appSecret, rawBody, signature, timestamp)) {
+    if (!this.verifyWebhook(rawBody, signature, timestamp)) {
       return { status: 401, reason: "signature mismatch" };
     }
+    return this.dispatchPayload(payload);
+  }
+
+  /** Whether `signature` and `timestamp` sign `rawBody` under the key derived from the AppSecret. */
+  verifyWebhook(
+    rawBody: string,
+    signature: string | undefined,
+    timestamp: string | undefined,
+  ): boolean {
+    return verifyQQSignature(this.opts.appSecret, rawBody, signature, timestamp);
+  }
+
+  /**
+   * Dispatch a parsed payload whose signature was already verified. A payload that is not a JSON
+   * object is `"malformed"`; an event that is not a C2C text message is acknowledged as
+   * `"delivered"`.
+   */
+  async ingestPayload(payload: unknown): Promise<"delivered" | "malformed" | "no_handler"> {
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      return "malformed";
+    }
+    const answer = await this.dispatchPayload(payload as QQWebhookPayload);
+    return answer.status === 503 ? "no_handler" : "delivered";
+  }
+
+  private async dispatchPayload(payload: QQWebhookPayload): Promise<QQWebhookAnswer> {
     const event = toMessageEvent(payload);
     if (event === undefined) return { status: 200, reason: "not a direct text message" };
     // Before dispatch: the handler's reply is the one that answers this message.

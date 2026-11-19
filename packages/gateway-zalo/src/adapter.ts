@@ -141,18 +141,41 @@ export class ZaloAdapter extends BasePlatformAdapter {
    * or Zalo does not redeliver and the message is lost.
    */
   async handleWebhook(rawBody: string, signature: string | undefined): Promise<ZaloWebhookAnswer> {
-    if (!verifyZaloSignature(this.opts, rawBody, signature)) {
+    if (!this.verifyWebhook(rawBody, signature)) {
       return { status: 401, reason: "signature mismatch" };
     }
-    let payload: ZaloWebhookEvent;
+    let payload: unknown;
     try {
-      payload = JSON.parse(rawBody) as ZaloWebhookEvent;
+      payload = JSON.parse(rawBody);
     } catch {
       return { status: 400, reason: "body is not JSON" };
     }
-    const skipped = this.skipReason(payload);
+    return this.dispatchPayload(payload);
+  }
+
+  /** Whether `signature` is the `mac=` header for `rawBody` under the app id and OA secret key. */
+  verifyWebhook(rawBody: string, signature: string | undefined): boolean {
+    return verifyZaloSignature(this.opts, rawBody, signature);
+  }
+
+  /**
+   * Dispatch a parsed payload whose signature was already verified. A payload that is not a JSON
+   * object is `"malformed"`; an event that is not a text message is acknowledged as `"delivered"`.
+   */
+  async ingestPayload(payload: unknown): Promise<"delivered" | "malformed" | "no_handler"> {
+    const answer = await this.dispatchPayload(payload);
+    if (answer.status === 503) return "no_handler";
+    return answer.status === 200 ? "delivered" : "malformed";
+  }
+
+  private async dispatchPayload(payload: unknown): Promise<ZaloWebhookAnswer> {
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      return { status: 400, reason: "body is not a JSON object" };
+    }
+    const typed = payload as ZaloWebhookEvent;
+    const skipped = this.skipReason(typed);
     if (skipped !== undefined) return { status: 200, reason: skipped };
-    const event = toMessageEvent(payload) as GatewayMessageEvent;
+    const event = toMessageEvent(typed) as GatewayMessageEvent;
     const outcome = await this.dispatchOnce(this.seen, event, LABEL);
     if (outcome === "no_handler") return { status: 503, reason: "no handler subscribed" };
     return { status: 200, reason: outcome };
