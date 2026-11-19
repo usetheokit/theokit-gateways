@@ -80,11 +80,14 @@ describe("xChannel", () => {
     expect(error.message).toContain(key);
   });
 
-  it.each([null, 5, true, {}])("refuses a non-string bearerToken %j with invalid_config", (value) => {
-    const error = refusal({ ...VALUES, bearerToken: value });
-    expect(error.code).toBe("invalid_config");
-    expect(error.message).toContain("bearerToken");
-  });
+  it.each([null, 5, true, {}])(
+    "refuses a non-string bearerToken %j with invalid_config",
+    (value) => {
+      const error = refusal({ ...VALUES, bearerToken: value });
+      expect(error.code).toBe("invalid_config");
+      expect(error.message).toContain("bearerToken");
+    },
+  );
 
   it("builds with the optional guest limit as a digit string or number", () => {
     expect(xChannel.create({ ...VALUES, guestDailyLimit: "5" })).toBeInstanceOf(XAdapter);
