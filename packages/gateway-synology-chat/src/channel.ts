@@ -9,6 +9,7 @@
 import { channelConfigReaders, GatewayConfigurationError } from "@theokit/gateway";
 
 import { SynologyChatAdapter } from "./adapter.js";
+import { rememberSynologyToken, synologyChatWebhook } from "./fetch-webhook.js";
 import { type SynologyChatAdapterOptions, SynologyChatConfigError } from "./types.js";
 
 const PREFIX = "gateway-synology-chat";
@@ -142,13 +143,16 @@ const CONFIG = [
  */
 export const synologyChatChannel = {
   platform: "synology_chat" as const,
-  transport: "socket" as const,
+  transport: "webhook" as const,
+  webhook: synologyChatWebhook,
   senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Config): SynologyChatAdapter {
     const options = buildOptions(config);
     try {
-      return new SynologyChatAdapter(options);
+      const adapter = new SynologyChatAdapter(options);
+      rememberSynologyToken(adapter, options.botToken);
+      return adapter;
     } catch (err) {
       if (!(err instanceof SynologyChatConfigError)) throw err;
       const key = options.botToken.length === 0 ? "botToken" : "incomingUrl";

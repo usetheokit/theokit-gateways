@@ -15,6 +15,7 @@ import {
   type GatewayConfigurationErrorOptions,
 } from "@theokit/gateway";
 import { NextcloudTalkAdapter } from "./adapter.js";
+import { nextcloudTalkWebhook, rememberTalkSecret } from "./fetch-webhook.js";
 import type { NextcloudTalkAdapterOptions } from "./types.js";
 
 /** Misconfiguration of the Nextcloud Talk channel, raised before any network call. */
@@ -122,15 +123,16 @@ const CONFIG: ReadonlyArray<ConfigField> = [
 ];
 
 /**
- * The Nextcloud Talk channel: the adapter starts its own webhook listener in `connect()`, so the
- * transport is `"socket"`. `create` validates each value and makes no network call; `app` and `fetch`
+ * The Nextcloud Talk channel. Inbound webhooks arrive through `webhook.handle` (mount it with
+ * `createWebhookHandler`); the adapter still starts its own Express listener in `connect()`. `create` validates each value and makes no network call; `app` and `fetch`
  * are programmatic fields with no env binding.
  *
  * @public
  */
 export const nextcloudTalkChannel = {
   platform: "nextcloud_talk" as const,
-  transport: "socket" as const,
+  transport: "webhook" as const,
+  webhook: nextcloudTalkWebhook,
   config: CONFIG,
   create(config: Config): NextcloudTalkAdapter {
     rejectBlank(config);
@@ -144,7 +146,9 @@ export const nextcloudTalkChannel = {
       fetch: readers.readFunction(config, "fetch") as NextcloudTalkAdapterOptions["fetch"],
     });
     try {
-      return new NextcloudTalkAdapter(options);
+      const adapter = new NextcloudTalkAdapter(options);
+      rememberTalkSecret(adapter, options.secret);
+      return adapter;
     } catch (err) {
       // The constructor throws a plain Error for a secret outside 40 to 128 characters.
       throw new ConfigurationError({

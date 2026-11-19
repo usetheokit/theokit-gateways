@@ -115,7 +115,7 @@ Record the date and observed receive and reply results after that run succeeds.
 
 ## Channel descriptor and environment variables
 
-`nextcloudTalkChannel` describes the channel as data, for `createChannels` and `configFromEnv` from `@theokit/gateway`. It uses a `"socket"` transport and builds a `NextcloudTalkAdapter` without any network call.
+`nextcloudTalkChannel` describes the channel as data, for `createChannels` and `configFromEnv` from `@theokit/gateway`. It uses a `"webhook"` transport and builds a `NextcloudTalkAdapter` without any network call.
 
 ```ts
 import { configFromEnv, createChannels } from "@theokit/gateway";
@@ -135,3 +135,16 @@ List values accept an array or a comma-separated string, booleans `true`/`false`
 | `NEXTCLOUD_TALK_PORT` | `port` | no | no |
 | `NEXTCLOUD_TALK_PATH` | `path` | no | no |
 | `NEXTCLOUD_TALK_CONNECT_TIMEOUT_MS` | `connectTimeoutMs` | no | no |
+
+### Mount the webhook with `createWebhookHandler`
+
+The descriptor's `webhook.handle` checks Talk's signature over the random and the raw body and answers with the adapter's own status (401 for a bad signature, 503 when no handler is subscribed). The adapter's Express listener still starts in `connect()`.
+
+```ts
+import { createChannels, createWebhookHandler } from "@theokit/gateway";
+import { nextcloudTalkChannel } from "@theokit/gateway-nextcloud-talk";
+
+const { channels } = createChannels([{ descriptor: nextcloudTalkChannel, config }]);
+const handle = createWebhookHandler({ channels, isStarted: () => true });
+// POST /webhooks/nextcloud_talk -> handle(request)
+```
