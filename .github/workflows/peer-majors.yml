@@ -20,6 +20,8 @@ name: Peer majors
 
 on:
   pull_request:
+    # `workspace` merges with no CI; the promotion into develop is where checks run.
+    branches: [main, develop]
     # The claim only moves when a manifest moves.
     paths:
       - "packages/*/package.json"
