@@ -228,8 +228,25 @@ descriptor itself is the `cloud` shape.
 | `baileys` | `botPhoneId` | `WHATSAPP_BOT_PHONE_ID` | no | no |
 | both | `requireMention` | `WHATSAPP_REQUIRE_MENTION` | no | no |
 
-`verifyToken` is not an adapter option: it is kept so the webhook half can answer Meta's
-subscription check.
+`verifyToken` is not an adapter option: the webhook half uses it to answer Meta's subscription
+check. The `cloud` descriptor declares `transport: "webhook"` with `methods: ["GET", "POST"]`;
+`baileys` stays `"socket"`.
+
+### Mounting the route
+
+GET answers the subscription check (200 with `hub.challenge` as `text/plain`, else 403). POST checks
+`x-hub-signature-256` with `appSecret` (401 on a mismatch), answers 400 for a body that is not JSON,
+delivers each event and answers 200 (500 or 503 when the handler threw or none is subscribed).
+
+```ts
+import { createChannels, createWebhookHandler, selectVariant } from "@theokit/gateway";
+import { whatsappChannel } from "@theokit/gateway-whatsapp";
+
+const descriptor = selectVariant(whatsappChannel, "cloud");
+const { channels } = createChannels([{ descriptor, config }]);
+const handle = createWebhookHandler({ channels, isStarted: () => true });
+// GET and POST /webhooks/whatsapp -> handle(request)
+```
 
 ```ts
 import { configFromEnv, createChannels, selectVariant } from "@theokit/gateway";

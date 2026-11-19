@@ -25,7 +25,9 @@ describe("check-peer-floor", () => {
     for (const a of Object.values(byName)) expect(a).toMatch(/^\d+\.\d+\.\d+$/);
     expect(byName["@theokit/gateway-zalo"]).toBe("0.15.0");
     expect(byName["@theokit/gateway-qq"]).toBe("0.16.0");
-    expect(byName["@theokit/gateway-buzz"]).toBe("0.14.0");
+    expect(byName["@theokit/gateway-buzz"]).toBe("0.21.0");
+    expect(byName["@theokit/gateway-clickclack"]).toBe("0.21.0");
+    expect(byName["@theokit/gateway-feishu-lark"]).toBe("0.21.0");
   });
 });
 

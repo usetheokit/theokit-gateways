@@ -7,7 +7,6 @@
  * integration package assigns it to one, and its typecheck is where a drift between the two fails.
  */
 
-import { channelConfigReaders } from "@theokit/gateway";
 import { LineAdapter } from "./adapter.js";
 import { isEnvelope } from "./envelope.js";
 import { ConfigurationError } from "./errors.js";
@@ -16,21 +15,45 @@ import type { LineAdapterOptions } from "./types.js";
 
 const SIGNATURE_HEADER = "x-line-signature";
 
-const readers = channelConfigReaders("gateway-line", (options) => new ConfigurationError(options));
+function invalid(key: string, expected: string): ConfigurationError {
+  return new ConfigurationError({
+    code: "invalid_config",
+    message: `gateway-line: config.${key} must be ${expected}`,
+    detail: key,
+  });
+}
 
 /** A required string; an empty one is left for the adapter's own check, which names it. */
 function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
-  return config[key] === "" ? "" : readers.requiredString(config, key);
+  const value = config[key];
+  if (typeof value !== "string") throw invalid(key, "a string");
+  return value;
 }
 
-/** An optional boolean; `configFromEnv` yields strings, so `"true"` and `"false"` stand for the booleans. */
-function readBooleanLike(
+/** An optional value: `undefined`, `null` and `""` are absent, anything else must pass `check`. */
+function optional<T>(
+  config: Readonly<Record<string, unknown>>,
+  key: string,
+  check: (value: unknown) => value is T,
+  expected: string,
+): T | undefined {
+  const value = config[key];
+  if (value === undefined || value === null || value === "") return undefined;
+  if (!check(value)) throw invalid(key, expected);
+  return value;
+}
+
+const isString = (value: unknown): value is string => typeof value === "string";
+/** `configFromEnv` yields strings, so `"true"` and `"false"` stand for the booleans. */
+const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
+
+function optionalBooleanLike(
   config: Readonly<Record<string, unknown>>,
   key: string,
 ): boolean | undefined {
   const value = config[key];
   if (value === "true" || value === "false") return value === "true";
-  return readers.readBoolean(config, key);
+  return optional(config, key, isBoolean, "a boolean");
 }
 
 function buildOptions(config: Readonly<Record<string, unknown>>): LineAdapterOptions {
@@ -39,8 +62,8 @@ function buildOptions(config: Readonly<Record<string, unknown>>): LineAdapterOpt
   // path. An empty secret or token is then refused by the constructor's own ConfigurationError.
   const channelSecret = requiredString(config, "channelSecret");
   const channelAccessToken = requiredString(config, "channelAccessToken");
-  const botUserId = readers.readString(config, "botUserId");
-  const requireMention = readBooleanLike(config, "requireMention");
+  const botUserId = optional(config, "botUserId", isString, "a string");
+  const requireMention = optionalBooleanLike(config, "requireMention");
   return {
     channelSecret,
     channelAccessToken,

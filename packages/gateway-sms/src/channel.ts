@@ -7,6 +7,7 @@
 
 import { SMSAdapter } from "./adapter.js";
 import { ConfigurationError } from "./errors.js";
+import { rememberSmsOptions, twilioWebhook } from "./fetch-webhook.js";
 
 const KEYS = ["accountSid", "authToken", "fromNumber", "publicUrl"] as const;
 
@@ -63,8 +64,9 @@ const CONFIG: ReadonlyArray<ConfigField> = [
 ];
 
 /**
- * The SMS channel on the Twilio backend. `transport` is `"socket"` as the issue requires; inbound
- * messages still arrive through a webhook the app hosts (see the README).
+ * The SMS channel on the Twilio backend. Inbound messages arrive by webhook: mount
+ * `createWebhookHandler` (see the README); `webhook.handle` verifies against the configured
+ * `publicUrl`.
  *
  * `create` validates each value with this package's `ConfigurationError` and makes no network call.
  *
@@ -72,16 +74,20 @@ const CONFIG: ReadonlyArray<ConfigField> = [
  */
 export const smsChannel = {
   platform: "sms" as const,
-  transport: "socket" as const,
+  transport: "webhook" as const,
+  webhook: twilioWebhook,
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): SMSAdapter {
     const [accountSid, authToken, fromNumber, publicUrl] = KEYS.map((k) => readString(config, k));
-    return new SMSAdapter({
-      backend: "twilio",
+    const opts = {
+      backend: "twilio" as const,
       accountSid: accountSid as string,
       authToken: authToken as string,
       fromNumber: fromNumber as string,
       publicUrl: publicUrl as string,
-    });
+    };
+    const adapter = new SMSAdapter(opts);
+    rememberSmsOptions(adapter, opts);
+    return adapter;
   },
 };
