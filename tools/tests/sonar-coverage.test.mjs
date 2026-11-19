@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
@@ -91,28 +92,68 @@ test("the sonar scan runs the report generation and the scanner in one command, 
   expect([...order].sort((a, b) => a - b)).toEqual(order);
 });
 
-// Runs the root command the Sonar scan runs first, then checks the evidence the scanner
-// needs: both lcov files exist, are non-empty, and every SF: entry sits under the
-// sonar.sources of its package and is listed in sonar.javascript.lcov.reportPaths.
-test("pnpm coverage:sonar really writes both reports the scanner is told to import", () => {
+// Runs the real `sonar:scan` script. Only its last step, `pnpm dlx @sonar/scan`, is
+// replaced: a script-shell wrapper hands that call to a stand-in scanner (the real one needs a
+// server and a token, which CI supplies) and runs every other command unchanged. The stand-in
+// does what the scanner does with lcov: read sonar-project.properties, open every report
+// path, and import an entry only if its file lies under sonar.sources. It logs one
+// "Imported coverage" line per report and exits 1 if a report is absent, empty or
+// unresolvable, so the test fails unless coverage:sonar produced both reports first.
+const STAND_IN_SCANNER = String.raw`
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+const props = Object.fromEntries(readFileSync("sonar-project.properties", "utf8").split("\n")
+  .filter((l) => l.includes("=") && !l.startsWith("#")).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+const sources = props["sonar.sources"].split(",").map((d) => resolve(d));
+let failed = false;
+for (const report of props["sonar.javascript.lcov.reportPaths"].split(",")) {
+  if (!process.argv.slice(2).some((dir) => report.startsWith(dir + "/"))) continue;
+  if (!existsSync(report)) { console.log("ERROR: report not found " + report); failed = true; continue; }
+  const files = readFileSync(report, "utf8").split("\n").filter((l) => l.startsWith("SF:"))
+    .map((l) => resolve(report, "../..", l.slice(3)));
+  const ok = files.filter((f) => existsSync(f) && sources.some((s) => f.startsWith(s + "/")));
+  if (files.length === 0 || ok.length !== files.length) { console.log("ERROR: unresolved entries in " + report); failed = true; continue; }
+  console.log("INFO: Imported coverage for " + ok.length + " files from " + report);
+}
+process.exit(failed ? 1 : 0);
+`;
+
+test("pnpm sonar:scan generates both reports, then the scanner imports both", () => {
   const root = fileURLToPath(new URL("../../", import.meta.url));
-  for (const dir of PACKAGES) rmSync(resolve(root, dir, "coverage/lcov.info"), { force: true });
-  const run = spawnSync("pnpm", ["coverage:sonar"], { cwd: root, encoding: "utf8" });
-  expect(run.status, run.stdout + run.stderr).toBe(0);
-  const reportPaths = read("sonar-project.properties")
-    .split("\n")
-    .find((l) => l.startsWith("sonar.javascript.lcov.reportPaths="))
-    .split("=")[1]
-    .split(",");
-  for (const dir of PACKAGES) {
-    expect(reportPaths).toContain(`${dir}/coverage/lcov.info`);
-    const file = resolve(root, dir, "coverage/lcov.info");
-    expect(existsSync(file), `${dir} lcov missing after coverage:sonar`).toBe(true);
-    const sf = readFileSync(file, "utf8")
-      .split("\n")
-      .filter((l) => l.startsWith("SF:"))
-      .map((l) => resolve(root, dir, l.slice(3)));
-    expect(sf.length).toBeGreaterThan(0);
-    for (const f of sf) expect(f.startsWith(resolve(root, dir, "src")), f).toBe(true);
+  const bin = mkdtempSync(join(tmpdir(), "sonar-shim-"));
+  try {
+    writeFileSync(join(bin, "scanner.mjs"), STAND_IN_SCANNER);
+    // pnpm runs scripts through its script-shell, so that is where the last step is swapped.
+    writeFileSync(
+      join(bin, "shell.sh"),
+      `#!/bin/sh
+cmd="$2"
+last="pnpm dlx @sonar/scan"
+case "$cmd" in
+  *"&& $last") /bin/sh -c "\${cmd%"&& $last"}" && exec node "${join(bin, "scanner.mjs")}" ${PACKAGES.join(" ")} ;;
+  *) exec /bin/sh -c "$cmd" ;;
+esac
+`,
+      { mode: 0o755 },
+    );
+    for (const dir of PACKAGES)
+      rmSync(resolve(root, dir, "coverage"), { recursive: true, force: true });
+    const run = spawnSync("pnpm", ["sonar:scan"], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        npm_config_script_shell: join(bin, "shell.sh"),
+      },
+    });
+    const log = run.stdout + run.stderr;
+    expect(run.status, log).toBe(0);
+    for (const dir of PACKAGES) {
+      expect(log).toMatch(
+        new RegExp(`Imported coverage for [1-9]\\d* files from ${dir}/coverage/lcov.info`),
+      );
+    }
+  } finally {
+    rmSync(bin, { recursive: true, force: true });
   }
 }, 480_000);
