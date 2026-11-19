@@ -26,6 +26,18 @@ export interface ChannelConfigReaders {
   /** An optional boolean; absent gives `undefined`, a non-boolean throws. */
   readBoolean(config: ChannelConfigInput, key: string): boolean | undefined;
   /**
+   * Readers for values that may arrive as env strings. Only `undefined` is absent: `null` and
+   * `""` are wrong shapes and throw `invalid_config`.
+   */
+  /** An optional non-empty string. */
+  readStrictString(config: ChannelConfigInput, key: string): string | undefined;
+  /** An optional boolean, given as a boolean or the string `"true"` / `"false"`. */
+  readFlag(config: ChannelConfigInput, key: string): boolean | undefined;
+  /** An optional finite number, given as a number or a digit string. */
+  readNumber(config: ChannelConfigInput, key: string): number | undefined;
+  /** An optional string list, given as an array of strings or a comma-separated string. */
+  readList(config: ChannelConfigInput, key: string): string[] | undefined;
+  /**
    * An optional function; absent gives `undefined`, a non-function throws. Only callability is
    * checked: the caller names the signature `T` and is responsible for it.
    */
@@ -64,15 +76,50 @@ export function channelConfigReaders(
     if (typeof value !== "string") throw invalid(key, "a string");
     return value;
   };
+  const requiredString = (config: ChannelConfigInput, key: string): string => {
+    const value = config[key];
+    if (typeof value !== "string" || value === "") throw invalid(key, "a non-empty string");
+    return value;
+  };
+  const toFiniteNumber = (value: unknown): number | undefined => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+    if (typeof value !== "string" || !/^[0-9]+$/.test(value.trim())) return undefined;
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
   return {
     invalid,
+    readStrictString: (config, key) =>
+      config[key] === undefined ? undefined : requiredString(config, key),
+    readFlag(config, key) {
+      const value = config[key];
+      if (value === undefined) return undefined;
+      if (value === true || value === "true") return true;
+      if (value === false || value === "false") return false;
+      throw invalid(key, 'a boolean or the string "true" or "false"');
+    },
+    readNumber(config, key) {
+      const value = config[key];
+      if (value === undefined) return undefined;
+      const parsed = toFiniteNumber(value);
+      if (parsed !== undefined) return parsed;
+      throw invalid(key, "a number or a digit string");
+    },
+    readList(config, key) {
+      const value = config[key];
+      if (value === undefined) return undefined;
+      if (typeof value === "string") {
+        return value
+          .split(",")
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0);
+      }
+      if (Array.isArray(value) && value.every((item) => typeof item === "string")) return value;
+      throw invalid(key, "an array of strings or a comma-separated string");
+    },
     isAbsent,
     readString,
-    requiredString(config, key) {
-      const value = config[key];
-      if (typeof value !== "string" || value === "") throw invalid(key, "a non-empty string");
-      return value;
-    },
+    requiredString,
     readBoolean(config, key) {
       const value = config[key];
       if (isAbsent(value)) return undefined;

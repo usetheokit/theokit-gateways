@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "description": "Multi-platform messaging gateway core for @theokit/sdk — transport-agnostic primitives (BasePlatformAdapter, MessageEvent, SessionRouter, DeliveryRouter, GatewayRunner, hooks). Inspired by hermes-agent/gateway. ADRs D170-D181.",
   "license": "Apache-2.0",
   "repository": {
@@ -41,7 +41,7 @@
     "test:mutation": "stryker run"
   },
   "peerDependencies": {
-    "@theokit/sdk": ">=2.18.0 <6"
+    "@theokit/sdk": ">=4.62.0 <6"
   },
   "devDependencies": {
     "@stryker-mutator/core": "10",

@@ -71,3 +71,32 @@ describe("channelConfigReaders", () => {
     expect(thrown(() => mine.requiredString({}, "k"))).toBeInstanceOf(Mine);
   });
 });
+
+describe("channelConfigReaders string-form readers", () => {
+  it("readStrictString: undefined is absent, null and empty throw", () => {
+    expect(r.readStrictString({}, "k")).toBeUndefined();
+    expect(r.readStrictString({ k: "v" }, "k")).toBe("v");
+    expect(thrown(() => r.readStrictString({ k: "" }, "k")).code).toBe("invalid_config");
+    expect(thrown(() => r.readStrictString({ k: null }, "k")).detail).toBe("k");
+  });
+  it("readFlag takes booleans and their strings", () => {
+    expect(r.readFlag({}, "k")).toBeUndefined();
+    expect(r.readFlag({ k: true }, "k")).toBe(true);
+    expect(r.readFlag({ k: "false" }, "k")).toBe(false);
+    expect(thrown(() => r.readFlag({ k: "yes" }, "k")).message).toContain("config.k");
+  });
+  it("readNumber takes numbers and digit strings", () => {
+    expect(r.readNumber({}, "k")).toBeUndefined();
+    expect(r.readNumber({ k: 5 }, "k")).toBe(5);
+    expect(r.readNumber({ k: " 42 " }, "k")).toBe(42);
+    expect(thrown(() => r.readNumber({ k: Number.NaN }, "k")).code).toBe("invalid_config");
+    expect(thrown(() => r.readNumber({ k: "1.5" }, "k")).message).toContain("config.k");
+    expect(thrown(() => r.readNumber({ k: true }, "k")).detail).toBe("k");
+  });
+  it("readList takes arrays and comma-separated strings", () => {
+    expect(r.readList({}, "k")).toBeUndefined();
+    expect(r.readList({ k: "a, b,,c" }, "k")).toEqual(["a", "b", "c"]);
+    expect(r.readList({ k: ["a"] }, "k")).toEqual(["a"]);
+    expect(thrown(() => r.readList({ k: [1] }, "k")).message).toContain("config.k");
+  });
+});
