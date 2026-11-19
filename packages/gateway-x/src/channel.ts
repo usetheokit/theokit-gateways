@@ -65,11 +65,27 @@ const CONFIG: ReadonlyArray<ConfigField> = [
   field("userId", "X_USER_ID", "The numeric X user id of the bot account."),
   field("username", "X_USERNAME", "The bot account's @handle, without the @."),
   field("clientId", "X_CLIENT_ID", "The OAuth 2.0 client id of the X app."),
-  field("clientSecret", "X_CLIENT_SECRET", "The OAuth 2.0 client secret of the X app.", { secret: true }),
-  field("refreshToken", "X_REFRESH_TOKEN", "The OAuth 2.0 refresh token of the bot account.", { secret: true }),
-  field("allowFrom", "X_ALLOW_FROM", "X user ids allowed to reach the handler, an array or a comma-separated string; must not be empty."),
-  field("bearerToken", "X_BEARER_TOKEN", "An app-only bearer token for reads.", { required: false, secret: true }),
-  field("guestDailyLimit", "X_GUEST_DAILY_LIMIT", "Replies per day for a sender outside the allowlist (guest.dailyLimit); a positive integer.", { required: false }),
+  field("clientSecret", "X_CLIENT_SECRET", "The OAuth 2.0 client secret of the X app.", {
+    secret: true,
+  }),
+  field("refreshToken", "X_REFRESH_TOKEN", "The OAuth 2.0 refresh token of the bot account.", {
+    secret: true,
+  }),
+  field(
+    "allowFrom",
+    "X_ALLOW_FROM",
+    "X user ids allowed to reach the handler, an array or a comma-separated string; must not be empty.",
+  ),
+  field("bearerToken", "X_BEARER_TOKEN", "An app-only bearer token for reads.", {
+    required: false,
+    secret: true,
+  }),
+  field(
+    "guestDailyLimit",
+    "X_GUEST_DAILY_LIMIT",
+    "Replies per day for a sender outside the allowlist (guest.dailyLimit); a positive integer.",
+    { required: false },
+  ),
 ];
 
 /**

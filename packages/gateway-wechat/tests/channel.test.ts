@@ -30,12 +30,11 @@ const { refusal } = describeChannelContract({
 
 vitest.describe("wechatChannel descriptor", () => {
   vitest.it("declares its config fields with env bindings and secret flags", () => {
-    vitest
-      .expect(wechatChannel.config.map((f) => [f.key, f.env, f.required, f.secret]))
-      .toEqual([
-        ["appId", "WECHAT_APP_ID", true, false],
-        ["appSecret", "WECHAT_APP_SECRET", true, true],
-        ["token", "WECHAT_TOKEN", true, true],
-      ]);
+    const rows = wechatChannel.config.map((f) => [f.key, f.env, f.required, f.secret]);
+    vitest.expect(rows).toEqual([
+      ["appId", "WECHAT_APP_ID", true, false],
+      ["appSecret", "WECHAT_APP_SECRET", true, true],
+      ["token", "WECHAT_TOKEN", true, true],
+    ]);
   });
 });

@@ -42,10 +42,26 @@ const field = (
 
 const CONFIG: ReadonlyArray<ConfigField> = [
   field("corpId", "WECOM_CORP_ID", "The enterprise CorpID."),
-  field("corpSecret", "WECOM_CORP_SECRET", "The self-built application's secret.", { secret: true }),
-  field("agentId", "WECOM_AGENT_ID", "The self-built application's AgentId, a number or a string of digits."),
-  field("token", "WECOM_TOKEN", "The token configured for the application's callback, used to verify signatures.", { secret: true }),
-  field("encodingAesKey", "WECOM_ENCODING_AES_KEY", "The 43-character EncodingAESKey configured for the application's callback.", { secret: true }),
+  field("corpSecret", "WECOM_CORP_SECRET", "The self-built application's secret.", {
+    secret: true,
+  }),
+  field(
+    "agentId",
+    "WECOM_AGENT_ID",
+    "The self-built application's AgentId, a number or a string of digits.",
+  ),
+  field(
+    "token",
+    "WECOM_TOKEN",
+    "The token configured for the application's callback, used to verify signatures.",
+    { secret: true },
+  ),
+  field(
+    "encodingAesKey",
+    "WECOM_ENCODING_AES_KEY",
+    "The 43-character EncodingAESKey configured for the application's callback.",
+    { secret: true },
+  ),
 ];
 
 /**

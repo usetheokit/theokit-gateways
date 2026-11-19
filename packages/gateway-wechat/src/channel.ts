@@ -34,7 +34,12 @@ const field = (
 const CONFIG: ReadonlyArray<ConfigField> = [
   field("appId", "WECHAT_APP_ID", "The Official Account AppID."),
   field("appSecret", "WECHAT_APP_SECRET", "The Official Account AppSecret.", { secret: true }),
-  field("token", "WECHAT_TOKEN", "The token configured for server callbacks, used to verify their signature.", { secret: true }),
+  field(
+    "token",
+    "WECHAT_TOKEN",
+    "The token configured for server callbacks, used to verify their signature.",
+    { secret: true },
+  ),
 ];
 
 /**
