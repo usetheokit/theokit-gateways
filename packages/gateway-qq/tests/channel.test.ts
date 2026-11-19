@@ -1,22 +1,15 @@
-import {
-  configFromEnv,
-  createChannels,
-  GatewayConfigurationError,
-} from "@theokit/gateway";
+import { configFromEnv, createChannels, GatewayConfigurationError } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 import { QQAdapter } from "../src/adapter.js";
 import { qqChannel } from "../src/channel.js";
 
 const ENV = { APP_QQ_APP_ID: "app-1", APP_QQ_APP_SECRET: "s3cret-qq" };
-const read = (env: Record<string, string>) =>
-  configFromEnv(qqChannel, env, "APP_");
+const read = (env: Record<string, string>) => configFromEnv(qqChannel, env, "APP_");
 
 describe("qqChannel", () => {
   it("builds the adapter from the environment through createChannels", () => {
-    const result = createChannels([
-      { descriptor: qqChannel, config: read(ENV).config },
-    ]);
+    const result = createChannels([{ descriptor: qqChannel, config: read(ENV).config }]);
     expect(result.rejected).toEqual([]);
     expect(result.adapters[0]).toBeInstanceOf(QQAdapter);
     expect(qqChannel.transport).toBe("webhook");
@@ -39,8 +32,7 @@ describe("qqChannel", () => {
   });
 
   it("refuses a number for appSecret with invalid_config naming the key", () => {
-    const build = () =>
-      qqChannel.create({ ...read(ENV).config, appSecret: 42 });
+    const build = () => qqChannel.create({ ...read(ENV).config, appSecret: 42 });
     expect(build).toThrow(GatewayConfigurationError);
     expect(build).toThrow(
       expect.objectContaining({

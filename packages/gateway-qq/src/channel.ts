@@ -6,11 +6,7 @@
  * object is structurally a `ChannelDescriptor`.
  */
 
-import {
-  channelConfigReaders,
-  type WebhookAnswer,
-  type WebhookRequest,
-} from "@theokit/gateway";
+import { channelConfigReaders, type WebhookAnswer, type WebhookRequest } from "@theokit/gateway";
 
 import { QQAdapter } from "./adapter.js";
 import type { QQFetch } from "./types.js";
@@ -48,8 +44,7 @@ const CONFIG = [
     env: "QQ_TOKEN_URL",
     required: false,
     secret: false,
-    description:
-      "Override the token endpoint, https://bots.qq.com/app/getAppAccessToken.",
+    description: "Override the token endpoint, https://bots.qq.com/app/getAppAccessToken.",
   },
 ];
 
@@ -84,17 +79,13 @@ export const qqChannel = {
   webhook: {
     verify: () => false,
     ingest: () => Promise.resolve("malformed" as const),
-    async handle(
-      adapter: QQAdapter,
-      request: WebhookRequest,
-    ): Promise<WebhookAnswer> {
+    async handle(adapter: QQAdapter, request: WebhookRequest): Promise<WebhookAnswer> {
       const answer = await adapter.handleWebhook(
         request.rawBody,
         request.headers["x-signature-ed25519"],
         request.headers["x-signature-timestamp"],
       );
-      const body =
-        "body" in answer && answer.body !== undefined ? answer.body : undefined;
+      const body = "body" in answer && answer.body !== undefined ? answer.body : undefined;
       return body === undefined
         ? { status: answer.status }
         : {
