@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 // Duplication analysis must keep covering channel.ts and test files in every package.
@@ -38,4 +38,30 @@ describe("sonar duplication scope", () => {
       }
     });
   }
+});
+
+describe("sonar analysis roots", () => {
+  const prop = (name) =>
+    readFileSync(new URL("../../sonar-project.properties", import.meta.url), "utf8")
+      .split("\n")
+      .find((l) => l.startsWith(`${name}=`))
+      ?.slice(name.length + 1)
+      .split(",") ?? [];
+
+  it("lists the src and tests directory of every package as sources", () => {
+    const sources = prop("sonar.sources");
+    const root = new URL("../../packages/", import.meta.url);
+    for (const pkg of readdirSync(root)) {
+      for (const dir of ["src", "tests"]) {
+        if (existsSync(new URL(`${pkg}/${dir}`, root))) {
+          expect(sources).toContain(`packages/${pkg}/${dir}`);
+        }
+      }
+    }
+  });
+
+  it("does not classify tests as test code, which has no duplication analysis", () => {
+    expect(prop("sonar.tests")).toEqual([]);
+    expect(prop("sonar.test.inclusions")).toEqual([]);
+  });
 });
