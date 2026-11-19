@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 
 const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
@@ -35,4 +35,25 @@ test.each(PACKAGES)("%s writes lcov and is known to sonar", (dir) => {
   }
   const lcov = props.split("\n").find((l) => l.startsWith("sonar.javascript.lcov.reportPaths="));
   expect(lcov.split("=")[1].split(",")).toContain(`${dir}/coverage/lcov.info`);
+});
+
+// Evidence from a real run: when coverage was generated (coverage:sonar), the lcov must
+// cover files that sonar.sources knows, so the scanner imports it rather than skipping it.
+test.each(PACKAGES)("%s lcov, when generated, only lists files under its sonar source dir", (dir) => {
+  const path = new URL(`../../${dir}/coverage/lcov.info`, import.meta.url);
+  if (!existsSync(path)) return;
+  const files = readFileSync(path, "utf8")
+    .split("\n")
+    .filter((l) => l.startsWith("SF:"))
+    .map((l) => l.slice(3));
+  expect(files.length).toBeGreaterThan(0);
+  for (const f of files) expect(f.replaceAll("\\", "/")).toMatch(/^(src\/|\/.*\/src\/)/);
+});
+
+test("the sonar scan runs the report generation and the scanner in one command, in order", () => {
+  const { scripts } = json("package.json");
+  const expanded = scripts["sonar:scan"].replace("pnpm coverage:sonar", scripts["coverage:sonar"]);
+  const order = ["build", "run coverage", "@sonar/scan"].map((s) => expanded.indexOf(s));
+  expect(order.every((i) => i >= 0)).toBe(true);
+  expect([...order].sort((a, b) => a - b)).toEqual(order);
 });
