@@ -1,5 +1,6 @@
 import * as gateway from "@theokit/gateway";
 import * as vitest from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { describeChannelContract } from "../../../test-support/channel-contract.js";
 import { WeChatAdapter } from "../src/adapter.js";
@@ -28,10 +29,10 @@ const { refusal } = describeChannelContract({
   gateway,
 });
 
-vitest.describe("wechatChannel descriptor", () => {
-  vitest.it("declares its config fields with env bindings and secret flags", () => {
+describe("wechatChannel descriptor", () => {
+  it("declares its config fields with env bindings and secret flags", () => {
     const rows = wechatChannel.config.map((f) => [f.key, f.env, f.required, f.secret]);
-    vitest.expect(rows).toEqual([
+    expect(rows).toEqual([
       ["appId", "WECHAT_APP_ID", true, false],
       ["appSecret", "WECHAT_APP_SECRET", true, true],
       ["token", "WECHAT_TOKEN", true, true],
