@@ -130,6 +130,8 @@ export const xChannel = {
   config: CONFIG,
   create(config: Config): XAdapter {
     const str = (key: string) => requiredString(config, key);
+    // `null` is a wrong shape here, not an absent value (configFromEnv never yields it).
+    if (config.bearerToken === null) throw invalid("bearerToken", "a string");
     const bearerToken = readString(config, "bearerToken");
     const guestDailyLimit = readLimit(config);
     const options: XAdapterOptions = {
