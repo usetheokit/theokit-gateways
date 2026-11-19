@@ -6,30 +6,14 @@
  * is structurally a `ChannelDescriptor`; the integration package assigns it to one.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 
 import { WeComAdapter } from "./adapter.js";
 import type { WeComAdapterOptions } from "./types.js";
 
 type Config = Readonly<Record<string, unknown>>;
 
-function invalid(key: string, expected: string): GatewayConfigurationError {
-  return new GatewayConfigurationError("gateway-wecom", {
-    code: "invalid_config",
-    message: `gateway-wecom: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-/** Reads `key` as a non-empty string. */
-function readString(config: Config, key: string): string {
-  const value = config[key];
-  if (value === undefined || value === null || value === "") {
-    throw invalid(key, "a non-empty string");
-  }
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return value;
-}
+const { invalid, requiredString } = channelConfigReaders("gateway-wecom");
 
 /** The agent id: a number or a digit string. */
 function readAgentId(config: Config): number | string {
@@ -102,11 +86,11 @@ export const wecomChannel = {
   config: CONFIG,
   create(config: Config): WeComAdapter {
     const options: WeComAdapterOptions = {
-      corpId: readString(config, "corpId"),
-      corpSecret: readString(config, "corpSecret"),
+      corpId: requiredString(config, "corpId"),
+      corpSecret: requiredString(config, "corpSecret"),
       agentId: readAgentId(config),
-      token: readString(config, "token"),
-      encodingAesKey: readString(config, "encodingAesKey"),
+      token: requiredString(config, "token"),
+      encodingAesKey: requiredString(config, "encodingAesKey"),
     };
     return new WeComAdapter(options);
   },

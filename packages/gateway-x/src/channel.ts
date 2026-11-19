@@ -6,32 +6,14 @@
  * is structurally a `ChannelDescriptor`; the integration package assigns it to one.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 
 import { XAdapter } from "./adapter.js";
 import type { XAdapterOptions } from "./types.js";
 
 type Config = Readonly<Record<string, unknown>>;
 
-function invalid(key: string, expected: string): GatewayConfigurationError {
-  return new GatewayConfigurationError("gateway-x", {
-    code: "invalid_config",
-    message: `gateway-x: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-/** Reads `key` as a string; `""` and `undefined` count as absent, `null` is a wrong shape. */
-function readString(config: Config, key: string, required: boolean): string | undefined {
-  const value = config[key];
-  if (value === null) throw invalid(key, required ? "a non-empty string" : "a string");
-  if (value === undefined || value === "") {
-    if (required) throw invalid(key, "a non-empty string");
-    return undefined;
-  }
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return value;
-}
+const { invalid, readString, requiredString } = channelConfigReaders("gateway-x");
 
 /** An array of strings or a comma-separated string; an entry that is empty once trimmed and stripped of a leading @, or an empty list, is refused. */
 function readAllowFrom(config: Config): string[] {
@@ -147,8 +129,8 @@ export const xChannel = {
   senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Config): XAdapter {
-    const str = (key: string) => readString(config, key, true) as string;
-    const bearerToken = readString(config, "bearerToken", false);
+    const str = (key: string) => requiredString(config, key);
+    const bearerToken = readString(config, "bearerToken");
     const guestDailyLimit = readLimit(config);
     const options: XAdapterOptions = {
       userId: str("userId"),

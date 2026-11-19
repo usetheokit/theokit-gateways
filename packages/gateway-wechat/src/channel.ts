@@ -6,30 +6,14 @@
  * is structurally a `ChannelDescriptor`; the integration package assigns it to one.
  */
 
-import { GatewayConfigurationError } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 
 import { WeChatAdapter } from "./adapter.js";
 import type { WeChatAdapterOptions } from "./types.js";
 
 type Config = Readonly<Record<string, unknown>>;
 
-function invalid(key: string, expected: string): GatewayConfigurationError {
-  return new GatewayConfigurationError("gateway-wechat", {
-    code: "invalid_config",
-    message: `gateway-wechat: config.${key} must be ${expected}`,
-    detail: key,
-  });
-}
-
-/** Reads `key` as a non-empty string. */
-function readString(config: Config, key: string): string {
-  const value = config[key];
-  if (value === undefined || value === null || value === "") {
-    throw invalid(key, "a non-empty string");
-  }
-  if (typeof value !== "string") throw invalid(key, "a string");
-  return value;
-}
+const { requiredString } = channelConfigReaders("gateway-wechat");
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
 interface ConfigField {
@@ -80,9 +64,9 @@ export const wechatChannel = {
   config: CONFIG,
   create(config: Config): WeChatAdapter {
     const options: WeChatAdapterOptions = {
-      appId: readString(config, "appId"),
-      appSecret: readString(config, "appSecret"),
-      token: readString(config, "token"),
+      appId: requiredString(config, "appId"),
+      appSecret: requiredString(config, "appSecret"),
+      token: requiredString(config, "token"),
     };
     return new WeChatAdapter(options);
   },

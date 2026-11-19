@@ -39,53 +39,45 @@ function refusal(config: Record<string, unknown>): GatewayConfigurationError {
   throw new Error("create did not throw");
 }
 
+const required = xChannel.config.filter((f) => f.required);
+const secrets = xChannel.config.filter((f) => f.secret);
+const secretValues = secrets.map((f) => VALUES[f.key] as string).sort();
+const prefixed = (name: string | undefined) => `APP_${name}`;
+const reject = (source: Record<string, string>) => {
+  const env = configFromEnv(descriptor, source, "APP_");
+  const result = createChannels([{ descriptor, config: env.config, envPrefix: "APP_" }]);
+  return { env, result };
+};
+
 describe("xChannel", () => {
   it("builds the adapter through createChannels from configFromEnv", () => {
-    const env = configFromEnv(descriptor, ENV, "APP_");
+    const { env, result } = reject(ENV);
     expect(env.missing).toEqual([]);
-    const result = createChannels([{ descriptor, config: env.config, envPrefix: "APP_" }]);
     expect(result.rejected).toEqual([]);
     expect(result.adapters[0]).toBeInstanceOf(XAdapter);
   });
 
-  it.each([
-    "APP_X_USER_ID",
-    "APP_X_USERNAME",
-    "APP_X_CLIENT_ID",
-    "APP_X_CLIENT_SECRET",
-    "APP_X_REFRESH_TOKEN",
-    "APP_X_ALLOW_FROM",
-  ])("a missing %s is rejected naming the full variable", (name) => {
-    const source = { ...ENV };
-    delete source[name];
-    const env = configFromEnv(descriptor, source, "APP_");
-    expect(env.missing).toEqual([name]);
-    const result = createChannels([{ descriptor, config: env.config, envPrefix: "APP_" }]);
-    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toContain(name);
-  });
-
-  it("lists exactly the secret values in configFromEnv(...).secrets", () => {
-    const env = configFromEnv(descriptor, ENV, "APP_");
-    expect([...env.secrets].sort()).toEqual(["btok", "csec", "rtok"]);
-    const secretKeys = xChannel.config.filter((f) => f.secret).map((f) => f.key);
-    expect(secretKeys.map((k) => VALUES[k]).sort()).toEqual(["btok", "csec", "rtok"]);
-  });
-
-  it.each(["userId", "username", "clientId", "clientSecret", "refreshToken", "allowFrom"])(
-    "refuses a wrongly typed %s with invalid_config",
-    (key) => {
-      const error = refusal({ ...VALUES, [key]: { not: "valid" } });
-      expect(error).toBeInstanceOf(GatewayConfigurationError);
-      expect(error.code).toBe("invalid_config");
-      expect(error.message).toContain(key);
+  it.each(required.map((f) => [prefixed(f.env)]))(
+    "a missing %s is rejected naming the full variable",
+    (name) => {
+      const source = { ...ENV };
+      delete source[name as string];
+      const { env, result } = reject(source);
+      expect(env.missing).toEqual([name]);
+      expect(result.rejected[0]?.error.code).toBe("missing_required_config");
+      expect(result.rejected[0]?.error.message).toContain(name);
     },
   );
 
-  it("refuses a null bearerToken with invalid_config", () => {
-    const error = refusal({ ...VALUES, bearerToken: null });
+  it("lists exactly the secret values in configFromEnv(...).secrets", () => {
+    expect([...configFromEnv(descriptor, ENV, "APP_").secrets].sort()).toEqual(secretValues);
+  });
+
+  it.each(required.map((f) => [f.key]))("refuses a wrongly typed %s with invalid_config", (key) => {
+    const error = refusal({ ...VALUES, [key as string]: { not: "valid" } });
+    expect(error).toBeInstanceOf(GatewayConfigurationError);
     expect(error.code).toBe("invalid_config");
-    expect(error.message).toContain("bearerToken");
+    expect(error.message).toContain(key);
   });
 
   it("builds with the optional guest limit as a digit string or number", () => {
