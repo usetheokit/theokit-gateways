@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0
+
+### Minor Changes
+
+- 4a4c25d: Ship `ChannelDescriptor`s with env bindings for `configFromEnv`: `discordChannel` and `slackChannel` are new, and `telegramChannel` and `lineChannel` gain `env` names. `create` accepts comma-separated list strings and `"true"`/`"false"` strings.
+
+## 0.6.1
+
+### Patch Changes
+
+- 963a0ff: `@theokit/gateway` exports `channelConfigReaders(prefix)`, the config readers (`invalid`, `isAbsent`, `readString`, `requiredString`, `readBoolean`, `readFunction`) that channel packages each copied. `@theokit/gateway-line` uses them and raises its `@theokit/gateway` peer floor to `>=0.21.0`.
+
 ## 0.6.0
 
 ### Minor Changes
