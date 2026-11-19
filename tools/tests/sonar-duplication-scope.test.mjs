@@ -28,13 +28,11 @@ const analysedFiles = () => {
 
 const toRegExp = (glob) =>
   new RegExp(
-    "^" +
-      glob
-        .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-        .replace(/\*\*\/?/g, "@@GLOBSTAR@@")
-        .replace(/\*/g, "[^/]*")
-        .replace(/@@GLOBSTAR@@/g, "(?:.*/)?") +
-      "$",
+    `^${glob
+      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*\*\/|\*\*|\*/g, (m) =>
+        m === "**/" ? "(?:.*/)?" : m === "**" ? ".*" : "[^/]*",
+      )}$`,
   );
 
 const globsOf = (file, key) =>
@@ -44,6 +42,15 @@ const globsOf = (file, key) =>
     .flatMap((l) => l.slice(l.indexOf("=") + 1).split(","))
     .map((g) => g.trim())
     .filter(Boolean);
+
+describe("glob matcher", () => {
+  it("lets a trailing ** match files below the directory", () => {
+    expect(toRegExp("packages/a/tests/**").test("packages/a/tests/x/y.test.ts")).toBe(true);
+    expect(toRegExp("**/tests/**").test("packages/a/tests/x.ts")).toBe(true);
+    expect(toRegExp("**/*.d.ts").test("a/b.d.ts")).toBe(true);
+    expect(toRegExp("packages/a/tests/**").test("packages/b/tests/x.ts")).toBe(false);
+  });
+});
 
 describe("sonar duplication scope", () => {
   const files = analysedFiles();
