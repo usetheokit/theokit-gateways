@@ -15,9 +15,9 @@ const toRegExp = (glob) =>
     "^" +
       glob
         .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-        .replace(/\*\*\/?/g, "\u0000")
+        .replace(/\*\*\/?/g, "@@GLOBSTAR@@")
         .replace(/\*/g, "[^/]*")
-        .replace(/\u0000/g, "(?:.*/)?") +
+        .replace(/@@GLOBSTAR@@/g, "(?:.*/)?") +
       "$",
   );
 
