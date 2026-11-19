@@ -80,3 +80,21 @@ The descriptor is constructor-only (`transport: "socket"`); your app still mount
 
 `create` refuses a value of the wrong type with a `GatewayConfigurationError` (`invalid_config`,
 naming the key) and makes no network call.
+
+## Mount with `createWebhookHandler`
+
+`wecomChannel` declares `transport: "webhook"`, so one Fetch route serves it:
+
+```ts
+import { configFromEnv, createChannels, createWebhookHandler } from "@theokit/gateway";
+import { wecomChannel } from "@theokit/gateway-wecom";
+
+const { adapters, channels } = createChannels([
+  { descriptor: wecomChannel, config: configFromEnv(wecomChannel, process.env).config },
+]);
+// Subscribe with adapter.onInbound(...) and start the adapters, then:
+export const onWebhook = createWebhookHandler({ channels, isStarted: () => true });
+// Route `/webhooks/wecom` to onWebhook(request).
+```
+
+The route takes `GET` (the callback-URL check, answered with the decrypted `echostr`) and `POST` (encrypted XML). The `msg_signature` is read from the query; a wrong one is a 401, and a 503 (no handler subscribed) stays 503 so WeCom retries.

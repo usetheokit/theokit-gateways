@@ -9,6 +9,7 @@
 import { channelConfigReaders } from "@theokit/gateway";
 
 import { WeChatAdapter } from "./adapter.js";
+import { rememberWeChatToken, wechatWebhook } from "./fetch-webhook.js";
 import type { WeChatAdapterOptions } from "./types.js";
 
 type Config = Readonly<Record<string, unknown>>;
@@ -43,8 +44,8 @@ const CONFIG: ReadonlyArray<ConfigField> = [
 ];
 
 /**
- * The WeChat channel. Callbacks reach the adapter through a route your app mounts
- * (`transport: "socket"` is the constructor-only descriptor shape; the webhook contract is separate).
+ * The WeChat channel. Callbacks arrive by webhook: mount `createWebhookHandler` (see the README);
+ * `webhook.handle` verifies the query signature and answers the server-URL check.
  *
  * `create` refuses a value of the wrong type with a `GatewayConfigurationError` coded
  * `invalid_config` and performs no network call.
@@ -53,7 +54,8 @@ const CONFIG: ReadonlyArray<ConfigField> = [
  */
 export const wechatChannel = {
   platform: "wechat" as const,
-  transport: "socket" as const,
+  transport: "webhook" as const,
+  webhook: wechatWebhook,
   senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Config): WeChatAdapter {
@@ -62,6 +64,8 @@ export const wechatChannel = {
       appSecret: requiredString(config, "appSecret"),
       token: requiredString(config, "token"),
     };
-    return new WeChatAdapter(options);
+    const adapter = new WeChatAdapter(options);
+    rememberWeChatToken(adapter, options.token);
+    return adapter;
   },
 };
