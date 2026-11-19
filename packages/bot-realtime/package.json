@@ -33,8 +33,7 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "coverage": "vitest run --coverage"
+    "test": "vitest run --coverage"
   },
   "devDependencies": {
     "@theokit/gateway": "workspace:*",

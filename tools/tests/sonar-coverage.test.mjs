@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -24,27 +25,28 @@ describe.each([
     expect(list("sonar.javascript.lcov.reportPaths")).toContain(`${dir}/coverage/lcov.info`);
   });
 
-  it("has a coverage script and a config that writes LCOV for src", () => {
+  it("writes the report from the package's ordinary test script", () => {
     const pkg = JSON.parse(readFileSync(resolve(root, dir, "package.json"), "utf8"));
-    expect(pkg.scripts.coverage).toContain("--coverage");
+    expect(pkg.scripts.test).toContain("--coverage");
     expect(pkg.devDependencies["@vitest/coverage-v8"]).toBeDefined();
-    const config = readFileSync(resolve(root, dir, "vitest.config.ts"), "utf8");
-    expect(config).toContain('"lcov"');
-    expect(config).toContain("src/**/*.ts");
   });
 
-  it("is run by the root coverage:sonar script", () => {
-    const rootPkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
-    expect(rootPkg.scripts["coverage:sonar"]).toContain(pkgName);
-  });
-
-  it("writes LCOV records for existing source files with covered lines (when generated)", () => {
+  it("generates a report whose records land on indexed Sonar source files", () => {
     const lcov = resolve(root, dir, "coverage/lcov.info");
-    if (!existsSync(lcov)) return;
+    rmSync(resolve(root, dir, "coverage"), { recursive: true, force: true });
+    execFileSync("pnpm", ["--filter", pkgName, "run", "test"], { cwd: root, stdio: "pipe" });
+    expect(existsSync(lcov)).toBe(true);
+
     const text = readFileSync(lcov, "utf8");
     const files = [...text.matchAll(/^SF:(.+)$/gm)].map((m) => m[1]);
     expect(files.length).toBeGreaterThan(0);
-    for (const f of files) expect(existsSync(resolve(root, dir, f))).toBe(true);
+    const sources = list("sonar.sources");
+    for (const f of files) {
+      // Sonar sees the repository-relative path of the record.
+      const repoPath = `${dir}/${f}`;
+      expect(existsSync(resolve(root, repoPath))).toBe(true);
+      expect(sources.some((s) => repoPath.startsWith(`${s}/`))).toBe(true);
+    }
     expect(text).toMatch(/^LH:[1-9]\d*$/m);
-  });
+  }, 120_000);
 });
