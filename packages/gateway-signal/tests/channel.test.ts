@@ -52,7 +52,7 @@ describe("signalChannel", () => {
     const result = createChannels([{ descriptor: signalChannel, config }]);
     expect(result.adapters).toEqual([]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toContain("account");
+    expect(result.rejected[0]?.error.message).toContain("account (env SIGNAL_ACCOUNT)");
   });
 
   it("createChannels names APP_SIGNAL_ACCOUNT when the entry carries the same envPrefix", () => {
