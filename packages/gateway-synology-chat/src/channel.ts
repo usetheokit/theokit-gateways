@@ -18,14 +18,20 @@ type Config = Readonly<Record<string, unknown>>;
 const readers = channelConfigReaders(PREFIX);
 const { invalid, readString, requiredString } = readers;
 
-/**
- * The shared readers treat `null` (and `""`) as absent. A value the caller supplied must not fall
- * back to a default silently: `null` is refused for every key, `""` for those that are not strings.
- */
-function refuseSuppliedAbsent(config: Config, keys: Readonly<Record<string, string>>): void {
-  for (const [key, expected] of Object.entries(keys)) {
-    const value = config[key];
-    if (value === null || (value === "" && expected !== "a string")) throw invalid(key, expected);
+/** `null` is refused for every key, and `""` for each non-string key, instead of defaulting. */
+const SYNOLOGY_EXPECTED: Readonly<Record<string, string>> = {
+  path: "a string",
+  port: "a number or a string of digits",
+  connectTimeoutMs: "a number or a string of digits",
+  app: "an Express app (an object with a post method)",
+  fetch: "a function",
+};
+
+function refuseSynologyAbsent(config: Config): void {
+  for (const key of Object.keys(SYNOLOGY_EXPECTED)) {
+    const supplied = config[key];
+    const emptyNonString = supplied === "" && key !== "path";
+    if (supplied === null || emptyNonString) throw invalid(key, SYNOLOGY_EXPECTED[key] as string);
   }
 }
 
@@ -53,13 +59,7 @@ function readApp(config: Config): SynologyChatAdapterOptions["app"] {
 }
 
 function buildOptions(config: Config): SynologyChatAdapterOptions {
-  refuseSuppliedAbsent(config, {
-    path: "a string",
-    port: "a number or a string of digits",
-    connectTimeoutMs: "a number or a string of digits",
-    app: "an Express app (an object with a post method)",
-    fetch: "a function",
-  });
+  refuseSynologyAbsent(config);
   const path = readString(config, "path");
   const port = readNumber(config, "port");
   const connectTimeoutMs = readNumber(config, "connectTimeoutMs");
@@ -79,16 +79,8 @@ function buildOptions(config: Config): SynologyChatAdapterOptions {
   };
 }
 
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly description: string;
-  readonly env?: string;
-}
-
-const CONFIG: ReadonlyArray<ConfigField> = [
+/** The fields, shaped like the core's `ChannelConfigField` (typed locally). */
+const CONFIG = [
   {
     key: "botToken",
     required: true,

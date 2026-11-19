@@ -18,17 +18,6 @@ type Config = Readonly<Record<string, unknown>>;
 const readers = channelConfigReaders(PREFIX);
 const { invalid, readString, requiredString } = readers;
 
-/**
- * The shared readers treat `null` (and `""`) as absent. A value the caller supplied must not fall
- * back to a default silently: `null` is refused for every key, `""` for those that are not strings.
- */
-function refuseSuppliedAbsent(config: Config, keys: Readonly<Record<string, string>>): void {
-  for (const [key, expected] of Object.entries(keys)) {
-    const value = config[key];
-    if (value === null || (value === "" && expected !== "a string")) throw invalid(key, expected);
-  }
-}
-
 /** An array of strings, or a comma-separated string (what an environment variable gives). */
 function readIds(config: Config, key: string): string[] {
   const value = config[key];
@@ -48,12 +37,18 @@ function readIds(config: Config, key: string): string[] {
   return list;
 }
 
+/** A supplied `null` (or `""` for a function) must not fall back to the default silently. */
+function refuseTwitchSuppliedAbsent(config: Config): void {
+  for (const key of ["eventSubUrl", "fetch", "socketFactory"]) {
+    if (config[key] === null) throw invalid(key, key === "eventSubUrl" ? "a string" : "a function");
+  }
+  for (const key of ["fetch", "socketFactory"]) {
+    if (config[key] === "") throw invalid(key, "a function");
+  }
+}
+
 function buildOptions(config: Config): TwitchAdapterOptions {
-  refuseSuppliedAbsent(config, {
-    eventSubUrl: "a string",
-    fetch: "a function",
-    socketFactory: "a function",
-  });
+  refuseTwitchSuppliedAbsent(config);
   const eventSubUrl = readString(config, "eventSubUrl");
   const fetchFn = readers.readFunction<NonNullable<TwitchAdapterOptions["fetch"]>>(config, "fetch");
   const socketFactory = readers.readFunction<NonNullable<TwitchAdapterOptions["socketFactory"]>>(
@@ -70,16 +65,8 @@ function buildOptions(config: Config): TwitchAdapterOptions {
   };
 }
 
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly description: string;
-  readonly env?: string;
-}
-
-const CONFIG: ReadonlyArray<ConfigField> = [
+/** The fields, shaped like the core's `ChannelConfigField` (typed locally). */
+const CONFIG = [
   {
     key: "accessToken",
     required: true,
