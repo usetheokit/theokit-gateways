@@ -98,3 +98,20 @@ describe("sonar analysis roots", () => {
     expect(prop("sonar.test.inclusions")).toEqual([]);
   });
 });
+
+describe("sonar coverage pipeline scripts", () => {
+  const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+
+  it("coverage:sonar writes lcov for every package", () => {
+    expect(pkg.scripts["coverage:sonar"]).toMatch(/vitest run .*--coverage\.reporter=lcov/);
+    expect(pkg.devDependencies["@vitest/coverage-v8"]).toBeDefined();
+  });
+
+  it("sonar:scan builds, generates coverage, then provisions the scanner, in that order", () => {
+    const cmd = pkg.scripts["sonar:scan"];
+    const at = (s) => cmd.indexOf(s);
+    expect(at("pnpm build")).toBe(0);
+    expect(at("pnpm coverage:sonar")).toBeGreaterThan(at("pnpm build"));
+    expect(at("@sonar/scan")).toBeGreaterThan(at("pnpm coverage:sonar"));
+  });
+});
