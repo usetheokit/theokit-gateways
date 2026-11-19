@@ -105,14 +105,20 @@ describe("ci workflow runs the sonar pipeline", () => {
   const at = (s) => ci.indexOf(s);
 
   it("scans after the offline integration units", () => {
-    expect(at("run: pnpm --filter @theokit/gateway-integration test:unit")).toBeGreaterThan(-1);
-    expect(at("run: pnpm sonar:scan")).toBeGreaterThan(at("test:unit"));
+    const units = at("run: pnpm --filter @theokit/gateway-integration test:unit");
+    expect(units).toBeGreaterThan(-1);
+    expect(at("pnpm sonar:scan\n")).toBeGreaterThan(units);
   });
 
   it("passes SONAR_TOKEN to the scan", () => {
     expect(ci).toMatch(
-      /run: pnpm sonar:scan\s+env:\s+SONAR_TOKEN: \$\{\{ secrets\.SONAR_TOKEN \}\}/,
+      /pnpm sonar:scan\n[\s\S]*?env:\s+SONAR_TOKEN: \$\{\{ secrets\.SONAR_TOKEN \}\}/,
     );
+  });
+
+  it("only runs the scan when the root package.json declares sonar:scan", () => {
+    expect(ci).toContain("scripts?.['sonar:scan']");
+    expect(ci).toContain("::warning::no sonar:scan script");
   });
 
   it("imports the lcov files that coverage:sonar writes, incl. offline integration", () => {

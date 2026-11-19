@@ -144,10 +144,17 @@ jobs:
 
       # `sonar:scan` builds, runs `coverage:sonar` (writing the lcov files that
       # `sonar.javascript.lcov.reportPaths` imports) and provisions the scanner. Skipped
-      # for fork pull requests, which cannot read the token.
+      # for fork pull requests, which cannot read the token. The scripts themselves land
+      # with #602; until the root package.json declares `sonar:scan` the step warns and
+      # skips instead of failing every run.
       - name: Sonar scan
         if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-        run: pnpm sonar:scan
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.['sonar:scan'] ? 0 : 1)"; then
+            pnpm sonar:scan
+          else
+            echo "::warning::no sonar:scan script in package.json (see #602) - Sonar scan skipped"
+          fi
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
