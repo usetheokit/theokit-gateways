@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -12,6 +12,23 @@ const list = (key) =>
     .find((l) => l.startsWith(`${key}=`))
     .slice(key.length + 1)
     .split(",");
+
+// How the scanner reads an unmodified `SF:` record: relative to the repository root.
+// Returns the repository-relative path of the file it lands on, or null if it lands on none.
+const resolveSf = (sf) => {
+  const abs = isAbsolute(sf) ? sf : resolve(root, sf);
+  const rel = relative(root, abs);
+  return rel.startsWith("..") || !existsSync(abs) ? null : rel;
+};
+
+describe("resolveSf", () => {
+  it("does not resolve a package-relative record that only exists inside a package", () => {
+    expect(resolveSf("src/index.ts")).toBeNull();
+    expect(resolveSf("packages/gateway-zalo/src/index.ts")).toBe(
+      "packages/gateway-zalo/src/index.ts",
+    );
+  });
+});
 
 describe.each([
   ["bot-realtime", "@theokit/gateway-bot-realtime"],
@@ -51,15 +68,15 @@ describe.each([
     expect(files.length).toBeGreaterThan(0);
     const sources = list("sonar.sources");
     for (const f of files) {
-      // Sonar sees the repository-relative path of the record.
-      const repoPath = `${dir}/${f}`;
-      expect(existsSync(resolve(root, repoPath))).toBe(true);
-      expect(sources.some((s) => repoPath.startsWith(`${s}/`))).toBe(true);
+      const resolved = resolveSf(f);
+      expect(resolved, `SF:${f} resolves to no file`).not.toBeNull();
+      expect(resolved.startsWith(`${dir}/src/`), `SF:${f} is attributed outside ${dir}`).toBe(true);
+      expect(sources.some((s) => resolved.startsWith(`${s}/`))).toBe(true);
     }
     const src = execFileSync("git", ["ls-files", `${dir}/src`], { cwd: root, encoding: "utf8" })
       .split("\n")
       .filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts"));
-    for (const f of src) expect(files).toContain(f.slice(dir.length + 1));
+    for (const f of src) expect(files.map(resolveSf)).toContain(f);
     expect(text).toMatch(/^LH:[1-9]\d*$/m);
   }, 120_000);
 });

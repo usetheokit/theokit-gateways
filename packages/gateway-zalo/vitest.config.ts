@@ -1,4 +1,5 @@
 import { cpus } from "node:os";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
@@ -12,7 +13,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],
-      reporter: ["text-summary", "lcov"],
+      // Sonar resolves a relative `SF:` record against the repository root, where it
+      // scans, so the record must be repo-relative: `src/index.ts` would match nothing
+      // here, or the wrong package's file.
+      reporter: [
+        "text-summary",
+        ["lcov", { projectRoot: fileURLToPath(new URL("../..", import.meta.url)) }],
+      ],
     },
   },
 });
