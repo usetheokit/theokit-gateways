@@ -58,7 +58,7 @@ export function describeChannelContract(o: ContractOptions): {
     throw new Error("create did not throw");
   };
   const required = o.channel.config.filter((f) => f.required);
-  const secretValues = [...o.secretValues].sort();
+  const secretValues = [...o.secretValues].sort((a, b) => a.localeCompare(b));
   const run = (source: Record<string, string>) => {
     const env = configFromEnv(descriptor, source, "APP_");
     const result = createChannels([{ descriptor, config: env.config, envPrefix: "APP_" }]);
@@ -86,7 +86,8 @@ export function describeChannelContract(o: ContractOptions): {
     );
 
     it("lists exactly the secret values in configFromEnv(...).secrets", () => {
-      expect([...configFromEnv(descriptor, o.env, "APP_").secrets].sort()).toEqual(secretValues);
+      const secrets = [...configFromEnv(descriptor, o.env, "APP_").secrets];
+      expect(secrets.sort((a, b) => a.localeCompare(b))).toEqual(secretValues);
     });
 
     it.each(required.map((f) => [f.key]))(
