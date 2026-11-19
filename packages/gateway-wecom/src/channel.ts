@@ -9,6 +9,7 @@
 import { channelConfigReaders } from "@theokit/gateway";
 
 import { WeComAdapter } from "./adapter.js";
+import { rememberWeComToken, wecomWebhook } from "./fetch-webhook.js";
 import type { WeComAdapterOptions } from "./types.js";
 
 type Config = Readonly<Record<string, unknown>>;
@@ -72,8 +73,8 @@ const CONFIG: ReadonlyArray<ConfigField> = [
 ];
 
 /**
- * The WeCom channel. Callbacks reach the adapter through a route your app mounts
- * (`transport: "socket"` is the constructor-only descriptor shape; the webhook contract is separate).
+ * The WeCom channel. Callbacks arrive by webhook: mount `createWebhookHandler` (see the README);
+ * `webhook.handle` verifies the query signature and answers the callback-URL check.
  *
  * `create` refuses a value of the wrong type with a `GatewayConfigurationError` coded
  * `invalid_config` and performs no network call.
@@ -82,7 +83,8 @@ const CONFIG: ReadonlyArray<ConfigField> = [
  */
 export const wecomChannel = {
   platform: "wecom" as const,
-  transport: "socket" as const,
+  transport: "webhook" as const,
+  webhook: wecomWebhook,
   senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Config): WeComAdapter {
@@ -93,6 +95,8 @@ export const wecomChannel = {
       token: requiredString(config, "token"),
       encodingAesKey: requiredString(config, "encodingAesKey"),
     };
-    return new WeComAdapter(options);
+    const adapter = new WeComAdapter(options);
+    rememberWeComToken(adapter, options.token);
+    return adapter;
   },
 };
