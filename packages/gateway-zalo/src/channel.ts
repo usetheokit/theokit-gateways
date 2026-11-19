@@ -5,7 +5,7 @@
  * `.d.ts` naming a core type must not break a consumer on an older peer floor.
  */
 
-import { channelConfigReaders } from "@theokit/gateway";
+import { GatewayConfigurationError } from "@theokit/gateway";
 
 import { ZaloAdapter } from "./adapter.js";
 
@@ -39,7 +39,16 @@ const CONFIG = [
   },
 ];
 
-const { requiredString } = channelConfigReaders("gateway-zalo");
+/** A non-empty string config value; anything else is a `gateway-zalo` configuration error. */
+function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
+  const value = config[key];
+  if (typeof value === "string" && value.trim() !== "") return value;
+  throw new GatewayConfigurationError("gateway-zalo", {
+    code: "invalid_config",
+    message: `gateway-zalo: config.${key} must be a non-empty string`,
+    detail: key,
+  });
+}
 
 const webhook = {
   methods: ["POST"] as const,

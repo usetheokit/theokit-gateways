@@ -102,3 +102,11 @@ describe("yuanbaoChannel", () => {
     expect(res.status).toBe(405);
   });
 });
+
+describe("malformed signed payloads", () => {
+  it("acknowledges a null message without throwing", async () => {
+    const { adapter, delivered } = setup(true);
+    expect(await adapter.ingestPayload({ type: "message", message: null })).toBe("delivered");
+    expect(delivered).toEqual([]);
+  });
+});

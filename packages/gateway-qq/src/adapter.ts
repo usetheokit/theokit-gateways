@@ -322,7 +322,7 @@ function parseJson<T>(text: string): T | undefined {
 
 function toMessageEvent(payload: QQWebhookPayload): GatewayMessageEvent | undefined {
   const d = payload.d;
-  if (payload.op !== 0 || payload.t !== "C2C_MESSAGE_CREATE" || d === undefined) return undefined;
+  if (payload.op !== 0 || payload.t !== "C2C_MESSAGE_CREATE" || !d) return undefined;
   const userOpenId = d.author?.user_openid;
   if (!userOpenId || !d.id || typeof d.content !== "string") return undefined;
   const ts = Date.parse(d.timestamp ?? "");

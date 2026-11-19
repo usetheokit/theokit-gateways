@@ -243,7 +243,7 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
 
 function toMessageEvent(payload: YuanbaoWebhookEvent): GatewayMessageEvent | undefined {
   const m = payload.message;
-  if (payload.type !== "message" || m === undefined) return undefined;
+  if (payload.type !== "message" || !m) return undefined;
   const userId = m.from?.id;
   if (!userId || !m.id || typeof m.text !== "string") return undefined;
   const ts = (m.create_time ?? 0) * 1000;
