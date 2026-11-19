@@ -61,11 +61,18 @@ describe.each([["bot-realtime"], ["gateway-zalo"]])("sonar coverage for packages
     const out = mkdtempSync(resolve(tmpdir(), "sonar-cov-"));
     const lcov = resolve(out, "lcov.info");
     try {
-      execFileSync(
-        "pnpm",
-        ["exec", "vitest", "run", "--coverage", `--coverage.reportsDirectory=${out}`],
-        { cwd: resolve(root, dir), stdio: "pipe" },
-      );
+      // The package's real `test` script; only the output directory is redirected, by an
+      // argument pnpm appends to that script. The script and config must not pin their own
+      // directory, so the default `coverage/` that `sonar.javascript.lcov.reportPaths` lists is
+      // where an unredirected run writes.
+      const pkg = JSON.parse(readFileSync(resolve(root, dir, "package.json"), "utf8"));
+      const cfg = readFileSync(resolve(root, dir, "vitest.config.ts"), "utf8");
+      expect(pkg.scripts.test).not.toContain("reportsDirectory");
+      expect(cfg).not.toContain("reportsDirectory");
+      execFileSync("pnpm", ["run", "test", `--coverage.reportsDirectory=${out}`], {
+        cwd: resolve(root, dir),
+        stdio: "pipe",
+      });
     } catch (e) {
       rmSync(out, { recursive: true, force: true });
       throw e;
