@@ -55,6 +55,38 @@ describe("channelConfigReaders", () => {
     );
   });
 
+  it("readNumber", () => {
+    expect(r.readNumber({}, "k")).toBeUndefined();
+    expect(r.readNumber({ k: 5 }, "k")).toBe(5);
+    expect(r.readNumber({ k: "6697" }, "k")).toBe(6697);
+    for (const bad of ["1.5", "-1", "x", Number.NaN, true]) {
+      expect(thrown(() => r.readNumber({ k: bad }, "k")).message).toBe(
+        "gateway-x: config.k must be a number or a digit string",
+      );
+    }
+  });
+
+  it("readBooleanString", () => {
+    expect(r.readBooleanString({}, "k")).toBeUndefined();
+    expect(r.readBooleanString({ k: false }, "k")).toBe(false);
+    expect(r.readBooleanString({ k: "true" }, "k")).toBe(true);
+    expect(r.readBooleanString({ k: "false" }, "k")).toBe(false);
+    expect(thrown(() => r.readBooleanString({ k: "yes" }, "k")).message).toBe(
+      'gateway-x: config.k must be a boolean or "true"/"false"',
+    );
+  });
+
+  it("readList", () => {
+    expect(r.readList({}, "k")).toBeUndefined();
+    expect(r.readList({ k: ["a", "b"] }, "k")).toEqual(["a", "b"]);
+    expect(r.readList({ k: " a, b ,,c " }, "k")).toEqual(["a", "b", "c"]);
+    for (const bad of [5, [1], {}]) {
+      expect(thrown(() => r.readList({ k: bad }, "k")).message).toBe(
+        "gateway-x: config.k must be an array of strings or a comma-separated string",
+      );
+    }
+  });
+
   it("readFunction", () => {
     const fn = () => 1;
     expect(r.readFunction({}, "k")).toBeUndefined();
