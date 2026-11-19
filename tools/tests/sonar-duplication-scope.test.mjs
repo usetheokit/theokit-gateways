@@ -1,4 +1,14 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -116,9 +126,36 @@ describe("ci workflow runs the sonar pipeline", () => {
     );
   });
 
-  it("only runs the scan when the root package.json declares sonar:scan", () => {
-    expect(ci).toContain("scripts?.['sonar:scan']");
-    expect(ci).toContain("::warning::no sonar:scan script");
+  describe("scan step guard", () => {
+    // Run the step's real shell block against a throwaway package.json and a stub `pnpm`.
+    const runStep = (scripts) => {
+      const block = ci.match(/- name: Sonar scan[\s\S]*?run: \|\n([\s\S]*?)\n {8}env:/)?.[1];
+      expect(block).toBeTruthy();
+      const dir = mkdtempSync(`${tmpdir()}/sonar-step-`);
+      const bin = `${dir}/bin`;
+      mkdirSync(bin);
+      writeFileSync(`${bin}/pnpm`, '#!/bin/sh\necho "pnpm $*"\n');
+      chmodSync(`${bin}/pnpm`, 0o755);
+      writeFileSync(`${dir}/package.json`, JSON.stringify({ scripts }));
+      return spawnSync("bash", ["-e", "-c", block], {
+        cwd: dir,
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+        encoding: "utf8",
+      });
+    };
+
+    it("invokes pnpm sonar:scan when the script exists", () => {
+      const r = runStep({ "sonar:scan": "x" });
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain("pnpm sonar:scan");
+    });
+
+    it("warns and skips instead of failing when the script is missing", () => {
+      const r = runStep({});
+      expect(r.status).toBe(0);
+      expect(r.stdout).not.toContain("pnpm sonar:scan");
+      expect(r.stdout).toContain("::warning::");
+    });
   });
 
   it("imports the lcov files that coverage:sonar writes, incl. offline integration", () => {
