@@ -180,3 +180,21 @@ const { adapters, rejected } = createChannels([{ descriptor: teamsChannel, confi
 
 `create` refuses a value of the wrong type with a `GatewayConfigurationError` (`invalid_config`,
 naming the key).
+
+## Mount with `createWebhookHandler`
+
+`teamsChannel` declares `transport: "webhook"`, so one Fetch route serves it:
+
+```ts
+import { configFromEnv, createChannels, createWebhookHandler } from "@theokit/gateway";
+import { teamsChannel } from "@theokit/gateway-teams";
+
+const { adapters, channels } = createChannels([
+  { descriptor: teamsChannel, config: configFromEnv(teamsChannel, process.env).config },
+]);
+// Subscribe with adapter.onInbound(...) and start the adapters, then:
+export const onWebhook = createWebhookHandler({ channels, isStarted: () => true });
+// Route `/webhooks/teams` to onWebhook(request).
+```
+
+The route takes `POST` only. `webhook.handle` verifies the connector token with `teamsActivityVerifier` built from the client id alone (a `tenantId` would refuse connector tokens, which carry no `tid` claim). Refusals: `malformed_body` 400 (not logged), `validator_unavailable` and `key_set_unavailable` 503, `body_already_read` 500, anything else 401; a verifier that throws is a 401. The standalone `webhook.verify` always answers `false`, because a token check is asynchronous; use the handler.

@@ -25,7 +25,9 @@ describe("check-peer-floor", () => {
     for (const a of Object.values(byName)) expect(a).toMatch(/^\d+\.\d+\.\d+$/);
     expect(byName["@theokit/gateway-zalo"]).toBe("0.15.0");
     expect(byName["@theokit/gateway-qq"]).toBe("0.16.0");
-    expect(byName["@theokit/gateway-buzz"]).toBe("0.14.0");
+    expect(byName["@theokit/gateway-buzz"]).toBe("0.21.0");
+    expect(byName["@theokit/gateway-clickclack"]).toBe("0.21.0");
+    expect(byName["@theokit/gateway-feishu-lark"]).toBe("0.21.0");
   });
 });
 
@@ -75,7 +77,7 @@ describe("gateway-x peer floor", () => {
         readFileSync(new URL(`../../packages/${p}/package.json`, import.meta.url), "utf8"),
       );
     const floor = floorOf(read("gateway-x").peerDependencies["@theokit/gateway"]);
-    expect(floor).toBe("0.20.0");
+    expect(floor).toBe("0.22.0");
     const num = (v) => v.split(".").map(Number);
     const [a, b] = [num(read("gateway").version), num(floor)];
     const cmp = a[0] - b[0] || a[1] - b[1] || a[2] - b[2];

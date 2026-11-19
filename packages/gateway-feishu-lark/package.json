@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-feishu-lark",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Feishu/Lark platform adapter for @theokit/gateway, over the open platform SDK's long connection.",
   "license": "Apache-2.0",
   "repository": {
@@ -42,7 +42,7 @@
   },
   "peerDependencies": {
     "@larksuiteoapi/node-sdk": "^1.76.0",
-    "@theokit/gateway": ">=0.15.0 <1.0.0"
+    "@theokit/gateway": ">=0.21.0 <1.0.0"
   },
   "peerDependenciesMeta": {
     "@larksuiteoapi/node-sdk": {

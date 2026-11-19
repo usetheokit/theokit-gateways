@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-agent",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "description": "Agent bridge for @theokit/gateway: run a TheoKit SDK agent turn to text and deliver text to a channel rendered for its platform.",
   "license": "Apache-2.0",
   "repository": {
@@ -41,9 +41,9 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@theokit/gateway": ">=0.16.0 <1.0.0",
+    "@theokit/gateway": ">=0.19.0 <1.0.0",
     "@theokit/presenter": ">=0.10.0 <1.0.0",
-    "@theokit/sdk": ">=2.18.0 <6"
+    "@theokit/sdk": ">=5.3.0 <6"
   },
   "devDependencies": {
     "@theokit/agents": "16.5.0",
