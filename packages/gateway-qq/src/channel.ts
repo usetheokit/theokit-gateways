@@ -9,15 +9,6 @@ import { GatewayConfigurationError } from "@theokit/gateway";
 
 import { QQAdapter } from "./adapter.js";
 
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly env: string;
-  readonly description: string;
-}
-
 /** A webhook request, shaped like the core's `WebhookRequest` (typed locally). */
 interface WebhookRequestShape {
   readonly rawBody: string;
@@ -31,7 +22,7 @@ interface WebhookAnswerShape {
   readonly contentType?: string;
 }
 
-const CONFIG: ReadonlyArray<ConfigField> = [
+const CONFIG = [
   {
     key: "appId",
     required: true,
@@ -50,22 +41,19 @@ const CONFIG: ReadonlyArray<ConfigField> = [
 
 function readString(config: Readonly<Record<string, unknown>>, key: string): string {
   const value = config[key];
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new GatewayConfigurationError("gateway-qq", {
-      code: "invalid_config",
-      message: `gateway-qq: config.${key} must be a non-empty string`,
-      detail: key,
-    });
-  }
-  return value;
+  if (typeof value === "string" && value.trim() !== "") return value;
+  const message = `gateway-qq: config.${key} must be a non-empty string`;
+  throw new GatewayConfigurationError("gateway-qq", {
+    code: "invalid_config",
+    message,
+    detail: key,
+  });
 }
 
 /** The header `name` (lower case), looked up without regard to the case of the request's keys. */
 function header(request: WebhookRequestShape, name: string): string | undefined {
-  for (const [key, value] of Object.entries(request.headers)) {
-    if (key.toLowerCase() === name) return value;
-  }
-  return undefined;
+  const hit = Object.keys(request.headers).find((key) => key.toLowerCase() === name);
+  return hit === undefined ? undefined : request.headers[hit];
 }
 
 const webhook = {
