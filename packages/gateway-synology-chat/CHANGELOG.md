@@ -1,5 +1,11 @@
 # @theokit/gateway-synology-chat
 
+## 0.2.0
+
+### Minor Changes
+
+- 4107ff7: Export `synologyChatChannel`, `twitchChannel` and `zaloPersonalChannel`: `ChannelDescriptor`s with env bindings for `createChannels` and `configFromEnv`. Requires `@theokit/gateway >=0.22.0`.
+
 ## 0.1.1
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1
+
+### Patch Changes
+
+- 021127c: `@theokit/gateway-line` keeps its own config readers instead of importing `channelConfigReaders`, which `@theokit/gateway@0.21.0` does not export, so it loads against any core its peer range admits.
+- `@theokit/gateway-line` keeps its own copy of the channel config readers until `@theokit/gateway@0.22.0` ships `channelConfigReaders`, so it works with every `@theokit/gateway` its `>=0.21.0` peer floor admits (#564).
+
 ## 0.7.0
 
 ### Minor Changes
