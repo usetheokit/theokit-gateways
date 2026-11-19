@@ -33,42 +33,35 @@ interface ConfigField {
   readonly env?: string;
 }
 
+const field = (
+  key: string,
+  env: string,
+  description: string,
+  { required = true, secret = false }: { required?: boolean; secret?: boolean } = {},
+): ConfigField => ({ key, required, secret, env, description });
+
 const CONFIG: ReadonlyArray<ConfigField> = [
-  {
-    key: "corpId",
-    required: true,
-    secret: false,
-    env: "WECOM_CORP_ID",
-    description: "The enterprise CorpID.",
-  },
-  {
-    key: "corpSecret",
-    required: true,
+  field("corpId", "WECOM_CORP_ID", "The enterprise CorpID."),
+  field("corpSecret", "WECOM_CORP_SECRET", "The self-built application's secret.", {
     secret: true,
-    env: "WECOM_CORP_SECRET",
-    description: "The self-built application's secret.",
-  },
-  {
-    key: "agentId",
-    required: true,
-    secret: false,
-    env: "WECOM_AGENT_ID",
-    description: "The self-built application's AgentId, a number or a string of digits.",
-  },
-  {
-    key: "token",
-    required: true,
-    secret: true,
-    env: "WECOM_TOKEN",
-    description: "The token configured for the application's callback, used to verify signatures.",
-  },
-  {
-    key: "encodingAesKey",
-    required: true,
-    secret: true,
-    env: "WECOM_ENCODING_AES_KEY",
-    description: "The 43-character EncodingAESKey configured for the application's callback.",
-  },
+  }),
+  field(
+    "agentId",
+    "WECOM_AGENT_ID",
+    "The self-built application's AgentId, a number or a string of digits.",
+  ),
+  field(
+    "token",
+    "WECOM_TOKEN",
+    "The token configured for the application's callback, used to verify signatures.",
+    { secret: true },
+  ),
+  field(
+    "encodingAesKey",
+    "WECOM_ENCODING_AES_KEY",
+    "The 43-character EncodingAESKey configured for the application's callback.",
+    { secret: true },
+  ),
 ];
 
 /**

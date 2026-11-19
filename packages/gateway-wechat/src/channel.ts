@@ -24,28 +24,22 @@ interface ConfigField {
   readonly env?: string;
 }
 
+const field = (
+  key: string,
+  env: string,
+  description: string,
+  { required = true, secret = false }: { required?: boolean; secret?: boolean } = {},
+): ConfigField => ({ key, required, secret, env, description });
+
 const CONFIG: ReadonlyArray<ConfigField> = [
-  {
-    key: "appId",
-    required: true,
-    secret: false,
-    env: "WECHAT_APP_ID",
-    description: "The Official Account AppID.",
-  },
-  {
-    key: "appSecret",
-    required: true,
-    secret: true,
-    env: "WECHAT_APP_SECRET",
-    description: "The Official Account AppSecret.",
-  },
-  {
-    key: "token",
-    required: true,
-    secret: true,
-    env: "WECHAT_TOKEN",
-    description: "The token configured for server callbacks, used to verify their signature.",
-  },
+  field("appId", "WECHAT_APP_ID", "The Official Account AppID."),
+  field("appSecret", "WECHAT_APP_SECRET", "The Official Account AppSecret.", { secret: true }),
+  field(
+    "token",
+    "WECHAT_TOKEN",
+    "The token configured for server callbacks, used to verify their signature.",
+    { secret: true },
+  ),
 ];
 
 /**

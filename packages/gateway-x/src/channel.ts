@@ -54,65 +54,38 @@ interface ConfigField {
   readonly env?: string;
 }
 
+const field = (
+  key: string,
+  env: string,
+  description: string,
+  { required = true, secret = false }: { required?: boolean; secret?: boolean } = {},
+): ConfigField => ({ key, required, secret, env, description });
+
 const CONFIG: ReadonlyArray<ConfigField> = [
-  {
-    key: "userId",
-    required: true,
-    secret: false,
-    env: "X_USER_ID",
-    description: "The numeric X user id of the bot account.",
-  },
-  {
-    key: "username",
-    required: true,
-    secret: false,
-    env: "X_USERNAME",
-    description: "The bot account's @handle, without the @.",
-  },
-  {
-    key: "clientId",
-    required: true,
-    secret: false,
-    env: "X_CLIENT_ID",
-    description: "The OAuth 2.0 client id of the X app.",
-  },
-  {
-    key: "clientSecret",
-    required: true,
+  field("userId", "X_USER_ID", "The numeric X user id of the bot account."),
+  field("username", "X_USERNAME", "The bot account's @handle, without the @."),
+  field("clientId", "X_CLIENT_ID", "The OAuth 2.0 client id of the X app."),
+  field("clientSecret", "X_CLIENT_SECRET", "The OAuth 2.0 client secret of the X app.", {
     secret: true,
-    env: "X_CLIENT_SECRET",
-    description: "The OAuth 2.0 client secret of the X app.",
-  },
-  {
-    key: "refreshToken",
-    required: true,
+  }),
+  field("refreshToken", "X_REFRESH_TOKEN", "The OAuth 2.0 refresh token of the bot account.", {
     secret: true,
-    env: "X_REFRESH_TOKEN",
-    description: "The OAuth 2.0 refresh token of the bot account.",
-  },
-  {
-    key: "allowFrom",
-    required: true,
-    secret: false,
-    env: "X_ALLOW_FROM",
-    description:
-      "X user ids allowed to reach the handler, an array or a comma-separated string; must not be empty.",
-  },
-  {
-    key: "bearerToken",
+  }),
+  field(
+    "allowFrom",
+    "X_ALLOW_FROM",
+    "X user ids allowed to reach the handler, an array or a comma-separated string; must not be empty.",
+  ),
+  field("bearerToken", "X_BEARER_TOKEN", "An app-only bearer token for reads.", {
     required: false,
     secret: true,
-    env: "X_BEARER_TOKEN",
-    description: "An app-only bearer token for reads.",
-  },
-  {
-    key: "guestDailyLimit",
-    required: false,
-    secret: false,
-    env: "X_GUEST_DAILY_LIMIT",
-    description:
-      "Replies per day for a sender outside the allowlist (guest.dailyLimit); a positive integer.",
-  },
+  }),
+  field(
+    "guestDailyLimit",
+    "X_GUEST_DAILY_LIMIT",
+    "Replies per day for a sender outside the allowlist (guest.dailyLimit); a positive integer.",
+    { required: false },
+  ),
 ];
 
 /**
