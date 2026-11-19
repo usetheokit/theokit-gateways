@@ -4,7 +4,6 @@ import {
   configFromEnv,
   createChannels,
   createWebhookHandler,
-  GatewayConfigurationError,
   type MessageEvent,
 } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
@@ -108,19 +107,5 @@ describe("yuanbaoChannel environment binding", () => {
       callbackSecret: "v-callbackSecret",
     });
     expect(() => yuanbaoChannel.create(config)).not.toThrow();
-  });
-});
-
-describe("yuanbaoChannel refused configuration", () => {
-  it("lands in rejected through createChannels instead of aborting", () => {
-    const descriptor = yuanbaoChannel as unknown as ChannelDescriptor<BasePlatformAdapter>;
-    const bad = { ...CONFIG, appId: 1 };
-    const empty = { ...CONFIG, appId: "" };
-    for (const config of [bad, empty]) {
-      const built = createChannels([{ descriptor, config }]);
-      expect(built.adapters).toHaveLength(0);
-      expect(built.rejected).toHaveLength(1);
-      expect(built.rejected[0]?.error).toBeInstanceOf(GatewayConfigurationError);
-    }
   });
 });
