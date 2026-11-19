@@ -8,6 +8,7 @@
 
 import { channelConfigReaders } from "@theokit/gateway";
 
+import { type ConfigField, field } from "../../../shared/channel-config-field.js";
 import { WeComAdapter } from "./adapter.js";
 import type { WeComAdapterOptions } from "./types.js";
 
@@ -23,22 +24,6 @@ function readAgentId(config: Config): number | string {
     return value;
   throw invalid("agentId", "a non-negative integer or a string of digits");
 }
-
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly description: string;
-  readonly env?: string;
-}
-
-const field = (
-  key: string,
-  env: string,
-  description: string,
-  { required = true, secret = false }: { required?: boolean; secret?: boolean } = {},
-): ConfigField => ({ key, required, secret, env, description });
 
 const CONFIG: ReadonlyArray<ConfigField> = [
   field("corpId", "WECOM_CORP_ID", "The enterprise CorpID."),

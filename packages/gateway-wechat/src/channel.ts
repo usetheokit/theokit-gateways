@@ -8,28 +8,13 @@
 
 import { channelConfigReaders } from "@theokit/gateway";
 
+import { type ConfigField, field } from "../../../shared/channel-config-field.js";
 import { WeChatAdapter } from "./adapter.js";
 import type { WeChatAdapterOptions } from "./types.js";
 
 type Config = Readonly<Record<string, unknown>>;
 
 const { requiredString } = channelConfigReaders("gateway-wechat");
-
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly description: string;
-  readonly env?: string;
-}
-
-const field = (
-  key: string,
-  env: string,
-  description: string,
-  { required = true, secret = false }: { required?: boolean; secret?: boolean } = {},
-): ConfigField => ({ key, required, secret, env, description });
 
 const CONFIG: ReadonlyArray<ConfigField> = [
   field("appId", "WECHAT_APP_ID", "The Official Account AppID."),

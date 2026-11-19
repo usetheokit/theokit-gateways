@@ -8,6 +8,7 @@
 
 import { channelConfigReaders } from "@theokit/gateway";
 
+import { type ConfigField, field } from "../../../shared/channel-config-field.js";
 import { XAdapter } from "./adapter.js";
 import type { XAdapterOptions } from "./types.js";
 
@@ -44,22 +45,6 @@ function readLimit(config: Config): number | undefined {
   if (!Number.isSafeInteger(n) || n <= 0) throw invalid("guestDailyLimit", expected);
   return n;
 }
-
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly description: string;
-  readonly env?: string;
-}
-
-const field = (
-  key: string,
-  env: string,
-  description: string,
-  { required = true, secret = false }: { required?: boolean; secret?: boolean } = {},
-): ConfigField => ({ key, required, secret, env, description });
 
 const CONFIG: ReadonlyArray<ConfigField> = [
   field("userId", "X_USER_ID", "The numeric X user id of the bot account."),
