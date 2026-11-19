@@ -27,3 +27,15 @@ const { refusal } = describeChannelContract({
   vitest,
   gateway,
 });
+
+vitest.describe("wechatChannel descriptor", () => {
+  vitest.it("declares its config fields with env bindings and secret flags", () => {
+    vitest
+      .expect(wechatChannel.config.map((f) => [f.key, f.env, f.required, f.secret]))
+      .toEqual([
+        ["appId", "WECHAT_APP_ID", true, false],
+        ["appSecret", "WECHAT_APP_SECRET", true, true],
+        ["token", "WECHAT_TOKEN", true, true],
+      ]);
+  });
+});
