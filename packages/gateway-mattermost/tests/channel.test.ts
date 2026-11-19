@@ -32,17 +32,20 @@ describe("mattermostChannel", () => {
     });
   }
 
-  it.each(["baseUrl", "accessToken"])("rejects a number for %s with invalid_config naming the key", (key) => {
-    const { config } = configFromEnv(mattermostChannel, ENV, "APP_");
-    expect.assertions(3);
-    try {
-      mattermostChannel.create({ ...config, [key]: 42 });
-    } catch (err) {
-      expect(err).toBeInstanceOf(GatewayConfigurationError);
-      expect((err as GatewayConfigurationError).code).toBe("invalid_config");
-      expect((err as Error).message).toContain(key);
-    }
-  });
+  it.each(["baseUrl", "accessToken"])(
+    "rejects a number for %s with invalid_config naming the key",
+    (key) => {
+      const { config } = configFromEnv(mattermostChannel, ENV, "APP_");
+      expect.assertions(3);
+      try {
+        mattermostChannel.create({ ...config, [key]: 42 });
+      } catch (err) {
+        expect(err).toBeInstanceOf(GatewayConfigurationError);
+        expect((err as GatewayConfigurationError).code).toBe("invalid_config");
+        expect((err as Error).message).toContain(key);
+      }
+    },
+  );
 
   it("rejects a malformed boolean and number", () => {
     const { config } = configFromEnv(mattermostChannel, ENV, "APP_");

@@ -33,17 +33,20 @@ describe("matrixChannel", () => {
     });
   }
 
-  it.each(["homeserverUrl", "accessToken", "userId"])("rejects a number for %s with invalid_config naming the key", (key) => {
-    const { config } = configFromEnv(matrixChannel, ENV, "APP_");
-    expect.assertions(3);
-    try {
-      matrixChannel.create({ ...config, [key]: 42 });
-    } catch (err) {
-      expect(err).toBeInstanceOf(GatewayConfigurationError);
-      expect((err as GatewayConfigurationError).code).toBe("invalid_config");
-      expect((err as Error).message).toContain(key);
-    }
-  });
+  it.each(["homeserverUrl", "accessToken", "userId"])(
+    "rejects a number for %s with invalid_config naming the key",
+    (key) => {
+      const { config } = configFromEnv(matrixChannel, ENV, "APP_");
+      expect.assertions(3);
+      try {
+        matrixChannel.create({ ...config, [key]: 42 });
+      } catch (err) {
+        expect(err).toBeInstanceOf(GatewayConfigurationError);
+        expect((err as GatewayConfigurationError).code).toBe("invalid_config");
+        expect((err as Error).message).toContain(key);
+      }
+    },
+  );
 
   it("rejects a malformed boolean and number", () => {
     const { config } = configFromEnv(matrixChannel, ENV, "APP_");
