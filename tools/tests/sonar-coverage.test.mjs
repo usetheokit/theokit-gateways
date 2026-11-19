@@ -11,7 +11,15 @@ test("coverage:sonar generates both reports and the scanner runs after it", () =
     expect(scripts["coverage:sonar"]).toContain(`@theokit/${name}`);
   }
   expect(scripts["sonar:scan"].startsWith("pnpm coverage:sonar && ")).toBe(true);
-  expect(scripts["sonar:scan"]).toContain("sonar-scanner");
+  expect(scripts["sonar:scan"]).toContain("@sonar/scan");
+});
+
+test("a clean checkout can run the scan: gateway is built first and the scanner is fetched by the command", () => {
+  const { scripts } = json("package.json");
+  const steps = scripts["coverage:sonar"].split("&&").map((s) => s.trim());
+  expect(steps[0]).toBe("pnpm --filter @theokit/gateway build");
+  expect(steps[1]).toContain("run coverage");
+  expect(scripts["sonar:scan"]).toMatch(/pnpm dlx @sonar\/scan$/);
 });
 
 test.each(PACKAGES)("%s writes lcov and is known to sonar", (dir) => {
