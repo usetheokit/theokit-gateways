@@ -7,7 +7,7 @@
  * every value before the constructor runs and starts no process (signal-cli starts in `connect()`).
  */
 
-import { channelConfigReaders, type ChannelConfigField } from "@theokit/gateway";
+import { type ChannelConfigField, channelConfigReaders } from "@theokit/gateway";
 
 import { SignalAdapter } from "./adapter.js";
 import { ConfigurationError } from "./errors.js";

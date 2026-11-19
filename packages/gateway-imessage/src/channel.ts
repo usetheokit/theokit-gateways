@@ -7,8 +7,8 @@
  */
 
 import {
-  channelConfigReaders,
   type ChannelConfigField,
+  channelConfigReaders,
   GatewayConfigurationError,
 } from "@theokit/gateway";
 

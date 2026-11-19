@@ -7,7 +7,7 @@
  * options `replyArgs` and `spawn` are not configurable from the environment.
  */
 
-import { channelConfigReaders, type ChannelConfigField } from "@theokit/gateway";
+import { type ChannelConfigField, channelConfigReaders } from "@theokit/gateway";
 
 import { RaftAdapter } from "./adapter.js";
 import type { RaftAdapterOptions } from "./types.js";
