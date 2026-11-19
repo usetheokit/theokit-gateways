@@ -179,7 +179,6 @@ export type {
 } from "./types/platform-events.js";
 // A Fetch handler that routes webhook requests to the channels' descriptors.
 export { statusForDeliver } from "./webhook/deliver-status.js";
-export { ingestResultForStatus, webhookHeader } from "./webhook/descriptor-helpers.js";
 // The shared half of an Express webhook server — see `webhook/express-server.ts` for why it lives
 // here and why it does not make express a dependency of the core (#89).
 export type {
