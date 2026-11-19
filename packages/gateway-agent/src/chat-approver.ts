@@ -3,6 +3,7 @@ import { type GatewayHook, type MessageEvent, parseChatCommand } from "@theokit/
 /** What an owner answered: allow once, allow from now on, or refuse. */
 export type ApprovalAnswer = "once" | "always" | "deny";
 
+/** Options for {@link createChatApprover}. */
 export interface ChatApproverOptions {
   /** The conversation key of an event; must match what the app passes to `ask()`. */
   conversationOf(event: MessageEvent): string;
@@ -15,6 +16,7 @@ export interface ChatApproverOptions {
   format?(question: string, timeoutMs: number): string;
 }
 
+/** An approver: a hook that reads the owner's answers and `ask` to put a question to them. */
 export interface ChatApprover {
   /** Register in the runner's hooks; it blocks `/approve`, `/approve always` and `/deny`. */
   readonly hook: GatewayHook;
