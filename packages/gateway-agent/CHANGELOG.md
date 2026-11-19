@@ -1,5 +1,11 @@
 # @theokit/gateway-agent
 
+## 0.3.1
+
+### Patch Changes
+
+- f573ef6: Raise the `@theokit/sdk` peer floor from `4.62.0` to `5.3.0`. Every `@theokit/presenter` the package admits (`>=0.10.0`) requires `@theokit/sdk@^5.3.0`, so an sdk below 5.3.0 installed no presenter the package accepts.
+
 ## 0.3.0
 
 ### Minor Changes
