@@ -9,9 +9,12 @@
  * string, a boolean as a boolean or `"true"`/`"false"`, and a number as a number or a digit string.
  */
 
-import { GatewayConfigurationError, type GatewayConfigurationErrorOptions } from "@theokit/gateway";
+import {
+  channelConfigReaders,
+  GatewayConfigurationError,
+  type GatewayConfigurationErrorOptions,
+} from "@theokit/gateway";
 import { NostrAdapter } from "./adapter.js";
-import { channelConfigReaders } from "./config-readers.js";
 import { NostrKeyError } from "./keys.js";
 import { NostrRelayError } from "./relay-client.js";
 import type { NostrAdapterOptions } from "./types.js";
@@ -27,7 +30,7 @@ export class ConfigurationError extends GatewayConfigurationError {
 type Config = Readonly<Record<string, unknown>>;
 
 const readers = channelConfigReaders("gateway-nostr", (options) => new ConfigurationError(options));
-const { invalid, isAbsent, requiredString: readRequiredString } = readers;
+const { invalid, isAbsent, requiredString: readRequiredString, readNumber, readList } = readers;
 
 /**
  * The shared readers treat `null` and `""` as absent. An explicit `null` is never a valid value,
@@ -46,29 +49,6 @@ function rejectBlank(config: Config): void {
       throw invalid(key, "set to a value of its type, not null or empty");
     }
   }
-}
-
-function readList(config: Config, key: string): string[] | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter((item) => item !== "");
-  }
-  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
-    throw invalid(key, "an array of strings or a comma-separated string");
-  }
-  return value;
-}
-
-function readNumber(config: Config, key: string): number | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && /^\d+$/.test(value)) return Number(value);
-  throw invalid(key, "a number or a digit string");
 }
 
 function readClient(config: Config): NostrAdapterOptions["client"] {

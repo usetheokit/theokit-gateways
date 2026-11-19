@@ -9,9 +9,12 @@
  * string, a boolean as a boolean or `"true"`/`"false"`, and a number as a number or a digit string.
  */
 
-import { GatewayConfigurationError, type GatewayConfigurationErrorOptions } from "@theokit/gateway";
+import {
+  channelConfigReaders,
+  GatewayConfigurationError,
+  type GatewayConfigurationErrorOptions,
+} from "@theokit/gateway";
 import { IrcAdapter } from "./adapter.js";
-import { channelConfigReaders } from "./config-readers.js";
 import type { IrcAdapterOptions } from "./types.js";
 
 /** Misconfiguration of the IRC channel, raised before any network call. */
@@ -25,7 +28,14 @@ export class ConfigurationError extends GatewayConfigurationError {
 type Config = Readonly<Record<string, unknown>>;
 
 const readers = channelConfigReaders("gateway-irc", (options) => new ConfigurationError(options));
-const { invalid, isAbsent, readString, requiredString: readRequiredString } = readers;
+const {
+  invalid,
+  readString,
+  requiredString: readRequiredString,
+  readNumber,
+  readList,
+  readBooleanString,
+} = readers;
 
 /**
  * The shared readers treat `null` and `""` as absent. An explicit `null` is never a valid value,
@@ -45,37 +55,6 @@ function rejectBlank(config: Config): void {
       throw invalid(key, "set to a value of its type, not null or empty");
     }
   }
-}
-
-function readList(config: Config, key: string): string[] | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter((item) => item !== "");
-  }
-  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
-    throw invalid(key, "an array of strings or a comma-separated string");
-  }
-  return value;
-}
-
-/** `configFromEnv` yields strings: map `"true"`/`"false"` to booleans before the shared reader. */
-function booleanStrings(config: Config, key: string): Config {
-  const value = config[key];
-  if (value === "true") return { ...config, [key]: true };
-  if (value === "false") return { ...config, [key]: false };
-  return config;
-}
-
-function readNumber(config: Config, key: string): number | undefined {
-  const value = config[key];
-  if (isAbsent(value)) return undefined;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && /^\d+$/.test(value)) return Number(value);
-  throw invalid(key, "a number or a digit string");
 }
 
 /** Keep only the keys whose value is defined. */
@@ -199,7 +178,7 @@ export const ircChannel = {
       nick: readRequiredString(config, "nick"),
       channels,
       port: readNumber(config, "port"),
-      tls: readers.readBoolean(booleanStrings(config, "tls"), "tls"),
+      tls: readBooleanString(config, "tls"),
       username: readString(config, "username"),
       realname: readString(config, "realname"),
       password: readString(config, "password"),
