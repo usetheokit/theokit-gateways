@@ -100,6 +100,8 @@ describe("qqChannel", () => {
 describe("malformed signed payloads", () => {
   it("answers a null d without throwing", async () => {
     const { adapter } = setup(true);
-    expect(await adapter.ingestPayload({ op: 0, t: "C2C_MESSAGE_CREATE", d: null })).toBe("delivered");
+    expect(await adapter.ingestPayload({ op: 0, t: "C2C_MESSAGE_CREATE", d: null })).toBe(
+      "delivered",
+    );
   });
 });
