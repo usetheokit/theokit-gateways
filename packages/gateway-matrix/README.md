@@ -111,6 +111,29 @@ Aliases are resolved + cached on first use. If the admin renames an alias mid-pr
 
 The adapter doesn't handle federation — Matrix protocol does. Your bot in `@theo-bot:matrix.org` can be added to rooms by users on any homeserver and the conversation flows transparently. Outbound performance varies with remote homeserver latency; failure modes (e.g. remote unreachable) surface as `SendResult{send_failed}`.
 
+## Channel descriptor
+
+`matrixChannel` describes the channel as data for `createChannels` and `configFromEnv` from `@theokit/gateway`. Its transport is `socket`.
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { matrixChannel } from "@theokit/gateway-matrix";
+
+const { config, missing, secrets } = configFromEnv(matrixChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: matrixChannel, config, envPrefix: "APP_" }]);
+```
+
+| Config key | Env name | Required | Secret |
+| --- | --- | --- | --- |
+| `homeserverUrl` | `MATRIX_HOMESERVER_URL` | yes | no |
+| `accessToken` | `MATRIX_ACCESS_TOKEN` | yes | yes |
+| `userId` | `MATRIX_USER_ID` | yes | no |
+| `freshnessWindowMs` | `MATRIX_FRESHNESS_WINDOW_MS` | no | no |
+| `requireMention` | `MATRIX_REQUIRE_MENTION` | no | no |
+| `acceptInvite` | none (callback) | no | no |
+
+The `APP_` prefix is the app's choice. A value of the wrong type throws `invalid_config` naming the key; a list may be an array or a comma-separated string, a boolean `true`/`false` or the same strings, a number a number or a digit string.
+
 ## ADRs
 
 D413 – D421 in `.claude/knowledge-base/adrs/`.

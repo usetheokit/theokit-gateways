@@ -1,6 +1,7 @@
 // Public API for @theokit/gateway-mattermost (ADRs D397-D404).
 
 export { MattermostAdapter, parsePostFromWS } from "./adapter.js";
+export { mattermostChannel } from "./channel.js";
 export { connectMattermost, getChannelCached, wsUrlFromBase } from "./client.js";
 export { ConfigurationError, SDKNotInstalledError } from "./errors.js";
 export { hasMentionWithBoundary, shouldRespond } from "./filters.js";
