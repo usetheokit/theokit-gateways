@@ -19,9 +19,9 @@ const ALL_ENV: Record<string, string> = {
 };
 
 describe("nextcloudTalkChannel", () => {
-  it("declares a socket transport and no webhook part", () => {
-    expect(nextcloudTalkChannel.transport).toBe("socket");
-    expect("webhook" in nextcloudTalkChannel).toBe(false);
+  it("declares a webhook transport with a POST webhook part", () => {
+    expect(nextcloudTalkChannel.transport).toBe("webhook");
+    expect(nextcloudTalkChannel.webhook.methods).toEqual(["POST"]);
   });
 
   it("builds the adapter from configFromEnv with every required variable set", () => {
