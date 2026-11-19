@@ -31,6 +31,15 @@ describe.each([
     expect(pkg.devDependencies["@vitest/coverage-v8"]).toBeDefined();
   });
 
+  it("is reached by the checked-in CI test flow", () => {
+    const rootPkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+    expect(rootPkg.scripts.test).toBe("pnpm -r run test");
+    const ci = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8");
+    expect(ci).toContain("run: pnpm -r run test");
+    const cfg = readFileSync(resolve(root, dir, "vitest.config.ts"), "utf8");
+    expect(cfg).toMatch(/reporter:\s*\[[^\]]*"lcov"/);
+  });
+
   it("generates a report whose records land on indexed Sonar source files", () => {
     const lcov = resolve(root, dir, "coverage/lcov.info");
     rmSync(resolve(root, dir, "coverage"), { recursive: true, force: true });
@@ -47,6 +56,10 @@ describe.each([
       expect(existsSync(resolve(root, repoPath))).toBe(true);
       expect(sources.some((s) => repoPath.startsWith(`${s}/`))).toBe(true);
     }
+    const src = execFileSync("git", ["ls-files", `${dir}/src`], { cwd: root, encoding: "utf8" })
+      .split("\n")
+      .filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts"));
+    for (const f of src) expect(files).toContain(f.slice(dir.length + 1));
     expect(text).toMatch(/^LH:[1-9]\d*$/m);
   }, 120_000);
 });
