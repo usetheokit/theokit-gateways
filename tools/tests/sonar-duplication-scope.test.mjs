@@ -136,7 +136,9 @@ describe("ci workflow runs the sonar pipeline", () => {
   });
 
   it("passes SONAR_TOKEN to the scan", () => {
-    expect(ci).toMatch(/run: pnpm sonar:scan\s+env:\s+SONAR_TOKEN: \$\{\{ secrets\.SONAR_TOKEN \}\}/);
+    expect(ci).toMatch(
+      /run: pnpm sonar:scan\s+env:\s+SONAR_TOKEN: \$\{\{ secrets\.SONAR_TOKEN \}\}/,
+    );
   });
 
   it("imports the lcov files that coverage:sonar writes, incl. offline integration", () => {
