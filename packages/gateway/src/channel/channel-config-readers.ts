@@ -25,6 +25,12 @@ export interface ChannelConfigReaders {
   requiredString(config: ChannelConfigInput, key: string): string;
   /** An optional boolean; absent gives `undefined`, a non-boolean throws. */
   readBoolean(config: ChannelConfigInput, key: string): boolean | undefined;
+  /** An optional number: a finite number or a digit string; anything else throws. */
+  readNumber(config: ChannelConfigInput, key: string): number | undefined;
+  /** An optional boolean as a boolean or the string `"true"`/`"false"`; anything else throws. */
+  readBooleanString(config: ChannelConfigInput, key: string): boolean | undefined;
+  /** An optional list of strings: an array or a comma-separated string (items trimmed). */
+  readList(config: ChannelConfigInput, key: string): string[] | undefined;
   /**
    * An optional function; absent gives `undefined`, a non-function throws. Only callability is
    * checked: the caller names the signature `T` and is responsible for it.
@@ -77,6 +83,35 @@ export function channelConfigReaders(
       const value = config[key];
       if (isAbsent(value)) return undefined;
       if (typeof value !== "boolean") throw invalid(key, "a boolean");
+      return value;
+    },
+    readNumber(config, key) {
+      const value = config[key];
+      if (isAbsent(value)) return undefined;
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      if (typeof value === "string" && /^\d+$/.test(value)) return Number(value);
+      throw invalid(key, "a number or a digit string");
+    },
+    readBooleanString(config, key) {
+      const value = config[key];
+      if (isAbsent(value)) return undefined;
+      if (typeof value === "boolean") return value;
+      if (value === "true") return true;
+      if (value === "false") return false;
+      throw invalid(key, 'a boolean or "true"/"false"');
+    },
+    readList(config, key) {
+      const value = config[key];
+      if (isAbsent(value)) return undefined;
+      if (typeof value === "string") {
+        return value
+          .split(",")
+          .map((item) => item.trim())
+          .filter((item) => item !== "");
+      }
+      if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+        throw invalid(key, "an array of strings or a comma-separated string");
+      }
       return value;
     },
     readFunction<T extends (...args: never[]) => unknown>(
