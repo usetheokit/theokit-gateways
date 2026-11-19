@@ -56,13 +56,6 @@ const CONFIG: ReadonlyArray<ConfigField> = [
   },
 ];
 
-function header(request: WebhookRequest, name: string): string | undefined {
-  for (const [key, value] of Object.entries(request.headers)) {
-    if (key.toLowerCase() === name) return value;
-  }
-  return undefined;
-}
-
 /**
  * The QQ channel.
  *
@@ -101,8 +94,8 @@ export const qqChannel = {
     async handle(adapter: QQAdapter, request: WebhookRequest): Promise<WebhookAnswer> {
       const answer = await adapter.handleWebhook(
         request.rawBody,
-        header(request, "x-signature-ed25519"),
-        header(request, "x-signature-timestamp"),
+        request.headers["x-signature-ed25519"],
+        request.headers["x-signature-timestamp"],
       );
       const body = "body" in answer && answer.body !== undefined ? answer.body : undefined;
       return body === undefined

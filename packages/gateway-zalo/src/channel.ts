@@ -55,13 +55,6 @@ const CONFIG: ReadonlyArray<ConfigField> = [
   },
 ];
 
-function header(request: WebhookRequest, name: string): string | undefined {
-  for (const [key, value] of Object.entries(request.headers)) {
-    if (key.toLowerCase() === name) return value;
-  }
-  return undefined;
-}
-
 /**
  * The Zalo channel.
  *
@@ -100,12 +93,9 @@ export const zaloChannel = {
     async handle(adapter: ZaloAdapter, request: WebhookRequest): Promise<WebhookAnswer> {
       const answer = await adapter.handleWebhook(
         request.rawBody,
-        header(request, "x-zevent-signature"),
+        request.headers["x-zevent-signature"],
       );
-      const body = "body" in answer && answer.body !== undefined ? answer.body : undefined;
-      return body === undefined
-        ? { status: answer.status }
-        : { status: answer.status, body: JSON.stringify(body), contentType: "application/json" };
+      return { status: answer.status };
     },
   },
 };

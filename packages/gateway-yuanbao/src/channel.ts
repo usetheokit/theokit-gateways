@@ -55,13 +55,6 @@ const CONFIG: ReadonlyArray<ConfigField> = [
   },
 ];
 
-function header(request: WebhookRequest, name: string): string | undefined {
-  for (const [key, value] of Object.entries(request.headers)) {
-    if (key.toLowerCase() === name) return value;
-  }
-  return undefined;
-}
-
 /**
  * The Yuanbao channel.
  *
@@ -100,13 +93,10 @@ export const yuanbaoChannel = {
     async handle(adapter: YuanbaoAdapter, request: WebhookRequest): Promise<WebhookAnswer> {
       const answer = await adapter.handleWebhook(
         request.rawBody,
-        header(request, "x-signature"),
-        header(request, "x-timestamp"),
+        request.headers["x-signature"],
+        request.headers["x-timestamp"],
       );
-      const body = "body" in answer && answer.body !== undefined ? answer.body : undefined;
-      return body === undefined
-        ? { status: answer.status }
-        : { status: answer.status, body: JSON.stringify(body), contentType: "application/json" };
+      return { status: answer.status };
     },
   },
 };

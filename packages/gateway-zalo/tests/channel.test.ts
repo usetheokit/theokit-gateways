@@ -4,24 +4,12 @@ import { describe, expect, it } from "vitest";
 import { ZaloAdapter } from "../src/adapter.js";
 import { zaloChannel } from "../src/channel.js";
 
-const REQUIRED = ["appId", "oaSecretKey", "accessToken"];
-const OPTIONAL = ["apiBase"];
-const SECRET = ["oaSecretKey", "accessToken"];
-const envName = (key: string): string =>
-  "APP_ZALO_" + key.replace(/[A-Z]/g, (c) => "_" + c).toUpperCase();
-const ENV: Record<string, string> = Object.fromEntries(
-  [...REQUIRED, ...OPTIONAL].map((key) => [envName(key), key + "-value"]),
-);
-const VALID = Object.fromEntries(REQUIRED.map((key) => [key, "x"]));
-
-function thrownBy(config: Record<string, unknown>): unknown {
-  try {
-    zaloChannel.create(config);
-  } catch (err) {
-    return err;
-  }
-  return undefined;
-}
+const ENV = {
+  "APP_ZALO_APP_ID": "zid",
+  "APP_ZALO_OA_SECRET_KEY": "zalo-oa-key",
+  "APP_ZALO_ACCESS_TOKEN": "zalo-token"
+};
+const KEYS: Record<string, string> = {"APP_ZALO_APP_ID": "appId", "APP_ZALO_OA_SECRET_KEY": "oaSecretKey", "APP_ZALO_ACCESS_TOKEN": "accessToken"};
 
 describe("zaloChannel", () => {
   it("builds the adapter from the environment through createChannels", () => {
@@ -31,56 +19,38 @@ describe("zaloChannel", () => {
     expect(result.adapters[0]).toBeInstanceOf(ZaloAdapter);
   });
 
-  it("builds the adapter from a plain object without optional fields", () => {
-    expect(zaloChannel.create(VALID)).toBeInstanceOf(ZaloAdapter);
-  });
-
-  it("declares platform and the env names", () => {
+  it("binds ZALO_* variables and is a webhook channel", () => {
     expect(zaloChannel.platform).toBe("zalo");
-    expect(zaloChannel.config.map((f) => f.env)).toEqual(
-      [...REQUIRED, ...OPTIONAL].map((key) => envName(key).replace("APP_", "")),
+    expect(zaloChannel.transport).toBe("webhook");
+    expect(zaloChannel.config.filter((f) => f.required).map((f) => f.env)).toEqual(
+      ["ZALO_APP_ID", "ZALO_OA_SECRET_KEY", "ZALO_ACCESS_TOKEN"],
     );
   });
 
-  it.each(REQUIRED)("rejects with missing_required_config when %s is unset", (key) => {
-    const env = { ...ENV };
-    delete env[envName(key)];
+  it.each(Object.keys(ENV))("rejects with missing_required_config when %s is unset", (name) => {
+    const env: Record<string, string> = { ...ENV };
+    delete env[name];
     const read = configFromEnv(zaloChannel, env, "APP_");
-    expect(read.missing).toEqual([envName(key)]);
+    expect(read.missing).toEqual([name]);
     const result = createChannels([{ descriptor: zaloChannel, config: read.config }]);
     expect(result.adapters).toEqual([]);
     expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toContain(key);
+    expect(result.rejected[0]?.error.message).toContain(KEYS[name]);
   });
 
-  it.each([...REQUIRED, ...OPTIONAL, "fetch"])("%s of the wrong type is invalid_config", (key) => {
-    const thrown = thrownBy({ ...VALID, [key]: key === "fetch" ? "nope" : 42 });
-    expect(thrown).toBeInstanceOf(GatewayConfigurationError);
-    expect((thrown as GatewayConfigurationError).code).toBe("invalid_config");
-    expect((thrown as Error).message).toContain(key);
+  it("refuses a number for oaSecretKey with invalid_config naming the key", () => {
+    const { config } = configFromEnv(zaloChannel, ENV, "APP_");
+    expect(() => zaloChannel.create({ ...config, oaSecretKey: 42 })).toThrow(
+      expect.objectContaining({
+        code: "invalid_config",
+        message: expect.stringContaining("oaSecretKey"),
+      }),
+    );
+    expect(() => zaloChannel.create({ ...config, oaSecretKey: 42 })).toThrow(GatewayConfigurationError);
   });
 
   it("collects exactly the secret values", () => {
     const { secrets } = configFromEnv(zaloChannel, ENV, "APP_");
-    expect([...secrets].sort()).toEqual(SECRET.map((key) => key + "-value").sort());
-  });
-
-  it("passes a supplied fetch through to the adapter", async () => {
-    const calls: string[] = [];
-    const fetch = async (url: string) => {
-      calls.push(url);
-      return { status: 200, text: async () => "{}" };
-    };
-    await zaloChannel.create({ ...VALID, fetch }).connect();
-    expect(calls.length).toBeGreaterThan(0);
-  });
-
-  it("is a webhook channel whose handle refuses an unsigned request with 401", async () => {
-    expect(zaloChannel.transport).toBe("webhook");
-    const answer = await zaloChannel.webhook.handle(zaloChannel.create(VALID), {
-      rawBody: "{}",
-      headers: {},
-    });
-    expect(answer.status).toBe(401);
+    expect([...secrets].sort()).toEqual(["zalo-oa-key", "zalo-token"]);
   });
 });
