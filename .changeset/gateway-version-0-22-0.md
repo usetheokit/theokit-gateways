@@ -2,4 +2,4 @@
 "@theokit/gateway": patch
 ---
 
-`@theokit/gateway` sets its workspace version to `0.22.0`, the version published with `channelConfigReaders`, so the channel packages whose peer floor is `>=0.22.0` resolve against it.
+No change to the `@theokit/gateway` runtime. The Yuanbao, QQ and Zalo webhook channel descriptors are built and tested against it.

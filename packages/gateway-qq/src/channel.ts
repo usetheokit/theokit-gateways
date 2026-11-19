@@ -5,13 +5,18 @@
  * integration package assigns it to one, so a drift between the two fails there.
  */
 
+import { GatewayConfigurationError } from "@theokit/gateway";
 import { QQAdapter } from "./adapter.js";
 
-/** A required string; an empty one is left for the adapter's own check, which names it. */
+/** A required string; absent, empty or a non-string is a refused configuration. */
 function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
   const value = config[key];
-  if (typeof value !== "string") throw new Error(`gateway-qq: config.${key} must be a string`);
-  return value;
+  if (typeof value === "string" && value !== "") return value;
+  throw new GatewayConfigurationError("gateway-qq", {
+    code: "invalid_config",
+    message: `gateway-qq: config.${key} must be a non-empty string`,
+    detail: key,
+  });
 }
 
 type Headers = Readonly<Record<string, string | undefined>>;
@@ -42,7 +47,7 @@ const CONFIG = [
  * `ingest` reports `"malformed"` for a payload that is not a JSON object, `"no_handler"` when a
  * text message arrives and no handler is subscribed (answer that with a non-success status so the
  * platform redelivers), and `"delivered"` otherwise, including for events it ignores.
- * `create` refuses a credential that is not a string; the adapter refuses an empty one.
+ * `create` refuses a credential that is not a non-empty string with a `GatewayConfigurationError`.
  *
  * @public
  */
