@@ -1,5 +1,6 @@
 export type { WeComWebhookAnswer, WeComWebhookRequest } from "./adapter.js";
 export { WeComAdapter } from "./adapter.js";
+export { wecomChannel } from "./channel.js";
 export {
   computeWeComSignature,
   decryptWeCom,
