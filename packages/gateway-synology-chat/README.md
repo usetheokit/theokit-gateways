@@ -70,3 +70,25 @@ listener as its Outgoing URL, and run the GatewayRunner example above. Send a
 message to the bot from a real Chat user and confirm the reply appears in that
 user's conversation. Record the date, Chat Server version, received message and
 reply (with tokens redacted) before claiming live verification.
+
+## Channel descriptor
+
+`synologyChatChannel` is a `ChannelDescriptor` (transport `socket`) for `createChannels`; bind it to the environment with `configFromEnv` (needs `@theokit/gateway >=0.22.0`).
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { synologyChatChannel } from "@theokit/gateway-synology-chat";
+
+const { config, missing } = configFromEnv(synologyChatChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: synologyChatChannel, config }]);
+```
+
+| Env name | Option | Required | Secret |
+| --- | --- | --- | --- |
+| `SYNOLOGY_CHAT_BOT_TOKEN` | `botToken` | yes | yes |
+| `SYNOLOGY_CHAT_INCOMING_URL` | `incomingUrl` | yes | no (it carries a token: keep it out of logs) |
+| `SYNOLOGY_CHAT_PATH` | `path` | no | no |
+| `SYNOLOGY_CHAT_PORT` | `port` (digit string ok) | no | no |
+| `SYNOLOGY_CHAT_CONNECT_TIMEOUT_MS` | `connectTimeoutMs` (digit string ok) | no | no |
+
+Options without an env name are programmatic only. `create` makes no network call and throws a `GatewayConfigurationError` (`invalid_config`, naming the key) for a wrongly typed value.
