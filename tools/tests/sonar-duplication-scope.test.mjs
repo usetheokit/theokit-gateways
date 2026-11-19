@@ -123,3 +123,25 @@ describe("sonar coverage pipeline scripts", () => {
     expect(at("@sonar/scan")).toBeGreaterThan(at("pnpm coverage:sonar"));
   });
 });
+
+describe("ci workflow runs the sonar pipeline", () => {
+  const ci = readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
+  const props = readFileSync(new URL("../../sonar-project.properties", import.meta.url), "utf8");
+  const at = (s) => ci.indexOf(s);
+
+  it("generates coverage after the offline integration units, then scans", () => {
+    expect(at("run: pnpm --filter @theokit/gateway-integration test:unit")).toBeGreaterThan(-1);
+    expect(at("run: pnpm coverage:sonar")).toBeGreaterThan(at("test:unit"));
+    expect(at("run: pnpm sonar:scan")).toBeGreaterThan(at("run: pnpm coverage:sonar"));
+  });
+
+  it("passes SONAR_TOKEN to the scan", () => {
+    expect(ci).toMatch(/run: pnpm sonar:scan\s+env:\s+SONAR_TOKEN: \$\{\{ secrets\.SONAR_TOKEN \}\}/);
+  });
+
+  it("imports the lcov files that coverage:sonar writes, incl. offline integration", () => {
+    expect(props).toContain("integration/coverage/lcov.info");
+    expect(props).toContain("tools/coverage/lcov.info");
+    expect(props).toContain("packages/gateway/coverage/lcov.info");
+  });
+});

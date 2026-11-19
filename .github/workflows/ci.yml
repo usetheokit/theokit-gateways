@@ -142,6 +142,19 @@ jobs:
       - name: Integration package — offline units
         run: pnpm --filter @theokit/gateway-integration test:unit
 
+      # Writes `coverage/lcov.info` for every package (offline integration scope only),
+      # which `sonar.javascript.lcov.reportPaths` imports in the scan below.
+      - name: Coverage reports for Sonar
+        run: pnpm coverage:sonar
+
+      # `sonar:scan` rebuilds, regenerates coverage and provisions the scanner. Skipped
+      # for fork pull requests, which cannot read the token.
+      - name: Sonar scan
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: pnpm sonar:scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
       # Guards this workflow against itself. If someone renames the root `test`
       # script or drops a package's test script, the suite would silently stop
       # running and every job above would still be green. This asserts that all
