@@ -30,6 +30,10 @@ export interface ContractOptions {
   readonly env: Record<string, string>;
   /** The same configuration as `create` receives it, keyed by option. */
   readonly values: Record<string, unknown>;
+  /** Independent of the descriptor: the full variable names (prefixed `APP_`) that must be required. */
+  readonly requiredEnv: ReadonlyArray<string>;
+  /** Independent of the descriptor: the values that must be listed as secret. */
+  readonly secretValues: ReadonlyArray<string>;
   readonly vitest: { describe: Loose; expect: Loose; it: Loose };
   readonly gateway: {
     configFromEnv: Loose;
@@ -54,10 +58,7 @@ export function describeChannelContract(o: ContractOptions): {
     throw new Error("create did not throw");
   };
   const required = o.channel.config.filter((f) => f.required);
-  const secretValues = o.channel.config
-    .filter((f) => f.secret)
-    .map((f) => o.values[f.key] as string)
-    .sort();
+  const secretValues = [...o.secretValues].sort();
   const run = (source: Record<string, string>) => {
     const env = configFromEnv(descriptor, source, "APP_");
     const result = createChannels([{ descriptor, config: env.config, envPrefix: "APP_" }]);
@@ -72,7 +73,7 @@ export function describeChannelContract(o: ContractOptions): {
       expect(result.adapters[0]).toBeInstanceOf(o.adapterClass);
     });
 
-    it.each(required.map((f) => [`APP_${f.env}`]))(
+    it.each(o.requiredEnv.map((name) => [name]))(
       "a missing %s is rejected naming the full variable",
       (name: string) => {
         const source = { ...o.env };

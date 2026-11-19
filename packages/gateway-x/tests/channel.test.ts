@@ -30,6 +30,8 @@ const { refusal } = describeChannelContract({
   adapterClass: XAdapter,
   env: ENV,
   values: VALUES,
+  requiredEnv: ["APP_X_USER_ID", "APP_X_USERNAME", "APP_X_CLIENT_ID", "APP_X_CLIENT_SECRET", "APP_X_REFRESH_TOKEN", "APP_X_ALLOW_FROM"],
+  secretValues: ["csec", "rtok", "btok"],
   vitest,
   gateway,
 });

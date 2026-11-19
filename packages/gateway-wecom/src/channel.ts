@@ -19,7 +19,8 @@ const { invalid, requiredString } = channelConfigReaders("gateway-wecom");
 function readAgentId(config: Config): number | string {
   const value = config.agentId;
   if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value;
-  if (typeof value === "string" && /^\d+$/.test(value)) return value;
+  if (typeof value === "string" && /^\d+$/.test(value) && Number.isSafeInteger(Number(value)))
+    return value;
   throw invalid("agentId", "a non-negative integer or a string of digits");
 }
 

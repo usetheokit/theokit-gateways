@@ -26,6 +26,8 @@ const { refusal } = describeChannelContract({
   adapterClass: WeComAdapter,
   env: ENV,
   values: VALUES,
+  requiredEnv: ["APP_WECOM_CORP_ID", "APP_WECOM_CORP_SECRET", "APP_WECOM_AGENT_ID", "APP_WECOM_TOKEN", "APP_WECOM_ENCODING_AES_KEY"],
+  secretValues: ["s", "t", "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk"],
   vitest,
   gateway,
 });
@@ -36,5 +38,10 @@ vitest.describe("wecomChannel options", () => {
   it("accepts agentId as a number or a digit string and refuses other shapes", () => {
     expect(wecomChannel.create({ ...VALUES, agentId: 1000002 })).toBeInstanceOf(WeComAdapter);
     expect(refusal({ ...VALUES, agentId: "abc" }).message).toContain("agentId");
+  });
+
+  it("refuses a digit-string agentId beyond the safe integer range", () => {
+    expect(refusal({ ...VALUES, agentId: "9".repeat(400) }).message).toContain("agentId");
+    expect(refusal({ ...VALUES, agentId: "9007199254740993" }).message).toContain("agentId");
   });
 });

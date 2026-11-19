@@ -22,6 +22,8 @@ const { refusal } = describeChannelContract({
   adapterClass: WeChatAdapter,
   env: ENV,
   values: VALUES,
+  requiredEnv: ["APP_WECHAT_APP_ID", "APP_WECHAT_APP_SECRET", "APP_WECHAT_TOKEN"],
+  secretValues: ["s", "t"],
   vitest,
   gateway,
 });
