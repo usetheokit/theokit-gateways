@@ -107,6 +107,14 @@ describe("sonar coverage pipeline scripts", () => {
     expect(pkg.devDependencies["@vitest/coverage-v8"]).toBeDefined();
   });
 
+  it("coverage:sonar never runs the live integration suite", () => {
+    const [everyone, integration] = pkg.scripts["coverage:sonar"].split("&&").map((c) => c.trim());
+    expect(everyone).toContain("--filter=!@theokit/gateway-integration");
+    expect(integration).toContain("--filter @theokit/gateway-integration");
+    expect(integration).toContain("tests/unit tests/readiness.test.ts");
+    expect(integration).not.toMatch(/vitest run (--|$)/);
+  });
+
   it("sonar:scan builds, generates coverage, then provisions the scanner, in that order", () => {
     const cmd = pkg.scripts["sonar:scan"];
     const at = (s) => cmd.indexOf(s);
