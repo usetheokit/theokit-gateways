@@ -103,12 +103,17 @@ describe("sonar scan in CI", () => {
   const read = (p) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
   const workflow = read(".github/workflows/ci.yml");
   const pkg = JSON.parse(read("package.json"));
-  const sonarJob = workflow.slice(workflow.indexOf("\n  sonar:"), workflow.indexOf("\n  # ONE required check"));
+  const sonarJob = workflow.slice(
+    workflow.indexOf("\n  sonar:"),
+    workflow.indexOf("\n  # ONE required check"),
+  );
 
   it("runs sonar:scan after install in a job that has the token and full history", () => {
     expect(sonarJob).toMatch(/run: pnpm sonar:scan/);
     expect(sonarJob.indexOf("shared-workflows/actions/setup")).toBeGreaterThan(-1);
-    expect(sonarJob.indexOf("shared-workflows/actions/setup")).toBeLessThan(sonarJob.indexOf("pnpm sonar:scan"));
+    expect(sonarJob.indexOf("shared-workflows/actions/setup")).toBeLessThan(
+      sonarJob.indexOf("pnpm sonar:scan"),
+    );
     expect(sonarJob).toMatch(/SONAR_TOKEN: \$\{\{ secrets\.SONAR_TOKEN \}\}/);
     expect(sonarJob).toMatch(/fetch-depth: 0/);
   });
@@ -128,13 +133,20 @@ describe("sonar scan in CI", () => {
       .split("=")[1]
       .split(",");
     const base = fileURLToPath(ROOT);
-    const dirs = ["integration", "tools", ...readdirSync(`${base}packages`).map((d) => `packages/${d}`)];
+    const dirs = [
+      "integration",
+      "tools",
+      ...readdirSync(`${base}packages`).map((d) => `packages/${d}`),
+    ];
     for (const d of dirs) {
-      if (existsSync(`${base}${d}/package.json`)) expect(reports).toContain(`${d}/coverage/lcov.info`);
+      if (existsSync(`${base}${d}/package.json`))
+        expect(reports).toContain(`${d}/coverage/lcov.info`);
     }
     const cov = pkg.scripts["coverage:sonar"];
     expect(cov).toContain("--coverage.reporter=lcov");
-    expect(cov).toContain("@theokit/gateway-integration exec vitest run tests/unit tests/readiness.test.ts");
+    expect(cov).toContain(
+      "@theokit/gateway-integration exec vitest run tests/unit tests/readiness.test.ts",
+    );
     expect(cov).toContain("--filter '!@theokit/gateway-integration'");
   });
 });
