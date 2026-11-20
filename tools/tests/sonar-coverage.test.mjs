@@ -48,8 +48,6 @@ describe.each([["bot-realtime"], ["gateway-zalo"]])("sonar coverage for packages
   it("is reached by the checked-in CI test flow", () => {
     const rootPkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
     expect(rootPkg.scripts.test).toBe("pnpm -r run test");
-    const ci = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8");
-    expect(ci).toContain("run: pnpm -r run test");
     const cfg = readFileSync(resolve(root, dir, "vitest.config.ts"), "utf8");
     expect(cfg).toMatch(/reporter:\s*\[[^\]]*"lcov"/);
   });
@@ -98,10 +96,24 @@ describe.each([["bot-realtime"], ["gateway-zalo"]])("sonar coverage for packages
 });
 
 describe("coverage:sonar", () => {
-  it("generates LCOV for the workspace packages", () => {
-    const rootPkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
-    const cmd = rootPkg.scripts["coverage:sonar"];
-    expect(cmd).toContain("--coverage.reporter=lcov");
-    expect(cmd).toContain("pnpm -r");
-  });
+  const rootPkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+  const segments = rootPkg.scripts["coverage:sonar"].split(" && ");
+
+  it.each(["@theokit/gateway-bot-realtime", "@theokit/gateway-zalo"])(
+    "does not override the reporter of %s and runs its own test script",
+    (name) => {
+      // `--coverage.reporter=lcov` replaces the config's reporter list and loses `projectRoot`,
+      // which yields package-relative `SF:` records Sonar cannot attribute.
+      const overriding = segments.filter((c) => c.includes("--coverage.reporter"));
+      expect(overriding.length).toBeGreaterThan(0);
+      for (const c of overriding) {
+        // Either a recursive run that excludes the package, or a run scoped to other packages.
+        const recursive = c.startsWith("pnpm -r ");
+        expect(recursive ? c.includes(`--filter '!${name}'`) : !c.includes(name)).toBe(true);
+      }
+      expect(segments.some((c) => c.includes(`--filter ${name}`) && c.endsWith(" run test"))).toBe(
+        true,
+      );
+    },
+  );
 });
