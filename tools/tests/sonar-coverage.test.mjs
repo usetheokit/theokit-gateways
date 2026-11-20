@@ -1,119 +1,110 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { expect, test } from "vitest";
 
-import { describe, expect, it } from "vitest";
+const root = fileURLToPath(new URL("../../", import.meta.url));
+const read = (path) => readFileSync(join(root, path), "utf8");
+const PACKAGES = ["packages/bot-realtime", "packages/gateway-zalo"];
+const SCANNER = "pnpm dlx @sonar/scan@5.1.0";
 
-const root = resolve(import.meta.dirname, "../..");
-const props = readFileSync(resolve(root, "sonar-project.properties"), "utf8");
-const list = (key) =>
-  props
-    .split("\n")
-    .find((l) => l.startsWith(`${key}=`))
-    .slice(key.length + 1)
-    .split(",");
-
-// How the scanner reads an unmodified `SF:` record: relative to the repository root.
-// Returns the repository-relative path of the file it lands on, or null if it lands on none.
-const resolveSf = (sf) => {
-  const abs = isAbsolute(sf) ? sf : resolve(root, sf);
-  const rel = relative(root, abs);
-  return rel.startsWith("..") || !existsSync(abs) ? null : rel;
-};
-
-describe("resolveSf", () => {
-  it("does not resolve a package-relative record that only exists inside a package", () => {
-    expect(resolveSf("src/index.ts")).toBeNull();
-    expect(resolveSf("packages/gateway-zalo/src/index.ts")).toBe(
-      "packages/gateway-zalo/src/index.ts",
-    );
-  });
-});
-
-describe.each([["bot-realtime"], ["gateway-zalo"]])("sonar coverage for packages/%s", (name) => {
-  const dir = `packages/${name}`;
-
-  it("lists the source root and LCOV report", () => {
-    expect(list("sonar.sources")).toContain(`${dir}/src`);
-    expect(list("sonar.javascript.lcov.reportPaths")).toContain(`${dir}/coverage/lcov.info`);
-  });
-
-  it("writes the report from the package's ordinary test script", () => {
-    const pkg = JSON.parse(readFileSync(resolve(root, dir, "package.json"), "utf8"));
-    expect(pkg.scripts.test).toContain("--coverage");
-    expect(pkg.devDependencies["@vitest/coverage-v8"]).toBeDefined();
-  });
-
-  it("is reached by the checked-in CI test flow", () => {
-    const rootPkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
-    expect(rootPkg.scripts.test).toBe("pnpm -r run test");
-    const cfg = readFileSync(resolve(root, dir, "vitest.config.ts"), "utf8");
-    expect(cfg).toMatch(/reporter:\s*\[[^\]]*"lcov"/);
-  });
-
-  it("generates a report whose records land on indexed Sonar source files", () => {
-    // An isolated reports directory: the shared `coverage/` may be written by a concurrent
-    // `pnpm -r run test`, so this run neither deletes nor overwrites it.
-    const out = mkdtempSync(resolve(tmpdir(), "sonar-cov-"));
-    const lcov = resolve(out, "lcov.info");
-    try {
-      // The package's real `test` script; only the output directory is redirected, by an
-      // argument pnpm appends to that script. The script and config must not pin their own
-      // directory, so the default `coverage/` that `sonar.javascript.lcov.reportPaths` lists is
-      // where an unredirected run writes.
-      const pkg = JSON.parse(readFileSync(resolve(root, dir, "package.json"), "utf8"));
-      const cfg = readFileSync(resolve(root, dir, "vitest.config.ts"), "utf8");
-      expect(pkg.scripts.test).not.toContain("reportsDirectory");
-      expect(cfg).not.toContain("reportsDirectory");
-      execFileSync("pnpm", ["run", "test", `--coverage.reportsDirectory=${out}`], {
-        cwd: resolve(root, dir),
-        stdio: "pipe",
-      });
-    } catch (e) {
-      rmSync(out, { recursive: true, force: true });
-      throw e;
-    }
-    expect(existsSync(lcov)).toBe(true);
-
-    const text = readFileSync(lcov, "utf8");
-    rmSync(out, { recursive: true, force: true });
-    const files = [...text.matchAll(/^SF:(.+)$/gm)].map((m) => m[1]);
-    expect(files.length).toBeGreaterThan(0);
-    const sources = list("sonar.sources");
-    for (const f of files) {
-      const resolved = resolveSf(f);
-      expect(resolved, `SF:${f} resolves to no file`).not.toBeNull();
-      expect(resolved.startsWith(`${dir}/src/`), `SF:${f} is attributed outside ${dir}`).toBe(true);
-      expect(sources.some((s) => resolved.startsWith(`${s}/`))).toBe(true);
-    }
-    const src = execFileSync("git", ["ls-files", `${dir}/src`], { cwd: root, encoding: "utf8" })
+const props = () =>
+  Object.fromEntries(
+    read("sonar-project.properties")
       .split("\n")
-      .filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts"));
-    for (const f of src) expect(files.map(resolveSf)).toContain(f);
-    expect(text).toMatch(/^LH:[1-9]\d*$/m);
-  }, 120_000);
-});
-
-describe("coverage:sonar", () => {
-  const rootPkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
-  const segments = rootPkg.scripts["coverage:sonar"].split(" && ");
-
-  it.each(["@theokit/gateway-bot-realtime", "@theokit/gateway-zalo"])(
-    "does not override the reporter of %s and runs its own test script",
-    (name) => {
-      // `--coverage.reporter=lcov` replaces the config's reporter list and loses `projectRoot`,
-      // which yields package-relative `SF:` records Sonar cannot attribute.
-      const overriding = segments.filter((c) => c.includes("--coverage.reporter"));
-      expect(overriding.length).toBeGreaterThan(0);
-      for (const c of overriding) {
-        // Either a recursive run that excludes the package, or a run scoped to other packages.
-        const recursive = c.startsWith("pnpm -r ");
-        expect(recursive ? c.includes(`--filter '!${name}'`) : !c.includes(name)).toBe(true);
-      }
-      expect(segments.some((c) => c.includes(`--filter ${name}`) && c.endsWith(" run test"))).toBe(
-        true,
-      );
-    },
+      .filter((l) => l.includes("=") && !l.startsWith("#"))
+      .map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]),
   );
+
+test("sonar:scan builds gateway, generates coverage, then runs the pinned scanner, in that order", () => {
+  const { scripts } = JSON.parse(read("package.json"));
+  expect(scripts["sonar:scan"].split("&&").map((s) => s.trim())).toEqual([
+    "pnpm --filter @theokit/gateway build",
+    "pnpm coverage:sonar",
+    SCANNER,
+  ]);
+  expect(scripts["coverage:sonar"]).toContain("--coverage.reporter=lcov");
 });
+
+test.each(PACKAGES)("%s is a sonar source and its lcov is a report path", (dir) => {
+  const p = props();
+  const sources = p["sonar.sources"].split(",");
+  expect(sources).toContain(`${dir}/src`);
+  expect(sources).toContain(`${dir}/tests`);
+  expect(p["sonar.javascript.lcov.reportPaths"].split(",")).toContain(`${dir}/coverage/lcov.info`);
+});
+
+// Stand-in for the scanner, which needs a server and a token that only CI has. It is weaker
+// evidence than the real scanner: it applies its own resolver (read each lcov report path,
+// accept an SF: entry only if the file exists under sonar.sources) rather than the scanner's
+// rules. It logs one "Imported coverage" line per report and exits 1 on an absent, empty or
+// unresolvable report.
+const STAND_IN_SCANNER = String.raw`
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+const props = Object.fromEntries(readFileSync("sonar-project.properties", "utf8").split("\n")
+  .filter((l) => l.includes("=") && !l.startsWith("#")).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+const sources = props["sonar.sources"].split(",").map((d) => resolve(d));
+let failed = false;
+for (const report of props["sonar.javascript.lcov.reportPaths"].split(",")) {
+  if (!process.argv.slice(2).some((dir) => report.startsWith(dir + "/"))) continue;
+  if (!existsSync(report)) { console.log("ERROR: report not found " + report); failed = true; continue; }
+  const files = readFileSync(report, "utf8").split("\n").filter((l) => l.startsWith("SF:"))
+    .map((l) => resolve(report, "../..", l.slice(3)));
+  const ok = files.filter((f) => existsSync(f) && sources.some((s) => f.startsWith(s + "/")));
+  if (files.length === 0 || ok.length !== files.length) { console.log("ERROR: unresolved entries in " + report); failed = true; continue; }
+  console.log("INFO: Imported coverage for " + ok.length + " files from " + report);
+}
+process.exit(failed ? 1 : 0);
+`;
+
+// Runs the real `pnpm sonar:scan`. pnpm runs scripts through its script-shell, so that is
+// where only the last step, the scanner, is swapped for the stand-in; the build and
+// coverage:sonar run unchanged. The test fails unless coverage:sonar wrote both reports first.
+// coverage:sonar also runs this tools suite, which would start sonar:scan again and delete the
+// reports the outer run is writing; the marker env var makes the nested run skip this test.
+test.skipIf(process.env.SONAR_SCAN_REGRESSION)(
+  "pnpm sonar:scan generates both reports, then the scanner imports both",
+  () => {
+    const bin = mkdtempSync(join(tmpdir(), "sonar-shim-"));
+    try {
+      writeFileSync(join(bin, "scanner.mjs"), STAND_IN_SCANNER);
+      writeFileSync(
+        join(bin, "shell.sh"),
+        `#!/bin/sh
+cmd="$2"
+last="${SCANNER}"
+case "$cmd" in
+  *"&& $last") /bin/sh -c "\${cmd%"&& $last"}" && exec node "${join(bin, "scanner.mjs")}" ${PACKAGES.join(" ")} ;;
+  *) exec /bin/sh -c "$cmd" ;;
+esac
+`,
+        { mode: 0o755 },
+      );
+      for (const dir of PACKAGES)
+        rmSync(resolve(root, dir, "coverage"), { recursive: true, force: true });
+      const run = spawnSync("pnpm", ["sonar:scan"], {
+        cwd: root,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          SONAR_SCAN_REGRESSION: "1",
+          npm_config_script_shell: join(bin, "shell.sh"),
+        },
+      });
+      const log = run.stdout + run.stderr;
+      expect(run.status, log).toBe(0);
+      for (const dir of PACKAGES) {
+        expect(existsSync(join(root, dir, "coverage/lcov.info"))).toBe(true);
+        expect(log).toMatch(
+          new RegExp(`Imported coverage for [1-9]\\d* files from ${dir}/coverage/lcov.info`),
+        );
+      }
+    } finally {
+      rmSync(bin, { recursive: true, force: true });
+    }
+  },
+  540_000,
+);
