@@ -14,6 +14,7 @@ import {
   GatewayConfigurationError,
   type GatewayConfigurationErrorOptions,
 } from "@theokit/gateway";
+import { type ConfigField, field } from "../../../shared/channel-config-field.js";
 import { IrcAdapter } from "./adapter.js";
 import type { IrcAdapterOptions } from "./types.js";
 
@@ -62,93 +63,41 @@ function defined<T extends object>(options: T): T {
   return Object.fromEntries(Object.entries(options).filter(([, v]) => v !== undefined)) as T;
 }
 
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly env?: string;
-  readonly description: string;
-}
-
 const CONFIG: ReadonlyArray<ConfigField> = [
-  {
-    key: "host",
-    required: true,
-    secret: false,
-    env: "IRC_HOST",
-    description: "The IRC server's host name, for example irc.libera.chat.",
-  },
-  {
-    key: "nick",
-    required: true,
-    secret: false,
-    env: "IRC_NICK",
-    description: "The nick the adapter registers with.",
-  },
-  {
-    key: "channels",
-    required: true,
-    secret: false,
-    env: "IRC_CHANNELS",
-    description: "Channels to join, #name or &name: an array or a comma-separated string.",
-  },
-  {
-    key: "port",
+  field("host", "IRC_HOST", "The IRC server's host name, for example irc.libera.chat."),
+  field("nick", "IRC_NICK", "The nick the adapter registers with."),
+  field(
+    "channels",
+    "IRC_CHANNELS",
+    "Channels to join, #name or &name: an array or a comma-separated string.",
+  ),
+  field("port", "IRC_PORT", "The server's port; default 6697.", { required: false }),
+  field("tls", "IRC_TLS", "Whether to speak TLS; default true.", { required: false }),
+  field("username", "IRC_USERNAME", "The username sent in USER; default the nick.", {
     required: false,
-    secret: false,
-    env: "IRC_PORT",
-    description: "The server's port; default 6697.",
-  },
-  {
-    key: "tls",
+  }),
+  field("realname", "IRC_REALNAME", "The real name sent in USER; default the nick.", {
     required: false,
-    secret: false,
-    env: "IRC_TLS",
-    description: "Whether to speak TLS; default true.",
-  },
-  {
-    key: "username",
-    required: false,
-    secret: false,
-    env: "IRC_USERNAME",
-    description: "The username sent in USER; default the nick.",
-  },
-  {
-    key: "realname",
-    required: false,
-    secret: false,
-    env: "IRC_REALNAME",
-    description: "The real name sent in USER; default the nick.",
-  },
-  {
-    key: "password",
+  }),
+  field("password", "IRC_PASSWORD", "The server password, sent as PASS before registration.", {
     required: false,
     secret: true,
-    env: "IRC_PASSWORD",
-    description: "The server password, sent as PASS before registration.",
-  },
-  {
-    key: "saslAccount",
+  }),
+  field("saslAccount", "IRC_SASL_ACCOUNT", "The account name for SASL PLAIN; default the nick.", {
     required: false,
-    secret: false,
-    env: "IRC_SASL_ACCOUNT",
-    description: "The account name for SASL PLAIN; default the nick.",
-  },
-  {
-    key: "saslPassword",
-    required: false,
-    secret: true,
-    env: "IRC_SASL_PASSWORD",
-    description: "The NickServ account password, sent through SASL PLAIN.",
-  },
-  {
-    key: "connectTimeoutMs",
-    required: false,
-    secret: false,
-    env: "IRC_CONNECT_TIMEOUT_MS",
-    description: "How long connect() waits for registration and every join; default 10000.",
-  },
+  }),
+  field(
+    "saslPassword",
+    "IRC_SASL_PASSWORD",
+    "The NickServ account password, sent through SASL PLAIN.",
+    { required: false, secret: true },
+  ),
+  field(
+    "connectTimeoutMs",
+    "IRC_CONNECT_TIMEOUT_MS",
+    "How long connect() waits for registration and every join; default 10000.",
+    { required: false },
+  ),
   {
     key: "socketFactory",
     required: false,

@@ -14,6 +14,7 @@ import {
   GatewayConfigurationError,
   type GatewayConfigurationErrorOptions,
 } from "@theokit/gateway";
+import { type ConfigField, field } from "../../../shared/channel-config-field.js";
 import { NextcloudTalkAdapter } from "./adapter.js";
 import { nextcloudTalkWebhook, rememberTalkSecret } from "./fetch-webhook.js";
 import type { NextcloudTalkAdapterOptions } from "./types.js";
@@ -63,51 +64,30 @@ function defined<T extends object>(options: T): T {
   return Object.fromEntries(Object.entries(options).filter(([, v]) => v !== undefined)) as T;
 }
 
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly env?: string;
-  readonly description: string;
-}
-
 const CONFIG: ReadonlyArray<ConfigField> = [
-  {
-    key: "baseUrl",
-    required: true,
-    secret: false,
-    env: "NEXTCLOUD_TALK_BASE_URL",
-    description: "The Nextcloud server, https://cloud.example.com, without a trailing path.",
-  },
-  {
-    key: "secret",
-    required: true,
-    secret: true,
-    env: "NEXTCLOUD_TALK_SECRET",
-    description: "The bot secret passed to occ talk:bot:install; 40 to 128 characters.",
-  },
-  {
-    key: "port",
+  field(
+    "baseUrl",
+    "NEXTCLOUD_TALK_BASE_URL",
+    "The Nextcloud server, https://cloud.example.com, without a trailing path.",
+  ),
+  field(
+    "secret",
+    "NEXTCLOUD_TALK_SECRET",
+    "The bot secret passed to occ talk:bot:install; 40 to 128 characters.",
+    { secret: true },
+  ),
+  field("port", "NEXTCLOUD_TALK_PORT", "Port the webhook listener binds; default 3000.", {
     required: false,
-    secret: false,
-    env: "NEXTCLOUD_TALK_PORT",
-    description: "Port the webhook listener binds; default 3000.",
-  },
-  {
-    key: "path",
+  }),
+  field("path", "NEXTCLOUD_TALK_PATH", "Path of the webhook route; default /nextcloud-talk.", {
     required: false,
-    secret: false,
-    env: "NEXTCLOUD_TALK_PATH",
-    description: "Path of the webhook route; default /nextcloud-talk.",
-  },
-  {
-    key: "connectTimeoutMs",
-    required: false,
-    secret: false,
-    env: "NEXTCLOUD_TALK_CONNECT_TIMEOUT_MS",
-    description: "How long connect() waits for the capabilities read; default 10000.",
-  },
+  }),
+  field(
+    "connectTimeoutMs",
+    "NEXTCLOUD_TALK_CONNECT_TIMEOUT_MS",
+    "How long connect() waits for the capabilities read; default 10000.",
+    { required: false },
+  ),
   {
     key: "app",
     required: false,

@@ -7,8 +7,9 @@
  * every value before the constructor runs and starts no process (signal-cli starts in `connect()`).
  */
 
-import { type ChannelConfigField, channelConfigReaders } from "@theokit/gateway";
+import { channelConfigReaders } from "@theokit/gateway";
 
+import { type ConfigField, field } from "../../../shared/channel-config-field.js";
 import { SignalAdapter } from "./adapter.js";
 import { ConfigurationError } from "./errors.js";
 import type { SignalAdapterOptions } from "./types.js";
@@ -32,49 +33,42 @@ function readNumber(config: Config, key: string): number | undefined {
 
 const E164 = /^\+[1-9]\d{6,14}$/;
 
-const CONFIG: ReadonlyArray<ChannelConfigField> = [
-  {
-    key: "account",
-    required: true,
-    secret: false,
-    env: "SIGNAL_ACCOUNT",
-    description: "The Signal account (E.164 phone number) registered or linked to signal-cli.",
-  },
-  {
-    key: "signalCliPath",
-    required: false,
-    secret: false,
-    env: "SIGNAL_CLI_PATH",
-    description: "Path or name of the signal-cli binary; default `signal-cli` on PATH.",
-  },
-  {
-    key: "configDir",
-    required: false,
-    secret: false,
-    env: "SIGNAL_CONFIG_DIR",
-    description: "signal-cli's data directory; default is signal-cli's own.",
-  },
-  {
-    key: "connectTimeoutMs",
-    required: false,
-    secret: false,
-    env: "SIGNAL_CONNECT_TIMEOUT_MS",
-    description: "Milliseconds `connect()` waits for signal-cli; default 10000.",
-  },
-  {
-    key: "requestTimeoutMs",
-    required: false,
-    secret: false,
-    env: "SIGNAL_REQUEST_TIMEOUT_MS",
-    description: "Milliseconds a send may stay unanswered; default 30000.",
-  },
-  {
-    key: "senderKey",
-    required: false,
-    secret: false,
-    env: "SIGNAL_SENDER_KEY",
-    description: 'Which envelope field becomes sender.id: "uuid" (default) or "number".',
-  },
+const CONFIG: ReadonlyArray<ConfigField> = [
+  field(
+    "account",
+    "SIGNAL_ACCOUNT",
+    "The Signal account (E.164 phone number) registered or linked to signal-cli.",
+  ),
+  field(
+    "signalCliPath",
+    "SIGNAL_CLI_PATH",
+    "Path or name of the signal-cli binary; default `signal-cli` on PATH.",
+    { required: false },
+  ),
+  field(
+    "configDir",
+    "SIGNAL_CONFIG_DIR",
+    "signal-cli's data directory; default is signal-cli's own.",
+    { required: false },
+  ),
+  field(
+    "connectTimeoutMs",
+    "SIGNAL_CONNECT_TIMEOUT_MS",
+    "Milliseconds `connect()` waits for signal-cli; default 10000.",
+    { required: false },
+  ),
+  field(
+    "requestTimeoutMs",
+    "SIGNAL_REQUEST_TIMEOUT_MS",
+    "Milliseconds a send may stay unanswered; default 30000.",
+    { required: false },
+  ),
+  field(
+    "senderKey",
+    "SIGNAL_SENDER_KEY",
+    'Which envelope field becomes sender.id: "uuid" (default) or "number".',
+    { required: false },
+  ),
 ];
 
 function buildOptions(config: Config): SignalAdapterOptions {
