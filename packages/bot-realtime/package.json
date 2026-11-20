@@ -33,12 +33,10 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --coverage --coverage.provider=v8 --coverage.reporter=lcov --coverage.reporter=text-summary --coverage.include=src/**",
-    "coverage": "vitest run --coverage --coverage.provider=v8 --coverage.reporter=lcov --coverage.reporter=text-summary --coverage.include=src/**"
+    "test": "vitest run"
   },
   "devDependencies": {
     "@theokit/gateway": "workspace:*",
-    "@vitest/coverage-v8": "4.1.12",
     "tsup": "^8.5.0",
     "typescript": "5.9.3",
     "vitest": "^4.1.11"

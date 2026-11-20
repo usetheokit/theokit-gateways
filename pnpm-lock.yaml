@@ -197,9 +197,6 @@ importers:
       '@theokit/gateway':
         specifier: workspace:*
         version: link:../gateway
-      '@vitest/coverage-v8':
-        specifier: 4.1.12
-        version: 4.1.12(vitest@4.1.12)
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1)
@@ -919,9 +916,6 @@ importers:
       '@theokit/gateway':
         specifier: workspace:*
         version: link:../gateway
-      '@vitest/coverage-v8':
-        specifier: 4.1.12
-        version: 4.1.12(vitest@4.1.12)
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1)
@@ -5838,7 +5832,7 @@ snapshots:
       '@babel/generator': 8.0.10
       '@babel/helper-compilation-targets': 8.0.7
       '@babel/helpers': 8.1.0
-      '@babel/parser': 8.1.0
+      '@babel/parser': 8.0.10
       '@babel/template': 8.0.0
       '@babel/traverse': 8.0.10
       '@babel/types': 8.1.0
@@ -5861,7 +5855,7 @@ snapshots:
 
   '@babel/generator@8.0.10':
     dependencies:
-      '@babel/parser': 8.1.0
+      '@babel/parser': 8.0.10
       '@babel/types': 8.1.0
       '@jridgewell/gen-mapping': 0.4.0-beta.0
       '@jridgewell/trace-mapping': 0.3.31
@@ -6115,7 +6109,7 @@ snapshots:
   '@babel/template@8.0.0':
     dependencies:
       '@babel/code-frame': 8.0.6
-      '@babel/parser': 8.1.0
+      '@babel/parser': 8.0.10
       '@babel/types': 8.1.0
 
   '@babel/traverse@7.29.13':
@@ -6135,7 +6129,7 @@ snapshots:
       '@babel/code-frame': 8.0.6
       '@babel/generator': 8.0.10
       '@babel/helper-globals': 8.0.6
-      '@babel/parser': 8.1.0
+      '@babel/parser': 8.0.10
       '@babel/template': 8.0.0
       '@babel/types': 8.1.0
       obug: 3.0.0
