@@ -182,7 +182,8 @@ exist yet.
 
 ## Relationship to `@theokit/sdk`
 
-`@theokit/gateway` (the core) and `@theokit/gateway-agent` declare a peer on `@theokit/sdk`, at `>=4.62.0 <6`. The core uses it
+`@theokit/gateway` (the core) declares a peer on `@theokit/sdk` at `>=4.62.0 <6`, and `@theokit/gateway-agent` at `>=5.3.0 <6`, the
+floor every `@theokit/presenter` it admits requires. The core uses it
 for one thing: redacting a throw before it reaches a log, at two call sites. The ten adapters name it
 only as a `devDependency` and mark it external at build time; none of them imports it, which is what
 B-007 measured before removing the peer each had inherited. So installing an adapter does not pull

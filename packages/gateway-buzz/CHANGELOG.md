@@ -1,5 +1,11 @@
 # @theokit/gateway-buzz
 
+## 0.3.0
+
+### Minor Changes
+
+- 60fb3ae: Export `buzzChannel`, `clickclackChannel` and `feishuLarkChannel`: channel descriptors with env bindings for `createChannels` and `configFromEnv`.
+
 ## 0.2.0
 
 ### Minor Changes

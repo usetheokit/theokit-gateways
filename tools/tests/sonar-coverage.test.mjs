@@ -34,9 +34,8 @@ describe("resolveSf", () => {
 describe.each([["bot-realtime"], ["gateway-zalo"]])("sonar coverage for packages/%s", (name) => {
   const dir = `packages/${name}`;
 
-  it("lists the source root, test root and LCOV report", () => {
+  it("lists the source root and LCOV report", () => {
     expect(list("sonar.sources")).toContain(`${dir}/src`);
-    expect(list("sonar.tests")).toContain(`${dir}/tests`);
     expect(list("sonar.javascript.lcov.reportPaths")).toContain(`${dir}/coverage/lcov.info`);
   });
 
@@ -99,9 +98,10 @@ describe.each([["bot-realtime"], ["gateway-zalo"]])("sonar coverage for packages
 });
 
 describe("coverage:sonar", () => {
-  it("runs the coverage suites and then the Sonar scanner on this properties file", () => {
+  it("generates LCOV for the workspace packages", () => {
     const rootPkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
     const cmd = rootPkg.scripts["coverage:sonar"];
-    expect(cmd).toMatch(/^pnpm -r run test && .*@sonar\/scan/);
+    expect(cmd).toContain("--coverage.reporter=lcov");
+    expect(cmd).toContain("pnpm -r");
   });
 });

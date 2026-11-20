@@ -9,6 +9,7 @@
 import { GatewayConfigurationError } from "@theokit/gateway";
 
 import { TeamsAdapter } from "./adapter.js";
+import { rememberTeamsWebhook, teamsWebhook } from "./fetch-webhook.js";
 import type { TeamsAdapterOptions } from "./types.js";
 
 type Config = Readonly<Record<string, unknown>>;
@@ -85,7 +86,8 @@ const CONFIG: ReadonlyArray<ConfigField> = [
 ];
 
 /**
- * The Teams channel: the SDK listens for `POST /api/messages` once `connect()` runs.
+ * The Teams channel. Activities arrive by webhook: mount `createWebhookHandler` (see the README);
+ * `webhook.handle` verifies the connector token with the client id alone.
  *
  * `create` refuses a value of the wrong type with a `GatewayConfigurationError` coded
  * `invalid_config` and performs no network call.
@@ -94,7 +96,8 @@ const CONFIG: ReadonlyArray<ConfigField> = [
  */
 export const teamsChannel = {
   platform: "teams" as const,
-  transport: "socket" as const,
+  transport: "webhook" as const,
+  webhook: teamsWebhook,
   senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Config): TeamsAdapter {
@@ -108,6 +111,11 @@ export const teamsChannel = {
       ...(botDisplayName === undefined ? {} : { botDisplayName }),
       ...(requireMention === undefined ? {} : { requireMention }),
     };
-    return new TeamsAdapter(options);
+    const adapter = new TeamsAdapter(options);
+    rememberTeamsWebhook(adapter, {
+      clientId: options.clientId,
+      ...(botDisplayName === undefined ? {} : { botDisplayName }),
+    });
+    return adapter;
   },
 };

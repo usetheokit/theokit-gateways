@@ -56,3 +56,37 @@ Status: unverified against the live X API; wire shapes are written from X's publ
 ## Capabilities
 
 `adapter.capabilities.maxMessageChars` is `280` (the splitter limit) and `threads` is `false`. See `@theokit/gateway` for the field meanings.
+
+## Channel descriptor
+
+`xChannel` describes the channel as data, for `createChannels` and `configFromEnv` from
+`@theokit/gateway`.
+
+| Field | Env | Required | Secret |
+| --- | --- | --- | --- |
+| `userId` | `X_USER_ID` | yes | no |
+| `username` | `X_USERNAME` | yes | no |
+| `clientId` | `X_CLIENT_ID` | yes | no |
+| `clientSecret` | `X_CLIENT_SECRET` | yes | yes |
+| `refreshToken` | `X_REFRESH_TOKEN` | yes | yes |
+| `allowFrom` | `X_ALLOW_FROM` | yes (non-empty list) | no |
+| `bearerToken` | `X_BEARER_TOKEN` | no | yes |
+| `guestDailyLimit` | `X_GUEST_DAILY_LIMIT` | no | no |
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { xChannel } from "@theokit/gateway-x";
+
+const { config, missing } = configFromEnv(xChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([
+  { descriptor: xChannel, config, envPrefix: "APP_" },
+]);
+```
+
+Pass the same prefix as `envPrefix` to `createChannels`: a missing required value is then rejected with
+`missing_required_config` naming the full variable (for example `APP_X_USER_ID`).
+
+An empty `allowFrom` answers nobody, so `create` refuses it; `X_GUEST_DAILY_LIMIT` must be a positive integer.
+
+`create` refuses a value of the wrong type with a `GatewayConfigurationError` (`invalid_config`,
+naming the key) and makes no network call.
