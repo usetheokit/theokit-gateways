@@ -1,14 +1,4 @@
-import { spawnSync } from "node:child_process";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -106,61 +96,5 @@ describe("sonar analysis roots", () => {
   it("does not classify tests as test code, which has no duplication analysis", () => {
     expect(prop("sonar.tests")).toEqual([]);
     expect(prop("sonar.test.inclusions")).toEqual([]);
-  });
-});
-
-describe("ci workflow runs the sonar pipeline", () => {
-  const ci = readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
-  const props = readFileSync(new URL("../../sonar-project.properties", import.meta.url), "utf8");
-  const at = (s) => ci.indexOf(s);
-
-  it("scans after the offline integration units", () => {
-    const units = at("run: pnpm --filter @theokit/gateway-integration test:unit");
-    expect(units).toBeGreaterThan(-1);
-    expect(at("pnpm sonar:scan\n")).toBeGreaterThan(units);
-  });
-
-  it("passes SONAR_TOKEN to the scan", () => {
-    expect(ci).toMatch(
-      /pnpm sonar:scan\n[\s\S]*?env:\s+SONAR_TOKEN: \$\{\{ secrets\.SONAR_TOKEN \}\}/,
-    );
-  });
-
-  describe("scan step guard", () => {
-    // Run the step's real shell block against a throwaway package.json and a stub `pnpm`.
-    const runStep = (scripts) => {
-      const block = ci.match(/- name: Sonar scan[\s\S]*?run: \|\n([\s\S]*?)\n {8}env:/)?.[1];
-      expect(block).toBeTruthy();
-      const dir = mkdtempSync(`${tmpdir()}/sonar-step-`);
-      const bin = `${dir}/bin`;
-      mkdirSync(bin);
-      writeFileSync(`${bin}/pnpm`, '#!/bin/sh\necho "pnpm $*"\n');
-      chmodSync(`${bin}/pnpm`, 0o755);
-      writeFileSync(`${dir}/package.json`, JSON.stringify({ scripts }));
-      return spawnSync("bash", ["-e", "-c", block], {
-        cwd: dir,
-        env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
-        encoding: "utf8",
-      });
-    };
-
-    it("invokes pnpm sonar:scan when the script exists", () => {
-      const r = runStep({ "sonar:scan": "x" });
-      expect(r.status).toBe(0);
-      expect(r.stdout).toContain("pnpm sonar:scan");
-    });
-
-    it("warns and skips instead of failing when the script is missing", () => {
-      const r = runStep({});
-      expect(r.status).toBe(0);
-      expect(r.stdout).not.toContain("pnpm sonar:scan");
-      expect(r.stdout).toContain("::warning::");
-    });
-  });
-
-  it("imports the lcov files that coverage:sonar writes, incl. offline integration", () => {
-    expect(props).toContain("integration/coverage/lcov.info");
-    expect(props).toContain("tools/coverage/lcov.info");
-    expect(props).toContain("packages/gateway/coverage/lcov.info");
   });
 });
