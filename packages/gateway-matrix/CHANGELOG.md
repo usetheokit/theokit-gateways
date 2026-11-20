@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0
+
+### Minor Changes
+
+- bc799e9: Export `matrixChannel`, `mattermostChannel` and `emailChannel`: `ChannelDescriptor`s with `MATRIX_*`, `MATTERMOST_*` and `EMAIL_*` environment bindings for `createChannels` and `configFromEnv`. The peer range on `@theokit/gateway` is now `>=0.21.0`.
+
+### Patch Changes
+
+- fc94485: The email, IRC, Matrix, Nextcloud Talk and Signal channel descriptors build their configuration fields with the shared `field` helper, and email and Matrix read their env-string numbers and booleans through one shared reader instead of two copies. The descriptors and the values they accept are unchanged.
+
 ## 0.6.0
 
 ### Minor Changes

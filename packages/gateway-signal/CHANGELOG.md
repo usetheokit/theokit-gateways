@@ -1,5 +1,17 @@
 # @theokit/gateway-signal
 
+## 0.3.0
+
+### Minor Changes
+
+- d6fe699: Export `signalChannel`, `imessageChannel` and `raftChannel`: channel descriptors with an environment variable bound to each option, for `createChannels` and `configFromEnv`.
+
+  The three packages now require `@theokit/gateway >=0.22.0` and read channel config with its shared `channelConfigReaders`.
+
+### Patch Changes
+
+- fc94485: The email, IRC, Matrix, Nextcloud Talk and Signal channel descriptors build their configuration fields with the shared `field` helper, and email and Matrix read their env-string numbers and booleans through one shared reader instead of two copies. The descriptors and the values they accept are unchanged.
+
 ## 0.2.0
 
 ### Minor Changes

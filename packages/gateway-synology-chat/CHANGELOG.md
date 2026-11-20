@@ -1,5 +1,11 @@
 # @theokit/gateway-synology-chat
 
+## 0.3.0
+
+### Minor Changes
+
+- be678d9: The `nextcloudTalkChannel` and `synologyChatChannel` descriptors now declare `transport: "webhook"` with a `webhook.handle`, so a host mounts them with `createWebhookHandler`. Nextcloud Talk checks the signature headers over the raw body; Synology Chat checks the outgoing-webhook token in the form body. Statuses match the packages' own routes, and the Express listeners are unchanged.
+
 ## 0.2.0
 
 ### Minor Changes
