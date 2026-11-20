@@ -9,6 +9,7 @@
 // Re-export the MessageEvent variant.
 export type { EmailMessageEvent } from "@theokit/gateway";
 export { EmailAdapter } from "./adapter.js";
+export { emailChannel } from "./channel.js";
 export { mapEmailError } from "./errors.js";
 export { extractAddr, isAllowedSender, isAutomatedSender } from "./filters.js";
 export { type NormalizeOptions, normalizeEmail } from "./normalize.js";

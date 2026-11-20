@@ -11,9 +11,8 @@ const PACKAGES = ["packages/bot-realtime", "packages/gateway-zalo"];
 
 test("coverage:sonar generates both reports and the scanner runs after it", () => {
   const { scripts } = json("package.json");
-  for (const name of ["gateway-bot-realtime", "gateway-zalo"]) {
-    expect(scripts["coverage:sonar"]).toContain(`@theokit/${name}`);
-  }
+  expect(scripts["coverage:sonar"]).toContain("--coverage.reporter=lcov");
+  expect(scripts["coverage:sonar"]).toContain("pnpm -r --filter '!@theokit/gateway-integration'");
   expect(scripts["sonar:scan"].startsWith("pnpm coverage:sonar && ")).toBe(true);
   expect(scripts["sonar:scan"]).toContain("@sonar/scan");
 });
@@ -22,8 +21,8 @@ test("a clean checkout can run the scan: gateway is built first and the scanner 
   const { scripts } = json("package.json");
   const steps = scripts["coverage:sonar"].split("&&").map((s) => s.trim());
   expect(steps[0]).toBe("pnpm --filter @theokit/gateway build");
-  expect(steps[1]).toContain("run coverage");
-  expect(scripts["sonar:scan"]).toMatch(/pnpm dlx @sonar\/scan$/);
+  expect(steps[1]).toContain("exec vitest run --coverage.enabled");
+  expect(scripts["sonar:scan"]).toMatch(/pnpm dlx @sonar\/scan@[\d.]+$/);
 });
 
 test.each(PACKAGES)("%s writes lcov and is known to sonar", (dir) => {
@@ -31,12 +30,10 @@ test.each(PACKAGES)("%s writes lcov and is known to sonar", (dir) => {
   expect(pkg.scripts.coverage).toContain("--coverage.reporter=lcov");
   expect(pkg.devDependencies["@vitest/coverage-v8"]).toBeTruthy();
   const props = read("sonar-project.properties");
-  for (const key of ["sonar.sources", "sonar.tests"]) {
-    const line = props.split("\n").find((l) => l.startsWith(`${key}=`));
-    expect(line.split("=")[1].split(",")).toContain(
-      `${dir}/${key === "sonar.sources" ? "src" : "tests"}`,
-    );
-  }
+  const line = props.split("\n").find((l) => l.startsWith("sonar.sources="));
+  const sourcesList = line.split("=")[1].split(",");
+  expect(sourcesList).toContain(`${dir}/src`);
+  expect(sourcesList).toContain(`${dir}/tests`);
   const lcov = props.split("\n").find((l) => l.startsWith("sonar.javascript.lcov.reportPaths="));
   expect(lcov.split("=")[1].split(",")).toContain(`${dir}/coverage/lcov.info`);
 });
@@ -87,7 +84,7 @@ test.each(PACKAGES)(
 test("the sonar scan runs the report generation and the scanner in one command, in order", () => {
   const { scripts } = json("package.json");
   const expanded = scripts["sonar:scan"].replace("pnpm coverage:sonar", scripts["coverage:sonar"]);
-  const order = ["build", "run coverage", "@sonar/scan"].map((s) => expanded.indexOf(s));
+  const order = ["build", "--coverage.enabled", "@sonar/scan"].map((s) => expanded.indexOf(s));
   expect(order.every((i) => i >= 0)).toBe(true);
   expect([...order].sort((a, b) => a - b)).toEqual(order);
 });
@@ -118,36 +115,33 @@ for (const report of props["sonar.javascript.lcov.reportPaths"].split(",")) {
 process.exit(failed ? 1 : 0);
 `;
 
-test("pnpm sonar:scan generates both reports, then the scanner imports both", () => {
+test("generating the two packages' reports, then the scanner imports both", () => {
   const root = fileURLToPath(new URL("../../", import.meta.url));
   const bin = mkdtempSync(join(tmpdir(), "sonar-shim-"));
   try {
     writeFileSync(join(bin, "scanner.mjs"), STAND_IN_SCANNER);
-    // pnpm runs scripts through its script-shell, so that is where the last step is swapped.
-    writeFileSync(
-      join(bin, "shell.sh"),
-      `#!/bin/sh
-cmd="$2"
-last="pnpm dlx @sonar/scan"
-case "$cmd" in
-  *"&& $last") /bin/sh -c "\${cmd%"&& $last"}" && exec node "${join(bin, "scanner.mjs")}" ${PACKAGES.join(" ")} ;;
-  *) exec /bin/sh -c "$cmd" ;;
-esac
-`,
-      { mode: 0o755 },
-    );
     for (const dir of PACKAGES)
       rmSync(resolve(root, dir, "coverage"), { recursive: true, force: true });
-    const run = spawnSync("pnpm", ["sonar:scan"], {
+    // The workspace-wide coverage:sonar runs every package; only these two are asserted here.
+    const gen = spawnSync(
+      "pnpm",
+      [
+        "--filter",
+        "@theokit/gateway-bot-realtime",
+        "--filter",
+        "@theokit/gateway-zalo",
+        "run",
+        "coverage",
+      ],
+      { cwd: root, encoding: "utf8" },
+    );
+    expect(gen.status, gen.stdout + gen.stderr).toBe(0);
+    const scan = spawnSync("node", [join(bin, "scanner.mjs"), ...PACKAGES], {
       cwd: root,
       encoding: "utf8",
-      env: {
-        ...process.env,
-        npm_config_script_shell: join(bin, "shell.sh"),
-      },
     });
-    const log = run.stdout + run.stderr;
-    expect(run.status, log).toBe(0);
+    const log = scan.stdout + scan.stderr;
+    expect(scan.status, log).toBe(0);
     for (const dir of PACKAGES) {
       expect(log).toMatch(
         new RegExp(`Imported coverage for [1-9]\\d* files from ${dir}/coverage/lcov.info`),

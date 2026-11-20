@@ -25,6 +25,8 @@
     "test": "pnpm -r run test",
     "integration": "pnpm --filter @theokit/gateway-integration integration",
     "integration:readiness": "pnpm --filter @theokit/gateway-integration readiness",
+    "coverage:sonar": "pnpm --filter @theokit/gateway build && pnpm -r --filter '!@theokit/gateway-integration' exec vitest run --coverage.enabled --coverage.provider=v8 --coverage.reporter=lcov && pnpm --filter @theokit/gateway-integration exec vitest run tests/unit tests/readiness.test.ts --coverage.enabled --coverage.provider=v8 --coverage.reporter=lcov",
+    "sonar:scan": "pnpm coverage:sonar && pnpm dlx @sonar/scan@5.1.0",
     "typecheck": "pnpm -r run typecheck",
     "check": "biome check .",
     "check:fix": "biome check --write .",
@@ -32,14 +34,13 @@
     "version-packages": "changeset version",
     "release": "pnpm run build && changeset publish",
     "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
-    "quality:adr-citations": "node tools/check-adr-citations.mjs",
-    "coverage:sonar": "pnpm --filter @theokit/gateway build && pnpm --filter @theokit/gateway-bot-realtime --filter @theokit/gateway-zalo run coverage",
-    "sonar:scan": "pnpm coverage:sonar && pnpm dlx @sonar/scan"
+    "quality:adr-citations": "node tools/check-adr-citations.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.11",
     "@changesets/cli": "^2.31.0",
     "@types/node": "^22.20.1",
+    "@vitest/coverage-v8": "4.1.12",
     "knip": "^5.88.1",
     "theokit": "^0.60.0",
     "typescript": "5.9.3"

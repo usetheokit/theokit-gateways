@@ -5,6 +5,7 @@ export {
   type NextcloudTalkInbound,
   type TalkSignatureHeaders,
 } from "./adapter.js";
+export { nextcloudTalkChannel } from "./channel.js";
 export { type TalkBodyOutcome, type TalkWebhookBody, talkBodyToMessageEvent } from "./normalize.js";
 export { talkSignature, verifyTalkSignature } from "./signature.js";
 export { splitForTalk, TALK_MAX_LENGTH } from "./split.js";

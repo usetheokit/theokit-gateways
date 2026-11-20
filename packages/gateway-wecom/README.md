@@ -49,3 +49,52 @@ written from WeCom's server API documentation and tested against a scripted fake
 ## Capabilities
 
 `adapter.capabilities` reports `maxMessageChars` is the splitter's limit (exported from this package) and `threads` is `false`; other fields follow the defaults of `@theokit/gateway`.
+
+## Channel descriptor
+
+`wecomChannel` describes the channel as data, for `createChannels` and `configFromEnv` from
+`@theokit/gateway`.
+
+| Field | Env | Required | Secret |
+| --- | --- | --- | --- |
+| `corpId` | `WECOM_CORP_ID` | yes | no |
+| `corpSecret` | `WECOM_CORP_SECRET` | yes | yes |
+| `agentId` | `WECOM_AGENT_ID` | yes | no |
+| `token` | `WECOM_TOKEN` | yes | yes |
+| `encodingAesKey` | `WECOM_ENCODING_AES_KEY` | yes | yes |
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { wecomChannel } from "@theokit/gateway-wecom";
+
+const { config, missing } = configFromEnv(wecomChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([
+  { descriptor: wecomChannel, config, envPrefix: "APP_" },
+]);
+```
+
+Pass the same prefix as `envPrefix` to `createChannels`: a missing required value is then rejected with
+`missing_required_config` naming the full variable (for example `APP_WECOM_CORP_ID`).
+
+The descriptor is constructor-only (`transport: "socket"`); your app still mounts the callback route.
+
+`create` refuses a value of the wrong type with a `GatewayConfigurationError` (`invalid_config`,
+naming the key) and makes no network call.
+
+## Mount with `createWebhookHandler`
+
+`wecomChannel` declares `transport: "webhook"`, so one Fetch route serves it:
+
+```ts
+import { configFromEnv, createChannels, createWebhookHandler } from "@theokit/gateway";
+import { wecomChannel } from "@theokit/gateway-wecom";
+
+const { adapters, channels } = createChannels([
+  { descriptor: wecomChannel, config: configFromEnv(wecomChannel, process.env).config },
+]);
+// Subscribe with adapter.onInbound(...) and start the adapters, then:
+export const onWebhook = createWebhookHandler({ channels, isStarted: () => true });
+// Route `/webhooks/wecom` to onWebhook(request).
+```
+
+The route takes `GET` (the callback-URL check, answered with the decrypted `echostr`) and `POST` (encrypted XML). The `msg_signature` is read from the query; a wrong one is a 401, and a 503 (no handler subscribed) stays 503 so WeCom retries.
