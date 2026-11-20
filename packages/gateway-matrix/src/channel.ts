@@ -6,6 +6,8 @@
  */
 
 import { channelConfigReaders } from "@theokit/gateway";
+import { type ConfigField, field } from "../../../shared/channel-config-field.js";
+import { envValueReaders } from "../../../shared/env-value-readers.js";
 import { MatrixAdapter } from "./adapter.js";
 import { ConfigurationError } from "./errors.js";
 import type { MatrixAdapterOptions } from "./types.js";
@@ -19,28 +21,10 @@ const { invalid } = readers;
 /** Only `undefined` is absent: `null` and `""` are wrong shapes and throw `invalid_config`. */
 const isAbsent = (value: unknown): boolean => value === undefined;
 
-type Config = Readonly<Record<string, unknown>>;
-
 /** Readers for values that may arrive as env strings; only `undefined` is absent. */
 const read = {
+  ...envValueReaders(invalid),
   string: readers.requiredString,
-  number(config: Config, key: string): number | undefined {
-    const value = config[key];
-    if (value === undefined) return undefined;
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-    if (typeof value === "string" && /^[0-9]+$/.test(value.trim())) {
-      const parsed = Number(value.trim());
-      if (Number.isFinite(parsed)) return parsed;
-    }
-    throw invalid(key, "a number or a digit string");
-  },
-  boolean(config: Config, key: string): boolean | undefined {
-    const value = config[key];
-    if (value === undefined) return undefined;
-    if (value === true || value === "true") return true;
-    if (value === false || value === "false") return false;
-    throw invalid(key, 'a boolean or the string "true" or "false"');
-  },
 };
 
 function readAcceptInvite(
@@ -52,51 +36,26 @@ function readAcceptInvite(
   return value as MatrixAdapterOptions["acceptInvite"];
 }
 
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly description: string;
-  readonly env?: string;
-}
-
 const CONFIG: ReadonlyArray<ConfigField> = [
-  {
-    key: "homeserverUrl",
-    required: true,
-    secret: false,
-    description: "Base URL of the Matrix homeserver, e.g. https://matrix.example.org.",
-    env: "MATRIX_HOMESERVER_URL",
-  },
-  {
-    key: "accessToken",
-    required: true,
-    secret: true,
-    description: "Access token of the bot account.",
-    env: "MATRIX_ACCESS_TOKEN",
-  },
-  {
-    key: "userId",
-    required: true,
-    secret: false,
-    description: "Matrix user id of the bot, e.g. @bot:example.org.",
-    env: "MATRIX_USER_ID",
-  },
-  {
-    key: "freshnessWindowMs",
-    required: false,
-    secret: false,
-    description: "Events older than this many milliseconds are dropped.",
-    env: "MATRIX_FRESHNESS_WINDOW_MS",
-  },
-  {
-    key: "requireMention",
-    required: false,
-    secret: false,
-    description: "When true, group messages reach the handler only if they mention the bot.",
-    env: "MATRIX_REQUIRE_MENTION",
-  },
+  field(
+    "homeserverUrl",
+    "MATRIX_HOMESERVER_URL",
+    "Base URL of the Matrix homeserver, e.g. https://matrix.example.org.",
+  ),
+  field("accessToken", "MATRIX_ACCESS_TOKEN", "Access token of the bot account.", { secret: true }),
+  field("userId", "MATRIX_USER_ID", "Matrix user id of the bot, e.g. @bot:example.org."),
+  field(
+    "freshnessWindowMs",
+    "MATRIX_FRESHNESS_WINDOW_MS",
+    "Events older than this many milliseconds are dropped.",
+    { required: false },
+  ),
+  field(
+    "requireMention",
+    "MATRIX_REQUIRE_MENTION",
+    "When true, group messages reach the handler only if they mention the bot.",
+    { required: false },
+  ),
   {
     key: "acceptInvite",
     required: false,

@@ -8,6 +8,8 @@
 
 import { channelConfigReaders } from "@theokit/gateway";
 
+import { type ConfigField, field } from "../../../shared/channel-config-field.js";
+import { envValueReaders } from "../../../shared/env-value-readers.js";
 import { EmailAdapter } from "./adapter.js";
 import type { EmailCursorStore } from "./types.js";
 
@@ -21,26 +23,10 @@ type Config = Readonly<Record<string, unknown>>;
 
 /** Readers for values that may arrive as env strings; only `undefined` is absent. */
 const read = {
+  ...envValueReaders(invalid),
   string: readers.requiredString,
   optionalString: (config: Config, key: string): string | undefined =>
     config[key] === undefined ? undefined : readers.requiredString(config, key),
-  boolean(config: Config, key: string): boolean | undefined {
-    const value = config[key];
-    if (value === undefined) return undefined;
-    if (value === true || value === "true") return true;
-    if (value === false || value === "false") return false;
-    throw invalid(key, 'a boolean or the string "true" or "false"');
-  },
-  number(config: Config, key: string): number | undefined {
-    const value = config[key];
-    if (value === undefined) return undefined;
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-    if (typeof value === "string" && /^[0-9]+$/.test(value.trim())) {
-      const parsed = Number(value.trim());
-      if (Number.isFinite(parsed)) return parsed;
-    }
-    throw invalid(key, "a number or a digit string");
-  },
   list(config: Config, key: string): string[] | undefined {
     const value = config[key];
     if (value === undefined) return undefined;
@@ -69,93 +55,38 @@ function readCursorStore(config: Readonly<Record<string, unknown>>): EmailCursor
   return value as EmailCursorStore;
 }
 
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly description: string;
-  readonly env?: string;
-}
-
 const CONFIG: ReadonlyArray<ConfigField> = [
-  {
-    key: "address",
-    required: true,
-    secret: false,
-    description: "Email address the bot listens on; also the From address of outbound mail.",
-    env: "EMAIL_ADDRESS",
-  },
-  {
-    key: "password",
-    required: true,
+  field(
+    "address",
+    "EMAIL_ADDRESS",
+    "Email address the bot listens on; also the From address of outbound mail.",
+  ),
+  field("password", "EMAIL_PASSWORD", "Password or app password for the IMAP and SMTP login.", {
     secret: true,
-    description: "Password or app password for the IMAP and SMTP login.",
-    env: "EMAIL_PASSWORD",
-  },
-  {
-    key: "imapHost",
-    required: true,
-    secret: false,
-    description: "IMAP server host name.",
-    env: "EMAIL_IMAP_HOST",
-  },
-  {
-    key: "imapPort",
+  }),
+  field("imapHost", "EMAIL_IMAP_HOST", "IMAP server host name."),
+  field("imapPort", "EMAIL_IMAP_PORT", "IMAP server port.", { required: false }),
+  field("smtpHost", "EMAIL_SMTP_HOST", "SMTP server host name."),
+  field("smtpPort", "EMAIL_SMTP_PORT", "SMTP server port.", { required: false }),
+  field("fromName", "EMAIL_FROM_NAME", "Display name for outbound mail.", { required: false }),
+  field(
+    "allowedSenders",
+    "EMAIL_ALLOWED_SENDERS",
+    "Sender addresses allowed through, as a list or comma-separated string.",
+    { required: false },
+  ),
+  field(
+    "allowAutomated",
+    "EMAIL_ALLOW_AUTOMATED",
+    "When true, automated senders (no-reply, bulk mail) are not filtered out.",
+    { required: false },
+  ),
+  field("pollIntervalMs", "EMAIL_POLL_INTERVAL_MS", "Milliseconds between mailbox polls.", {
     required: false,
-    secret: false,
-    description: "IMAP server port.",
-    env: "EMAIL_IMAP_PORT",
-  },
-  {
-    key: "smtpHost",
-    required: true,
-    secret: false,
-    description: "SMTP server host name.",
-    env: "EMAIL_SMTP_HOST",
-  },
-  {
-    key: "smtpPort",
+  }),
+  field("maxBodyChars", "EMAIL_MAX_BODY_CHARS", "Longest inbound body kept, in characters.", {
     required: false,
-    secret: false,
-    description: "SMTP server port.",
-    env: "EMAIL_SMTP_PORT",
-  },
-  {
-    key: "fromName",
-    required: false,
-    secret: false,
-    description: "Display name for outbound mail.",
-    env: "EMAIL_FROM_NAME",
-  },
-  {
-    key: "allowedSenders",
-    required: false,
-    secret: false,
-    description: "Sender addresses allowed through, as a list or comma-separated string.",
-    env: "EMAIL_ALLOWED_SENDERS",
-  },
-  {
-    key: "allowAutomated",
-    required: false,
-    secret: false,
-    description: "When true, automated senders (no-reply, bulk mail) are not filtered out.",
-    env: "EMAIL_ALLOW_AUTOMATED",
-  },
-  {
-    key: "pollIntervalMs",
-    required: false,
-    secret: false,
-    description: "Milliseconds between mailbox polls.",
-    env: "EMAIL_POLL_INTERVAL_MS",
-  },
-  {
-    key: "maxBodyChars",
-    required: false,
-    secret: false,
-    description: "Longest inbound body kept, in characters.",
-    env: "EMAIL_MAX_BODY_CHARS",
-  },
+  }),
   {
     key: "cursorStore",
     required: false,
