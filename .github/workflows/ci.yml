@@ -203,6 +203,28 @@ jobs:
       # without seven pull requests, which is the reason that repository exists.
       - uses: usetheokit/shared-workflows/actions/release-channel@v1 # zizmor: ignore[unpinned-uses]
 
+  # Coverage and static analysis for SonarQube Cloud. `sonar:scan` is the whole pipeline: it builds
+  # `@theokit/gateway`, runs `coverage:sonar` (which writes the lcov files listed in
+  # `sonar.javascript.lcov.reportPaths`) and then the scanner. Coverage is therefore NOT run as a
+  # separate step — that would execute the suite twice. Not listed in `ci-ok`'s `needs`: fork pull
+  # requests receive no secrets, so the job is skipped there and must not turn the required check red.
+  sonar:
+    name: Sonar scan
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Sonar needs full history for blame and new-code detection.
+          fetch-depth: 0
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - name: Build, run coverage and scan
+        run: pnpm sonar:scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
   # ONE required check for this whole workflow.
   #
   # Branch protection requires checks BY NAME, so every job added here is advisory
