@@ -91,6 +91,26 @@ Override with `requireMention: false` to make the bot respond to every message i
 | Slash command incoming webhooks | Not supported v0.1 | — |
 | Ephemeral / hidden messages | Not supported v0.1 | — |
 
+## Channel descriptor
+
+`mattermostChannel` describes the channel as data for `createChannels` and `configFromEnv` from `@theokit/gateway`. Its transport is `socket`.
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { mattermostChannel } from "@theokit/gateway-mattermost";
+
+const { config, missing, secrets } = configFromEnv(mattermostChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: mattermostChannel, config, envPrefix: "APP_" }]);
+```
+
+| Config key | Env name | Required | Secret |
+| --- | --- | --- | --- |
+| `baseUrl` | `MATTERMOST_BASE_URL` | yes | no |
+| `accessToken` | `MATTERMOST_ACCESS_TOKEN` | yes | yes |
+| `requireMention` | `MATTERMOST_REQUIRE_MENTION` | no | no |
+
+The `APP_` prefix is the app's choice. A value of the wrong type throws `invalid_config` naming the key; a list may be an array or a comma-separated string, a boolean `true`/`false` or the same strings, a number a number or a digit string.
+
 ## ADRs
 
 D397 – D404 in `.claude/knowledge-base/adrs/`.

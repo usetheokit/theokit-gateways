@@ -2,6 +2,7 @@
 
 export { MatrixAdapter } from "./adapter.js";
 export { AliasCache } from "./alias.js";
+export { matrixChannel } from "./channel.js";
 export { ConfigurationError, EncryptedRoomError, SDKNotInstalledError } from "./errors.js";
 export { matrixEventToMessageEvent } from "./normalize.js";
 export { detectChannelType } from "./room-state.js";

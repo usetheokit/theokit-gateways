@@ -101,3 +101,24 @@ and confirm the reply on that second account. Record the date, macOS and `imsg` 
 and the observed inbound and outbound results without recording private account details.
 TheoClaw should supply its handler through the gateway contract shown above; iMessage
 protocol handling stays in this package.
+
+## Channel descriptor
+
+`imessageChannel` describes the channel as data for `createChannels` and `configFromEnv` from `@theokit/gateway` (transport `socket`; no field is secret).
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { imessageChannel } from "@theokit/gateway-imessage";
+
+const { config } = configFromEnv(imessageChannel, process.env, "APP_");
+const { adapters, rejected } = createChannels([{ descriptor: imessageChannel, config }]);
+```
+
+| Key | Variable | Required |
+| --- | --- | --- |
+| `cliPath` | `IMESSAGE_CLI_PATH` | no |
+| `dbPath` | `IMESSAGE_DB_PATH` | no |
+| `connectTimeoutMs` | `IMESSAGE_CONNECT_TIMEOUT_MS` | no |
+| `requestTimeoutMs` | `IMESSAGE_REQUEST_TIMEOUT_MS` | no |
+
+Numbers accept a number or a digit string. `create` throws `invalid_config` when `process.platform` is not `darwin`. To drive a Mac over an ssh wrapper from another system, construct `IMessageAdapter` directly.

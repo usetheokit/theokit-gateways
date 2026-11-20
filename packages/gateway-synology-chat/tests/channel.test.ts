@@ -98,8 +98,8 @@ describe("synologyChatChannel", () => {
     expect(secrets).toEqual([BOT_TOKEN]);
   });
 
-  it("declares socket transport and the SYNOLOGY_CHAT_ env names", () => {
-    expect(synologyChatChannel.transport).toBe("socket");
+  it("declares webhook transport and the SYNOLOGY_CHAT_ env names", () => {
+    expect(synologyChatChannel.transport).toBe("webhook");
     expect(synologyChatChannel.config.map((f) => f.env).filter(Boolean)).toEqual([
       "SYNOLOGY_CHAT_BOT_TOKEN",
       "SYNOLOGY_CHAT_INCOMING_URL",

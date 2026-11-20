@@ -1,4 +1,5 @@
 export { NostrAdapter } from "./adapter.js";
+export { nostrChannel } from "./channel.js";
 export { NostrKeyError, parseNostrSecretKey } from "./keys.js";
 export {
   type NostrPublishResult,
