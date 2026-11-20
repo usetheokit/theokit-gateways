@@ -142,6 +142,22 @@ jobs:
       - name: Integration package — offline units
         run: pnpm --filter @theokit/gateway-integration test:unit
 
+      # `sonar:scan` builds, runs `coverage:sonar` (writing the lcov files that
+      # `sonar.javascript.lcov.reportPaths` imports) and provisions the scanner. Skipped
+      # for fork pull requests, which cannot read the token. The scripts themselves land
+      # with #602; until the root package.json declares `sonar:scan` the step warns and
+      # skips instead of failing every run.
+      - name: Sonar scan
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.['sonar:scan'] ? 0 : 1)"; then
+            pnpm sonar:scan
+          else
+            echo "::warning::no sonar:scan script in package.json (see #602) - Sonar scan skipped"
+          fi
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
       # Guards this workflow against itself. If someone renames the root `test`
       # script or drops a package's test script, the suite would silently stop
       # running and every job above would still be green. This asserts that all
