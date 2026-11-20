@@ -5,11 +5,12 @@ const root = JSON.parse(readFileSync(new URL("../../package.json", import.meta.u
 const scripts = root.scripts;
 
 describe("coverage:sonar", () => {
-  const [workspaces, integration, ...rest] = scripts["coverage:sonar"].split(" && ");
+  const [workspaces, integration, ownConfig, ...rest] = scripts["coverage:sonar"].split(" && ");
 
-  it("runs as exactly two commands, workspaces then integration", () => {
+  it("runs as exactly three commands: workspaces, integration, then packages with their own reporter config", () => {
     expect(rest).toEqual([]);
     expect(integration).toBeDefined();
+    expect(ownConfig).toMatch(/ run test$/);
   });
 
   it("covers every workspace package except the live integration one", () => {
