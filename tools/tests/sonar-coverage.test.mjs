@@ -13,15 +13,16 @@ test("coverage:sonar generates both reports and the scanner runs after it", () =
   const { scripts } = json("package.json");
   expect(scripts["coverage:sonar"]).toContain("--coverage.reporter=lcov");
   expect(scripts["coverage:sonar"]).toContain("pnpm -r --filter '!@theokit/gateway-integration'");
-  expect(scripts["sonar:scan"].startsWith("pnpm coverage:sonar && ")).toBe(true);
+  expect(scripts["sonar:scan"]).toContain("&& pnpm coverage:sonar && ");
   expect(scripts["sonar:scan"]).toContain("@sonar/scan");
 });
 
 test("a clean checkout can run the scan: gateway is built first and the scanner is fetched by the command", () => {
   const { scripts } = json("package.json");
-  const steps = scripts["coverage:sonar"].split("&&").map((s) => s.trim());
+  const steps = scripts["sonar:scan"].split("&&").map((s) => s.trim());
   expect(steps[0]).toBe("pnpm --filter @theokit/gateway build");
-  expect(steps[1]).toContain("exec vitest run --coverage.enabled");
+  expect(steps[1]).toBe("pnpm coverage:sonar");
+  expect(scripts["coverage:sonar"]).toContain("exec vitest run --coverage.enabled");
   expect(scripts["sonar:scan"]).toMatch(/pnpm dlx @sonar\/scan@[\d.]+$/);
 });
 
