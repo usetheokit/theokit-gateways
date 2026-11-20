@@ -26,7 +26,7 @@
     "integration": "pnpm --filter @theokit/gateway-integration integration",
     "integration:readiness": "pnpm --filter @theokit/gateway-integration readiness",
     "coverage:sonar": "pnpm -r --filter '!@theokit/gateway-integration' exec vitest run --coverage.enabled --coverage.provider=v8 --coverage.reporter=lcov && pnpm --filter @theokit/gateway-integration exec vitest run tests/unit tests/readiness.test.ts --coverage.enabled --coverage.provider=v8 --coverage.reporter=lcov",
-    "sonar:scan": "pnpm dlx @sonar/scan@5.1.0",
+    "sonar:scan": "pnpm --filter @theokit/gateway build && pnpm coverage:sonar && pnpm dlx @sonar/scan@5.1.0",
     "typecheck": "pnpm -r run typecheck",
     "check": "biome check .",
     "check:fix": "biome check --write .",
