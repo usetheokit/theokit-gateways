@@ -89,3 +89,31 @@ To verify with an account, run the GatewayRunner example above using a registere
 or linked number, send it a unique message from a second account, and confirm the
 reply on that device. Record the UTC date, signal-cli version, and redacted
 send/receive outcome here after performing that check.
+
+## Channel descriptor
+
+`signalChannel` describes the channel as data for `createChannels` and `configFromEnv` from `@theokit/gateway` (transport `socket`; no field is secret).
+
+```ts
+import { configFromEnv, createChannels } from "@theokit/gateway";
+import { signalChannel } from "@theokit/gateway-signal";
+
+const { config, missing } = configFromEnv(signalChannel, process.env, "APP_");
+// Pass the same prefix as `envPrefix`: a missing `account` is then rejected as
+// `missing_required_config` naming `APP_SIGNAL_ACCOUNT`.
+const { adapters, rejected } = createChannels([
+  { descriptor: signalChannel, config, envPrefix: "APP_" },
+]);
+if (missing.length > 0) console.error(`skipped: set ${missing.join(", ")}`); // APP_SIGNAL_ACCOUNT
+```
+
+| Key | Variable | Required |
+| --- | --- | --- |
+| `account` | `SIGNAL_ACCOUNT` | yes |
+| `signalCliPath` | `SIGNAL_CLI_PATH` | no |
+| `configDir` | `SIGNAL_CONFIG_DIR` | no |
+| `connectTimeoutMs` | `SIGNAL_CONNECT_TIMEOUT_MS` | no |
+| `requestTimeoutMs` | `SIGNAL_REQUEST_TIMEOUT_MS` | no |
+| `senderKey` | `SIGNAL_SENDER_KEY` | no |
+
+Numbers accept a number or a digit string. `account` must be in E.164 form.

@@ -1,0 +1,141 @@
+/**
+ * The Nextcloud Talk channel described as data.
+ *
+ * Typed locally on purpose: this package declares `@theokit/gateway` as a peer, and a published
+ * `.d.ts` naming a core type a consumer's floor lacks would break that consumer. The object is
+ * structurally a `ChannelDescriptor`.
+ *
+ * `configFromEnv` yields strings, so `create` accepts a list as an array or a comma-separated
+ * string, a boolean as a boolean or `"true"`/`"false"`, and a number as a number or a digit string.
+ */
+
+import {
+  channelConfigReaders,
+  GatewayConfigurationError,
+  type GatewayConfigurationErrorOptions,
+} from "@theokit/gateway";
+import { type ConfigField, field } from "../../../shared/channel-config-field.js";
+import { NextcloudTalkAdapter } from "./adapter.js";
+import { nextcloudTalkWebhook, rememberTalkSecret } from "./fetch-webhook.js";
+import type { NextcloudTalkAdapterOptions } from "./types.js";
+
+/** Misconfiguration of the Nextcloud Talk channel, raised before any network call. */
+export class ConfigurationError extends GatewayConfigurationError {
+  override readonly name = "ConfigurationError";
+  constructor(opts: GatewayConfigurationErrorOptions) {
+    super("gateway-nextcloud-talk", opts);
+  }
+}
+
+type Config = Readonly<Record<string, unknown>>;
+
+const readers = channelConfigReaders(
+  "gateway-nextcloud-talk",
+  (options) => new ConfigurationError(options),
+);
+const { invalid, readString, requiredString: readRequiredString, readNumber } = readers;
+
+/**
+ * The shared readers treat `null` and `""` as absent. An explicit `null` is never a valid value,
+ * and `""` is not one for a field that is not a string, so both are refused rather than defaulted.
+ */
+const NON_STRING_KEYS: ReadonlySet<string> = new Set(["port", "connectTimeoutMs", "app", "fetch"]);
+
+function rejectBlank(config: Config): void {
+  for (const [key, value] of Object.entries(config)) {
+    if (value === null || (value === "" && NON_STRING_KEYS.has(key))) {
+      throw invalid(key, "set to a value of its type, not null or empty");
+    }
+  }
+}
+
+/** An Express app: a function with the `post` method the adapter mounts its route with. */
+function readApp(config: Config): NextcloudTalkAdapterOptions["app"] {
+  const app = readers.readFunction(config, "app");
+  if (app === undefined) return undefined;
+  if (typeof (app as { post?: unknown }).post !== "function") {
+    throw invalid("app", "an Express app (a function with a post method)");
+  }
+  return app as unknown as NextcloudTalkAdapterOptions["app"];
+}
+
+/** Keep only the keys whose value is defined. */
+function defined<T extends object>(options: T): T {
+  return Object.fromEntries(Object.entries(options).filter(([, v]) => v !== undefined)) as T;
+}
+
+const CONFIG: ReadonlyArray<ConfigField> = [
+  field(
+    "baseUrl",
+    "NEXTCLOUD_TALK_BASE_URL",
+    "The Nextcloud server, https://cloud.example.com, without a trailing path.",
+  ),
+  field(
+    "secret",
+    "NEXTCLOUD_TALK_SECRET",
+    "The bot secret passed to occ talk:bot:install; 40 to 128 characters.",
+    { secret: true },
+  ),
+  field("port", "NEXTCLOUD_TALK_PORT", "Port the webhook listener binds; default 3000.", {
+    required: false,
+  }),
+  field("path", "NEXTCLOUD_TALK_PATH", "Path of the webhook route; default /nextcloud-talk.", {
+    required: false,
+  }),
+  field(
+    "connectTimeoutMs",
+    "NEXTCLOUD_TALK_CONNECT_TIMEOUT_MS",
+    "How long connect() waits for the capabilities read; default 10000.",
+    { required: false },
+  ),
+  {
+    key: "app",
+    required: false,
+    secret: false,
+    description: "Programmatic only, no env binding: an Express app to mount the webhook route on.",
+  },
+  {
+    key: "fetch",
+    required: false,
+    secret: false,
+    description: "Programmatic only, no env binding: the fetch function used for requests.",
+  },
+];
+
+/**
+ * The Nextcloud Talk channel. Inbound webhooks arrive through `webhook.handle` (mount it with
+ * `createWebhookHandler`); the adapter still starts its own Express listener in `connect()`. `create` validates each value and makes no network call; `app` and `fetch`
+ * are programmatic fields with no env binding.
+ *
+ * @public
+ */
+export const nextcloudTalkChannel = {
+  platform: "nextcloud_talk" as const,
+  transport: "webhook" as const,
+  webhook: nextcloudTalkWebhook,
+  config: CONFIG,
+  create(config: Config): NextcloudTalkAdapter {
+    rejectBlank(config);
+    const options: NextcloudTalkAdapterOptions = defined({
+      baseUrl: readRequiredString(config, "baseUrl"),
+      secret: readRequiredString(config, "secret"),
+      port: readNumber(config, "port"),
+      path: readString(config, "path"),
+      connectTimeoutMs: readNumber(config, "connectTimeoutMs"),
+      app: readApp(config),
+      fetch: readers.readFunction(config, "fetch") as NextcloudTalkAdapterOptions["fetch"],
+    });
+    try {
+      const adapter = new NextcloudTalkAdapter(options);
+      rememberTalkSecret(adapter, options.secret);
+      return adapter;
+    } catch (err) {
+      // The constructor throws a plain Error for a secret outside 40 to 128 characters.
+      throw new ConfigurationError({
+        code: "invalid_config",
+        message: `gateway-nextcloud-talk: ${err instanceof Error ? err.message : "invalid config"}`,
+        detail: "secret",
+      });
+    }
+  },
+};

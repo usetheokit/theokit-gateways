@@ -73,7 +73,7 @@ reply (with tokens redacted) before claiming live verification.
 
 ## Channel descriptor
 
-`synologyChatChannel` is a `ChannelDescriptor` (transport `socket`) for `createChannels`; bind it to the environment with `configFromEnv` (needs `@theokit/gateway >=0.22.0`).
+`synologyChatChannel` is a `ChannelDescriptor` (transport `webhook`) for `createChannels`; bind it to the environment with `configFromEnv` (needs `@theokit/gateway >=0.22.0`).
 
 ```ts
 import { configFromEnv, createChannels } from "@theokit/gateway";
@@ -92,3 +92,16 @@ const { adapters, rejected } = createChannels([{ descriptor: synologyChatChannel
 | `SYNOLOGY_CHAT_CONNECT_TIMEOUT_MS` | `connectTimeoutMs` (digit string ok) | no | no |
 
 Options without an env name are programmatic only. `create` makes no network call and throws a `GatewayConfigurationError` (`invalid_config`, naming the key) for a wrongly typed value.
+
+### Mount the webhook with `createWebhookHandler`
+
+The descriptor's `webhook.handle` answers the bot's outgoing callback with the adapter's own status (400 for a missing token, 401 for a wrong one, 503 when not connected or no handler is subscribed). The adapter's Express listener still starts in `connect()`.
+
+```ts
+import { createChannels, createWebhookHandler } from "@theokit/gateway";
+import { synologyChatChannel } from "@theokit/gateway-synology-chat";
+
+const { channels } = createChannels([{ descriptor: synologyChatChannel, config }]);
+const handle = createWebhookHandler({ channels, isStarted: () => true });
+// POST /webhooks/synology_chat -> handle(request)
+```

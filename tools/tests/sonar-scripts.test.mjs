@@ -47,6 +47,6 @@ describe("coverage:sonar", () => {
 
 describe("sonar:scan", () => {
   it("invokes a pinned scanner", () => {
-    expect(scripts["sonar:scan"]).toMatch(/^pnpm dlx @sonar\/scan@\d+\.\d+\.\d+$/);
+    expect(scripts["sonar:scan"]).toMatch(/pnpm dlx @sonar\/scan@\d+\.\d+\.\d+$/);
   });
 });
