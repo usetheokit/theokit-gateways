@@ -7,8 +7,17 @@
  */
 
 import { ZaloAdapter } from "./adapter.js";
+import { ConfigurationError } from "./errors.js";
 
 const SIGNATURE_HEADER = "x-zevent-signature";
+
+function invalid(key: string): ConfigurationError {
+  return new ConfigurationError({
+    code: "invalid_config",
+    message: `gateway-zalo: config.${key} must be a string`,
+    detail: key,
+  });
+}
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
 interface ConfigField {
@@ -36,17 +45,38 @@ const CONFIG: ReadonlyArray<ConfigField> = [
   },
   {
     key: "accessToken",
-    env: "ZALO_OA_ACCESS_TOKEN",
+    env: "ZALO_ACCESS_TOKEN",
     required: true,
     secret: true,
     description: "An Official Account access token for the Open API; it expires.",
+  },
+  {
+    key: "apiBase",
+    env: "ZALO_API_BASE",
+    required: false,
+    secret: false,
+    description: "The Zalo Open API base URL override.",
   },
 ];
 
 function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
   const value = config[key];
-  if (typeof value !== "string") throw new Error(`gateway-zalo: config.${key} must be a string`);
+  if (typeof value !== "string") throw invalid(key);
   return value;
+}
+
+function optionalString(
+  config: Readonly<Record<string, unknown>>,
+  key: string,
+): string | undefined {
+  const value = config[key];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw invalid(key);
+  return value;
+}
+
+function optionalEntry(key: string, value: string | undefined): Record<string, string> {
+  return value === undefined ? {} : { [key]: value };
 }
 
 function headerValue(
@@ -81,6 +111,7 @@ export const zaloChannel = {
       appId: requiredString(config, "appId"),
       oaSecretKey: requiredString(config, "oaSecretKey"),
       accessToken: requiredString(config, "accessToken"),
+      ...optionalEntry("apiBase", optionalString(config, "apiBase")),
     });
   },
   webhook: {

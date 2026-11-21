@@ -36,6 +36,8 @@ headers and `webhook.ingest` dispatches the event, so `createWebhookHandler` fro
 `@theokit/gateway` serves the route over Fetch (`POST /webhooks/yuanbao`): 401 for a bad
 signature, 503 when no handler is subscribed.
 
+With `configFromEnv(descriptor, process.env, "APP_")` the required values are read from `APP_YUANBAO_*`; secrets (`appSecret`-style keys and tokens) are returned in `.secrets` for log masking. Optional endpoint overrides: `YUANBAO_API_BASE` (optional `apiBase`). A value of the wrong type makes `create` throw `ConfigurationError` with code `invalid_config` naming the key.
+
 ## Behaviour
 
 - Signature: hex `HMAC-SHA256(callbackSecret, timestamp + "." + rawBody)`, compared in constant

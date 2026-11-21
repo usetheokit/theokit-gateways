@@ -1,8 +1,14 @@
-import { type ChannelDescriptor, createChannels, createWebhookHandler } from "@theokit/gateway";
+import {
+  type ChannelDescriptor,
+  configFromEnv,
+  createChannels,
+  createWebhookHandler,
+} from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 import { QQAdapter } from "../src/adapter.js";
 import { qqChannel } from "../src/channel.js";
+import { ConfigurationError } from "../src/errors.js";
 import { signQQ } from "../src/signature.js";
 
 const SECRET = "qq-secret";
@@ -32,7 +38,12 @@ describe("qqChannel descriptor", () => {
   it("declares a webhook transport and its config", () => {
     expect(qqChannel.transport).toBe("webhook");
     expect(qqChannel.platform).toBe("qq");
-    expect(qqChannel.config.map((f) => f.key)).toEqual(["appId", "appSecret"]);
+    expect(qqChannel.config.map((f) => f.key)).toEqual([
+      "appId",
+      "appSecret",
+      "apiBase",
+      "tokenUrl",
+    ]);
   });
 
   it("creates an adapter, and refuses a non-string or empty field", () => {
@@ -121,4 +132,86 @@ describe("qq webhook through createWebhookHandler", () => {
       signature: signQQ(SECRET, "1700000000tok123"),
     });
   });
+});
+
+describe("qqChannel env bindings", () => {
+  const ENV = { APP_QQ_APP_ID: "v-appId", APP_QQ_APP_SECRET: "v-appSecret" };
+
+  it("binds each field to QQ_<KEY>", () => {
+    expect(qqChannel.config.map((f) => [f.key, f.env])).toEqual([
+      ["appId", "QQ_APP_ID"],
+      ["appSecret", "QQ_APP_SECRET"],
+      ["apiBase", "QQ_API_BASE"],
+      ["tokenUrl", "QQ_TOKEN_URL"],
+    ]);
+  });
+
+  it("builds the adapter from configFromEnv", () => {
+    const { config, missing } = configFromEnv(qqChannel as ChannelDescriptor, ENV, "APP_");
+    expect(missing).toEqual([]);
+    const result = createChannels([{ descriptor: qqChannel as ChannelDescriptor, config }]);
+    expect(result.rejected).toEqual([]);
+    expect(result.adapters[0]).toBeInstanceOf(QQAdapter);
+  });
+
+  it.each([
+    ["appId", "APP_QQ_APP_ID"],
+    ["appSecret", "APP_QQ_APP_SECRET"],
+  ])("rejects with missing_required_config naming %s when %s is unset", (key, variable) => {
+    const env: Record<string, string> = { ...ENV };
+    delete env[variable];
+    const { config, missing } = configFromEnv(qqChannel as ChannelDescriptor, env, "APP_");
+    expect(missing).toEqual([variable]);
+    const result = createChannels([
+      { descriptor: qqChannel as ChannelDescriptor, config, envPrefix: "APP_" },
+    ]);
+    expect(result.adapters).toEqual([]);
+    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
+    expect(result.rejected[0]?.error.message).toContain(key);
+  });
+
+  it("collects only secret values", () => {
+    const env = {
+      ...ENV,
+      APP_QQ_API_BASE: "https://example.test",
+      APP_QQ_TOKEN_URL: "https://example.test",
+    };
+    expect([...configFromEnv(qqChannel as ChannelDescriptor, env, "APP_").secrets].sort()).toEqual([
+      "v-appSecret",
+    ]);
+  });
+
+  it("accepts optional string endpoints", () => {
+    expect(
+      qqChannel.create({
+        ...Object.fromEntries([
+          ["appId", "x"],
+          ["appSecret", "x"],
+        ]),
+        apiBase: "https://example.test",
+        tokenUrl: "https://example.test",
+      }),
+    ).toBeInstanceOf(QQAdapter);
+  });
+
+  it.each(["appId", "appSecret", "apiBase", "tokenUrl"])(
+    "throws invalid_config naming %s for a number",
+    (key) => {
+      const config = {
+        ...Object.fromEntries([
+          ["appId", "x"],
+          ["appSecret", "x"],
+        ]),
+        [key]: 5,
+      };
+      try {
+        qqChannel.create(config);
+        throw new Error("expected a throw");
+      } catch (err) {
+        expect(err).toBeInstanceOf(ConfigurationError);
+        expect((err as ConfigurationError).code).toBe("invalid_config");
+        expect((err as ConfigurationError).message).toContain(key);
+      }
+    },
+  );
 });
