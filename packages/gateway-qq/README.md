@@ -27,6 +27,17 @@ const answer = await adapter.handleWebhook(
 response.status(answer.status).json(answer.body ?? {});
 ```
 
+## Webhook channel
+
+`qqChannel` describes the package as data: `transport: "webhook"`, config keys `appId` and
+`appSecret` (env `QQ_APP_ID`, `QQ_APP_SECRET`). Its `webhook.verify` checks the
+`X-Signature-Ed25519` and `X-Signature-Timestamp` headers and `webhook.ingest` dispatches the
+event. `webhook.handle` also answers QQ's unsigned callback URL validation (`op` 13) with the
+signed `plain_token`, so `createWebhookHandler` from `@theokit/gateway` serves the route over
+Fetch (`POST /webhooks/qq`): 401 for a bad signature, 503 when no handler is subscribed.
+
+With `configFromEnv(descriptor, process.env, "APP_")` the required values are read from `APP_QQ_*`; secrets (`appSecret`-style keys and tokens) are returned in `.secrets` for log masking. Optional endpoint overrides: `QQ_API_BASE` and `QQ_TOKEN_URL` (optional `apiBase`, `tokenUrl`). A value of the wrong type makes `create` throw `ConfigurationError` with code `invalid_config` naming the key.
+
 ## Behaviour
 
 - Callback URL validation (`op` 13): answered with `{ plain_token, signature }` in `answer.body`.
