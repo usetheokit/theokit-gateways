@@ -27,6 +27,15 @@ const answer = await adapter.handleWebhook(
 response.status(answer.status).end();
 ```
 
+## Webhook channel
+
+`yuanbaoChannel` describes the package as data: `transport: "webhook"`, config keys `appId`,
+`appSecret` and `callbackSecret` (env `YUANBAO_APP_ID`, `YUANBAO_APP_SECRET`,
+`YUANBAO_CALLBACK_SECRET`). Its `webhook.verify` checks the `X-Signature` and `X-Timestamp`
+headers and `webhook.ingest` dispatches the event, so `createWebhookHandler` from
+`@theokit/gateway` serves the route over Fetch (`POST /webhooks/yuanbao`): 401 for a bad
+signature, 503 when no handler is subscribed.
+
 ## Behaviour
 
 - Signature: hex `HMAC-SHA256(callbackSecret, timestamp + "." + rawBody)`, compared in constant
