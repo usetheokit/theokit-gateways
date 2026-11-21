@@ -29,6 +29,17 @@ A `MESSAGE` event becomes a `GoogleChatMessageEvent`; other event types answer 2
 nothing. The request is answered before the handler runs, and with 503 when no handler is
 registered.
 
+## Mount the route
+
+```ts
+import { createChannels, createWebhookHandler } from "@theokit/gateway";
+import { googleChatChannel } from "@theokit/gateway-google-chat";
+
+const { channels } = createChannels([{ descriptor: googleChatChannel, config }]);
+const handle = createWebhookHandler({ channels, isStarted: () => true });
+// Route POST /webhooks/google_chat to `handle(request)`; it answers with a Fetch `Response`.
+```
+
 ## Install
 
 ```bash

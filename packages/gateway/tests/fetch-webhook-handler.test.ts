@@ -75,6 +75,11 @@ describe("createWebhookHandler", () => {
   it("accepts a body of exactly the cap", async () => {
     expect((await make()(post('{"a":"bcd"}'.slice(0, 10)))).status).toBe(400);
   });
+  it("awaits an asynchronous verify", async () => {
+    expect((await make({ verify: async () => false })(post("{}"))).status).toBe(401);
+    expect((await make({ verify: async () => true })(post("{}"))).status).toBe(200);
+  });
+
   it("401s when verify is false", async () => {
     expect((await make({ verify: () => false })(post("{}"))).status).toBe(401);
   });

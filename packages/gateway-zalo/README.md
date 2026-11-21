@@ -34,6 +34,17 @@ event, so `createWebhookHandler` from `@theokit/gateway` serves the route over F
 
 With `configFromEnv(descriptor, process.env, "APP_")` the required values are read from `APP_ZALO_*`; secrets (`appSecret`-style keys and tokens) are returned in `.secrets` for log masking. Optional endpoint overrides: `ZALO_API_BASE` (optional `apiBase`). A value of the wrong type makes `create` throw `ConfigurationError` with code `invalid_config` naming the key.
 
+## Mount the route
+
+```ts
+import { createChannels, createWebhookHandler } from "@theokit/gateway";
+import { zaloChannel } from "@theokit/gateway-zalo";
+
+const { channels } = createChannels([{ descriptor: zaloChannel, config }]);
+const handle = createWebhookHandler({ channels, isStarted: () => true });
+// Route POST /webhooks/zalo to `handle(request)`; it answers with a Fetch `Response`.
+```
+
 ## Behaviour
 
 - Signature: `X-ZEvent-Signature: mac=sha256(appId + rawBody + timestamp + oaSecretKey)`, compared in

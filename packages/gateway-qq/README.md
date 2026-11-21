@@ -38,6 +38,17 @@ Fetch (`POST /webhooks/qq`): 401 for a bad signature, 503 when no handler is sub
 
 With `configFromEnv(descriptor, process.env, "APP_")` the required values are read from `APP_QQ_*`; secrets (`appSecret`-style keys and tokens) are returned in `.secrets` for log masking. Optional endpoint overrides: `QQ_API_BASE` and `QQ_TOKEN_URL` (optional `apiBase`, `tokenUrl`). A value of the wrong type makes `create` throw `ConfigurationError` with code `invalid_config` naming the key.
 
+## Mount the route
+
+```ts
+import { createChannels, createWebhookHandler } from "@theokit/gateway";
+import { qqChannel } from "@theokit/gateway-qq";
+
+const { channels } = createChannels([{ descriptor: qqChannel, config }]);
+const handle = createWebhookHandler({ channels, isStarted: () => true });
+// Route POST /webhooks/qq to `handle(request)`; it answers with a Fetch `Response`.
+```
+
 ## Behaviour
 
 - Callback URL validation (`op` 13): answered with `{ plain_token, signature }` in `answer.body`.

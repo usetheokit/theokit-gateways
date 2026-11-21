@@ -67,7 +67,7 @@ export type IngestResult = "delivered" | "malformed" | "no_handler";
  */
 export interface ChannelWebhook<TAdapter extends BasePlatformAdapter> {
   /** `true` when the request carries a valid signature for this adapter's credentials. */
-  verify(adapter: TAdapter, request: WebhookRequest): boolean;
+  verify(adapter: TAdapter, request: WebhookRequest): boolean | Promise<boolean>;
   /** Dispatch a parsed, verified payload, or report it malformed without dispatching. */
   ingest(adapter: TAdapter, payload: unknown): Promise<IngestResult>;
   /** Methods the route takes. Default `["POST"]`. */

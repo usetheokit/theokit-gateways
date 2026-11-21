@@ -68,6 +68,7 @@ export const yuanbaoChannel = {
     });
   },
   webhook: {
+    methods: ["POST"] as const,
     verify(
       adapter: YuanbaoAdapter,
       request: {
@@ -86,6 +87,20 @@ export const yuanbaoChannel = {
       payload: unknown,
     ): Promise<"delivered" | "malformed" | "no_handler"> {
       return ingestOutcome((await adapter.ingestWebhook(payload)).status);
+    },
+    async handle(
+      adapter: YuanbaoAdapter,
+      request: {
+        readonly rawBody: string;
+        readonly headers: Readonly<Record<string, string | undefined>>;
+      },
+    ): Promise<{ status: number }> {
+      const answer = await adapter.handleWebhook(
+        request.rawBody,
+        headerValue(request.headers, SIGNATURE_HEADER),
+        headerValue(request.headers, TIMESTAMP_HEADER),
+      );
+      return { status: answer.status };
     },
   },
 };

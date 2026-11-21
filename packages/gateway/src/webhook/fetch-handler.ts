@@ -85,7 +85,7 @@ async function runDefault(
   adapter: BasePlatformAdapter,
   request: WebhookRequest,
 ): Promise<Response> {
-  if (!webhook.verify(adapter, request)) return plain(401);
+  if (!(await webhook.verify(adapter, request))) return plain(401);
   let payload: unknown;
   try {
     payload = JSON.parse(request.rawBody);
