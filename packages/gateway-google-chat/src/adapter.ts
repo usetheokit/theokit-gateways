@@ -26,7 +26,7 @@ import { googleKeySet, type KeySet } from "./key-set.js";
 import { chatEventToMessageEvent, type GoogleChatEventBody } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import type { FetchLike, GoogleChatAdapterOptions } from "./types.js";
-import { verifyChatRequest } from "./verify-token.js";
+import { type TokenVerdict, verifyChatRequest } from "./verify-token.js";
 import { createWebhookServer, type WebhookServer } from "./webhook-server.js";
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
@@ -169,7 +169,7 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
   /** Verify a Chat bearer token; a refusal is logged by reason only. */
   async verifyAuthorization(
     authorization: string | undefined,
-  ): Promise<Awaited<ReturnType<typeof verifyChatRequest>>> {
+  ): Promise<TokenVerdict> {
     const verdict = await verifyChatRequest(authorization, {
       keySet: this.keySet,
       audience: this.opts.audience,
