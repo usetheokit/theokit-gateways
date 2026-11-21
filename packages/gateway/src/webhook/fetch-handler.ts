@@ -85,7 +85,7 @@ async function runDefault(
   adapter: BasePlatformAdapter,
   request: WebhookRequest,
 ): Promise<Response> {
-  if (!webhook.verify(adapter, request)) return plain(401);
+  if (!(await webhook.verify(adapter, request))) return plain(401);
   let payload: unknown;
   try {
     payload = JSON.parse(request.rawBody);
@@ -140,7 +140,7 @@ export function createWebhookHandler(
     const platform = channel.descriptor.platform;
     if (!options.isStarted(platform)) return plain(503);
     const webhook = channel.descriptor.webhook as ChannelWebhook<BasePlatformAdapter>;
-    const refused = refuseMethod(webhook, request);
+    const refused = refuseEarly(webhook, channel.adapter, request);
     if (refused !== undefined) return refused;
     const rawBody = await readBody(request, max);
     if (typeof rawBody !== "string") return rawBody;
@@ -156,6 +156,29 @@ export function createWebhookHandler(
       return plain(500);
     }
   };
+}
+
+/** The method check, then the descriptor's `precheck`; both run before the body is read. */
+function refuseEarly(
+  webhook: ChannelWebhook<BasePlatformAdapter>,
+  adapter: BasePlatformAdapter,
+  request: Request,
+): Response | undefined {
+  return refuseMethod(webhook, request) ?? precheckAnswer(webhook, adapter, request);
+}
+
+function precheckAnswer(
+  webhook: ChannelWebhook<BasePlatformAdapter>,
+  adapter: BasePlatformAdapter,
+  request: Request,
+): Response | undefined {
+  if (webhook.precheck === undefined) return undefined;
+  const answer = webhook.precheck(adapter, {
+    headers: headersOf(request),
+    method: request.method.toUpperCase(),
+    url: request.url,
+  });
+  return answer === undefined ? undefined : answerResponse(answer);
 }
 
 function refuseMethod(

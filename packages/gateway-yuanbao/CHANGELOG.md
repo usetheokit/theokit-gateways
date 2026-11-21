@@ -1,5 +1,15 @@
 # @theokit/gateway-yuanbao
 
+## 0.3.0
+
+### Minor Changes
+
+- 87ce9f8: `yuanbaoChannel`, `qqChannel` and `zaloChannel` bind their config fields to environment variables for `configFromEnv`, validate values with the package `ConfigurationError` (`invalid_config`), and expose optional endpoint overrides. Peer range on `@theokit/gateway` is now `>=0.20.0`. The Zalo access token variable is `ZALO_ACCESS_TOKEN`.
+
+### Patch Changes
+
+- 58829a4: Export `yuanbaoChannel`, `qqChannel` and `zaloChannel`: webhook channel descriptors whose `verify` and `ingest` check the signed request and dispatch the event, so `createWebhookHandler` serves them over Fetch. `qqChannel` also answers the callback URL validation.
+
 ## 0.2.0
 
 ### Minor Changes
