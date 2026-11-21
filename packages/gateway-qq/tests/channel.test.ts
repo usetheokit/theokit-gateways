@@ -1,14 +1,14 @@
 import {
-  configFromEnv,
   type ChannelDescriptor,
+  configFromEnv,
   createChannels,
   createWebhookHandler,
 } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 import { QQAdapter } from "../src/adapter.js";
-import { ConfigurationError } from "../src/errors.js";
 import { qqChannel } from "../src/channel.js";
+import { ConfigurationError } from "../src/errors.js";
 import { signQQ } from "../src/signature.js";
 
 const SECRET = "qq-secret";

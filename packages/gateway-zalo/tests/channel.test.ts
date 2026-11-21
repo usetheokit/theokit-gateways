@@ -1,14 +1,14 @@
 import {
-  configFromEnv,
   type ChannelDescriptor,
+  configFromEnv,
   createChannels,
   createWebhookHandler,
 } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 import { ZaloAdapter } from "../src/adapter.js";
-import { ConfigurationError } from "../src/errors.js";
 import { zaloChannel } from "../src/channel.js";
+import { ConfigurationError } from "../src/errors.js";
 import { computeZaloSignature } from "../src/signature.js";
 
 const APP = "app1";
