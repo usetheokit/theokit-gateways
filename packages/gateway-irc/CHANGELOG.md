@@ -1,5 +1,15 @@
 # @theokit/gateway-irc
 
+## 0.3.0
+
+### Minor Changes
+
+- 35d9d91: Export a `ChannelDescriptor` with environment variable bindings: `ircChannel`, `nextcloudTalkChannel` and `nostrChannel`, for use with `createChannels` and `configFromEnv`. The `@theokit/gateway` peer floor is `>=0.23.0`, the release that adds the `readNumber`, `readList` and `readBooleanString` readers the descriptors call.
+
+### Patch Changes
+
+- fc94485: The email, IRC, Matrix, Nextcloud Talk and Signal channel descriptors build their configuration fields with the shared `field` helper, and email and Matrix read their env-string numbers and booleans through one shared reader instead of two copies. The descriptors and the values they accept are unchanged.
+
 ## 0.2.0
 
 ### Minor Changes

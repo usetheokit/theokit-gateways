@@ -27,6 +27,17 @@ const answer = await adapter.handleWebhook(
 response.status(answer.status).end();
 ```
 
+## Webhook channel
+
+`yuanbaoChannel` describes the package as data: `transport: "webhook"`, config keys `appId`,
+`appSecret` and `callbackSecret` (env `YUANBAO_APP_ID`, `YUANBAO_APP_SECRET`,
+`YUANBAO_CALLBACK_SECRET`). Its `webhook.verify` checks the `X-Signature` and `X-Timestamp`
+headers and `webhook.ingest` dispatches the event, so `createWebhookHandler` from
+`@theokit/gateway` serves the route over Fetch (`POST /webhooks/yuanbao`): 401 for a bad
+signature, 503 when no handler is subscribed.
+
+With `configFromEnv(descriptor, process.env, "APP_")` the required values are read from `APP_YUANBAO_*`; secrets (`appSecret`-style keys and tokens) are returned in `.secrets` for log masking. Optional endpoint overrides: `YUANBAO_API_BASE` (optional `apiBase`). A value of the wrong type makes `create` throw `ConfigurationError` with code `invalid_config` naming the key.
+
 ## Behaviour
 
 - Signature: hex `HMAC-SHA256(callbackSecret, timestamp + "." + rawBody)`, compared in constant

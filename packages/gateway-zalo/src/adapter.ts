@@ -135,21 +135,35 @@ export class ZaloAdapter extends BasePlatformAdapter {
     return { appId: this.opts.appId, oaSecretKey: this.opts.oaSecretKey };
   }
 
+  /** Whether `signature` is the valid `X-ZEvent-Signature` for `rawBody`. */
+  verifyWebhook(rawBody: string, signature: string | undefined): boolean {
+    return verifyZaloSignature(this.opts, rawBody, signature);
+  }
+
   /**
    * Webhook entry: verify, parse and dispatch. Answer `status` 200 only when the event was
    * handled or is not for this adapter; `503` (no handler subscribed) must not be acknowledged,
    * or Zalo does not redeliver and the message is lost.
    */
   async handleWebhook(rawBody: string, signature: string | undefined): Promise<ZaloWebhookAnswer> {
-    if (!verifyZaloSignature(this.opts, rawBody, signature)) {
+    if (!this.verifyWebhook(rawBody, signature)) {
       return { status: 401, reason: "signature mismatch" };
     }
-    let payload: ZaloWebhookEvent;
+    let payload: unknown;
     try {
-      payload = JSON.parse(rawBody) as ZaloWebhookEvent;
+      payload = JSON.parse(rawBody);
     } catch {
       return { status: 400, reason: "body is not JSON" };
     }
+    return this.ingestWebhook(payload);
+  }
+
+  /** Dispatch a verified, parsed webhook payload; the shared tail of `handleWebhook` and the descriptor. */
+  async ingestWebhook(parsed: unknown): Promise<ZaloWebhookAnswer> {
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { status: 400, reason: "body is not a JSON object" };
+    }
+    const payload = parsed as ZaloWebhookEvent;
     const skipped = this.skipReason(payload);
     if (skipped !== undefined) return { status: 200, reason: skipped };
     const event = toMessageEvent(payload) as GatewayMessageEvent;
