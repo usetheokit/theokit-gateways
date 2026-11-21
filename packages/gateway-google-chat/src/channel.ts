@@ -58,11 +58,11 @@ function requiredString(config: Config, key: string): string {
   return value;
 }
 
-function optionalWebhook(config: Config): "listener" | "external" | undefined {
+/** The descriptor is served by `createWebhookHandler`, so only `"external"` is accepted. */
+function refuseListener(config: Config): void {
   const value = config.webhook;
-  if (isAbsent(value)) return undefined;
-  if (value === "listener" || value === "external") return value;
-  throw invalid("webhook", '"listener" or "external"');
+  if (isAbsent(value) || value === "external") return;
+  throw invalid("webhook", '"external" (the descriptor opens no listener)');
 }
 
 interface Credentials {
@@ -157,7 +157,7 @@ const CONFIG: ReadonlyArray<ConfigField> = [
     secret: false,
     env: "GOOGLE_CHAT_WEBHOOK",
     description:
-      '"listener" (default) opens the webhook listener in connect(); "external" opens none and the host routes requests to handleRequest().',
+      'Only "external" (the default) is accepted: the descriptor opens no listener and the host mounts createWebhookHandler.',
   },
 ];
 
@@ -186,7 +186,7 @@ const inlineChannel = {
   config: CONFIG,
   create(config: Config): GoogleChatAdapter {
     const audience = requiredString(config, "audience");
-    optionalWebhook(config);
+    refuseListener(config);
     const credentials = readCredentials(config);
     const options: GoogleChatAdapterOptions = {
       ...credentials,
@@ -197,6 +197,14 @@ const inlineChannel = {
   },
   webhook: {
     methods: ["POST"] as const,
+    /** 401 before the body is read when the request has no `Bearer <token>`. */
+    precheck(
+      _adapter: GoogleChatAdapter,
+      request: { readonly headers: Readonly<Record<string, string | undefined>> },
+    ): { status: number; body: string; contentType: string } | undefined {
+      if (bearer({ rawBody: "", headers: request.headers }) !== undefined) return undefined;
+      return { status: 401, body: '{"error":"missing bearer token"}', contentType: JSON_TYPE };
+    },
     async verify(adapter: GoogleChatAdapter, request: WebhookReq): Promise<boolean> {
       const authorization = bearer(request);
       if (authorization === undefined) return false;

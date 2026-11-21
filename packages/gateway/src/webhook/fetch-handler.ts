@@ -142,6 +142,8 @@ export function createWebhookHandler(
     const webhook = channel.descriptor.webhook as ChannelWebhook<BasePlatformAdapter>;
     const refused = refuseMethod(webhook, request);
     if (refused !== undefined) return refused;
+    const early = precheckAnswer(webhook, channel.adapter, request);
+    if (early !== undefined) return early;
     const rawBody = await readBody(request, max);
     if (typeof rawBody !== "string") return rawBody;
     try {
@@ -156,6 +158,20 @@ export function createWebhookHandler(
       return plain(500);
     }
   };
+}
+
+function precheckAnswer(
+  webhook: ChannelWebhook<BasePlatformAdapter>,
+  adapter: BasePlatformAdapter,
+  request: Request,
+): Response | undefined {
+  if (webhook.precheck === undefined) return undefined;
+  const answer = webhook.precheck(adapter, {
+    headers: headersOf(request),
+    method: request.method.toUpperCase(),
+    url: request.url,
+  });
+  return answer === undefined ? undefined : answerResponse(answer);
 }
 
 function refuseMethod(
