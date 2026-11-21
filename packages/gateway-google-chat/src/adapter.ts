@@ -167,9 +167,7 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
   }
 
   /** Verify a Chat bearer token; a refusal is logged by reason only. */
-  async verifyAuthorization(
-    authorization: string | undefined,
-  ): Promise<TokenVerdict> {
+  async verifyAuthorization(authorization: string | undefined): Promise<TokenVerdict> {
     const verdict = await verifyChatRequest(authorization, {
       keySet: this.keySet,
       audience: this.opts.audience,
