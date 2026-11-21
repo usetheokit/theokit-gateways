@@ -24,6 +24,14 @@ const answer = await adapter.handleWebhook(rawBody, request.headers["x-zevent-si
 response.status(answer.status).end();
 ```
 
+## Webhook channel
+
+`zaloChannel` describes the package as data: `transport: "webhook"`, config keys `appId`,
+`oaSecretKey` and `accessToken` (env `ZALO_APP_ID`, `ZALO_OA_SECRET_KEY`, `ZALO_OA_ACCESS_TOKEN`).
+Its `webhook.verify` checks the `X-ZEvent-Signature` header and `webhook.ingest` dispatches the
+event, so `createWebhookHandler` from `@theokit/gateway` serves the route over Fetch
+(`POST /webhooks/zalo`): 401 for a bad signature, 503 when no handler is subscribed.
+
 ## Behaviour
 
 - Signature: `X-ZEvent-Signature: mac=sha256(appId + rawBody + timestamp + oaSecretKey)`, compared in

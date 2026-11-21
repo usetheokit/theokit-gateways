@@ -147,6 +147,15 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     return this.deliverInbound(event);
   }
 
+  /** Whether `signature` and `timestamp` are the valid callback headers for `rawBody`. */
+  verifyWebhook(
+    rawBody: string,
+    signature: string | undefined,
+    timestamp: string | undefined,
+  ): boolean {
+    return verifyYuanbaoSignature(this.opts.callbackSecret, rawBody, signature, timestamp);
+  }
+
   /**
    * Webhook entry: verify, parse and dispatch. Pass the RAW body and the signature and timestamp
    * headers. Answer `status` 200 only when the event was handled or is not for this adapter;
@@ -158,7 +167,7 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     signature: string | undefined,
     timestamp: string | undefined,
   ): Promise<YuanbaoWebhookAnswer> {
-    if (!verifyYuanbaoSignature(this.opts.callbackSecret, rawBody, signature, timestamp)) {
+    if (!this.verifyWebhook(rawBody, signature, timestamp)) {
       return { status: 401, reason: "signature mismatch" };
     }
     let parsed: unknown;
@@ -167,6 +176,11 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     } catch {
       return { status: 400, reason: "body is not JSON" };
     }
+    return this.ingestWebhook(parsed);
+  }
+
+  /** Dispatch a verified, parsed webhook payload; the shared tail of `handleWebhook` and the descriptor. */
+  async ingestWebhook(parsed: unknown): Promise<YuanbaoWebhookAnswer> {
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return { status: 400, reason: "body is not a JSON object" };
     }
