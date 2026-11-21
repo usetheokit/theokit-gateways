@@ -1,10 +1,7 @@
-import {
-  type ChannelDescriptor,
-  configFromEnv,
-  createChannels,
-  createWebhookHandler,
-} from "@theokit/gateway";
+import { configFromEnv, createChannels, createWebhookHandler } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
+
+import { describeWebhookChannel } from "../../../shared/webhook-channel-cases.js";
 
 import { YuanbaoAdapter } from "../src/adapter.js";
 import { yuanbaoChannel } from "../src/channel.js";
@@ -82,129 +79,32 @@ describe("yuanbaoChannel.webhook", () => {
   });
 });
 
-function setup(subscribe: boolean) {
-  const result = createChannels([
-    { descriptor: yuanbaoChannel as unknown as ChannelDescriptor, config: CONFIG },
-  ]);
-  const adapter = result.adapters[0] as unknown as YuanbaoAdapter;
-  const delivered: string[] = [];
-  if (subscribe) adapter.onInbound(async (e) => void delivered.push(e.text ?? ""));
-  const handler = createWebhookHandler({ channels: result.channels, isStarted: () => true });
-  return { handler, delivered };
-}
+const TOOLS = {
+  describe,
+  it,
+  expect,
+  createChannels,
+  createWebhookHandler,
+  configFromEnv,
+} as never;
 
-const post = (rawBody: string, headers: Record<string, string>) =>
-  new Request("https://bot.test/webhooks/yuanbao", { method: "POST", body: rawBody, headers });
+const SPEC = {
+  platform: "yuanbao",
+  descriptor: yuanbaoChannel,
+  config: CONFIG,
+  signedText: () => signed(TEXT),
+  badSignature: () => ({ "x-signature": "bad", "x-timestamp": "1" }),
+  bindings: [
+    ["appId", "YUANBAO_APP_ID"],
+    ["appSecret", "YUANBAO_APP_SECRET"],
+    ["callbackSecret", "YUANBAO_CALLBACK_SECRET"],
+    ["apiBase", "YUANBAO_API_BASE"],
+  ],
+  required: ["appId", "appSecret", "callbackSecret"],
+  secrets: ["appSecret", "callbackSecret"],
+  adapterClass: YuanbaoAdapter,
+  errorClass: ConfigurationError,
+  refusesGet: true,
+} as const;
 
-describe("yuanbao webhook through createWebhookHandler", () => {
-  it("delivers a signed event and answers 200", async () => {
-    const { handler, delivered } = setup(true);
-    const { rawBody, headers } = signed(TEXT);
-    expect((await handler(post(rawBody, headers))).status).toBe(200);
-    expect(delivered).toEqual(["hi"]);
-  });
-
-  it("answers 401 for a bad signature and delivers nothing", async () => {
-    const { handler, delivered } = setup(true);
-    const { rawBody } = signed(TEXT);
-    const res = await handler(post(rawBody, { "x-signature": "bad", "x-timestamp": "1" }));
-    expect(res.status).toBe(401);
-    expect(delivered).toEqual([]);
-  });
-
-  it("answers 503 when no handler is subscribed", async () => {
-    const { handler } = setup(false);
-    const { rawBody, headers } = signed(TEXT);
-    expect((await handler(post(rawBody, headers))).status).toBe(503);
-  });
-
-  it("refuses a method the route does not take", async () => {
-    const { handler } = setup(true);
-    const res = await handler(new Request("https://bot.test/webhooks/yuanbao"));
-    expect(res.status).toBe(405);
-  });
-});
-
-describe("yuanbaoChannel env bindings", () => {
-  const ENV = {
-    APP_YUANBAO_APP_ID: "v-appId",
-    APP_YUANBAO_APP_SECRET: "v-appSecret",
-    APP_YUANBAO_CALLBACK_SECRET: "v-callbackSecret",
-  };
-
-  it("binds each field to YUANBAO_<KEY>", () => {
-    expect(yuanbaoChannel.config.map((f) => [f.key, f.env])).toEqual([
-      ["appId", "YUANBAO_APP_ID"],
-      ["appSecret", "YUANBAO_APP_SECRET"],
-      ["callbackSecret", "YUANBAO_CALLBACK_SECRET"],
-      ["apiBase", "YUANBAO_API_BASE"],
-    ]);
-  });
-
-  it("builds the adapter from configFromEnv", () => {
-    const { config, missing } = configFromEnv(yuanbaoChannel as ChannelDescriptor, ENV, "APP_");
-    expect(missing).toEqual([]);
-    const result = createChannels([{ descriptor: yuanbaoChannel as ChannelDescriptor, config }]);
-    expect(result.rejected).toEqual([]);
-    expect(result.adapters[0]).toBeInstanceOf(YuanbaoAdapter);
-  });
-
-  it.each([
-    ["appId", "APP_YUANBAO_APP_ID"],
-    ["appSecret", "APP_YUANBAO_APP_SECRET"],
-    ["callbackSecret", "APP_YUANBAO_CALLBACK_SECRET"],
-  ])("rejects with missing_required_config naming %s when %s is unset", (key, variable) => {
-    const env: Record<string, string> = { ...ENV };
-    delete env[variable];
-    const { config, missing } = configFromEnv(yuanbaoChannel as ChannelDescriptor, env, "APP_");
-    expect(missing).toEqual([variable]);
-    const result = createChannels([
-      { descriptor: yuanbaoChannel as ChannelDescriptor, config, envPrefix: "APP_" },
-    ]);
-    expect(result.adapters).toEqual([]);
-    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
-    expect(result.rejected[0]?.error.message).toContain(key);
-  });
-
-  it("collects only secret values", () => {
-    const env = { ...ENV, APP_YUANBAO_API_BASE: "https://example.test" };
-    expect(
-      [...configFromEnv(yuanbaoChannel as ChannelDescriptor, env, "APP_").secrets].sort(),
-    ).toEqual(["v-appSecret", "v-callbackSecret"]);
-  });
-
-  it("accepts optional string endpoints", () => {
-    expect(
-      yuanbaoChannel.create({
-        ...Object.fromEntries([
-          ["appId", "x"],
-          ["appSecret", "x"],
-          ["callbackSecret", "x"],
-        ]),
-        apiBase: "https://example.test",
-      }),
-    ).toBeInstanceOf(YuanbaoAdapter);
-  });
-
-  it.each(["appId", "appSecret", "callbackSecret", "apiBase"])(
-    "throws invalid_config naming %s for a number",
-    (key) => {
-      const config = {
-        ...Object.fromEntries([
-          ["appId", "x"],
-          ["appSecret", "x"],
-          ["callbackSecret", "x"],
-        ]),
-        [key]: 5,
-      };
-      try {
-        yuanbaoChannel.create(config);
-        throw new Error("expected a throw");
-      } catch (err) {
-        expect(err).toBeInstanceOf(ConfigurationError);
-        expect((err as ConfigurationError).code).toBe("invalid_config");
-        expect((err as ConfigurationError).message).toContain(key);
-      }
-    },
-  );
-});
+describeWebhookChannel(TOOLS, SPEC);
