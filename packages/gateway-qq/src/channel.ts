@@ -6,6 +6,12 @@
  * is structurally a `ChannelDescriptor`; the integration package assigns it to one.
  */
 
+import { type ConfigField, field } from "../../../shared/channel-config-field.js";
+import {
+  headerValue,
+  ingestOutcome,
+  stringConfigReaders,
+} from "../../../shared/webhook-channel-readers.js";
 import { QQAdapter } from "./adapter.js";
 import { ConfigurationError } from "./errors.js";
 
@@ -22,72 +28,19 @@ function invalid(key: string): ConfigurationError {
   });
 }
 
-/** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
-interface ConfigField {
-  readonly key: string;
-  readonly env: string;
-  readonly required: boolean;
-  readonly secret: boolean;
-  readonly description: string;
-}
-
 const CONFIG: ReadonlyArray<ConfigField> = [
-  {
-    key: "appId",
-    env: "QQ_APP_ID",
-    required: true,
-    secret: false,
-    description: "The QQ Bot AppID.",
-  },
-  {
-    key: "appSecret",
-    env: "QQ_APP_SECRET",
-    required: true,
-    secret: true,
-    description: "The QQ Bot AppSecret; fetches the access token and signs callback validation.",
-  },
-  {
-    key: "apiBase",
-    env: "QQ_API_BASE",
-    required: false,
-    secret: false,
-    description: "The QQ Bot API base URL override.",
-  },
-  {
-    key: "tokenUrl",
-    env: "QQ_TOKEN_URL",
-    required: false,
-    secret: false,
-    description: "The QQ access-token endpoint override.",
-  },
+  field("appId", "QQ_APP_ID", "The QQ Bot AppID."),
+  field(
+    "appSecret",
+    "QQ_APP_SECRET",
+    "The QQ Bot AppSecret; fetches the access token and signs callback validation.",
+    { secret: true },
+  ),
+  field("apiBase", "QQ_API_BASE", "The QQ Bot API base URL override.", { required: false }),
+  field("tokenUrl", "QQ_TOKEN_URL", "The QQ access-token endpoint override.", { required: false }),
 ];
 
-function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
-  const value = config[key];
-  if (typeof value !== "string") throw invalid(key);
-  return value;
-}
-
-function optionalString(
-  config: Readonly<Record<string, unknown>>,
-  key: string,
-): string | undefined {
-  const value = config[key];
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "string") throw invalid(key);
-  return value;
-}
-
-function optionalEntry(key: string, value: string | undefined): Record<string, string> {
-  return value === undefined ? {} : { [key]: value };
-}
-
-function headerValue(headers: Headers, name: string): string | undefined {
-  for (const [key, value] of Object.entries(headers)) {
-    if (key.toLowerCase() === name) return value;
-  }
-  return undefined;
-}
+const { requiredString, optionalEntry } = stringConfigReaders(invalid);
 
 /**
  * The QQ channel: QQ delivers inbound events by signed webhook, so the app routes each request to
@@ -115,8 +68,8 @@ export const qqChannel = {
     return new QQAdapter({
       appId: requiredString(config, "appId"),
       appSecret: requiredString(config, "appSecret"),
-      ...optionalEntry("apiBase", optionalString(config, "apiBase")),
-      ...optionalEntry("tokenUrl", optionalString(config, "tokenUrl")),
+      ...optionalEntry(config, "apiBase"),
+      ...optionalEntry(config, "tokenUrl"),
     });
   },
   webhook: {
@@ -131,9 +84,7 @@ export const qqChannel = {
       adapter: QQAdapter,
       payload: unknown,
     ): Promise<"delivered" | "malformed" | "no_handler"> {
-      const answer = await adapter.ingestWebhook(payload);
-      if (answer.status === 503) return "no_handler";
-      return answer.status === 200 ? "delivered" : "malformed";
+      return ingestOutcome((await adapter.ingestWebhook(payload)).status);
     },
     async handle(
       adapter: QQAdapter,
