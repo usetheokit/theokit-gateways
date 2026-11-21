@@ -67,11 +67,16 @@ export type IngestResult = "delivered" | "malformed" | "no_handler";
  */
 export interface ChannelWebhook<TAdapter extends BasePlatformAdapter> {
   /** `true` when the request carries a valid signature for this adapter's credentials. */
-  verify(adapter: TAdapter, request: WebhookRequest): boolean;
+  verify(adapter: TAdapter, request: WebhookRequest): boolean | Promise<boolean>;
   /** Dispatch a parsed, verified payload, or report it malformed without dispatching. */
   ingest(adapter: TAdapter, payload: unknown): Promise<IngestResult>;
   /** Methods the route takes. Default `["POST"]`. */
   readonly methods?: readonly string[];
+  /**
+   * Called with the method, URL and headers before the body is read. An answer refuses the request
+   * there (an unreadable or oversized body never gets a 400 or 413); `undefined` lets it go on.
+   */
+  precheck?(adapter: TAdapter, request: Omit<WebhookRequest, "rawBody">): WebhookAnswer | undefined;
   /** Full control of one request. When absent, the handler runs verify, JSON.parse and ingest. */
   handle?(adapter: TAdapter, request: WebhookRequest): Promise<WebhookAnswer>;
 }

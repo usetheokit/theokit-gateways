@@ -26,7 +26,7 @@ import { googleKeySet, type KeySet } from "./key-set.js";
 import { chatEventToMessageEvent, type GoogleChatEventBody } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import type { FetchLike, GoogleChatAdapterOptions } from "./types.js";
-import { verifyChatRequest } from "./verify-token.js";
+import { type TokenVerdict, verifyChatRequest } from "./verify-token.js";
 import { createWebhookServer, type WebhookServer } from "./webhook-server.js";
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
@@ -161,6 +161,13 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
     authorization: string | undefined,
     rawBody: string,
   ): Promise<{ readonly status: number; readonly body: Record<string, unknown> }> {
+    const verdict = await this.verifyAuthorization(authorization);
+    if (!verdict.ok) return { status: verdict.status, body: { error: verdict.reason } };
+    return this.ingestBody(rawBody);
+  }
+
+  /** Verify a Chat bearer token; a refusal is logged by reason only. */
+  async verifyAuthorization(authorization: string | undefined): Promise<TokenVerdict> {
     const verdict = await verifyChatRequest(authorization, {
       keySet: this.keySet,
       audience: this.opts.audience,
@@ -168,8 +175,14 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
     });
     if (!verdict.ok) {
       process.stderr.write(`[${LABEL}] refused a request (${verdict.status}): ${verdict.reason}\n`);
-      return { status: verdict.status, body: { error: verdict.reason } };
     }
+    return verdict;
+  }
+
+  /** Parse and dispatch the body of a request whose token was already verified. */
+  async ingestBody(
+    rawBody: string,
+  ): Promise<{ readonly status: number; readonly body: Record<string, unknown> }> {
     let body: GoogleChatEventBody;
     try {
       body = JSON.parse(rawBody) as GoogleChatEventBody;

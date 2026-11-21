@@ -70,6 +70,7 @@ export const zaloChannel = {
     });
   },
   webhook: {
+    methods: ["POST"] as const,
     verify(
       adapter: ZaloAdapter,
       request: {
@@ -84,6 +85,19 @@ export const zaloChannel = {
       payload: unknown,
     ): Promise<"delivered" | "malformed" | "no_handler"> {
       return ingestOutcome((await adapter.ingestWebhook(payload)).status);
+    },
+    async handle(
+      adapter: ZaloAdapter,
+      request: {
+        readonly rawBody: string;
+        readonly headers: Readonly<Record<string, string | undefined>>;
+      },
+    ): Promise<{ status: number }> {
+      const answer = await adapter.handleWebhook(
+        request.rawBody,
+        headerValue(request.headers, SIGNATURE_HEADER),
+      );
+      return { status: answer.status };
     },
   },
 };

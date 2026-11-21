@@ -15,6 +15,23 @@ import type { GoogleChatAdapterOptions } from "./types.js";
 
 type Config = Readonly<Record<string, unknown>>;
 
+interface WebhookReq {
+  readonly rawBody: string;
+  readonly headers: Readonly<Record<string, string | undefined>>;
+}
+
+const JSON_TYPE = "application/json";
+
+/** The authorization header when it is `Bearer <token>`, else `undefined`. */
+function bearer(request: WebhookReq): string | undefined {
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (name.toLowerCase() === "authorization" && value !== undefined) {
+      return /^Bearer\s+\S+/i.test(value) ? value : undefined;
+    }
+  }
+  return undefined;
+}
+
 function invalid(key: string, expected: string): GatewayConfigurationError {
   return new GatewayConfigurationError("gateway-google-chat", {
     code: "invalid_config",
@@ -41,11 +58,11 @@ function requiredString(config: Config, key: string): string {
   return value;
 }
 
-function optionalWebhook(config: Config): "listener" | "external" | undefined {
+/** The descriptor is served by `createWebhookHandler`, so only `"external"` is accepted. */
+function refuseListener(config: Config): void {
   const value = config.webhook;
-  if (isAbsent(value)) return undefined;
-  if (value === "listener" || value === "external") return value;
-  throw invalid("webhook", '"listener" or "external"');
+  if (isAbsent(value) || value === "external") return;
+  throw invalid("webhook", '"external" (the descriptor opens no listener)');
 }
 
 interface Credentials {
@@ -140,7 +157,7 @@ const CONFIG: ReadonlyArray<ConfigField> = [
     secret: false,
     env: "GOOGLE_CHAT_WEBHOOK",
     description:
-      '"listener" (default) opens the webhook listener in connect(); "external" opens none and the host routes requests to handleRequest().',
+      'Only "external" (the default) is accepted: the descriptor opens no listener and the host mounts createWebhookHandler.',
   },
 ];
 
@@ -154,8 +171,8 @@ const FILE_CONFIG: ReadonlyArray<ConfigField> = CONFIG.map((field) =>
 );
 
 /**
- * The Google Chat channel: `connect()` opens its own webhook listener, unless `webhook` is
- * `"external"`.
+ * The Google Chat channel, served by `createWebhookHandler`: the adapter is built with
+ * `webhook: "external"`, so `connect()` opens no listener and `webhook.handle` answers each request.
  *
  * Credentials come from `serviceAccountEmail` and `privateKey`, or from the JSON key at
  * `serviceAccountFile` for whichever of the two is absent. `create` refuses a value of the wrong
@@ -164,19 +181,54 @@ const FILE_CONFIG: ReadonlyArray<ConfigField> = CONFIG.map((field) =>
  */
 const inlineChannel = {
   platform: "google_chat" as const,
-  transport: "socket" as const,
+  transport: "webhook" as const,
   senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Config): GoogleChatAdapter {
     const audience = requiredString(config, "audience");
-    const webhook = optionalWebhook(config);
+    refuseListener(config);
     const credentials = readCredentials(config);
     const options: GoogleChatAdapterOptions = {
       ...credentials,
       audience,
-      ...(webhook === undefined ? {} : { webhook }),
+      webhook: "external" as const,
     };
     return new GoogleChatAdapter(options);
+  },
+  webhook: {
+    methods: ["POST"] as const,
+    /** 401 before the body is read when the request has no `Bearer <token>`. */
+    precheck(
+      _adapter: GoogleChatAdapter,
+      request: { readonly headers: Readonly<Record<string, string | undefined>> },
+    ): { status: number; body: string; contentType: string } | undefined {
+      if (bearer({ rawBody: "", headers: request.headers }) !== undefined) return undefined;
+      return { status: 401, body: '{"error":"missing bearer token"}', contentType: JSON_TYPE };
+    },
+    async verify(adapter: GoogleChatAdapter, request: WebhookReq): Promise<boolean> {
+      const authorization = bearer(request);
+      if (authorization === undefined) return false;
+      return (await adapter.verifyAuthorization(authorization)).ok;
+    },
+    async ingest(
+      adapter: GoogleChatAdapter,
+      payload: unknown,
+    ): Promise<"delivered" | "malformed" | "no_handler"> {
+      const answer = await adapter.ingestBody(JSON.stringify(payload));
+      if (answer.status === 503) return "no_handler";
+      return answer.status === 200 ? "delivered" : "malformed";
+    },
+    async handle(
+      adapter: GoogleChatAdapter,
+      request: WebhookReq,
+    ): Promise<{ status: number; body: string; contentType: string }> {
+      const authorization = bearer(request);
+      if (authorization === undefined) {
+        return { status: 401, body: '{"error":"missing bearer token"}', contentType: JSON_TYPE };
+      }
+      const answer = await adapter.handleRequest(authorization, request.rawBody);
+      return { status: answer.status, body: JSON.stringify(answer.body), contentType: JSON_TYPE };
+    },
   },
 };
 
