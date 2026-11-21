@@ -7,11 +7,20 @@
  */
 
 import { QQAdapter } from "./adapter.js";
+import { ConfigurationError } from "./errors.js";
 
 const SIGNATURE_HEADER = "x-signature-ed25519";
 const TIMESTAMP_HEADER = "x-signature-timestamp";
 
 type Headers = Readonly<Record<string, string | undefined>>;
+
+function invalid(key: string): ConfigurationError {
+  return new ConfigurationError({
+    code: "invalid_config",
+    message: `gateway-qq: config.${key} must be a string`,
+    detail: key,
+  });
+}
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
 interface ConfigField {
@@ -37,12 +46,40 @@ const CONFIG: ReadonlyArray<ConfigField> = [
     secret: true,
     description: "The QQ Bot AppSecret; fetches the access token and signs callback validation.",
   },
+  {
+    key: "apiBase",
+    env: "QQ_API_BASE",
+    required: false,
+    secret: false,
+    description: "The QQ Bot API base URL override.",
+  },
+  {
+    key: "tokenUrl",
+    env: "QQ_TOKEN_URL",
+    required: false,
+    secret: false,
+    description: "The QQ access-token endpoint override.",
+  },
 ];
 
 function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
   const value = config[key];
-  if (typeof value !== "string") throw new Error(`gateway-qq: config.${key} must be a string`);
+  if (typeof value !== "string") throw invalid(key);
   return value;
+}
+
+function optionalString(
+  config: Readonly<Record<string, unknown>>,
+  key: string,
+): string | undefined {
+  const value = config[key];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw invalid(key);
+  return value;
+}
+
+function optionalEntry(key: string, value: string | undefined): Record<string, string> {
+  return value === undefined ? {} : { [key]: value };
 }
 
 function headerValue(headers: Headers, name: string): string | undefined {
@@ -78,6 +115,8 @@ export const qqChannel = {
     return new QQAdapter({
       appId: requiredString(config, "appId"),
       appSecret: requiredString(config, "appSecret"),
+      ...optionalEntry("apiBase", optionalString(config, "apiBase")),
+      ...optionalEntry("tokenUrl", optionalString(config, "tokenUrl")),
     });
   },
   webhook: {

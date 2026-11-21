@@ -7,9 +7,18 @@
  */
 
 import { YuanbaoAdapter } from "./adapter.js";
+import { ConfigurationError } from "./errors.js";
 
 const SIGNATURE_HEADER = "x-signature";
 const TIMESTAMP_HEADER = "x-timestamp";
+
+function invalid(key: string): ConfigurationError {
+  return new ConfigurationError({
+    code: "invalid_config",
+    message: `gateway-yuanbao: config.${key} must be a string`,
+    detail: key,
+  });
+}
 
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally). */
 interface ConfigField {
@@ -42,12 +51,33 @@ const CONFIG: ReadonlyArray<ConfigField> = [
     secret: true,
     description: "The callback signing secret that signs each webhook.",
   },
+  {
+    key: "apiBase",
+    env: "YUANBAO_API_BASE",
+    required: false,
+    secret: false,
+    description: "The Yuanbao API base URL override.",
+  },
 ];
 
 function requiredString(config: Readonly<Record<string, unknown>>, key: string): string {
   const value = config[key];
-  if (typeof value !== "string") throw new Error(`gateway-yuanbao: config.${key} must be a string`);
+  if (typeof value !== "string") throw invalid(key);
   return value;
+}
+
+function optionalString(
+  config: Readonly<Record<string, unknown>>,
+  key: string,
+): string | undefined {
+  const value = config[key];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw invalid(key);
+  return value;
+}
+
+function optionalEntry(key: string, value: string | undefined): Record<string, string> {
+  return value === undefined ? {} : { [key]: value };
 }
 
 function headerValue(
@@ -82,6 +112,7 @@ export const yuanbaoChannel = {
       appId: requiredString(config, "appId"),
       appSecret: requiredString(config, "appSecret"),
       callbackSecret: requiredString(config, "callbackSecret"),
+      ...optionalEntry("apiBase", optionalString(config, "apiBase")),
     });
   },
   webhook: {

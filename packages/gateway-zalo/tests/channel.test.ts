@@ -1,7 +1,13 @@
-import { type ChannelDescriptor, createChannels, createWebhookHandler } from "@theokit/gateway";
+import {
+  configFromEnv,
+  type ChannelDescriptor,
+  createChannels,
+  createWebhookHandler,
+} from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 import { ZaloAdapter } from "../src/adapter.js";
+import { ConfigurationError } from "../src/errors.js";
 import { zaloChannel } from "../src/channel.js";
 import { computeZaloSignature } from "../src/signature.js";
 
@@ -31,7 +37,12 @@ describe("zaloChannel descriptor", () => {
   it("declares a webhook transport and its config", () => {
     expect(zaloChannel.transport).toBe("webhook");
     expect(zaloChannel.platform).toBe("zalo");
-    expect(zaloChannel.config.map((f) => f.key)).toEqual(["appId", "oaSecretKey", "accessToken"]);
+    expect(zaloChannel.config.map((f) => f.key)).toEqual([
+      "appId",
+      "oaSecretKey",
+      "accessToken",
+      "apiBase",
+    ]);
   });
 
   it("creates an adapter, and refuses a non-string or empty field", () => {
@@ -114,4 +125,88 @@ describe("zalo webhook through createWebhookHandler", () => {
     const res = await handler(new Request("https://bot.test/webhooks/zalo"));
     expect(res.status).toBe(405);
   });
+});
+
+describe("zaloChannel env bindings", () => {
+  const ENV = {
+    APP_ZALO_APP_ID: "v-appId",
+    APP_ZALO_OA_SECRET_KEY: "v-oaSecretKey",
+    APP_ZALO_ACCESS_TOKEN: "v-accessToken",
+  };
+
+  it("binds each field to ZALO_<KEY>", () => {
+    expect(zaloChannel.config.map((f) => [f.key, f.env])).toEqual([
+      ["appId", "ZALO_APP_ID"],
+      ["oaSecretKey", "ZALO_OA_SECRET_KEY"],
+      ["accessToken", "ZALO_ACCESS_TOKEN"],
+      ["apiBase", "ZALO_API_BASE"],
+    ]);
+  });
+
+  it("builds the adapter from configFromEnv", () => {
+    const { config, missing } = configFromEnv(zaloChannel as ChannelDescriptor, ENV, "APP_");
+    expect(missing).toEqual([]);
+    const result = createChannels([{ descriptor: zaloChannel as ChannelDescriptor, config }]);
+    expect(result.rejected).toEqual([]);
+    expect(result.adapters[0]).toBeInstanceOf(ZaloAdapter);
+  });
+
+  it.each([
+    ["appId", "APP_ZALO_APP_ID"],
+    ["oaSecretKey", "APP_ZALO_OA_SECRET_KEY"],
+    ["accessToken", "APP_ZALO_ACCESS_TOKEN"],
+  ])("rejects with missing_required_config naming %s when %s is unset", (key, variable) => {
+    const env: Record<string, string> = { ...ENV };
+    delete env[variable];
+    const { config, missing } = configFromEnv(zaloChannel as ChannelDescriptor, env, "APP_");
+    expect(missing).toEqual([variable]);
+    const result = createChannels([
+      { descriptor: zaloChannel as ChannelDescriptor, config, envPrefix: "APP_" },
+    ]);
+    expect(result.adapters).toEqual([]);
+    expect(result.rejected[0]?.error.code).toBe("missing_required_config");
+    expect(result.rejected[0]?.error.message).toContain(key);
+  });
+
+  it("collects only secret values", () => {
+    const env = { ...ENV, APP_ZALO_API_BASE: "https://example.test" };
+    expect(
+      [...configFromEnv(zaloChannel as ChannelDescriptor, env, "APP_").secrets].sort(),
+    ).toEqual(["v-accessToken", "v-oaSecretKey"]);
+  });
+
+  it("accepts optional string endpoints", () => {
+    expect(
+      zaloChannel.create({
+        ...Object.fromEntries([
+          ["appId", "x"],
+          ["oaSecretKey", "x"],
+          ["accessToken", "x"],
+        ]),
+        apiBase: "https://example.test",
+      }),
+    ).toBeInstanceOf(ZaloAdapter);
+  });
+
+  it.each(["appId", "oaSecretKey", "accessToken", "apiBase"])(
+    "throws invalid_config naming %s for a number",
+    (key) => {
+      const config = {
+        ...Object.fromEntries([
+          ["appId", "x"],
+          ["oaSecretKey", "x"],
+          ["accessToken", "x"],
+        ]),
+        [key]: 5,
+      };
+      try {
+        zaloChannel.create(config);
+        throw new Error("expected a throw");
+      } catch (err) {
+        expect(err).toBeInstanceOf(ConfigurationError);
+        expect((err as ConfigurationError).code).toBe("invalid_config");
+        expect((err as ConfigurationError).message).toContain(key);
+      }
+    },
+  );
 });

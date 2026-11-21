@@ -14,7 +14,7 @@ import { ZaloAdapter } from "@theokit/gateway-zalo";
 const adapter = new ZaloAdapter({
   appId: process.env.ZALO_APP_ID!,
   oaSecretKey: process.env.ZALO_OA_SECRET_KEY!,
-  accessToken: process.env.ZALO_OA_ACCESS_TOKEN!,
+  accessToken: process.env.ZALO_ACCESS_TOKEN!,
 });
 const runner = new GatewayRunner({ adapters: [adapter], handler: async (_e, ctx) => ctx.reply("hello") });
 await runner.start();
@@ -27,10 +27,12 @@ response.status(answer.status).end();
 ## Webhook channel
 
 `zaloChannel` describes the package as data: `transport: "webhook"`, config keys `appId`,
-`oaSecretKey` and `accessToken` (env `ZALO_APP_ID`, `ZALO_OA_SECRET_KEY`, `ZALO_OA_ACCESS_TOKEN`).
+`oaSecretKey` and `accessToken` (env `ZALO_APP_ID`, `ZALO_OA_SECRET_KEY`, `ZALO_ACCESS_TOKEN`).
 Its `webhook.verify` checks the `X-ZEvent-Signature` header and `webhook.ingest` dispatches the
 event, so `createWebhookHandler` from `@theokit/gateway` serves the route over Fetch
 (`POST /webhooks/zalo`): 401 for a bad signature, 503 when no handler is subscribed.
+
+With `configFromEnv(descriptor, process.env, "APP_")` the required values are read from `APP_ZALO_*`; secrets (`appSecret`-style keys and tokens) are returned in `.secrets` for log masking. Optional endpoint overrides: `ZALO_API_BASE` (optional `apiBase`). A value of the wrong type makes `create` throw `ConfigurationError` with code `invalid_config` naming the key.
 
 ## Behaviour
 
