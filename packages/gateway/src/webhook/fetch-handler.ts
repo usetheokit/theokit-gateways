@@ -140,10 +140,8 @@ export function createWebhookHandler(
     const platform = channel.descriptor.platform;
     if (!options.isStarted(platform)) return plain(503);
     const webhook = channel.descriptor.webhook as ChannelWebhook<BasePlatformAdapter>;
-    const refused = refuseMethod(webhook, request);
+    const refused = refuseEarly(webhook, channel.adapter, request);
     if (refused !== undefined) return refused;
-    const early = precheckAnswer(webhook, channel.adapter, request);
-    if (early !== undefined) return early;
     const rawBody = await readBody(request, max);
     if (typeof rawBody !== "string") return rawBody;
     try {
@@ -158,6 +156,15 @@ export function createWebhookHandler(
       return plain(500);
     }
   };
+}
+
+/** The method check, then the descriptor's `precheck`; both run before the body is read. */
+function refuseEarly(
+  webhook: ChannelWebhook<BasePlatformAdapter>,
+  adapter: BasePlatformAdapter,
+  request: Request,
+): Response | undefined {
+  return refuseMethod(webhook, request) ?? precheckAnswer(webhook, adapter, request);
 }
 
 function precheckAnswer(
