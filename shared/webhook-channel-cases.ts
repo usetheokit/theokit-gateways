@@ -139,8 +139,9 @@ function envBindingCases(t: WebhookChannelTools, spec: WebhookChannelSpec): void
 
     t.it("collects only secret values", () => {
       const all = { ...env, ...Object.fromEntries(optional.map((key) => [envOf(key), ENDPOINT])) };
-      const secrets = [...t.configFromEnv(descriptor, all, "APP_").secrets].sort();
-      t.expect(secrets).toEqual(spec.secrets.map((key) => `v-${key}`).sort());
+      const byName = (a: string, b: string) => a.localeCompare(b);
+      const secrets = [...t.configFromEnv(descriptor, all, "APP_").secrets].sort(byName);
+      t.expect(secrets).toEqual(spec.secrets.map((key) => `v-${key}`).sort(byName));
     });
 
     t.it("accepts optional string endpoints", () => {
