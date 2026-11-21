@@ -1,8 +1,8 @@
-import { createWebhookHandler } from "@theokit/gateway";
 import type { MessageEvent } from "@theokit/gateway";
+import { createWebhookHandler } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
-import { YuanbaoAdapter } from "../src/adapter.js";
+import type { YuanbaoAdapter } from "../src/adapter.js";
 import { yuanbaoChannel } from "../src/channel.js";
 import { computeYuanbaoSignature } from "../src/signature.js";
 

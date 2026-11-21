@@ -1,5 +1,5 @@
-import { createWebhookHandler } from "@theokit/gateway";
 import type { MessageEvent } from "@theokit/gateway";
+import { createWebhookHandler } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 import { GoogleChatAdapter } from "../src/adapter.js";

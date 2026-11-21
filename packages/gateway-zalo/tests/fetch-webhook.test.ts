@@ -1,8 +1,8 @@
-import { createWebhookHandler } from "@theokit/gateway";
 import type { MessageEvent } from "@theokit/gateway";
+import { createWebhookHandler } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
-import { ZaloAdapter } from "../src/adapter.js";
+import type { ZaloAdapter } from "../src/adapter.js";
 import { zaloChannel } from "../src/channel.js";
 import { computeZaloSignature } from "../src/signature.js";
 

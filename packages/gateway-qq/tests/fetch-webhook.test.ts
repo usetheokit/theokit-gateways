@@ -1,8 +1,8 @@
-import { createWebhookHandler } from "@theokit/gateway";
 import type { MessageEvent } from "@theokit/gateway";
+import { createWebhookHandler } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
-import { QQAdapter } from "../src/adapter.js";
+import type { QQAdapter } from "../src/adapter.js";
 import { qqChannel } from "../src/channel.js";
 import { signQQ } from "../src/signature.js";
 
