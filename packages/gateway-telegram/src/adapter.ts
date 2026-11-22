@@ -57,6 +57,11 @@ export interface TelegramAdapterOptions {
    * Default false (today's behaviour).
    */
   readonly requireMention?: boolean;
+  /**
+   * Bot API root, for a self-hosted Bot API server or a fake one in tests. Default
+   * `"https://api.telegram.org"`. Voice-note downloads use the same root. A trailing slash is ignored.
+   */
+  readonly apiBase?: string;
 }
 
 function isObj(v: unknown): v is Record<string, unknown> {
@@ -96,13 +101,18 @@ export class TelegramAdapter extends BasePlatformAdapter {
   private handler?: (event: GatewayMessageEvent) => Promise<void>;
   private readonly inbound: "polling" | "webhook";
   private readonly requireMention: boolean;
+  private readonly apiBase: string | undefined;
   private warnedNoIdentity = false;
   private connected = false;
   private startPromise?: Promise<void>;
 
   constructor(opts: TelegramAdapterOptions) {
     super();
-    this.bot = new Bot(opts.token);
+    this.apiBase = opts.apiBase === undefined ? undefined : opts.apiBase.replace(/\/+$/, "");
+    this.bot = new Bot(
+      opts.token,
+      this.apiBase === undefined ? undefined : { client: { apiRoot: this.apiBase } },
+    );
     this.allowedUsers = new Set(opts.allowedUsers ?? []);
     this.inbound = opts.inbound ?? "polling";
     this.requireMention = opts.requireMention === true;
@@ -351,7 +361,7 @@ export class TelegramAdapter extends BasePlatformAdapter {
     event: TelegramMessageEvent,
   ): Promise<TelegramMessageEvent> {
     if (ctx.message?.voice === undefined) return event;
-    const read = await readVoice(ctx, this.bot.token);
+    const read = await readVoice(ctx, this.bot.token, undefined, this.apiBase);
     if ("audio" in read) return { ...event, audio: read.audio };
     process.stderr.write(`[telegram] voice not read: ${read.reason}\n`);
     return event;
