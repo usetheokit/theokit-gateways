@@ -6,8 +6,11 @@ export {
   BasePlatformAdapter,
   type OutboundAttachment,
   type OutboundMessage,
+  type SendError,
+  type SendErrorCode,
   type SendResult,
 } from "./adapter/base.js";
+export { sendErrorFromHttp } from "./adapter/send-error.js";
 export {
   WeixinAdapterBase,
   type WeixinAdapterConfig,
@@ -16,6 +19,19 @@ export {
   type WeixinWebhookAnswer,
 } from "./adapter/weixin-base.js";
 export { parseFlatXml } from "./adapter/weixin-xml.js";
+// A JWKS key-set cache and RS256 JWT signature verification (claims stay with the caller).
+export {
+  type DecodedJwt,
+  decodeJwt,
+  type JwksKeySet,
+  type JwksKeySetOptions,
+  type JwksLookup,
+  jwksKeySet,
+  type VerifyJwtResult,
+  verifyRs256Jwt,
+} from "./auth/jwks.js";
+export type { FetchedToken, TokenCache, TokenCacheOptions } from "./auth/token-cache.js";
+export { createTokenCache } from "./auth/token-cache.js";
 export {
   type ChannelConfigInput,
   type ChannelConfigReaders,
@@ -40,6 +56,7 @@ export {
   type CreateChannelsResult,
   createChannels,
 } from "./channel/create-channels.js";
+export { refuseUnsupportedAttachments } from "./delivery/attachments.js";
 // Delivery
 export {
   type DeliveryRequest,
@@ -196,3 +213,10 @@ export {
   rawBodyCapture,
 } from "./webhook/express-server.js";
 export { createWebhookHandler, type WebhookHandlerOptions } from "./webhook/fetch-handler.js";
+export {
+  type DigestEncoding,
+  safeEqualString,
+  type VerifyHmacOptions,
+  verifyDigest,
+  verifyHmac,
+} from "./webhook/verify-signature.js";

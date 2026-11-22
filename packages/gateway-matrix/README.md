@@ -97,12 +97,12 @@ await adapter.sendMessage({
 
 Aliases are resolved + cached on first use. If the admin renames an alias mid-process, sends to the cached value fail (rare — restart resolves).
 
-## What's NOT supported in v0.1
+## What's NOT supported yet
 
 | Feature | Status | Workaround |
 |---|---|---|
-| E2EE rooms | Refused with warn stderr (D418) | Use unencrypted rooms; E2EE in v0.2 |
-| Threads (MSC4140) | Deferred to v0.2 (D417) | All replies land at room root |
+| E2EE rooms | Refused with warn stderr (D418) | Use unencrypted rooms; E2EE not yet supported |
+| Threads (MSC4140) | Deferred (D417) | All replies land at room root |
 | Reactions / redactions | Inbound preserved via `event.matrix.raw` | Outbound: `adapter.getClient().sendEvent(...)` |
 | Media (image/file/audio) | Inbound delivered with empty `text` | Read `event.matrix.raw.getContent()` for the file URL |
 | Sync token persistence | Process-local | Restart re-syncs (mitigated by 60s freshness filter) |

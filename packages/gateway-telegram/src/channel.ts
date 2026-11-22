@@ -57,6 +57,14 @@ function readRequireMention(config: Readonly<Record<string, unknown>>): boolean 
   return value;
 }
 
+function readApiBase(config: Readonly<Record<string, unknown>>): string | undefined {
+  const value = config.apiBase;
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string" || value.length === 0)
+    throw invalid("apiBase", "a non-empty URL string");
+  return value;
+}
+
 /** One configuration field, shaped like the core's `ChannelConfigField` (typed locally, D4). */
 interface ConfigField {
   readonly key: string;
@@ -80,6 +88,14 @@ const CONFIG: ReadonlyArray<ConfigField> = [
     required: false,
     secret: false,
     description: "Telegram user ids allowed to reach the handler; absent or empty allows everyone.",
+  },
+  {
+    key: "apiBase",
+    env: "TELEGRAM_API_BASE",
+    required: false,
+    secret: false,
+    description:
+      "Bot API root, for a self-hosted Bot API server; default https://api.telegram.org.",
   },
   {
     key: "requireMention",
@@ -107,8 +123,10 @@ export const telegramChannel = {
     const token = readToken(config);
     const allowedUsers = readAllowedUsers(config);
     const requireMention = readRequireMention(config);
+    const apiBase = readApiBase(config);
     return new TelegramAdapter({
       token,
+      ...(apiBase === undefined ? {} : { apiBase }),
       ...(allowedUsers === undefined ? {} : { allowedUsers }),
       ...(requireMention === undefined ? {} : { requireMention }),
     });

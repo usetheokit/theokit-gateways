@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-
+import type { OutboundMessage } from "../../src/adapter/base.js";
 import type { MessageEvent } from "../../src/types/message-event.js";
 import { MockAdapter } from "./mock-adapter.js";
 
@@ -80,5 +80,56 @@ describe("BasePlatformAdapter (T1.2)", () => {
     const r = await a.react("c", "1", "👀");
     expect(r.ok).toBe(false);
     expect(r.error?.code).toBe("react_unsupported");
+  });
+});
+
+describe("refuseAttachments", () => {
+  class Probe extends MockAdapter {
+    constructor(override readonly supportsAttachments: boolean) {
+      super();
+    }
+    check(attachments: unknown) {
+      return this.refuseAttachments({
+        channel: { id: "c" },
+        text: "hi",
+        attachments,
+      } as unknown as OutboundMessage);
+    }
+  }
+  const one = [{ kind: "image", data: new Uint8Array(1), mimeType: "image/png" }];
+
+  it("refuses attachments when unsupported, passes absent, null and empty", () => {
+    const a = new Probe(false);
+    expect(a.check(one)).toEqual({
+      ok: false,
+      error: {
+        code: "attachments_unsupported",
+        message: "telegram adapter cannot send attachments",
+      },
+    });
+    expect(a.check(undefined)).toBeUndefined();
+    expect(a.check(null)).toBeUndefined();
+    expect(a.check([])).toBeUndefined();
+  });
+
+  it("refuses a non-array value from a JavaScript caller", () => {
+    expect(new Probe(false).check({})).toMatchObject({
+      error: { code: "attachments_unsupported" },
+    });
+  });
+
+  it("passes when attachments are supported", () => {
+    expect(new Probe(true).check(one)).toBeUndefined();
+  });
+
+  it("is exported from the package entry", async () => {
+    const mod = await import("../../src/index.js");
+    expect(
+      mod.refuseUnsupportedAttachments(new Probe(false), {
+        channel: { id: "c" },
+        text: "x",
+        attachments: one,
+      } as unknown as OutboundMessage)?.ok,
+    ).toBe(false);
   });
 });

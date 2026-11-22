@@ -2,7 +2,7 @@
 
 Multi-platform messaging gateway for `@theokit/sdk`. Transport-agnostic primitives — adapters live in separate peer-dep packages.
 
-> **Status: 0.1.0 — pre-release.** Breaking changes allowed within the `0.x` line per semver.
+> **Status: 0.x, pre-1.0.** Breaking changes allowed within the `0.x` line per semver.
 
 ## Install
 
@@ -144,6 +144,8 @@ if (sent.error?.code === "attachments_unsupported") {
 | `attachments_unsupported` | the adapter cannot send attachments, the outbound is an edit, or (Telegram) an attachment's `kind` is neither `image` nor `audio` |
 | `invalid_attachment` | Telegram only: `attachments` is not a list, holds more than 10 attachments, an entry has no bytes, an image is over 10 MiB, or an audio clip is over 50 MiB or its `mediaType` is not `audio/*` |
 
+An adapter that is called directly (not through `GatewayRunner` or `DeliveryRouter`) refuses attachments it cannot send with `this.refuseAttachments(out)`, a protected helper on `BasePlatformAdapter` that returns `attachments_unsupported` or `undefined`. The function behind it, `refuseUnsupportedAttachments(adapter, out)`, is exported from `@theokit/gateway`.
+
 ## Voice notes and spoken replies
 
 An inbound event may carry `audio`, an `InboundAudio`: the voice note's bytes (`data`, a
@@ -269,6 +271,31 @@ const { edit, attachments, typing, reactions, threads, maxMessageChars } = adapt
 
 The type is exported as `AdapterCapabilities`.
 
+## Send error codes
+
+A failed `SendResult` carries `error: { code, message, retryAfterMs?, platformCode? }`. `code` is a
+`SendErrorCode`, or a platform-specific string an adapter has not mapped yet.
+
+| Code | Used when |
+| --- | --- |
+| `empty_text` | core: the message has no text |
+| `not_connected` | core: the adapter is not connected |
+| `invalid_channel` | core: the channel is not valid for the adapter |
+| `attachments_unsupported` | core: attachments sent to an adapter that cannot send them |
+| `rate_limit` | the platform throttled the send (HTTP 429); `retryAfterMs` holds the wait |
+| `permission_denied` | the credential may not post here (HTTP 403) |
+| `auth_failed` | the credential was rejected (HTTP 401) |
+| `timeout` | the request timed out (HTTP 408) |
+| `server_error` | the platform failed (HTTP 5xx) |
+| `network_error` | the request got no answer |
+| `platform_error` | any other platform refusal |
+
+`sendErrorFromHttp(status, message, { retryAfter, platformCode, now })` builds the `SendResult`
+for an HTTP status; `retryAfter` is a `Retry-After` value in seconds or an HTTP date. It throws
+`RangeError` when `status` is not an integer in 100..599. Adapters still return their own codes
+today (`rate_limited`, `no_permission`, `<platform>_http_error`); moving them onto the shared
+codes is follow-up work.
+
 ## Chat commands
 
 `commandHook` is one `pre_inbound` hook for many commands. It recognises a command behind one leading mention (`<@U123> /help`, `@bot /help`) and with Telegram's `@bot` suffix (`/help@my_bot`), matches the name exactly (`/new chat` is `/new` with arg `chat`; `/newer` passes through), and answers `/help` with `helpText(commands)`.
@@ -359,6 +386,17 @@ keeps one file per key under `dir` (mode 0600, written to a temp file and rename
 `[A-Za-z0-9._:-]+`, otherwise `set` and `get` throw `GatewayConfigurationError` with code
 `invalid_credential_key`. `get` returns `undefined` for a missing key; any other read error throws
 code `credential_store_unreadable`. `@theokit/gateway-x` uses it to keep a rotated refresh token.
+
+## Caching an expiring access token
+
+`createTokenCache({ fetchToken })` holds one access token. `get()` returns the cached token, or
+runs `fetchToken` once and gives the same result to every concurrent caller. A token is refreshed
+`marginMs` (default 60 000) before it expires; its lifetime is `expiresInS` from `fetchToken`, or
+`defaultTtlS` (default 7200) when that is absent or not positive. `get({ force: true })` skips the
+cache but still joins a fetch already in flight. `clear()` forgets the token, and a fetch that was
+running at that moment does not store its result. A failed fetch rejects every waiting caller and
+is not cached. The signal passed to `get` reaches `fetchToken` only for the caller that starts the
+fetch. `now` replaces the clock in tests.
 
 ## Architecture (5 pieces)
 
@@ -647,6 +685,46 @@ assuming this one's.
 
 Adapters whose transport is a long-lived connection rather than a webhook own that transport and do
 not go through this seam.
+
+## Verifying webhook signatures
+
+`verifyHmac`, `verifyDigest` and `safeEqualString` do the constant-time
+signature compare that webhook adapters otherwise hand-write. They return
+`false` (never throw) for a missing, empty, malformed or wrong-prefix
+signature; an empty `secrets` value throws `RangeError`.
+
+```ts
+import { verifyHmac } from "@theokit/gateway";
+
+// WhatsApp-style: `X-Hub-Signature-256: sha256=<hex>`, over the raw body.
+const ok = verifyHmac({
+  algorithm: "sha256",
+  secrets: [currentSecret, previousSecret], // accepts either during rotation
+  message: rawBody,
+  signature: req.headers["x-hub-signature-256"] as string | undefined,
+  encoding: "hex",
+  prefix: "sha256=",
+  caseInsensitive: true,
+});
+```
+
+Timestamp windows and field sorting (WeChat, WeCom) stay with the caller; pass
+the built message to `verifyDigest` for keyless SHA-1/SHA-256 schemes.
+
+## Verifying a JWT-signed request
+
+Platforms that sign requests with an RS256 JWT can share one key-set cache and verifier:
+
+```ts
+import { jwksKeySet, verifyRs256Jwt } from "@theokit/gateway";
+
+const keys = jwksKeySet({ url: "https://www.googleapis.com/oauth2/v3/certs" });
+const result = await verifyRs256Jwt(bearerToken, keys);
+if (!result.ok) throw new Error(result.reason);
+// result.payload is signature-verified; check issuer, audience and expiry yourself.
+```
+
+The cache honours `Cache-Control: max-age`, shares one in-flight read, refetches for an unknown `kid` at most once per `unknownKidRefetchFloorMs` (default 60 s) and, by default, serves a stale key while one refresh runs (`staleWhileRevalidate`). `reason` is `malformed`, `unsupported_alg` (only `RS256` is accepted), `unknown_kid`, `keys_unavailable` or `bad_signature`. `decodeJwt` splits a token without verifying it.
 
 ## Design principles
 

@@ -2,7 +2,7 @@
 
 Discord platform adapter for `@theokit/gateway`. Wraps [discord.js](https://discord.js.org/) in the `BasePlatformAdapter` contract.
 
-> **Status: 0.1.0 — pre-release.**
+> **Status: 0.x, pre-1.0.**
 
 
 ## How inbound arrives
@@ -76,7 +76,7 @@ array of numbers or a comma-separated string of digits, and `requireMention` as 
 `"true"`/`"false"`. Any other shape throws `GatewayConfigurationError` coded `invalid_config`,
 naming the key. `create` makes no network call.
 
-## Limitations (v0.1)
+## Limitations
 
 - **Text-trigger commands only.** Proper Discord slash commands (registered via Application Commands API) are out of scope — use `event.text.startsWith("!cmd")` for now.
 - **WebSocket only** (ADR D179). No webhook-based bot mode.
