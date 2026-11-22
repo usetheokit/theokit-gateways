@@ -134,6 +134,7 @@ export {
 } from "./text/chunk.js";
 export { toDialect } from "./text/dialect.js";
 export { type FenceRegion, scanFences } from "./text/fence.js";
+export { refuseUnsupportedAttachments } from "./delivery/attachments.js";
 export { SeenIds } from "./text/seen-ids.js";
 export { type SplitKeepingRowsOptions, splitKeepingRows } from "./text/split-rows.js";
 // Types
