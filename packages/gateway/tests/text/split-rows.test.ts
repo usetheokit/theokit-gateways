@@ -48,3 +48,20 @@ describe("splitKeepingRows unit option", () => {
     expect(() => splitKeepingRows("a👨‍👩‍👧‍👦b", 2, { unit: "codepoint" })).toThrow(RangeError);
   });
 });
+
+describe("splitKeepingRows row fit boundary", () => {
+  it("moves a row of exactly the limit whole, and cuts one unit longer by length", () => {
+    expect(splitKeepingRows("ab\n|cdefg|\nxyz", 7)).toEqual(["ab\n", "|cdefg|", "\nxyz"]);
+    expect(splitKeepingRows("ab\n|cdefgh|\nxyz", 7)).toEqual(["ab\n|cde", "fgh|\nxy", "z"]);
+  });
+
+  it("counts an astral row in code points, not UTF-16 units", () => {
+    const text = "ab\n|😀😀|\nxyz";
+    expect(splitKeepingRows(text, 6, { unit: "codepoint" })[1]).toBe("|😀😀|\nx");
+    expect(splitKeepingRows("ab\n|😀😀😀😀|\nxyz", 5, { unit: "codepoint" })[0]).toBe("ab\n|😀");
+  });
+
+  it("ends a row at CRLF", () => {
+    expect(splitKeepingRows("ab\r\n|cdefg|\r\nxyz", 7)).toEqual(["ab\r\n", "|cdefg|", "\r\nxyz"]);
+  });
+});

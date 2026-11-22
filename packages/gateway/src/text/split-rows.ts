@@ -53,6 +53,26 @@ function advance(text: string, from: number, count: number, codepoint: boolean):
   return at;
 }
 
+/** True when the row from `lineStart` (through `cut`) ends within `partLimit` units; measures only that row. */
+function rowFits(
+  text: string,
+  lineStart: number,
+  cut: number,
+  partLimit: number,
+  codepoint: boolean,
+): boolean {
+  // A fitting row ends within 2 * partLimit UTF-16 units (code-point mode) or partLimit units.
+  const cap = lineStart + (codepoint ? 2 * partLimit : partLimit);
+  const end = lineEndFrom(text, cut, cap);
+  if (end > cap) return false;
+  if (!codepoint) return end - lineStart <= partLimit;
+  let units = 0;
+  for (let at = lineStart; at < end; units += 1) {
+    at += (text.codePointAt(at) ?? 0) > 0xffff ? 2 : 1;
+  }
+  return units <= partLimit;
+}
+
 /**
  * The cut to use instead of `cut`: the start of the table row `cut` falls inside, when that row
  * starts after `partStart` and fits in `partLimit` without its line ending; `cut` otherwise. A row
@@ -68,8 +88,7 @@ function rowSafeCut(
   const lineStart = lineStartBefore(text, cut, partStart);
   if (lineStart <= partStart || lineStart === cut) return cut;
   if (isLineEnd(text[cut]) || !startsTableRow(text, lineStart)) return cut;
-  const bound = advance(text, lineStart, partLimit, codepoint);
-  return lineEndFrom(text, cut, bound) <= bound ? lineStart : cut;
+  return rowFits(text, lineStart, cut, partLimit, codepoint) ? lineStart : cut;
 }
 
 /**
