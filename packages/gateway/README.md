@@ -88,6 +88,10 @@ presenter per turn; it keeps state between `present()` calls.
   does with `format`; none was observed on a real client.
 - The presenter never splits. Each adapter's `sendMessage` splits a long message at its own
   platform's limit, as it always has.
+- `splitKeepingRows(text, partLimit, { unit })` cuts at grapheme boundaries and keeps table rows
+  whole. `partLimit` counts UTF-16 units by default; `unit: "codepoint"` counts code points (it
+  needs a positive integer, and throws `RangeError` for a single grapheme longer than the limit).
+  Any other `unit` throws `RangeError`.
 - `channelRendering` throws a `RangeError` for a platform it does not know, rather than letting
   the presenter fall back to markdown.
 - `@theokit/presenter` is your dependency, not this package's: `@theokit/gateway` does not depend
