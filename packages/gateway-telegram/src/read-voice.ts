@@ -2,7 +2,7 @@
  * Read the audio of a polled voice note (B-715, ADR D1).
  *
  * Telegram sends a voice note as a file id. The bytes take two requests: `getFile` for the file's
- * path, then a download from `https://api.telegram.org/file/bot<token>/<path>`. Only the polled
+ * path, then a download from `<apiBase>/file/bot<token>/<path>` (`https://api.telegram.org` by default). Only the polled
  * path holds the token, so the webhook `parseInbound` does not read voice notes.
  *
  * A failure is returned as a reason, never thrown: the caller delivers the event without audio and
@@ -18,6 +18,8 @@ const MAX_VOICE_BYTES = 20 * 1024 * 1024;
 
 /** How long the whole read, `getFile` and download, may take before it is abandoned. */
 const READ_TIMEOUT_MS = 30_000;
+
+const DEFAULT_API_BASE = "https://api.telegram.org";
 
 const DEFAULT_MEDIA_TYPE = "audio/ogg";
 
@@ -48,6 +50,7 @@ export async function readVoice(
   ctx: Context,
   token: string,
   fetchImpl: FetchLike = fetch,
+  apiBase = DEFAULT_API_BASE,
 ): Promise<VoiceRead> {
   const voice = (ctx.message?.voice ?? {}) as VoiceFields;
   if (typeof voice.file_id !== "string") return { reason: "no_file_id" };
@@ -61,7 +64,7 @@ export async function readVoice(
   try {
     const path = await filePath(ctx, controller.signal);
     if (typeof path !== "string") return path;
-    const url = `https://api.telegram.org/file/bot${token}/${path}`;
+    const url = `${apiBase}/file/bot${token}/${path}`;
     const bytes = await download(url, fetchImpl, controller.signal);
     if (!(bytes instanceof Uint8Array)) return bytes;
     return { audio: { data: bytes, ...voiceDetails(voice) } };
