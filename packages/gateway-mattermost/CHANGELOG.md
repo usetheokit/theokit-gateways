@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+### Patch Changes
+
+- 8585427: README status lines say "0.x, pre-1.0" instead of a hard-coded version.
+
 ## 0.4.0
 
 ### Minor Changes
