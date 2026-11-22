@@ -5,14 +5,18 @@
  * would, and the verifier refuses it as a bad signature whichever listed `kid` it names.
  */
 
-import { createPublicKey, type JsonWebKey } from "node:crypto";
+import { createPublicKey, type JsonWebKey, type KeyObject } from "node:crypto";
 
+import { verifyRs256Jwt } from "@theokit/gateway";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { verifiesRs256 } from "../src/rs256-signature.js";
 import { acceptingValidatorModule, activityRequest, TENANT } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
 import { verifierUnderTest } from "./helpers/verifier-under-test.js";
+
+async function verifiesRs256(rawToken: string, publicKey: KeyObject): Promise<boolean> {
+  const result = await verifyRs256Jwt(rawToken, { lookup: async () => publicKey });
+  return result.ok;
+}
 
 const BAD_SIGNATURE = "signature does not verify";
 
@@ -53,10 +57,12 @@ describe("a forged token from the key server", () => {
     const { keys: tenantJwks } = (await tenantSet.json()) as { keys: JsonWebKey[] };
     const jwks = [...server.publishedJwks(), ...tenantJwks] as JsonWebKey[];
 
-    const verified = jwks.map((jwk) => {
-      const token = server.forgeToken({}, { kid: String(jwk.kid) });
-      return verifiesRs256(token, createPublicKey({ key: jwk, format: "jwk" }));
-    });
+    const verified = await Promise.all(
+      jwks.map(async (jwk) => {
+        const token = server.forgeToken({}, { kid: String(jwk.kid) });
+        return verifiesRs256(token, createPublicKey({ key: jwk, format: "jwk" }));
+      }),
+    );
 
     // Three Bot Framework keys and the tenant's own.
     expect(verified).toEqual([false, false, false, false]);
