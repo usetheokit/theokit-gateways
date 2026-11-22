@@ -174,7 +174,7 @@ If `botUserId` is unset, the mention guard is disabled (all messages dispatch).
 
 ## Event-type filter (EC-4 absorbed)
 
-LINE webhook delivers 9 event types: `message`, `follow`, `unfollow`, `join`, `leave`, `postback`, `beacon`, `accountLink`, `things`. The adapter dispatches **only `message` events of type `text`**. Other event types — including image/audio/video/sticker/location/postback — are filtered before reaching your handler in v0.1. No TypeErrors on unexpected events.
+LINE webhook delivers 9 event types: `message`, `follow`, `unfollow`, `join`, `leave`, `postback`, `beacon`, `accountLink`, `things`. The adapter dispatches **only `message` events of type `text`**. Other event types — including image/audio/video/sticker/location/postback — are filtered before reaching your handler. No TypeErrors on unexpected events.
 
 ## Channel-type mapping (D410)
 
@@ -190,15 +190,15 @@ LINE webhook delivers 9 event types: `message`, `follow`, `unfollow`, `join`, `l
 
 LINE caps text messages at 5000 chars. The adapter splits longer text into surrogate-safe chunks (grapheme-cluster boundaries via `Intl.Segmenter`), each ≤5000 chars. Each chunk is one billable message (Push API after free tier).
 
-## What's NOT supported in v0.1
+## What's NOT supported yet
 
 | Feature | Status | Workaround |
 |---|---|---|
-| Flex Message | Deferred to v0.2 (D412) | `adapter.getClient().pushMessage(userId, flexMessage)` |
-| Carousel template | Deferred to v0.2 (D412) | Same |
+| Flex Message | Deferred (D412) | `adapter.getClient().pushMessage(userId, flexMessage)` |
+| Carousel template | Deferred (D412) | Same |
 | Image/audio/video/sticker inbound | Filtered (EC-4) | Read via `event.line.raw` if needed |
-| Quick replies | Deferred to v0.2 | — |
-| Rich menu | Deferred to v0.2 | — |
+| Quick replies | Deferred | — |
+| Rich menu | Deferred | — |
 
 ## ADRs
 
