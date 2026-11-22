@@ -2,7 +2,7 @@
 
 Multi-platform messaging gateway for `@theokit/sdk`. Transport-agnostic primitives — adapters live in separate peer-dep packages.
 
-> **Status: 0.1.0 — pre-release.** Breaking changes allowed within the `0.x` line per semver.
+> **Status: 0.x, pre-1.0.** Breaking changes allowed within the `0.x` line per semver.
 
 ## Install
 
