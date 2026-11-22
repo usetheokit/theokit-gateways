@@ -9,7 +9,13 @@ function setup(expiresInS?: number) {
     return { value: `tok${n}`, ...(expiresInS === undefined ? {} : { expiresInS }) };
   });
   const cache = createTokenCache({ fetchToken, now: () => t });
-  return { cache, fetchToken, at: (s: number) => void (t = s * 1000) };
+  return {
+    cache,
+    fetchToken,
+    at: (s: number) => {
+      t = s * 1000;
+    },
+  };
 }
 
 describe("createTokenCache", () => {
