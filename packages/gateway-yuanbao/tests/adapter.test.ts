@@ -91,7 +91,38 @@ describe("YuanbaoAdapter", () => {
     );
     await refused.connect();
     const r = await refused.sendMessage({ channel: { id: "u1", type: "dm" }, text: "y" });
-    expect(r).toMatchObject({ ok: false, error: { code: "yuanbao_send_failed" } });
+    expect(r).toMatchObject({
+      ok: false,
+      error: { code: "platform_error", platformCode: "7" },
+    });
+  });
+
+  it("maps HTTP 429 to rate_limit, and a rejected fetch to network_error", async () => {
+    const token = {
+      status: 200,
+      text: async () => JSON.stringify({ code: 0, data: { access_token: "AT" } }),
+    };
+    const out = { channel: { id: "u1", type: "dm" as const }, text: "y" };
+    const limited = started(async (url) =>
+      url.endsWith("/auth/token")
+        ? token
+        : {
+            status: 429,
+            text: async () => "{}",
+            headers: { get: (n) => (n === "retry-after" ? "4" : null) },
+          },
+    );
+    await limited.connect();
+    expect(await limited.sendMessage(out)).toMatchObject({
+      ok: false,
+      error: { code: "rate_limit", retryAfterMs: 4000 },
+    });
+    const down = started(async (url) => {
+      if (url.endsWith("/auth/token")) return token;
+      throw new Error("boom");
+    });
+    await down.connect();
+    expect(await down.sendMessage(out)).toMatchObject({ error: { code: "network_error" } });
   });
 
   it("makes one token request for concurrent sends with an empty cache", async () => {

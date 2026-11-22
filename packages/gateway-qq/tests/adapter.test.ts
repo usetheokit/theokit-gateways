@@ -97,7 +97,39 @@ describe("QQAdapter", () => {
     );
     await refused.connect();
     const r = await refused.sendMessage({ channel: { id: "u1", type: "dm" }, text: "y" });
-    expect(r).toMatchObject({ ok: false, error: { code: "qq_send_failed" } });
+    expect(r).toMatchObject({
+      ok: false,
+      error: { code: "platform_error", platformCode: "304003" },
+    });
+  });
+
+  it("maps HTTP 429 to rate_limit, and a rejected fetch to network_error", async () => {
+    const limited: QQFetch = async (url) =>
+      url.includes("getApp")
+        ? {
+            status: 200,
+            text: async () => JSON.stringify({ access_token: "AT", expires_in: "7200" }),
+          }
+        : {
+            status: 429,
+            text: async () => "{}",
+            headers: { get: (n) => (n === "retry-after" ? "3" : null) },
+          };
+    const a = started(limited);
+    await a.connect();
+    const out = { channel: { id: "u1", type: "dm" as const }, text: "y" };
+    expect(await a.sendMessage(out)).toMatchObject({
+      ok: false,
+      error: { code: "rate_limit", retryAfterMs: 3000 },
+    });
+    const down = started(async (url) => {
+      if (url.includes("getApp")) {
+        return { status: 200, text: async () => JSON.stringify({ access_token: "AT" }) };
+      }
+      throw new Error("boom");
+    });
+    await down.connect();
+    expect(await down.sendMessage(out)).toMatchObject({ error: { code: "network_error" } });
   });
 
   it("makes one token request for concurrent sends with an empty cache", async () => {
