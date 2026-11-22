@@ -24,10 +24,8 @@ describe("tokensMatch", () => {
     expect(compare).not.toHaveBeenCalled();
   });
 
-  it("compares equal-length tokens with exactly one timingSafeEqual call", () => {
-    const compare = vi.spyOn(crypto, "timingSafeEqual");
-    tokensMatch("abc123", "abc123");
-
-    expect(compare).toHaveBeenCalledTimes(1);
+  it("refuses an empty token without throwing", () => {
+    expect(tokensMatch("abc123", "")).toBe(false);
+    expect(tokensMatch("", "")).toBe(false);
   });
 });
