@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.2
+
+### Patch Changes
+
+- 3479b0d: Verify inbound tokens with the core `jwksKeySet` and `verifyRs256Jwt` instead of an own key-set cache and RS256 check. Both adapters now need `@theokit/gateway` >=0.26.0, which ships them.
+
 ## 0.8.1
 
 ### Patch Changes
