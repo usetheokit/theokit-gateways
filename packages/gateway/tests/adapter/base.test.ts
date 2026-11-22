@@ -3,9 +3,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-
-import type { MessageEvent } from "../../src/types/message-event.js";
 import type { OutboundMessage } from "../../src/adapter/base.js";
+import type { MessageEvent } from "../../src/types/message-event.js";
 import { MockAdapter } from "./mock-adapter.js";
 
 function ev(platform: "telegram" = "telegram"): MessageEvent {
