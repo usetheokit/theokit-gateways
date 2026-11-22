@@ -57,6 +57,8 @@ before relying on this.
 | `botUserId` | `BUZZ_BOT_USER_ID` | yes | no |
 | `reconnectDelayMs` | `BUZZ_RECONNECT_DELAY_MS` | no | no |
 
+`reconnectDelayMs` is the initial wait (default 2000 ms) before reconnecting a dropped socket. Each failed attempt doubles the wait, up to a cap of 30 s, and a socket that stayed open for 60 s starts over from the initial wait. `0` disables reconnecting. Earlier versions retried every 2 s indefinitely.
+
 ```ts
 import { configFromEnv, createChannels } from "@theokit/gateway";
 import { buzzChannel } from "@theokit/gateway-buzz";

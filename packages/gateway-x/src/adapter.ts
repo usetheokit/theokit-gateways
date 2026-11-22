@@ -14,11 +14,12 @@ import {
   type OutboundMessage,
   SeenIds,
   type SendResult,
+  sendErrorFromHttp,
   type XThreadTweet,
 } from "@theokit/gateway";
 
 import { XAccessPolicy } from "./allow.js";
-import { XApi, type XPage } from "./api.js";
+import { XApi, XApiError, XNetworkError, type XPage } from "./api.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import type { XAdapterOptions, XTweet, XUser } from "./types.js";
 
@@ -32,6 +33,18 @@ const MEMORY = 1000;
 /** Split `text` into posts of at most 280 characters, never inside a grapheme. @public */
 export function splitForX(text: string): string[] {
   return chunkByGrapheme(text, { limit: X_POST_LIMIT }).filter((part) => part !== "");
+}
+
+/** The failed `SendResult` for a thrown error: HTTP status, rejected fetch, or a malformed answer. */
+function failureOf(err: unknown): SendResult {
+  if (err instanceof XApiError) {
+    return sendErrorFromHttp(err.status, err.message, {
+      ...(err.retryAfter === undefined ? {} : { retryAfter: err.retryAfter }),
+      ...(err.platformCode === undefined ? {} : { platformCode: err.platformCode }),
+    });
+  }
+  const code = err instanceof XNetworkError ? "network_error" : "platform_error";
+  return { ok: false, error: { code, message: messageOf(err) } };
 }
 
 function messageOf(err: unknown): string {
@@ -285,7 +298,7 @@ export class XAdapter extends BasePlatformAdapter {
         target = messageId;
       }
     } catch (err) {
-      return { ok: false, error: { code: "x_send_failed", message: messageOf(err) } };
+      return failureOf(err);
     }
     return { ok: true, messageId };
   }
