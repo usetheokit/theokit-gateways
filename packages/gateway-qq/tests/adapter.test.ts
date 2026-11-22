@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { GatewayRunner } from "@theokit/gateway";
 import { afterEach, describe, expect, it } from "vitest";
-import { expectOneTokenRequestForConcurrentSends } from "../../../test-support/concurrent-token-sends.js";
+import { concurrentSendsOnEmptyCache } from "../../../test-support/concurrent-token-sends.js";
 import {
   QQ_MESSAGE_LIMIT,
   QQAdapter,
@@ -101,14 +101,11 @@ describe("QQAdapter", () => {
     expect(r).toMatchObject({ ok: false, error: { code: "qq_send_failed" } });
   });
 
-  it("makes one token request for concurrent sends with an empty cache", () =>
-    expectOneTokenRequestForConcurrentSends({
-      expect,
-      fakeFetch,
-      ok,
-      started,
-      isTokenRequest: (u) => u.includes("getAppAccessToken"),
-    }));
+  it("makes one token request for concurrent sends with an empty cache", async () => {
+    const { results, calls } = await concurrentSendsOnEmptyCache({ fakeFetch, ok, started });
+    expect(results.every((r) => r.ok)).toBe(true);
+    expect(calls.filter((c) => c.url.includes("getAppAccessToken"))).toHaveLength(1);
+  });
 
   it("refuses bad sends before any call", async () => {
     const { fetch, calls } = fakeFetch(ok);

@@ -1,6 +1,6 @@
 import { GatewayRunner } from "@theokit/gateway";
 import { afterEach, describe, expect, it } from "vitest";
-import { expectOneTokenRequestForConcurrentSends } from "../../../test-support/concurrent-token-sends.js";
+import { concurrentSendsOnEmptyCache } from "../../../test-support/concurrent-token-sends.js";
 import {
   computeYuanbaoSignature,
   splitForYuanbao,
@@ -95,14 +95,11 @@ describe("YuanbaoAdapter", () => {
     expect(r).toMatchObject({ ok: false, error: { code: "yuanbao_send_failed" } });
   });
 
-  it("makes one token request for concurrent sends with an empty cache", () =>
-    expectOneTokenRequestForConcurrentSends({
-      expect,
-      fakeFetch,
-      ok,
-      started,
-      isTokenRequest: (u) => u.endsWith("/auth/token"),
-    }));
+  it("makes one token request for concurrent sends with an empty cache", async () => {
+    const { results, calls } = await concurrentSendsOnEmptyCache({ fakeFetch, ok, started });
+    expect(results.every((r) => r.ok)).toBe(true);
+    expect(calls.filter((c) => c.url.endsWith("/auth/token"))).toHaveLength(1);
+  });
 
   it("refuses bad sends before any call", async () => {
     const { fetch, calls } = fakeFetch(ok);

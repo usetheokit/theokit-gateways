@@ -1,25 +1,24 @@
-interface Call {
-  url: string;
-}
-
 interface Sender {
   connect(): Promise<unknown>;
   sendMessage(out: { channel: { id: string; type: "dm" }; text: string }): Promise<{ ok: boolean }>;
 }
 
 /**
- * Two concurrent sends on an empty token cache must make one token request.
- * A token inside the refresh margin is never served from the cache, so the cache stays empty.
+ * Runs two concurrent sends on an empty token cache and returns what happened, so each adapter
+ * test keeps its own assertions. A token inside the refresh margin is never served from the
+ * cache, so the cache stays empty.
  */
-export async function expectOneTokenRequestForConcurrentSends(options: {
-  expect: (value: unknown) => { toBe(v: unknown): void; toHaveLength(n: number): void };
-  fakeFetch: (answer: (c: any) => unknown) => { fetch: unknown; calls: Call[] };
-  ok: (c: any) => unknown;
-  started: (fetch: any) => Sender;
-  isTokenRequest: (url: string) => boolean;
-}): Promise<void> {
+export async function concurrentSendsOnEmptyCache<C extends { url: string }, F>(options: {
+  fakeFetch: (answer: (c: C) => unknown) => { fetch: F; calls: C[] };
+  ok: (c: C) => unknown;
+  started: (fetch: F) => Sender;
+}): Promise<{ results: { ok: boolean }[]; calls: C[] }> {
   const { fetch, calls } = options.fakeFetch((c) => {
-    const answer = options.ok(c) as any;
+    const answer = options.ok(c) as {
+      access_token?: unknown;
+      expires_in?: unknown;
+      data?: { access_token?: unknown; expires_in?: unknown };
+    };
     if (answer.access_token) answer.expires_in = "1";
     if (answer.data?.access_token) answer.data.expires_in = 1;
     return answer;
@@ -29,6 +28,5 @@ export async function expectOneTokenRequestForConcurrentSends(options: {
   calls.length = 0;
   const out = { channel: { id: "u1", type: "dm" as const }, text: "hi" };
   const results = await Promise.all([a.sendMessage(out), a.sendMessage(out)]);
-  options.expect(results.every((r) => r.ok)).toBe(true);
-  options.expect(calls.filter((c) => options.isTokenRequest(c.url))).toHaveLength(1);
+  return { results, calls };
 }
