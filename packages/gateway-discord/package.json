@@ -42,7 +42,7 @@
     "test:mutation": "stryker run"
   },
   "peerDependencies": {
-    "@theokit/gateway": ">=0.26.0 <1.0.0",
+    "@theokit/gateway": ">=0.25.0 <1.0.0",
     "discord.js": "^14.16.0"
   },
   "devDependencies": {

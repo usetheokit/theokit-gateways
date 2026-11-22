@@ -399,17 +399,13 @@ function editPartsRefusal(partCount: number): SendResult {
   return { ok: false, error: { code: "empty_text", message: "text reduced to zero parts" } };
 }
 
+function rateLimitResult(err: RateLimitError): SendResult {
+  const retryAfterMs = Number.isFinite(err.retryAfter) ? { retryAfterMs: err.retryAfter } : {};
+  return { ok: false, error: { code: "rate_limit", message: err.message, ...retryAfterMs } };
+}
+
 function mapSendError(err: unknown): SendResult {
-  if (err instanceof RateLimitError) {
-    return {
-      ok: false,
-      error: {
-        code: "rate_limit",
-        message: err.message,
-        ...(Number.isFinite(err.retryAfter) ? { retryAfterMs: err.retryAfter } : {}),
-      },
-    };
-  }
+  if (err instanceof RateLimitError) return rateLimitResult(err);
   if (err instanceof DiscordAPIError) {
     const codeStr = String(err.code);
     if (codeStr === "50007") {
