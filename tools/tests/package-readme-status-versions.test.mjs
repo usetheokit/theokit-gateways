@@ -13,4 +13,10 @@ describe("package README status lines", () => {
     );
     expect(bad).toEqual([]);
   });
+
+  it.each(dirs)("%s labels no scope with a v0.N release tag", (dir) => {
+    const text = readFileSync(new URL(`${dir}/README.md`, root), "utf8");
+    const bad = text.split("\n").filter((l) => /\bv0\.\d+/.test(l));
+    expect(bad).toEqual([]);
+  });
 });
