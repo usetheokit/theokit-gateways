@@ -48,3 +48,25 @@ describe("splitKeepingRows unit option", () => {
     expect(() => splitKeepingRows("a👨‍👩‍👧‍👦b", 2, { unit: "codepoint" })).toThrow(RangeError);
   });
 });
+
+describe("splitKeepingRows row fit near the limit", () => {
+  it("keeps a row of supplementary characters whole when it fits in code points only", () => {
+    const row = `|${"😀".repeat(4)}|`;
+    const text = `ab\n${row}\nz`;
+    expect(splitKeepingRows(text, 6, { unit: "codepoint" })).toEqual(["ab\n", row, "\nz"]);
+  });
+
+  it("cuts a row longer than a part by length", () => {
+    const text = `ab\n|${"😀".repeat(4)}|\nz`;
+    expect(splitKeepingRows(text, 5, { unit: "codepoint" }).join("")).toBe(text);
+    expect(splitKeepingRows(text, 5, { unit: "codepoint" })[0]).toBe("ab\n|😀");
+  });
+
+  it("treats a lone CR as the row end", () => {
+    expect(splitKeepingRows("intro\r| a | b |\r| c |", 12)).toEqual([
+      "intro\r",
+      "| a | b |\r",
+      "| c |",
+    ]);
+  });
+});

@@ -68,8 +68,13 @@ function rowSafeCut(
   const lineStart = lineStartBefore(text, cut, partStart);
   if (lineStart <= partStart || lineStart === cut) return cut;
   if (isLineEnd(text[cut]) || !startsTableRow(text, lineStart)) return cut;
-  const bound = advance(text, lineStart, partLimit, codepoint);
-  return lineEndFrom(text, cut, bound) <= bound ? lineStart : cut;
+  // A row's code-point count is at most its UTF-16 length and at least half of it, so most rows are
+  // decided without walking `partLimit` code points from the row start.
+  const widest = lineStart + (codepoint ? 2 * partLimit : partLimit);
+  const end = lineEndFrom(text, cut, widest);
+  if (end - lineStart <= partLimit) return lineStart;
+  if (!codepoint || end > widest) return cut;
+  return end <= advance(text, lineStart, partLimit, true) ? lineStart : cut;
 }
 
 /**
