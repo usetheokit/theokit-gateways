@@ -1,5 +1,6 @@
 import { GatewayRunner } from "@theokit/gateway";
 import { afterEach, describe, expect, it } from "vitest";
+import { concurrentSendsOnEmptyCache } from "../../../test-support/concurrent-token-sends.js";
 import {
   computeYuanbaoSignature,
   splitForYuanbao,
@@ -126,18 +127,7 @@ describe("YuanbaoAdapter", () => {
   });
 
   it("makes one token request for concurrent sends with an empty cache", async () => {
-    // A token inside the refresh margin is never served from the cache, so the cache stays empty.
-    const { fetch, calls } = fakeFetch((c) => {
-      const answer = ok(c) as any;
-      if (answer.access_token) answer.expires_in = "1";
-      if (answer.data?.access_token) answer.data.expires_in = 1;
-      return answer;
-    });
-    const a = started(fetch);
-    await a.connect();
-    calls.length = 0;
-    const out = { channel: { id: "u1", type: "dm" as const }, text: "hi" };
-    const results = await Promise.all([a.sendMessage(out), a.sendMessage(out)]);
+    const { results, calls } = await concurrentSendsOnEmptyCache({ fakeFetch, ok, started });
     expect(results.every((r) => r.ok)).toBe(true);
     expect(calls.filter((c) => c.url.endsWith("/auth/token"))).toHaveLength(1);
   });
