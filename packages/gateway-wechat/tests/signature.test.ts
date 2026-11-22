@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { computeWeChatSignature, verifyWeChatSignature } from "../src/signature.js";
 
 describe("WeChat signature", () => {
+  it("refuses an empty signature without throwing", () => {
+    const query = { signature: "", timestamp: String(Math.floor(Date.now() / 1000)), nonce: "n" };
+    expect(verifyWeChatSignature("tok", query)).toBe(false);
+  });
+
   it("sorts mixed-case inputs by byte order", () => {
     // sha1("1700000000" + "Zeta" + "alpha"): uppercase sorts before lowercase.
     const expected = "51b94a7ec2e827006d18b9cf6690ac5e35430412";

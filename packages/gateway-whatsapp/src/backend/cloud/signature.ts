@@ -7,15 +7,14 @@
  * @public
  */
 
-import * as crypto from "node:crypto";
+import { verifyHmac } from "@theokit/gateway";
 
 import { ConfigurationError } from "../../errors.js";
 
 /**
  * Verify the `X-Hub-Signature-256` HMAC-SHA256 against the app secret (D312).
  *
- * EC-3 absorbed: length-guard BEFORE `timingSafeEqual` so a malformed header
- * (e.g. `sha256=ab`) returns `false` instead of throwing `RangeError` (DoS).
+ * A malformed header (e.g. `sha256=ab`) returns `false`; core `verifyHmac` compares in constant time.
  *
  * An empty or whitespace-only `appSecret` throws rather than answering: an HMAC under an empty
  * key is computable by anyone, so a match would prove nothing about Meta. `fromCloud` accepts an
@@ -36,14 +35,13 @@ export function verifyWebhookSignature(
         "gateway-whatsapp: appSecret is required to verify a webhook signature and must not be empty; an HMAC under an empty key is computable by anyone.",
     });
   }
-  if (signatureHeader === undefined) return false;
-  if (!signatureHeader.startsWith("sha256=")) return false;
-  const receivedHex = signatureHeader.slice(7);
-  if (!/^[0-9a-f]+$/i.test(receivedHex)) return false;
-  const received = Buffer.from(receivedHex, "hex");
-  // `update` reads a string as UTF-8 and a Buffer as its bytes, which is what Meta signed.
-  const expected = crypto.createHmac("sha256", appSecret).update(rawBody).digest();
-  // EC-3: length guard before timingSafeEqual.
-  if (received.length !== expected.length) return false;
-  return crypto.timingSafeEqual(received, expected);
+  return verifyHmac({
+    algorithm: "sha256",
+    secrets: appSecret,
+    message: rawBody,
+    signature: signatureHeader,
+    encoding: "hex",
+    prefix: "sha256=",
+    caseInsensitive: true,
+  });
 }

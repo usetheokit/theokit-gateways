@@ -7,6 +7,8 @@
 
 import { createPublicKey, type JsonWebKey, type KeyObject } from "node:crypto";
 
+import { jwksKeySet } from "@theokit/gateway";
+
 import { readBoundedStream } from "./bounded-stream.js";
 import { errorKind } from "./error-kind.js";
 
@@ -193,74 +195,73 @@ export interface PublishedKeySet {
 }
 
 /**
- * One published key set, read by this verifier and nothing else. A `kid` the held copy lists is
- * answered from it at once; when the copy is older than {@link KEY_SET_MAX_AGE_MS}, a read is
- * started in the background and not awaited (stale-while-revalidate). A `kid` the copy lacks, or
- * any `kid` when there is no copy, waits for a read. Concurrent lookups share the read in flight,
- * and no read starts within {@link KEY_SET_READ_INTERVAL_MS} of the end of the previous one (so
- * nor of its start), whatever asked: an endpoint that hangs until the read times out cannot drive
- * reads back to back. A successful read replaces the copy, so a retired key is gone after it; a
- * failed read, which includes a document listing no usable RSA key, keeps the last good copy. A
- * `kid` missing after a successful read is `unlisted`; one missing when there is no copy, or when
- * the latest read failed, is `unavailable`.
+ * One published key set: the core `jwksKeySet` cache (max-age, shared in-flight read, read floor,
+ * stale-while-revalidate) over a fetch that applies this verifier's read rules (ADR-0005): the
+ * URL the cloud configured with no redirect, a bounded body, a document with at least one and at
+ * most {@link MAX_KEYS_PER_SET} usable keys. The fetch keeps each key's `endorsements`, which the
+ * core cache does not carry, and fails a read with a message that names the cause and never the
+ * error's text. A `kid` missing after a successful read is `unlisted`; one missing when there is
+ * no copy, or when the latest read failed, is `unavailable`.
  */
 export function keySet(label: string, url: string): PublishedKeySet {
-  // Times are read from the monotonic clock: a wall clock stepped back would hold the next read
-  // off by the size of the step, and one stepped forward would age the held copy early.
-  let held: Map<string, PublishedKey> | undefined;
-  let readAt = Number.NEGATIVE_INFINITY;
-  let nextReadAt = Number.NEGATIVE_INFINITY;
+  /** The endorsements of the keys in the latest successful read. */
+  let endorsements = new Map<string, readonly string[] | undefined>();
   /** Why the latest read failed; `undefined` once a read succeeds. */
   let lastFailure: KeySetReadFailure | undefined;
-  let reading: Promise<void> | undefined;
-  /** Keep a read that threw as the set's latest failure. */
-  const keepThrown = (error: unknown): void => {
-    lastFailure = { failed: `the read threw (${errorKind(error)})` };
-  };
   /**
-   * Never rejects. {@link readKeySet} turns every failure it expects into a value; anything that
-   * still throws (a response whose getter throws) is kept by {@link keepThrown}, so the lookup that
-   * waits for the read gets `key_set_unavailable`, never a rejection.
+   * The core cache spaces reads from the start of the last one; this verifier spaces them from its
+   * end, so an endpoint that hangs until the timeout cannot drive reads back to back. After each
+   * read the clock the cache sees is moved back by the read's duration.
    */
-  const read = async (): Promise<void> => {
-    try {
-      const fresh = await readKeySet(url);
-      if (fresh instanceof Map) {
-        lastFailure = undefined;
-        held = fresh;
-        readAt = performance.now();
-      } else lastFailure = fresh;
-    } catch (error) {
-      keepThrown(error);
-    }
-  };
-  const unavailable = (): KeyLookup => ({
-    unavailable: keySetUnavailableMessage(label, url, lastFailure),
-  });
-  /** The read in flight, started now if none is and the interval allows one. */
-  const currentRead = (now: number): Promise<void> | undefined => {
-    if (reading === undefined && now >= nextReadAt) {
-      reading = read().finally(() => {
-        nextReadAt = performance.now() + KEY_SET_READ_INTERVAL_MS;
-        reading = undefined;
-      });
-    }
-    return reading;
-  };
-  return {
-    async lookup(kid) {
-      const now = performance.now();
-      const listed = held?.get(kid);
-      if (listed !== undefined) {
-        // Keep an explicit rejection handler at the background boundary, even though `read`
-        // handles expected failures, so an unexpected rejection preserves the last good copy.
-        if (now - readAt >= KEY_SET_MAX_AGE_MS) void currentRead(now)?.catch(keepThrown);
-        return listed;
+  let skew = 0;
+  const keys = jwksKeySet({
+    url,
+    // The monotonic clock: a wall clock stepped back would hold the next read off by the size of
+    // the step, and one stepped forward would age the held copy early.
+    now: () => performance.now() + skew,
+    unknownKidRefetchFloorMs: KEY_SET_READ_INTERVAL_MS,
+    fetch: async () => {
+      const startedAt = performance.now();
+      try {
+        return await readForCache();
+      } finally {
+        skew -= performance.now() - startedAt;
       }
-      await currentRead(now);
-      const found = held?.get(kid);
-      if (found !== undefined) return found;
-      return held === undefined || lastFailure !== undefined ? unavailable() : "unlisted";
     },
-  };
+  });
+  return { lookup: async (kid) => lookupIn(keys, kid) };
+
+  async function readForCache(): Promise<Response> {
+    let found: Map<string, PublishedKey> | KeySetReadFailure;
+    try {
+      found = await readKeySet(url);
+    } catch (error) {
+      found = { failed: `the read threw (${errorKind(error)})` };
+    }
+    if (found instanceof Map) {
+      lastFailure = undefined;
+      endorsements = new Map([...found].map(([kid, key]) => [kid, key.endorsements]));
+      return Response.json(
+        {
+          keys: [...found].map(([kid, key]) => ({
+            ...key.publicKey.export({ format: "jwk" }),
+            kid,
+          })),
+        },
+        { headers: { "cache-control": `max-age=${KEY_SET_MAX_AGE_MS / 1000}` } },
+      );
+    }
+    lastFailure = found;
+    throw new Error(found.failed);
+  }
+
+  async function lookupIn(set: ReturnType<typeof jwksKeySet>, kid: string): Promise<KeyLookup> {
+    const found = await set.lookup(kid);
+    // A `kid` missing while the latest read failed is `unavailable`, not `unlisted`.
+    if (found === "unlisted" && lastFailure === undefined) return "unlisted";
+    if (found === "unlisted" || "unavailable" in found) {
+      return { unavailable: keySetUnavailableMessage(label, url, lastFailure) };
+    }
+    return { publicKey: found, endorsements: endorsements.get(kid) };
+  }
 }

@@ -25,7 +25,7 @@ function setup() {
     (r) => closed.push(r),
   );
   const send = (line: string) => stdout.write(`${line}\n`);
-  return { client, events, send, notes, closed, written };
+  return { client, events, send, notes, closed, written, stdin };
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 5));
@@ -85,5 +85,20 @@ describe("JsonRpcLineClient", () => {
     expect(await b).toEqual({ kind: "disconnected" });
     expect(t.closed).toEqual(["exited with code 1"]);
     expect(await t.client.request("c", {}, 1000)).toEqual({ kind: "disconnected" });
+  });
+
+  it("settles pending requests and reports once when the child errors or stdin fails", async () => {
+    const t = setup();
+    const a = t.client.request("a", {}, 1000);
+    t.events.emit("error", new Error("spawn ENOENT"));
+    t.events.emit("close", 1, null);
+    expect(await a).toEqual({ kind: "disconnected" });
+    expect(t.closed).toEqual(["spawn ENOENT"]);
+
+    const u = setup();
+    const b = u.client.request("b", {}, 1000);
+    u.stdin.emit("error", new Error("EPIPE"));
+    expect(await b).toEqual({ kind: "disconnected" });
+    expect(u.closed).toEqual(["stdin: EPIPE"]);
   });
 });

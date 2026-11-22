@@ -58,7 +58,7 @@ const handle = createWebhookHandler({ channels, isStarted: () => true });
   Yuanbao redelivers.
 - Outbound: text only; markdown loses its markers; over 2000 characters goes as several messages.
   Attachments are refused with `attachments_unsupported`. A non-zero `code` becomes
-  `yuanbao_send_failed`.
+  `platform_error` with that code in `platformCode`; an HTTP failure maps by status (429 is `rate_limit`) and a rejected fetch is `network_error`.
 
 ## Status
 

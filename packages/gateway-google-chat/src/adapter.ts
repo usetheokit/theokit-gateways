@@ -17,17 +17,18 @@ import {
   channelRendering,
   GatewayConfigurationError,
   type MessageEvent as GatewayMessageEvent,
+  type JwksKeySet,
+  jwksKeySet,
   type OutboundMessage,
   type SendResult,
   sendErrorFromHttp,
 } from "@theokit/gateway";
 
 import { AccessTokenClient, AccessTokenError } from "./access-token.js";
-import { googleKeySet, type KeySet } from "./key-set.js";
 import { chatEventToMessageEvent, type GoogleChatEventBody } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import type { FetchLike, GoogleChatAdapterOptions } from "./types.js";
-import { type TokenVerdict, verifyChatRequest } from "./verify-token.js";
+import { GOOGLE_CERTS_URL, type TokenVerdict, verifyChatRequest } from "./verify-token.js";
 import { createWebhookServer, type WebhookServer } from "./webhook-server.js";
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
@@ -57,7 +58,7 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
   private readonly opts: GoogleChatAdapterOptions;
   private readonly fetchFn: FetchLike;
   private readonly now: () => number;
-  private readonly keySet: KeySet;
+  private readonly keySet: JwksKeySet;
   private tokens: AccessTokenClient | undefined;
   private server: WebhookServer | undefined;
   private handler: ((event: GatewayMessageEvent) => Promise<void>) | undefined;
@@ -73,7 +74,7 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
     this.opts = opts;
     this.fetchFn = opts.fetch ?? ((input, init) => fetch(input, init));
     this.now = opts.now ?? Date.now;
-    this.keySet = googleKeySet({ fetch: this.fetchFn, now: this.now });
+    this.keySet = jwksKeySet({ url: GOOGLE_CERTS_URL, fetch: this.fetchFn, now: this.now });
   }
 
   async connect(): Promise<boolean> {

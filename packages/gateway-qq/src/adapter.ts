@@ -14,6 +14,7 @@ import {
   type OutboundMessage,
   SeenIds,
   type SendResult,
+  sendErrorFromHttp,
 } from "@theokit/gateway";
 
 import { refuseAttachments } from "./refuse-attachments.js";
@@ -51,11 +52,8 @@ interface ApiBody {
 
 async function defaultFetch(...[url, init]: Parameters<QQFetch>): ReturnType<QQFetch> {
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-  const { status, text } = await fetch(url, { ...init, signal: timeout }).then((res) => ({
-    status: res.status,
-    text: () => res.text(),
-  }));
-  return { status, text };
+  const res = await fetch(url, { ...init, signal: timeout });
+  return { status: res.status, text: () => res.text(), headers: res.headers };
 }
 
 /** Split `text` into messages of at most 2000 characters, never inside a grapheme. @public */
@@ -67,6 +65,78 @@ function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** A non-2xx HTTP answer, with what a caller needs to retry. */
+class HttpFailure extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly retryAfter: string | undefined,
+    readonly platformCode: string | undefined,
+  ) {
+    super(message);
+  }
+}
+
+/** The fetch itself rejected, so no answer came. */
+class NetworkFailure extends Error {}
+
+/** Run the fetch and read the body; a rejection of either becomes a `NetworkFailure`. */
+async function fetchText(
+  doFetch: QQFetch,
+  url: string,
+  init: Parameters<QQFetch>[1],
+): Promise<{ status: number; retryAfter: string | undefined; text: string }> {
+  try {
+    const res = await doFetch(url, init);
+    const retryAfter = res.headers?.get("retry-after") ?? undefined;
+    return { status: res.status, retryAfter, text: await res.text() };
+  } catch (err) {
+    throw new NetworkFailure(messageOf(err));
+  }
+}
+
+/** Throw an `HttpFailure` for a non-2xx answer, keeping the body's platform code when it has one. */
+function assertHttpOk(
+  who: string,
+  res: { status: number; retryAfter: string | undefined },
+  text: string,
+  codeOf: (body: { code?: unknown; error?: unknown } | null) => unknown,
+): void {
+  if (res.status >= 200 && res.status < 300) return;
+  let code: unknown;
+  try {
+    code = codeOf(JSON.parse(text));
+  } catch {
+    code = undefined;
+  }
+  throw new HttpFailure(
+    res.status,
+    `${who} answered HTTP ${res.status}`,
+    res.retryAfter,
+    code === undefined || code === null ? undefined : String(code),
+  );
+}
+
+/** The failed `SendResult` for a thrown error: HTTP status, rejected fetch, or anything else. */
+function failureOf(err: unknown): SendResult {
+  if (err instanceof HttpFailure) {
+    return sendErrorFromHttp(err.status, err.message, {
+      ...(err.retryAfter === undefined ? {} : { retryAfter: err.retryAfter }),
+      ...(err.platformCode === undefined ? {} : { platformCode: err.platformCode }),
+    });
+  }
+  const code = err instanceof NetworkFailure ? "network_error" : "platform_error";
+  return { ok: false, error: { code, message: messageOf(err) } };
+}
+
+/**
+ * A 200 answer whose body carries a platform error code. No code is mapped to `rate_limit` or
+ * `auth_failed`: QQ's documented codes were not checked, so all stay `platform_error`.
+ */
+function bodyFailure(message: string, code: unknown): SendResult {
+  return { ok: false, error: { code: "platform_error", message, platformCode: String(code) } };
+}
+
 /**
  * QQ Bot adapter.
  *
@@ -75,7 +145,8 @@ function messageOf(err: unknown): string {
  * the Ed25519 signature, answers the callback URL validation, turns a C2C text message into one
  * direct-message event and dispatches it. Replies go through the C2C message API, split at 2000
  * characters, as passive replies to the user's last message (`msg_id`, `msg_seq`) when one is
- * known; a refusal comes back as `qq_send_failed` with QQ's `code`.
+ * known; a refusal comes back as `platform_error` with QQ's `code` in `platformCode`; an HTTP
+ * failure maps by status (429 is `rate_limit`) and a rejected fetch is `network_error`.
  *
  * @public
  */
@@ -147,7 +218,7 @@ export class QQAdapter extends BasePlatformAdapter {
         messageId = sent || messageId;
       }
     } catch (err) {
-      return { ok: false, error: { code: "qq_send_failed", message: messageOf(err) } };
+      return failureOf(err);
     }
     return { ok: true, messageId };
   }
@@ -159,7 +230,7 @@ export class QQAdapter extends BasePlatformAdapter {
     const body = await this.call("POST", url, await this.tokens.get(), payload);
     if (body.code === undefined) return body.id ?? "";
     const message = `QQ error ${String(body.code)}: ${String(body.message)}`;
-    return { ok: false, error: { code: "qq_send_failed", message } };
+    return bodyFailure(message, body.code);
   }
 
   onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {
@@ -278,12 +349,13 @@ export class QQAdapter extends BasePlatformAdapter {
       token === undefined
         ? {}
         : { Authorization: `QQBot ${token}`, "X-Union-Appid": this.opts.appId };
-    const res = await this.doFetch(url, {
+    const res = await fetchText(this.doFetch, url, {
       method,
       headers: { "Content-Type": "application/json", ...auth },
       body: JSON.stringify(payload),
     });
-    const body = parseJson<ApiBody>(await res.text());
+    assertHttpOk("QQ", res, res.text, (b) => b?.code);
+    const body = parseJson<ApiBody>(res.text);
     if (body === undefined) throw new Error(`QQ answered HTTP ${res.status} with a non-JSON body`);
     return body;
   }
