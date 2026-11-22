@@ -11,6 +11,17 @@ function parseRetryAfter(value: string | null | undefined, now: number): number 
   return Math.max(0, at - now);
 }
 
+const STATUS_CODES: Readonly<Record<number, string>> = {
+  429: "rate_limit",
+  401: "auth_failed",
+  403: "permission_denied",
+  408: "timeout",
+};
+
+function codeForStatus(status: number): string {
+  return STATUS_CODES[status] ?? (status >= 500 ? "server_error" : "platform_error");
+}
+
 /**
  * Map an HTTP status to a failed SendResult: 429 -> rate_limit (retryAfterMs from a Retry-After
  * value in seconds or an HTTP date), 401 -> auth_failed, 403 -> permission_denied,
@@ -24,13 +35,7 @@ export function sendErrorFromHttp(
   if (!Number.isInteger(status) || status < 100 || status > 599) {
     throw new RangeError(`status must be an integer in 100..599, got ${String(status)}`);
   }
-  let code: string;
-  if (status === 429) code = "rate_limit";
-  else if (status === 401) code = "auth_failed";
-  else if (status === 403) code = "permission_denied";
-  else if (status === 408) code = "timeout";
-  else if (status >= 500) code = "server_error";
-  else code = "platform_error";
+  const code = codeForStatus(status);
   const retryAfterMs =
     status === 429 ? parseRetryAfter(options?.retryAfter, (options?.now ?? Date.now)()) : undefined;
   return {
