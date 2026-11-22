@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.27.0
+
+### Minor Changes
+
+- e3bf8c9: Add `jwksKeySet`, `decodeJwt` and `verifyRs256Jwt`: a JWKS key-set cache (max-age, shared in-flight read, unknown-kid refetch floor, stale-while-revalidate) and RS256 JWT signature verification for adapters whose platform signs requests with a JWT.
+
+### Patch Changes
+
+- 8585427: README status lines say "0.x, pre-1.0" instead of a hard-coded version.
+
 ## 0.26.0
 
 ### Minor Changes
