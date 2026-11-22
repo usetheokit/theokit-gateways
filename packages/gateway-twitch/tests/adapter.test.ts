@@ -287,6 +287,26 @@ describe("TwitchAdapter.sendMessage", () => {
     expect(result).toEqual({ ok: true, messageId: "sent-3" });
   });
 
+  it("passes a mapped HTTP error, with retry timing, to the caller", async () => {
+    const helix = new FakeHelix();
+    const { adapter } = await connected(helix);
+    helix.send = async () => new Response(null, { status: 429, headers: { "retry-after": "2" } });
+    const result = await adapter.sendMessage({
+      channel: { id: BROADCASTER, type: "group" },
+      text: "x",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "rate_limit",
+        message: "429",
+        retryAfterMs: 2000,
+        platformCode: "twitch_api_error",
+      },
+    });
+  });
+
   it("turns is_sent false into twitch_message_dropped with the drop reason", async () => {
     const helix = new FakeHelix();
     const { adapter } = await connected(helix);

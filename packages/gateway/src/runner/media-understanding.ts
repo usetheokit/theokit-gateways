@@ -3,6 +3,7 @@
  * image's description) into the turn text. The gateway makes no model or network call; the
  * caller supplies the functions.
  */
+import { reportDiagnosticLine } from "../diagnostics.js";
 import type { MessageEvent as GatewayMessageEvent } from "../types/message-event.js";
 import type { GatewayHandler } from "./gateway-runner.js";
 
@@ -34,7 +35,7 @@ export function withMediaUnderstanding(
   options: MediaUnderstandingOptions,
 ): GatewayHandler {
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
-  const write = options.write ?? ((line: string) => void process.stderr.write(`${line}\n`));
+  const write = options.write ?? reportDiagnosticLine;
 
   const understand = async (
     kind: "Audio transcript" | "Image description",

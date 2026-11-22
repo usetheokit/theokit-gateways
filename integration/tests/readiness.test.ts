@@ -225,6 +225,12 @@ describe("live-test readiness", () => {
     // That exact mistake was made once in this repository and caught only
     // because the check was run against a deliberately broken input.
     const NOT_DRIVEN_LIVE: Record<string, string> = {
+      verifyHmac:
+        "pure signature check, no I/O. Covered by packages/gateway/tests/verify-signature.test.ts",
+      verifyDigest:
+        "pure signature check, no I/O. Covered by packages/gateway/tests/verify-signature.test.ts",
+      safeEqualString:
+        "pure string compare, no I/O. Covered by packages/gateway/tests/verify-signature.test.ts",
       decodeJwt:
         "pure JWT/JWKS handling, no I/O of its own beyond an injected fetch. Covered by " +
         "packages/gateway/tests/auth/jwks.test.ts",
@@ -237,6 +243,9 @@ describe("live-test readiness", () => {
       createTokenCache:
         "an in-memory cache around a caller-supplied fetch function, no I/O of its own. Covered by " +
         "packages/gateway/tests/auth/token-cache.test.ts",
+      JsonRpcLineClient:
+        "a JSON-RPC client over a caller-supplied child's stdio; a live run needs a real child " +
+        "process. Covered by packages/gateway/tests/adapter/json-rpc-line.test.ts",
       WeixinAdapterBase:
         "the shared flow of the WeChat and WeCom adapters. Both have their own unit suites that " +
         "drive it end to end against a faked fetch; a live run needs a real Official Account or " +
@@ -253,6 +262,12 @@ describe("live-test readiness", () => {
       channelConfigReaders:
         "pure config validation, no I/O. Covered by " +
         "packages/gateway/tests/channel/channel-config-readers.test.ts and the LINE channel tests",
+      reportDiagnostic:
+        "writes one redacted line to stderr, no network or platform I/O. Covered by " +
+        "packages/gateway/tests/diagnostics.test.ts",
+      refuseUnsupportedAttachments:
+        "pure check, no I/O and no platform call. Covered by " +
+        "packages/gateway/tests/adapter/base.test.ts",
       ReconnectBackoff:
         "pure delay arithmetic with an injectable clock, no I/O. Covered by " +
         "packages/gateway/tests/runner/reconnect-backoff.test.ts and the runner reconnect tests",

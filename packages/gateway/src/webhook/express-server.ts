@@ -27,6 +27,8 @@
  * @public
  */
 
+import { reportDiagnostic } from "../diagnostics.js";
+
 /** What the capture middleware reads. Express's `Request` satisfies it; so does a bare stream. */
 export interface RawBodyRequest {
   readonly readableEnded?: boolean;
@@ -112,10 +114,11 @@ export function rawBodyCapture(tag: string, options: RawBodyCaptureOptions = {})
     // loudly and continuing is strictly better — verification then refuses the empty body with a
     // 401, which is at least a visible symptom pointing at the real cause.
     if (req.readableEnded === true || req.complete === true) {
-      process.stderr.write(
-        `[${tag}] raw body already consumed before signature capture — mount this router ` +
+      reportDiagnostic(
+        tag,
+        "raw body already consumed before signature capture — mount this router " +
           "BEFORE any global body parser, or signature verification cannot see the bytes it " +
-          "must hash\n",
+          "must hash",
       );
       (req as unknown as { rawBody: string }).rawBody = "";
       next();
@@ -181,7 +184,7 @@ interface JsonResponse {
 
 /** Answer 413 as JSON, and say on stderr which router refused and at what limit. */
 function answerTooLarge(res: JsonResponse, tag: string, maxBytes: number): void {
-  process.stderr.write(`[${tag}] refused a request (413): body larger than ${maxBytes} bytes\n`);
+  reportDiagnostic(tag, `refused a request (413): body larger than ${maxBytes} bytes`);
   res.status(413).json({ error: "request body too large" });
 }
 

@@ -56,6 +56,12 @@ describe("XApi single-flight refresh", () => {
     expect(urls.filter((u) => u.includes("/mentions") || u.endsWith("/2/tweets"))).toHaveLength(2);
   });
 
+  it("shares one token request between two concurrent replies with an empty cache", async () => {
+    const { api, posts } = setup();
+    await Promise.all([api.reply("a", "5"), api.reply("b", "6")]);
+    expect(posts()).toBe(1);
+  });
+
   it("rejects every caller on failure and does not cache the failure", async () => {
     const { api, posts } = setup(400);
     const results = await Promise.allSettled([api.refresh(), api.refresh()]);

@@ -3,12 +3,12 @@
  * tweets, and posting a reply.
  */
 
+import { createTokenCache, type TokenCache } from "@theokit/gateway";
+
 import type { XAdapterOptions, XFetch, XTweet, XUser } from "./types.js";
 
 const DEFAULT_BASE = "https://api.x.com";
 const REQUEST_TIMEOUT_MS = 30_000;
-/** Refresh this long before the token's stated expiry. */
-const TOKEN_MARGIN_MS = 60_000;
 
 const TWEET_FIELDS = "author_id,conversation_id,created_at,referenced_tweets,text";
 const EXPANSIONS = "author_id,referenced_tweets.id,referenced_tweets.id.author_id";
@@ -89,9 +89,8 @@ function describe(status: number, body: Body | undefined): string {
 export class XApi {
   private readonly doFetch: XFetch;
   private readonly base: string;
-  private accessToken: { value: string; expiresAt: number } | undefined;
+  private readonly tokens: TokenCache;
   private refreshToken: string;
-  private refreshing: Promise<string> | undefined;
   private storedLoaded = false;
   /** A rotated token the store has not accepted yet; retried before any further call. */
   private unsaved: string | undefined;
@@ -100,19 +99,17 @@ export class XApi {
 
   constructor(
     private readonly opts: XAdapterOptions,
-    private readonly now: () => number,
+    now: () => number,
   ) {
     this.doFetch = opts.fetch ?? defaultFetch;
     this.base = opts.apiBase ?? DEFAULT_BASE;
     this.refreshToken = opts.refreshToken;
+    this.tokens = createTokenCache({ fetchToken: () => this.doRefresh(), now });
   }
 
   /** Exchange the refresh token for an access token, and keep the rotated refresh token. Concurrent callers share one request. */
   refresh(): Promise<string> {
-    this.refreshing ??= this.doRefresh().finally(() => {
-      this.refreshing = undefined;
-    });
-    return this.refreshing;
+    return this.tokens.get({ force: true });
   }
 
   private get credentialKey(): string {
@@ -154,7 +151,7 @@ export class XApi {
     return job;
   }
 
-  private async doRefresh(): Promise<string> {
+  private async doRefresh(): Promise<{ value: string; expiresInS?: number }> {
     await this.loadStored();
     await this.retryUnsaved();
     const basic = Buffer.from(`${this.opts.clientId}:${this.opts.clientSecret}`).toString("base64");
@@ -177,19 +174,12 @@ export class XApi {
     if (body.refresh_token && body.refresh_token !== this.refreshToken) {
       await this.persist(body.refresh_token);
     }
-    this.accessToken = {
-      value: body.access_token,
-      expiresAt: this.now() + (body.expires_in ?? 7200) * 1000,
-    };
-    return body.access_token;
+    return { value: body.access_token, expiresInS: body.expires_in };
   }
 
   private async userToken(): Promise<string> {
     await this.retryUnsaved();
-    const cached = this.accessToken;
-    if (cached !== undefined && cached.expiresAt - TOKEN_MARGIN_MS > this.now())
-      return cached.value;
-    return this.refresh();
+    return this.tokens.get();
   }
 
   /** Mentions of the bot newer than `sinceId`, oldest first. */
