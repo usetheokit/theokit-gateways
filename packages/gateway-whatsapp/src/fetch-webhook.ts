@@ -9,7 +9,7 @@
  * No secret, signature or body text is logged or answered.
  */
 
-import { createHash, timingSafeEqual } from "node:crypto";
+import { safeEqualString } from "@theokit/gateway";
 
 import type { WhatsAppAdapter } from "./adapter.js";
 import { verifyWebhookSignature } from "./backend/cloud/signature.js";
@@ -55,13 +55,6 @@ function headerValue(
   return undefined;
 }
 
-/** Constant-time string equality: both sides are hashed to a fixed length first. */
-function safeEqual(a: string, b: string): boolean {
-  const ha = createHash("sha256").update(a).digest();
-  const hb = createHash("sha256").update(b).digest();
-  return timingSafeEqual(ha, hb);
-}
-
 /** Same mapping as the core's `statusForDeliver`, kept local so the older peer floor still loads. */
 function statusFor(outcomes: ReadonlyArray<Outcome>): 200 | 500 | 503 {
   let status: 200 | 500 | 503 = 200;
@@ -93,7 +86,11 @@ function subscriptionChallenge(adapter: object, request: WebhookRequestShape): s
   }
   const token = params.get("hub.verify_token");
   const challenge = params.get("hub.challenge");
-  if (params.get("hub.mode") !== "subscribe" || token === null || !safeEqual(token, expected)) {
+  if (
+    params.get("hub.mode") !== "subscribe" ||
+    token === null ||
+    !safeEqualString(expected, token)
+  ) {
     return undefined;
   }
   return challenge === null || challenge.length === 0 ? undefined : challenge;

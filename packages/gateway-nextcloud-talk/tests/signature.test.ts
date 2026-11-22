@@ -207,3 +207,9 @@ describe("the route on a real port", () => {
     expect(events.map((event) => event.id).sort()).toEqual(["2", "6"]);
   });
 });
+
+describe("verifyTalkSignature with an empty secret", () => {
+  it("returns false instead of throwing", () => {
+    expect(verifyTalkSignature("", "r", "{}", "ab")).toBe(false);
+  });
+});
