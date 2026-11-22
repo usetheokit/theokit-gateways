@@ -2,7 +2,7 @@
 
 Telegram platform adapter for `@theokit/gateway`. Wraps [grammy](https://grammy.dev/) in the `BasePlatformAdapter` contract.
 
-> **Status: 0.1.0 — pre-release.**
+> **Status: 0.x, pre-1.0.**
 
 
 ## How inbound arrives
