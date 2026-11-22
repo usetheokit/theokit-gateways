@@ -6,8 +6,11 @@ export {
   BasePlatformAdapter,
   type OutboundAttachment,
   type OutboundMessage,
+  type SendError,
+  type SendErrorCode,
   type SendResult,
 } from "./adapter/base.js";
+export { sendErrorFromHttp } from "./adapter/send-error.js";
 export {
   WeixinAdapterBase,
   type WeixinAdapterConfig,
@@ -16,6 +19,19 @@ export {
   type WeixinWebhookAnswer,
 } from "./adapter/weixin-base.js";
 export { parseFlatXml } from "./adapter/weixin-xml.js";
+// A JWKS key-set cache and RS256 JWT signature verification (claims stay with the caller).
+export {
+  type DecodedJwt,
+  decodeJwt,
+  type JwksKeySet,
+  type JwksKeySetOptions,
+  type JwksLookup,
+  jwksKeySet,
+  type VerifyJwtResult,
+  verifyRs256Jwt,
+} from "./auth/jwks.js";
+export type { FetchedToken, TokenCache, TokenCacheOptions } from "./auth/token-cache.js";
+export { createTokenCache } from "./auth/token-cache.js";
 export {
   type ChannelConfigInput,
   type ChannelConfigReaders,
@@ -98,6 +114,7 @@ export {
   type MediaUnderstandingOptions,
   withMediaUnderstanding,
 } from "./runner/media-understanding.js";
+export { ReconnectBackoff, type ReconnectBackoffOptions } from "./runner/reconnect-backoff.js";
 export type { CoveredShape, UncoveredShape } from "./security/credential-patterns.js";
 export {
   CREDENTIAL_SHAPES,

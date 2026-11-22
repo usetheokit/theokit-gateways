@@ -2,7 +2,7 @@
 
 Microsoft Teams platform adapter for `@theokit/gateway`. Built on the modern `@microsoft/teams.apps` v2 SDK.
 
-Status: **v0.1.0 pre-release**. Pre-1.0 contract per ADR D324: breaking changes allowed within 0.x.
+Status: **0.x, pre-1.0**. Pre-1.0 contract per ADR D324: breaking changes allowed within 0.x.
 
 ## How inbound arrives
 

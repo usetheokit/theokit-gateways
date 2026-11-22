@@ -42,6 +42,7 @@ import { HookExecutor } from "../hooks/executor.js";
 import type { GatewayHook } from "../hooks/types.js";
 import { maskSecrets, redactSecrets } from "../security/credential-patterns.js";
 import type { MessageEvent as GatewayMessageEvent, PlatformName } from "../types/message-event.js";
+import { ReconnectBackoff } from "./reconnect-backoff.js";
 
 /** Per-event context passed to the user handler. */
 export interface GatewayContext {
@@ -384,27 +385,32 @@ export class GatewayRunner {
       connected: result.connected.map((a) => a.platform),
       failed: result.failed,
     };
-    for (const adapter of result.retryable) this.scheduleReconnect(adapter, 1);
+    for (const adapter of result.retryable) {
+      const policy = this.opts.reconnect;
+      if (policy === undefined) break;
+      this.scheduleReconnect(adapter, 1, new ReconnectBackoff(policy));
+    }
     return this.startResult;
   }
 
   /** Retry one adapter after its backoff delay; reschedules itself until it connects or gives up. */
-  private scheduleReconnect(adapter: BasePlatformAdapter, attempt: number): void {
+  private scheduleReconnect(
+    adapter: BasePlatformAdapter,
+    attempt: number,
+    backoff: ReconnectBackoff,
+  ): void {
     const policy = this.opts.reconnect;
     if (policy === undefined || this.stopped) return;
-    if (policy.maxAttempts !== undefined && attempt > policy.maxAttempts) {
+    const delay = backoff.nextDelayMs();
+    if (delay === undefined) {
       process.stderr.write(
         `[gateway] adapter "${adapter.platform}" gave up reconnecting after ${policy.maxAttempts} attempts\n`,
       );
       return;
     }
-    const delay = Math.min(
-      (policy.initialDelayMs ?? 1000) * (policy.factor ?? 2) ** (attempt - 1),
-      policy.maxDelayMs ?? 60_000,
-    );
     const timer = setTimeout(() => {
       this.retryTimers.delete(timer);
-      void this.reconnectOnce(adapter, attempt);
+      void this.reconnectOnce(adapter, attempt, backoff);
     }, delay);
     // A pending retry must not keep the process alive on its own; `stop()` clears it anyway.
     timer.unref();
@@ -415,7 +421,11 @@ export class GatewayRunner {
     this.emitState(adapter.platform, "retrying", `reconnect attempt ${attempt} in ${delay}ms`);
   }
 
-  private async reconnectOnce(adapter: BasePlatformAdapter, attempt: number): Promise<void> {
+  private async reconnectOnce(
+    adapter: BasePlatformAdapter,
+    attempt: number,
+    backoff: ReconnectBackoff,
+  ): Promise<void> {
     if (this.stopped) return;
     try {
       if (await adapter.connect()) {
@@ -457,7 +467,7 @@ export class GatewayRunner {
         `[gateway] adapter "${adapter.platform}" reconnect attempt ${attempt} failed: ${reason}\n`,
       );
     }
-    this.scheduleReconnect(adapter, attempt + 1);
+    this.scheduleReconnect(adapter, attempt + 1, backoff);
   }
 
   /**

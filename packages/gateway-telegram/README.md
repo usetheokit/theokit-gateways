@@ -2,7 +2,7 @@
 
 Telegram platform adapter for `@theokit/gateway`. Wraps [grammy](https://grammy.dev/) in the `BasePlatformAdapter` contract.
 
-> **Status: 0.1.0 — pre-release.**
+> **Status: 0.x, pre-1.0.**
 
 
 ## How inbound arrives
@@ -38,6 +38,7 @@ import { TelegramAdapter } from "@theokit/gateway-telegram";
 const adapter = new TelegramAdapter({
   token: process.env.TELEGRAM_BOT_TOKEN!,
   allowedUsers: ["7528967933"], // optional
+  // apiBase: "http://localhost:8081", // optional, see below
 });
 
 const runner = new GatewayRunner({
@@ -49,6 +50,13 @@ const runner = new GatewayRunner({
 
 await runner.start();
 ```
+
+## Bot API root: `apiBase`
+
+`apiBase` sets the Bot API root, for a self-hosted Bot API server or a fake one in tests. It
+defaults to `https://api.telegram.org`. Every Bot API call, and the voice-note file download
+(`<apiBase>/file/bot<token>/<path>`), goes to that root. A trailing slash is ignored. The 20 MB
+voice-read limit is unchanged.
 
 ## Sending an image
 
@@ -127,6 +135,7 @@ strings, with this package's `ConfigurationError` (also a `GatewayConfigurationE
 | -------------- | ------------------------ | -------- | ------ |
 | `token`        | `TELEGRAM_TOKEN`         | yes      | yes    |
 | `allowedUsers` | `TELEGRAM_ALLOWED_USERS` | no       | no     |
+| `apiBase`      | `TELEGRAM_API_BASE`      | no       | no     |
 
 `configFromEnv(telegramChannel, process.env, "APP_")` reads `APP_TELEGRAM_TOKEN` and the rest into
 `config`, lists unset required variables in `missing`, and puts the secret values in `secrets`.

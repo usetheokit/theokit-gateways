@@ -111,14 +111,14 @@ All phone numbers — inbound `sender.id`, outbound `channel.id` — are normali
 
 US toll-free numbers (`+18001234567`) are accepted (EC-6).
 
-## What's NOT supported in v0.1
+## What's NOT supported yet
 
 | Feature | Status | Workaround |
 |---|---|---|
-| MMS (image/audio attachment) | Deferred to v0.2 (D395) | Use Twilio API direct via `adapter.getBackendClient()` |
+| MMS (image/audio attachment) | Deferred (D395) | Use Twilio API direct via `adapter.getBackendClient()` |
 | Group SMS (MMS group thread on US carriers) | Not supported (D394) | — |
-| Auto budget per-message charge | Deferred to v0.2 (D396) | Charge via your own counter |
-| Delivery status callback (delivered/failed post-200) | Deferred to v0.2 (EC-13) | Subscribe via Twilio statusCallback URL |
+| Auto budget per-message charge | Deferred (D396) | Charge via your own counter |
+| Delivery status callback (delivered/failed post-200) | Deferred (EC-13) | Subscribe via Twilio statusCallback URL |
 
 ## Live smoke
 
