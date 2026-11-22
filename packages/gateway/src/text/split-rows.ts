@@ -30,11 +30,16 @@ function lineStartBefore(text: string, cut: number, partStart: number): number {
   return at;
 }
 
-/** End of the line holding `cut`, without its line ending, scanning no further than `bound`. */
-function lineEndFrom(text: string, cut: number, bound: number): number {
-  let at = cut;
-  while (at < text.length && at <= bound && !isLineEnd(text[at])) at += 1;
-  return at;
+/** True when the line starting at `from`, without its line ending, is at most `limit` units long. */
+function lineFits(text: string, from: number, limit: number, codepoint: boolean): boolean {
+  let at = from;
+  let used = 0;
+  while (at < text.length && !isLineEnd(text[at])) {
+    used += 1;
+    if (used > limit) return false;
+    at += codepoint && (text.codePointAt(at) ?? 0) > 0xffff ? 2 : 1;
+  }
+  return true;
 }
 
 /** The unit `partLimit` is measured in. */
@@ -68,8 +73,7 @@ function rowSafeCut(
   const lineStart = lineStartBefore(text, cut, partStart);
   if (lineStart <= partStart || lineStart === cut) return cut;
   if (isLineEnd(text[cut]) || !startsTableRow(text, lineStart)) return cut;
-  const bound = advance(text, lineStart, partLimit, codepoint);
-  return lineEndFrom(text, cut, bound) <= bound ? lineStart : cut;
+  return lineFits(text, lineStart, partLimit, codepoint) ? lineStart : cut;
 }
 
 /**

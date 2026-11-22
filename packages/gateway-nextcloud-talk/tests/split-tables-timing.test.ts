@@ -67,19 +67,8 @@ function fastestRatio(oldFn: () => unknown, newFn: () => unknown, windowMs: numb
   return newBest / oldBest;
 }
 
-/**
- * True when this run collects v8 coverage. The row rule makes core measure a part's length twice
- * (once for the length cut, once to bound a straddled row), and coverage instrumentation slows
- * that loop about 2x against the plain-text baseline, which says nothing about the row rule's cost
- * in production. The ratio is therefore asserted in the plain test run only.
- */
-const collectingCoverage = Boolean(
-  (globalThis as { __vitest_worker__?: { config?: { coverage?: { enabled?: boolean } } } })
-    .__vitest_worker__?.config?.coverage?.enabled,
-);
-
 describe("splitForTalk timing against a grapheme-aware splitter without the row rule", () => {
-  it.skipIf(collectingCoverage)("stays within 1.5x on a 1,000,000-character table", () => {
+  it("stays within 1.5x on a 1,000,000-character table", () => {
     const text = tableOfLength(1_000_000);
     const plain = withoutRows(text);
     const ratio = fastestRatio(
