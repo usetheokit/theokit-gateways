@@ -6,8 +6,8 @@
  * @public
  */
 
-import { reportDiagnostic } from "../diagnostics.js";
 import { createTokenCache, type FetchedToken, type TokenCache } from "../auth/token-cache.js";
+import { reportDiagnostic } from "../diagnostics.js";
 import { SeenIds } from "../text/seen-ids.js";
 import type { MessageEvent as GatewayMessageEvent } from "../types/message-event.js";
 import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "./base.js";

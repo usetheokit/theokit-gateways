@@ -11,8 +11,8 @@
  * (`TelegramAdapter`, `DiscordAdapter`, ...).
  */
 
-import { reportDiagnostic } from "../diagnostics.js";
 import { refuseUnsupportedAttachments } from "../delivery/attachments.js";
+import { reportDiagnostic } from "../diagnostics.js";
 import { channelRendering } from "../text/channel-rendering.js";
 import type { SeenIds } from "../text/seen-ids.js";
 import type { MessageEvent as GatewayMessageEvent, PlatformName } from "../types/message-event.js";
