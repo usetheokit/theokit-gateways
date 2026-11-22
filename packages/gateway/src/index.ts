@@ -97,6 +97,8 @@ export {
   type MediaUnderstandingOptions,
   withMediaUnderstanding,
 } from "./runner/media-understanding.js";
+export type { FetchedToken, TokenCache, TokenCacheOptions } from "./auth/token-cache.js";
+export { createTokenCache } from "./auth/token-cache.js";
 export type { CoveredShape, UncoveredShape } from "./security/credential-patterns.js";
 export {
   CREDENTIAL_SHAPES,

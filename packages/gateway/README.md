@@ -356,6 +356,17 @@ keeps one file per key under `dir` (mode 0600, written to a temp file and rename
 `invalid_credential_key`. `get` returns `undefined` for a missing key; any other read error throws
 code `credential_store_unreadable`. `@theokit/gateway-x` uses it to keep a rotated refresh token.
 
+## Caching an expiring access token
+
+`createTokenCache({ fetchToken })` holds one access token. `get()` returns the cached token, or
+runs `fetchToken` once and gives the same result to every concurrent caller. A token is refreshed
+`marginMs` (default 60 000) before it expires; its lifetime is `expiresInS` from `fetchToken`, or
+`defaultTtlS` (default 7200) when that is absent or not positive. `get({ force: true })` skips the
+cache but still joins a fetch already in flight. `clear()` forgets the token, and a fetch that was
+running at that moment does not store its result. A failed fetch rejects every waiting caller and
+is not cached. The signal passed to `get` reaches `fetchToken` only for the caller that starts the
+fetch. `now` replaces the clock in tests.
+
 ## Architecture (5 pieces)
 
 | Module | Responsibility |
