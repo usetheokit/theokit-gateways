@@ -162,3 +162,18 @@ describe("splitForTalk counts rows in code points", () => {
     expectWholeDelivery(text, parts);
   });
 });
+
+describe("splitForTalk core delegation", () => {
+  it("cuts before a ZWJ family emoji that straddles the limit", () => {
+    const family = "\u{1F468}‍\u{1F469}‍\u{1F467}‍\u{1F466}";
+    const text = `${"a".repeat(31_999)}${family}`;
+    const parts = splitForTalk(text, TALK_MAX_LENGTH);
+    expect(parts).toEqual(["a".repeat(31_999), family]);
+    for (const part of parts) expect(Array.from(part).length).toBeLessThanOrEqual(32_000);
+  });
+
+  it("throws a RangeError naming limit for a limit of 0", () => {
+    expect(() => splitForTalk("x", 0)).toThrow(RangeError);
+    expect(() => splitForTalk("x", 0)).toThrow(/limit/);
+  });
+});
