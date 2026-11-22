@@ -6,8 +6,11 @@ export {
   BasePlatformAdapter,
   type OutboundAttachment,
   type OutboundMessage,
+  type SendError,
+  type SendErrorCode,
   type SendResult,
 } from "./adapter/base.js";
+export { sendErrorFromHttp } from "./adapter/send-error.js";
 export {
   WeixinAdapterBase,
   type WeixinAdapterConfig,

@@ -269,6 +269,31 @@ const { edit, attachments, typing, reactions, threads, maxMessageChars } = adapt
 
 The type is exported as `AdapterCapabilities`.
 
+## Send error codes
+
+A failed `SendResult` carries `error: { code, message, retryAfterMs?, platformCode? }`. `code` is a
+`SendErrorCode`, or a platform-specific string an adapter has not mapped yet.
+
+| Code | Used when |
+| --- | --- |
+| `empty_text` | core: the message has no text |
+| `not_connected` | core: the adapter is not connected |
+| `invalid_channel` | core: the channel is not valid for the adapter |
+| `attachments_unsupported` | core: attachments sent to an adapter that cannot send them |
+| `rate_limit` | the platform throttled the send (HTTP 429); `retryAfterMs` holds the wait |
+| `permission_denied` | the credential may not post here (HTTP 403) |
+| `auth_failed` | the credential was rejected (HTTP 401) |
+| `timeout` | the request timed out (HTTP 408) |
+| `server_error` | the platform failed (HTTP 5xx) |
+| `network_error` | the request got no answer |
+| `platform_error` | any other platform refusal |
+
+`sendErrorFromHttp(status, message, { retryAfter, platformCode, now })` builds the `SendResult`
+for an HTTP status; `retryAfter` is a `Retry-After` value in seconds or an HTTP date. It throws
+`RangeError` when `status` is not an integer in 100..599. Adapters still return their own codes
+today (`rate_limited`, `no_permission`, `<platform>_http_error`); moving them onto the shared
+codes is follow-up work.
+
 ## Chat commands
 
 `commandHook` is one `pre_inbound` hook for many commands. It recognises a command behind one leading mention (`<@U123> /help`, `@bot /help`) and with Telegram's `@bot` suffix (`/help@my_bot`), matches the name exactly (`/new chat` is `/new` with arg `chat`; `/newer` passes through), and answers `/help` with `helpText(commands)`.

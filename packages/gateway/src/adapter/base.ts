@@ -63,11 +63,50 @@ export interface OutboundMessage {
   readonly attachments?: ReadonlyArray<OutboundAttachment>;
 }
 
-/** Send result — adapters return this instead of throwing on platform errors. */
+/**
+ * Shared failure codes for {@link SendResult}.
+ *
+ * - `empty_text`, `not_connected`, `invalid_channel`, `attachments_unsupported`: core refused the send.
+ * - `rate_limit`: the platform throttled the send; see `retryAfterMs`.
+ * - `permission_denied`: the credential is valid but may not post here (HTTP 403).
+ * - `auth_failed`: the credential was rejected (HTTP 401).
+ * - `timeout`: the platform or the request timed out (HTTP 408).
+ * - `server_error`: the platform failed (HTTP 5xx).
+ * - `network_error`: the request never got an answer.
+ * - `platform_error`: any other platform refusal.
+ */
+export type SendErrorCode =
+  | "empty_text"
+  | "not_connected"
+  | "invalid_channel"
+  | "attachments_unsupported"
+  | "rate_limit"
+  | "permission_denied"
+  | "auth_failed"
+  | "timeout"
+  | "server_error"
+  | "network_error"
+  | "platform_error";
+
+/** The error of a failed {@link SendResult}. */
+export interface SendError {
+  /** A known code, or a platform-specific one an adapter has not mapped yet. */
+  readonly code: SendErrorCode | (string & {});
+  readonly message: string;
+  /** Set when the platform said how long to wait. */
+  readonly retryAfterMs?: number;
+  /** The platform's own code, kept for logs. */
+  readonly platformCode?: string;
+}
+
+/**
+ * Send result — adapters return this instead of throwing on platform errors.
+ * `error.code` is a {@link SendErrorCode} or a platform-specific string.
+ */
 export interface SendResult {
   readonly ok: boolean;
   readonly messageId?: string;
-  readonly error?: { readonly code: string; readonly message: string };
+  readonly error?: SendError;
 }
 
 /** The facts about an adapter that an app picks its rendering from. */
