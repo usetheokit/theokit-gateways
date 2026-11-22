@@ -225,4 +225,3 @@ function toMessageEvent(payload: ZaloWebhookEvent): GatewayMessageEvent | undefi
     zalo: { messageId: msgId, userId, oaId: payload.recipient?.id ?? "", raw: payload },
   };
 }
-
