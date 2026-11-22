@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2
+
+### Patch Changes
+
+- ff62df5: Share the split-tables test cases of the three adapters in one module under `shared/`. Tests only; no change to the published code.
+
 ## 0.6.1
 
 ### Patch Changes
