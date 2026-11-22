@@ -1,4 +1,5 @@
 ---
+"@theokit/gateway": patch
 "@theokit/gateway-signal": patch
 "@theokit/gateway-imessage": patch
 ---
