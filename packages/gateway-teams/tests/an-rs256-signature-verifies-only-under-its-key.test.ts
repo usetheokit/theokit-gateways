@@ -6,9 +6,13 @@
 import { Buffer } from "node:buffer";
 import { generateKeyPairSync, type KeyObject, sign } from "node:crypto";
 
+import { verifyRs256Jwt } from "@theokit/gateway";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { verifiesRs256 } from "./helpers/verifies-rs256.js";
+async function verifiesRs256(rawToken: string, publicKey: KeyObject): Promise<boolean> {
+  const result = await verifyRs256Jwt(rawToken, { lookup: async () => publicKey });
+  return result.ok;
+}
 
 const encode = (value: unknown): string => Buffer.from(JSON.stringify(value)).toString("base64url");
 

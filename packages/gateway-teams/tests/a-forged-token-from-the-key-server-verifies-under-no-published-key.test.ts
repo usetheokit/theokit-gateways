@@ -5,13 +5,18 @@
  * would, and the verifier refuses it as a bad signature whichever listed `kid` it names.
  */
 
-import { createPublicKey, type JsonWebKey } from "node:crypto";
+import { createPublicKey, type JsonWebKey, type KeyObject } from "node:crypto";
 
+import { verifyRs256Jwt } from "@theokit/gateway";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { acceptingValidatorModule, activityRequest, TENANT } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
 import { verifierUnderTest } from "./helpers/verifier-under-test.js";
-import { verifiesRs256 } from "./helpers/verifies-rs256.js";
+
+async function verifiesRs256(rawToken: string, publicKey: KeyObject): Promise<boolean> {
+  const result = await verifyRs256Jwt(rawToken, { lookup: async () => publicKey });
+  return result.ok;
+}
 
 const BAD_SIGNATURE = "signature does not verify";
 

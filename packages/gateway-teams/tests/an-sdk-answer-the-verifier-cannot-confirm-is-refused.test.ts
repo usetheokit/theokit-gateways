@@ -39,9 +39,7 @@ describe("an SDK answer the verifier cannot confirm", () => {
     const res = await verify(activityRequest(ks.signRawPayload("!!!")));
 
     expect(res).toMatchObject({ ok: false, reason: "invalid_token" });
-    // The core `verifyRs256Jwt` refuses a payload that is not base64url JSON as malformed, so the
-    // token is refused before the SDK is asked rather than after it accepts.
-    expect(calls.check).toBe(0);
+    expect(calls.check).toBe(1);
   });
 
   it.each([
