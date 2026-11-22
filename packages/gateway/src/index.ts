@@ -194,3 +194,10 @@ export {
   rawBodyCapture,
 } from "./webhook/express-server.js";
 export { createWebhookHandler, type WebhookHandlerOptions } from "./webhook/fetch-handler.js";
+export {
+  type DigestEncoding,
+  safeEqualString,
+  type VerifyHmacOptions,
+  verifyDigest,
+  verifyHmac,
+} from "./webhook/verify-signature.js";

@@ -644,6 +644,31 @@ assuming this one's.
 Adapters whose transport is a long-lived connection rather than a webhook own that transport and do
 not go through this seam.
 
+## Verifying webhook signatures
+
+`verifyHmac`, `verifyDigest` and `safeEqualString` do the constant-time
+signature compare that webhook adapters otherwise hand-write. They return
+`false` (never throw) for a missing, empty, malformed or wrong-prefix
+signature; an empty `secrets` value throws `RangeError`.
+
+```ts
+import { verifyHmac } from "@theokit/gateway";
+
+// WhatsApp-style: `X-Hub-Signature-256: sha256=<hex>`, over the raw body.
+const ok = verifyHmac({
+  algorithm: "sha256",
+  secrets: [currentSecret, previousSecret], // accepts either during rotation
+  message: rawBody,
+  signature: req.headers["x-hub-signature-256"] as string | undefined,
+  encoding: "hex",
+  prefix: "sha256=",
+  caseInsensitive: true,
+});
+```
+
+Timestamp windows and field sorting (WeChat, WeCom) stay with the caller; pass
+the built message to `verifyDigest` for keyless SHA-1/SHA-256 schemes.
+
 ## Design principles
 
 - **Compose, don't reimplement.** The gateway never owns session persistence (SDK does), never owns scheduling (Cron does), never owns prompt resolution (SystemPromptResolver does).
