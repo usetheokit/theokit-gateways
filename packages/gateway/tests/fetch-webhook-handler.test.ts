@@ -75,6 +75,31 @@ describe("createWebhookHandler", () => {
   it("accepts a body of exactly the cap", async () => {
     expect((await make()(post('{"a":"bcd"}'.slice(0, 10)))).status).toBe(400);
   });
+  it("answers a precheck refusal without reading the body", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      pull() {
+        throw new Error("body was read");
+      },
+    });
+    const request = new Request("http://x/webhooks/fake", {
+      method: "POST",
+      body,
+      duplex: "half",
+    } as RequestInit);
+    const handle = vi.fn(async () => ({ status: 200 }));
+    const h = make({ precheck: () => ({ status: 401 }), handle });
+    expect((await h(request)).status).toBe(401);
+    expect(handle).not.toHaveBeenCalled();
+  });
+  it("refuses at precheck before the body cap too", async () => {
+    const h = make({ precheck: () => ({ status: 401 }) });
+    expect((await h(post("a".repeat(11)))).status).toBe(401);
+  });
+  it("awaits an asynchronous verify", async () => {
+    expect((await make({ verify: async () => false })(post("{}"))).status).toBe(401);
+    expect((await make({ verify: async () => true })(post("{}"))).status).toBe(200);
+  });
+
   it("401s when verify is false", async () => {
     expect((await make({ verify: () => false })(post("{}"))).status).toBe(401);
   });

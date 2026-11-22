@@ -73,6 +73,7 @@ export const qqChannel = {
     });
   },
   webhook: {
+    methods: ["POST"] as const,
     verify(adapter: QQAdapter, request: { readonly rawBody: string; readonly headers: Headers }) {
       return adapter.verifyWebhook(
         request.rawBody,

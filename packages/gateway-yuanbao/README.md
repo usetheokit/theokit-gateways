@@ -38,6 +38,17 @@ signature, 503 when no handler is subscribed.
 
 With `configFromEnv(descriptor, process.env, "APP_")` the required values are read from `APP_YUANBAO_*`; secrets (`appSecret`-style keys and tokens) are returned in `.secrets` for log masking. Optional endpoint overrides: `YUANBAO_API_BASE` (optional `apiBase`). A value of the wrong type makes `create` throw `ConfigurationError` with code `invalid_config` naming the key.
 
+## Mount the route
+
+```ts
+import { createChannels, createWebhookHandler } from "@theokit/gateway";
+import { yuanbaoChannel } from "@theokit/gateway-yuanbao";
+
+const { channels } = createChannels([{ descriptor: yuanbaoChannel, config }]);
+const handle = createWebhookHandler({ channels, isStarted: () => true });
+// Route POST /webhooks/yuanbao to `handle(request)`; it answers with a Fetch `Response`.
+```
+
 ## Behaviour
 
 - Signature: hex `HMAC-SHA256(callbackSecret, timestamp + "." + rawBody)`, compared in constant
