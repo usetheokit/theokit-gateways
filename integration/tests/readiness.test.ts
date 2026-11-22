@@ -231,6 +231,15 @@ describe("live-test readiness", () => {
         "pure signature check, no I/O. Covered by packages/gateway/tests/verify-signature.test.ts",
       safeEqualString:
         "pure string compare, no I/O. Covered by packages/gateway/tests/verify-signature.test.ts",
+      decodeJwt:
+        "pure JWT/JWKS handling, no I/O of its own beyond an injected fetch. Covered by " +
+        "packages/gateway/tests/auth/jwks.test.ts",
+      jwksKeySet:
+        "pure JWT/JWKS handling, no I/O of its own beyond an injected fetch. Covered by " +
+        "packages/gateway/tests/auth/jwks.test.ts",
+      verifyRs256Jwt:
+        "pure JWT/JWKS handling, no I/O of its own beyond an injected fetch. Covered by " +
+        "packages/gateway/tests/auth/jwks.test.ts",
       createTokenCache:
         "an in-memory cache around a caller-supplied fetch function, no I/O of its own. Covered by " +
         "packages/gateway/tests/auth/token-cache.test.ts",
