@@ -5,8 +5,10 @@
  * @internal
  */
 
-import { type KeySet, KeySetUnavailableError } from "./key-set.js";
-import { decodeJwt, verifiesRs256 } from "./rs256.js";
+import { type JwksKeySet, verifyRs256Jwt } from "@theokit/gateway";
+
+/** Google's OAuth 2.0 signing keys as a JWK set, the keys that sign Chat's ID tokens. */
+export const GOOGLE_CERTS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 
 /** The issuers Google writes in an ID token. */
 const ISSUERS = new Set(["https://accounts.google.com", "accounts.google.com"]);
@@ -27,25 +29,26 @@ export type TokenVerdict =
  */
 export async function verifyChatRequest(
   authorization: string | undefined,
-  opts: { readonly keySet: KeySet; readonly audience: string; readonly now: () => number },
+  opts: { readonly keySet: JwksKeySet; readonly audience: string; readonly now: () => number },
 ): Promise<TokenVerdict> {
   const token = /^Bearer\s+(\S+)$/i.exec(authorization ?? "")?.[1];
   if (token === undefined) return refuse("no bearer token");
-  const jwt = decodeJwt(token);
-  if (jwt === undefined) return refuse("the token is not a JWT");
-  const kid = jwt.header.kid;
-  if (typeof kid !== "string") return refuse("the token names no key");
-  let key: Awaited<ReturnType<KeySet["forKid"]>>;
-  try {
-    key = await opts.keySet.forKid(kid);
-  } catch (err) {
-    if (err instanceof KeySetUnavailableError)
-      return { ok: false, status: 503, reason: err.message };
-    throw err;
+  const verified = await verifyRs256Jwt(token, opts.keySet);
+  if (!verified.ok) {
+    switch (verified.reason) {
+      case "keys_unavailable":
+        return { ok: false, status: 503, reason: "Google's key set could not be read" };
+      case "malformed":
+        return refuse("the token is not a JWT, or names no key");
+      case "unsupported_alg":
+        return refuse("the token is not signed with RS256");
+      case "unknown_kid":
+        return refuse("the token's key is not in Google's published set");
+      case "bad_signature":
+        return refuse("the signature does not verify");
+    }
   }
-  if (key === undefined) return refuse("the token's key is not in Google's published set");
-  if (!verifiesRs256(jwt, key)) return refuse("the signature does not verify");
-  return claimsFault(jwt.payload, opts.audience, opts.now()) ?? { ok: true };
+  return claimsFault(verified.payload, opts.audience, opts.now()) ?? { ok: true };
 }
 
 /** The first claim that disqualifies the token, as a refusal; `undefined` when all hold. */

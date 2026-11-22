@@ -8,11 +8,10 @@
 import { createPublicKey, type JsonWebKey } from "node:crypto";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { verifiesRs256 } from "../src/rs256-signature.js";
 import { acceptingValidatorModule, activityRequest, TENANT } from "./helpers/claim-fixtures.js";
 import { CLIENT_ID, type KeyServer, startKeyServer } from "./helpers/key-server.js";
 import { verifierUnderTest } from "./helpers/verifier-under-test.js";
+import { verifiesRs256 } from "./helpers/verifies-rs256.js";
 
 const BAD_SIGNATURE = "signature does not verify";
 
@@ -53,10 +52,12 @@ describe("a forged token from the key server", () => {
     const { keys: tenantJwks } = (await tenantSet.json()) as { keys: JsonWebKey[] };
     const jwks = [...server.publishedJwks(), ...tenantJwks] as JsonWebKey[];
 
-    const verified = jwks.map((jwk) => {
-      const token = server.forgeToken({}, { kid: String(jwk.kid) });
-      return verifiesRs256(token, createPublicKey({ key: jwk, format: "jwk" }));
-    });
+    const verified = await Promise.all(
+      jwks.map(async (jwk) => {
+        const token = server.forgeToken({}, { kid: String(jwk.kid) });
+        return verifiesRs256(token, createPublicKey({ key: jwk, format: "jwk" }));
+      }),
+    );
 
     // Three Bot Framework keys and the tenant's own.
     expect(verified).toEqual([false, false, false, false]);
