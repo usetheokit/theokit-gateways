@@ -1,5 +1,7 @@
 ---
 "@theokit/gateway": patch
+"@theokit/gateway-signal": minor
+"@theokit/gateway-imessage": minor
 ---
 
-Restructure `JsonRpcLineClient` internals (line parsing and outcome mapping as separate functions) without changing its behaviour.
+Remove the two package-local copies of the line-framed JSON-RPC client: `gateway-signal` and `gateway-imessage` now use the one `JsonRpcLineClient` exported by `@theokit/gateway`, so a single implementation exists. Raises their `@theokit/gateway` peer floor to `>=0.27.0`, the first core release that exports it.

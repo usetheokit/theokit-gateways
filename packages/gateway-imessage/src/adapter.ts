@@ -12,6 +12,9 @@ import { spawn as nodeSpawn } from "node:child_process";
 
 import {
   BasePlatformAdapter,
+  JsonRpcLineClient,
+  type RpcNotification,
+  type RpcOutcome,
   channelRendering,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
@@ -19,7 +22,6 @@ import {
 } from "@theokit/gateway";
 
 import { mapSendError } from "./errors.js";
-import { JsonRpcLineClient, type RpcNotification, type RpcOutcome } from "./json-rpc.js";
 import { type IMessageRow, imessageRowToMessageEvent } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import type { ChildLike, IMessageAdapterOptions, SpawnLike } from "./types.js";
