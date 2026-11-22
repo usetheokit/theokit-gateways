@@ -38,6 +38,26 @@ describe("splitKeepingRows unit option", () => {
     ]);
   });
 
+  it("keeps a row of exactly the limit in code points whole, astral characters counted once", () => {
+    // "| 😀😀😀 |" is 7 code points and 10 UTF-16 units.
+    expect(splitKeepingRows("ab\n| 😀😀😀 |\nzz", 8, { unit: "codepoint" })).toEqual([
+      "ab\n",
+      "| 😀😀😀 |\n",
+      "zz",
+    ]);
+    expect(splitKeepingRows("ab\n| 😀😀😀😀 |", 8, { unit: "codepoint" })).toEqual([
+      "ab\n",
+      "| 😀😀😀😀 |",
+    ]);
+  });
+
+  it("cuts a row one code point longer than the limit by length", () => {
+    expect(splitKeepingRows("ab\n| 😀😀😀😀😀 |", 8, { unit: "codepoint" })).toEqual([
+      "ab\n| 😀😀😀",
+      "😀😀 |",
+    ]);
+  });
+
   it("rejects an unknown unit", () => {
     expect(() => splitKeepingRows("abc", 2, { unit: "bytes" as never })).toThrow(/RangeError|unit/);
     expect(() => splitKeepingRows("abc", 2, { unit: "bytes" as never })).toThrow(RangeError);
