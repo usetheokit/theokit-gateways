@@ -13,13 +13,15 @@ import { spawn as nodeSpawn } from "node:child_process";
 import {
   BasePlatformAdapter,
   channelRendering,
+  JsonRpcLineClient,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
+  type RpcNotification,
+  type RpcOutcome,
   type SendResult,
 } from "@theokit/gateway";
 
 import { mapSendError } from "./errors.js";
-import { JsonRpcLineClient, type RpcNotification, type RpcOutcome } from "./json-rpc.js";
 import { type IMessageRow, imessageRowToMessageEvent } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import type { ChildLike, IMessageAdapterOptions, SpawnLike } from "./types.js";
