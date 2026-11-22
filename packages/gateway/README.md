@@ -655,3 +655,19 @@ See `.claude/knowledge-base/adrs/D170-D181-*.md` for the full design rationale.
 ## License
 
 Apache-2.0
+
+### `ReconnectBackoff`
+
+Adapters that hold a long-lived socket or stream can reuse the runner's backoff:
+
+```ts
+import { ReconnectBackoff } from "@theokit/gateway";
+
+const backoff = new ReconnectBackoff({ initialDelayMs: 1000, maxDelayMs: 30_000 });
+// on open:      backoff.opened();
+// on close:     const delay = backoff.nextDelayMs(); // undefined once maxAttempts is spent
+```
+
+Defaults match `ReconnectPolicy` (1 s initial, 60 s cap, factor 2). A connection open for at least
+`stableAfterMs` (default 60 s) resets the delay. A negative or non-finite delay, or a `factor`
+below 1, throws a `RangeError` naming the field.

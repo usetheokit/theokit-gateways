@@ -93,6 +93,7 @@ export {
   type ReconnectPolicy,
   type StartResult,
 } from "./runner/gateway-runner.js";
+export { ReconnectBackoff, type ReconnectBackoffOptions } from "./runner/reconnect-backoff.js";
 export {
   type MediaUnderstandingOptions,
   withMediaUnderstanding,
