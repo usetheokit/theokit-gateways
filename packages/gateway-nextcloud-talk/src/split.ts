@@ -17,11 +17,12 @@ export const TALK_MAX_LENGTH = 32_000;
 
 /**
  * Cut `text` into consecutive parts of at most `limit` code points, never inside a grapheme
- * (a ZWJ emoji or a flag ends the part before it, not inside it). A Markdown table row that a cut would split, and that fits in a part, starts the next part
- * instead, so it arrives whole (B-556). A text within the limit comes back whole; an empty text
- * gives no part.
+ * (a ZWJ emoji or a flag ends the part before it, not inside it). A Markdown table row that a
+ * cut would split, and that fits in a part, starts the next part instead, so it arrives whole
+ * (B-556). A text within the limit comes back whole; an empty text gives no part.
  *
- * @throws RangeError when `limit` is not a positive integer, or when one grapheme is longer than `limit`
+ * @throws RangeError when `limit` is not a positive integer, or when one grapheme is longer
+ * than `limit`
  * @public
  */
 export function splitForTalk(text: string, limit = TALK_MAX_LENGTH): string[] {

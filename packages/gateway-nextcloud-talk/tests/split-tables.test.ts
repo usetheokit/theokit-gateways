@@ -176,4 +176,9 @@ describe("splitForTalk core delegation", () => {
     expect(() => splitForTalk("x", 0)).toThrow(RangeError);
     expect(() => splitForTalk("x", 0)).toThrow(/limit/);
   });
+
+  it("throws a RangeError when one grapheme is longer than the limit", () => {
+    const family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}";
+    expect(() => splitForTalk(`ab${family}`, 3)).toThrow(RangeError);
+  });
 });
