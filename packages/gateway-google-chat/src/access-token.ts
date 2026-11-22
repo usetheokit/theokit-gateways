@@ -20,6 +20,19 @@ const ASSERTION_LIFETIME_S = 3600;
 /** The token exchange failed: the answer names why, never the key or the assertion. */
 export class AccessTokenError extends Error {
   override readonly name = "AccessTokenError";
+
+  constructor(
+    message: string,
+    readonly details: {
+      /** Set when the endpoint answered a non-success HTTP status. */
+      readonly status?: number;
+      readonly retryAfter?: string | null;
+      /** Set when the request itself failed (fetch rejected). */
+      readonly network?: true;
+    } = {},
+  ) {
+    super(message);
+  }
 }
 
 /** Access tokens for one service account, shared by every send until shortly before expiry. */
@@ -74,14 +87,19 @@ export class AccessTokenClient {
         ...(signal === undefined ? {} : { signal }),
       });
     } catch (err) {
-      throw new AccessTokenError(`token request failed: ${describe(err)}`);
+      throw new AccessTokenError(`token request failed: ${describe(err)}`, { network: true });
     }
     const answer = (await response.json().catch(() => undefined)) as
       | { access_token?: unknown; expires_in?: unknown; error?: unknown }
       | undefined;
     if (!response.ok || typeof answer?.access_token !== "string") {
       const why = typeof answer?.error === "string" ? `: ${answer.error}` : "";
-      throw new AccessTokenError(`token endpoint answered HTTP ${response.status}${why}`);
+      throw new AccessTokenError(
+        `token endpoint answered HTTP ${response.status}${why}`,
+        response.ok
+          ? {}
+          : { status: response.status, retryAfter: response.headers.get("retry-after") },
+      );
     }
     return {
       value: answer.access_token,

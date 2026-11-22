@@ -245,7 +245,40 @@ describe("SynologyChatAdapter.sendMessage", () => {
     expect(nas.posts()).toEqual([]);
   });
 
-  it("turns a refused post into synology_api_error", async () => {
+  it("maps an HTTP 429 with Retry-After to rate_limit", async () => {
+    const nas = new ScriptedNas();
+    const { adapter } = await connected(nas);
+    nas.chatbot = async () =>
+      new Response("slow down", { status: 429, headers: { "retry-after": "2" } });
+    const result = await adapter.sendMessage({ channel: { id: "42", type: "dm" }, text: "x" });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "rate_limit", retryAfterMs: 2000, platformCode: "synology_api_error" },
+    });
+  });
+
+  it("maps an HTTP 500 to server_error", async () => {
+    const nas = new ScriptedNas();
+    const { adapter } = await connected(nas);
+    nas.chatbot = async () => new Response("boom", { status: 500 });
+    const result = await adapter.sendMessage({ channel: { id: "42", type: "dm" }, text: "x" });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "server_error" } });
+  });
+
+  it("maps a rejected fetch to network_error", async () => {
+    const nas = new ScriptedNas();
+    const { adapter } = await connected(nas);
+    nas.chatbot = async () => {
+      throw new TypeError("fetch failed");
+    };
+    const result = await adapter.sendMessage({ channel: { id: "42", type: "dm" }, text: "x" });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "network_error" } });
+  });
+
+  it("turns a refused post into platform_error with the Synology code", async () => {
     const nas = new ScriptedNas();
     const { adapter } = await connected(nas);
     nas.chatbot = async () => Response.json({ success: false, error: { code: 120 } });
@@ -253,7 +286,11 @@ describe("SynologyChatAdapter.sendMessage", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: { code: "synology_api_error", message: "chatbot answered error code 120" },
+      error: {
+        code: "platform_error",
+        message: "chatbot answered error code 120",
+        platformCode: "synology_api_error",
+      },
     });
   });
 
