@@ -166,3 +166,24 @@ describe("telegramChannel env bindings", () => {
     expect(seen).toEqual(["from 10", "from 20"]);
   });
 });
+
+describe("telegramChannel apiBase", () => {
+  it("declares an optional apiBase read from TELEGRAM_API_BASE", () => {
+    expect(telegramChannel.config).toContainEqual(
+      expect.objectContaining({
+        key: "apiBase",
+        env: "TELEGRAM_API_BASE",
+        required: false,
+        secret: false,
+      }),
+    );
+  });
+
+  it("builds an adapter with apiBase and refuses a non-string one", () => {
+    expect(telegramChannel.create({ token: "123:abc", apiBase: "http://x" })).toBeInstanceOf(
+      TelegramAdapter,
+    );
+    const err = configurationErrorOf(() => telegramChannel.create({ token: "1:a", apiBase: 5 }));
+    expect(err.code).toBe("invalid_config");
+  });
+});

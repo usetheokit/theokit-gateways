@@ -6,14 +6,13 @@
  * @public
  */
 
+import { createTokenCache, type FetchedToken, type TokenCache } from "../auth/token-cache.js";
 import { SeenIds } from "../text/seen-ids.js";
 import type { MessageEvent as GatewayMessageEvent } from "../types/message-event.js";
 import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "./base.js";
 import { parseFlatXml } from "./weixin-xml.js";
 
 const REQUEST_TIMEOUT_MS = 30_000;
-/** Refresh this long before the token's stated expiry. */
-const TOKEN_MARGIN_MS = 60_000;
 
 /** A `fetch`-shaped function; the adapter's only network seam. @public */
 export type WeixinFetch = (
@@ -84,13 +83,14 @@ export abstract class WeixinAdapterBase extends BasePlatformAdapter {
   private readonly cfg: WeixinAdapterConfig;
   private readonly doFetch: WeixinFetch;
   private connected = false;
-  private accessToken: { value: string; expiresAt: number } | undefined;
+  private readonly tokens: TokenCache;
   private readonly seen = new SeenIds();
 
   constructor(cfg: WeixinAdapterConfig) {
     super();
     this.cfg = cfg;
     this.doFetch = cfg.fetch ?? defaultFetch;
+    this.tokens = createTokenCache({ fetchToken: () => this.requestToken() });
   }
 
   /** Path and query of the access-token request. */
@@ -118,7 +118,7 @@ export abstract class WeixinAdapterBase extends BasePlatformAdapter {
 
   async disconnect(): Promise<void> {
     this.connected = false;
-    this.accessToken = undefined;
+    this.tokens.clear();
   }
 
   /** Send text only; a subclass's `sendMessage` refuses attachments first, then calls this. */
@@ -189,21 +189,20 @@ export abstract class WeixinAdapterBase extends BasePlatformAdapter {
     return weixinAck(outcome);
   }
 
-  private async token(force: boolean): Promise<string> {
-    const cached = this.accessToken;
-    if (!force && cached !== undefined && cached.expiresAt - TOKEN_MARGIN_MS > Date.now()) {
-      return cached.value;
-    }
+  private token(force: boolean): Promise<string> {
+    return this.tokens.get({ force });
+  }
+
+  private async requestToken(): Promise<FetchedToken> {
     const body = await this.call("GET", this.tokenPath());
     if (body.errcode !== undefined && body.errcode !== 0) {
       throw new Error(`token answered error ${String(body.errcode)}: ${String(body.errmsg)}`);
     }
     if (!body.access_token) throw new Error("token answer has no access_token");
-    this.accessToken = {
+    return {
       value: body.access_token,
-      expiresAt: Date.now() + (body.expires_in ?? 7200) * 1000,
+      ...(body.expires_in === undefined ? {} : { expiresInS: body.expires_in }),
     };
-    return body.access_token;
   }
 
   private async call(method: "GET" | "POST", path: string, payload?: unknown): Promise<ApiBody> {

@@ -11,6 +11,7 @@ import {
   channelRendering,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
+  SeenIds,
   type SendResult,
 } from "@theokit/gateway";
 
@@ -68,7 +69,7 @@ export class ZaloPersonalAdapter extends BasePlatformAdapter {
   private connecting: Promise<boolean> | undefined;
   /** Bumped by `disconnect()`, so a connect it overtook does not report connected. */
   private generation = 0;
-  private readonly seen = new Set<string>();
+  private readonly seen = new SeenIds();
   private warnedAboutHtml = false;
 
   /** @throws Error when `credentials` lacks an imei or a user agent */
@@ -220,12 +221,7 @@ export class ZaloPersonalAdapter extends BasePlatformAdapter {
     if (message.isSelf === true) return;
     const event = toMessageEvent(message);
     if (event === undefined) return;
-    if (this.seen.has(event.id)) return;
-    this.seen.add(event.id);
-    if (this.seen.size > 1000) {
-      const oldest = this.seen.values().next().value;
-      if (oldest !== undefined) this.seen.delete(oldest);
-    }
+    if (!this.seen.add(event.id)) return;
     void this.runHandler(this.handler, event).catch((err: unknown) => {
       process.stderr.write(`[${LABEL}] handler threw: ${messageOf(err)}\n`);
     });

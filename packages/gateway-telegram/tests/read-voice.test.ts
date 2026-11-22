@@ -63,8 +63,12 @@ describe("TelegramAdapter reads a polled voice note", () => {
   let getFile: Mock<(fileId: string) => Promise<object>>;
   let fetchSpy: ReturnType<typeof vi.fn>;
 
-  function build(allowedUsers?: ReadonlyArray<string>): void {
-    adapter = new TelegramAdapter({ token: TOKEN, ...(allowedUsers ? { allowedUsers } : {}) });
+  function build(allowedUsers?: ReadonlyArray<string>, apiBase?: string): void {
+    adapter = new TelegramAdapter({
+      token: TOKEN,
+      ...(allowedUsers ? { allowedUsers } : {}),
+      ...(apiBase ? { apiBase } : {}),
+    });
     adapter.getBot().botInfo = BOT_INFO as never;
     getFile = vi.fn(async (fileId: string) => ({
       file_id: fileId,
@@ -114,6 +118,15 @@ describe("TelegramAdapter reads a polled voice note", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(String(fetchSpy.mock.calls[0]?.[0])).toBe(
       `https://api.telegram.org/file/bot${TOKEN}/voice/v1.oga`,
+    );
+  });
+
+  it("downloads from the configured apiBase", async () => {
+    build(undefined, "http://localhost:8081/");
+    await adapter.getBot().handleUpdate(voiceUpdate({ file_id: "v1", duration: 3 }));
+
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toBe(
+      `http://localhost:8081/file/bot${TOKEN}/voice/v1.oga`,
     );
   });
 

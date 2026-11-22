@@ -15,6 +15,7 @@ import {
   BasePlatformAdapter,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
+  SeenIds,
   type SendResult,
 } from "@theokit/gateway";
 
@@ -47,7 +48,7 @@ export class RaftAdapter extends BasePlatformAdapter {
   private connected = false;
   /** Wakes run one after another, in the order Raft printed them. */
   private queue: Promise<void> = Promise.resolve();
-  private readonly seen = new Set<string>();
+  private readonly seen = new SeenIds();
 
   constructor(opts: RaftAdapterOptions = {}) {
     super();
@@ -183,12 +184,7 @@ export class RaftAdapter extends BasePlatformAdapter {
       process.stderr.write(`[${LABEL}] dropped a wake line that is not a usable wake\n`);
       return;
     }
-    if (this.seen.has(event.id)) return;
-    this.seen.add(event.id);
-    if (this.seen.size > 1000) {
-      const oldest = this.seen.values().next().value;
-      if (oldest !== undefined) this.seen.delete(oldest);
-    }
+    if (!this.seen.add(event.id)) return;
     const outcome = await this.runHandler(this.handler, event);
     if (outcome === "handler_threw") process.stderr.write(`[${LABEL}] handler threw\n`);
   }
