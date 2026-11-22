@@ -1,5 +1,3 @@
-import { expect } from "vitest";
-
 interface Call {
   url: string;
 }
@@ -14,6 +12,7 @@ interface Sender {
  * A token inside the refresh margin is never served from the cache, so the cache stays empty.
  */
 export async function expectOneTokenRequestForConcurrentSends(options: {
+  expect: (value: unknown) => { toBe(v: unknown): void; toHaveLength(n: number): void };
   fakeFetch: (answer: (c: any) => unknown) => { fetch: unknown; calls: Call[] };
   ok: (c: any) => unknown;
   started: (fetch: any) => Sender;
@@ -30,6 +29,6 @@ export async function expectOneTokenRequestForConcurrentSends(options: {
   calls.length = 0;
   const out = { channel: { id: "u1", type: "dm" as const }, text: "hi" };
   const results = await Promise.all([a.sendMessage(out), a.sendMessage(out)]);
-  expect(results.every((r) => r.ok)).toBe(true);
-  expect(calls.filter((c) => options.isTokenRequest(c.url))).toHaveLength(1);
+  options.expect(results.every((r) => r.ok)).toBe(true);
+  options.expect(calls.filter((c) => options.isTokenRequest(c.url))).toHaveLength(1);
 }

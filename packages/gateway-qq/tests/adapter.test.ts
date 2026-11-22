@@ -103,6 +103,7 @@ describe("QQAdapter", () => {
 
   it("makes one token request for concurrent sends with an empty cache", () =>
     expectOneTokenRequestForConcurrentSends({
+      expect,
       fakeFetch,
       ok,
       started,
