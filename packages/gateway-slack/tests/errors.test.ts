@@ -13,6 +13,20 @@ describe("mapSlackError", () => {
     expect(r.error?.message).toContain("30");
   });
 
+  it("maps a rate limit to rate_limit with retryAfterMs and the Slack code", () => {
+    const r = mapSlackError({ data: { error: "rate_limited", retry_after: 30 } });
+    expect(r.error).toMatchObject({
+      code: "rate_limit",
+      retryAfterMs: 30000,
+      platformCode: "rate_limited",
+    });
+  });
+
+  it("keeps the Slack code in platformCode for a permission error", () => {
+    const r = mapSlackError({ data: { error: "missing_scope", needed: "chat:write" } });
+    expect(r.error).toMatchObject({ code: "permission_denied", platformCode: "missing_scope" });
+  });
+
   it("maps channel_not_found", () => {
     const r = mapSlackError({ data: { error: "channel_not_found" } });
     expect(r.ok).toBe(false);
@@ -21,9 +35,9 @@ describe("mapSlackError", () => {
 
   it("maps not_in_channel + missing_scope to no_permission with needed/scope", () => {
     const r1 = mapSlackError({ data: { error: "not_in_channel" } });
-    expect(r1.error?.code).toBe("no_permission");
+    expect(r1.error?.code).toBe("permission_denied");
     const r2 = mapSlackError({ data: { error: "missing_scope", needed: "chat:write" } });
-    expect(r2.error?.code).toBe("no_permission");
+    expect(r2.error?.code).toBe("permission_denied");
     expect(r2.error?.message).toBe("chat:write");
   });
 

@@ -186,11 +186,11 @@ describe("TelegramAdapter.sendMessage with attachments", () => {
     expect(sendText).not.toHaveBeenCalled();
   });
 
-  it("maps a 429 from sendPhoto to rate_limited and stops the send", async () => {
+  it("maps a 429 from sendPhoto to rate_limit and stops the send", async () => {
     sendPhoto.mockRejectedValueOnce(grammyError(429, "Too Many Requests: retry after 3"));
     const rateLimited = await adapter.sendMessage(out("hi", [image(), image()]));
 
-    expect(rateLimited.error?.code).toBe("rate_limited");
+    expect(rateLimited.error?.code).toBe("rate_limit");
     expect(sendPhoto).toHaveBeenCalledTimes(1);
   });
 
@@ -234,6 +234,30 @@ describe("TelegramAdapter.sendMessage with attachments", () => {
     expect(sendPhoto).not.toHaveBeenCalled();
   });
 
+  it("maps retry_after seconds to retryAfterMs", async () => {
+    sendPhoto.mockRejectedValueOnce(
+      new GrammyError(
+        "Call to 'sendPhoto' failed!",
+        {
+          ok: false,
+          error_code: 429,
+          description: "Too Many Requests: retry after 3",
+          parameters: { retry_after: 3 },
+        },
+        "sendPhoto",
+        {},
+      ),
+    );
+    const result = await adapter.sendMessage(out("hi", [image()]));
+    expect(result.error).toMatchObject({ code: "rate_limit", retryAfterMs: 3000 });
+  });
+
+  it("keeps the Telegram code in platformCode for a permission error", async () => {
+    sendPhoto.mockRejectedValueOnce(grammyError(403, "Forbidden: bot was blocked by the user"));
+    const result = await adapter.sendMessage(out("hi", [image()]));
+    expect(result.error).toMatchObject({ code: "permission_denied", platformCode: "403" });
+  });
+
   it("a 1-unit text is the caption", async () => {
     await adapter.sendMessage(out("x", [image()]));
 
@@ -246,7 +270,7 @@ describe("TelegramAdapter.sendMessage with attachments", () => {
     const result = await adapter.sendMessage(out("c".repeat(CAPTION_LIMIT + 1), [image()]));
 
     expect(sendPhoto).toHaveBeenCalledTimes(1);
-    expect(result.error?.code).toBe("no_permission");
+    expect(result.error?.code).toBe("permission_denied");
   });
 
   it("refuses an attachments value that is not an array", async () => {
