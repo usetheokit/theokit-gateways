@@ -684,6 +684,21 @@ assuming this one's.
 Adapters whose transport is a long-lived connection rather than a webhook own that transport and do
 not go through this seam.
 
+## Verifying a JWT-signed request
+
+Platforms that sign requests with an RS256 JWT can share one key-set cache and verifier:
+
+```ts
+import { jwksKeySet, verifyRs256Jwt } from "@theokit/gateway";
+
+const keys = jwksKeySet({ url: "https://www.googleapis.com/oauth2/v3/certs" });
+const result = await verifyRs256Jwt(bearerToken, keys);
+if (!result.ok) throw new Error(result.reason);
+// result.payload is signature-verified; check issuer, audience and expiry yourself.
+```
+
+The cache honours `Cache-Control: max-age`, shares one in-flight read, refetches for an unknown `kid` at most once per `unknownKidRefetchFloorMs` (default 60 s) and, by default, serves a stale key while one refresh runs (`staleWhileRevalidate`). `reason` is `malformed`, `unsupported_alg` (only `RS256` is accepted), `unknown_kid`, `keys_unavailable` or `bad_signature`. `decodeJwt` splits a token without verifying it.
+
 ## Design principles
 
 - **Compose, don't reimplement.** The gateway never owns session persistence (SDK does), never owns scheduling (Cron does), never owns prompt resolution (SystemPromptResolver does).
