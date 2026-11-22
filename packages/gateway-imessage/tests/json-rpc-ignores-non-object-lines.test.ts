@@ -1,6 +1,5 @@
-import { describe, expect, it } from "vitest";
-
 import { JsonRpcLineClient } from "@theokit/gateway";
+import { describe, expect, it } from "vitest";
 import { FakeChild, until } from "./fake-child.js";
 
 describe("JsonRpcLineClient with stdout lines that are not objects", () => {
