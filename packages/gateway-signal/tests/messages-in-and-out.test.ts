@@ -62,6 +62,21 @@ describe("inbound", () => {
     expect(event.signal.sourceNumber).toBe("+5511988887777");
   });
 
+  it("skips stdout lines that are not JSON objects and still delivers the next message", async () => {
+    const { adapter, child } = await connected();
+    const events = received(adapter);
+
+    for (const line of ["null", "42", '"x"', "[]"]) child.emitLine(line);
+    child.receive({
+      sourceNumber: "+5511988887777",
+      sourceUuid: "uuid-ana",
+      timestamp: 1_700_000_000_555,
+      dataMessage: { timestamp: 1_700_000_000_555, message: "after noise" },
+    });
+    await until(() => events.length === 1, "one event");
+    expect(events[0]?.text).toBe("after noise");
+  });
+
   it("files a direct message under the sender's number", async () => {
     const { adapter, child } = await connected();
     const events = received(adapter);

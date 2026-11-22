@@ -40,6 +40,22 @@ afterEach(() => {
 });
 
 describe("inbound", () => {
+  it("skips stdout lines that are not JSON objects and still delivers the next message", async () => {
+    const { adapter, child } = await connected();
+    const events = received(adapter);
+
+    for (const line of ["null", "42", '"x"', "[]"]) child.emitLine(line);
+    child.message({
+      id: 42,
+      chat_id: 9,
+      guid: "p:0/NOISE",
+      sender: "ana@example.com",
+      text: "after noise",
+    });
+    await until(() => events.length === 1, "one event");
+    expect(events[0]?.text).toBe("after noise");
+  });
+
   it("turns a message notification into an IMessageMessageEvent", async () => {
     const { adapter, child } = await connected();
     const events = received(adapter);
