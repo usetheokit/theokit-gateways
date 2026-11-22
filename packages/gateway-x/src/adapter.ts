@@ -12,6 +12,7 @@ import {
   chunkByGrapheme,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
+  SeenIds,
   type SendResult,
   type XThreadTweet,
 } from "@theokit/gateway";
@@ -35,14 +36,6 @@ export function splitForX(text: string): string[] {
 
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
-}
-
-function remember<T>(set: Set<T>, value: T): void {
-  set.add(value);
-  if (set.size > MEMORY) {
-    const oldest = set.values().next().value;
-    if (oldest !== undefined) set.delete(oldest);
-  }
 }
 
 /** Numeric ids compare by length, then lexically; X ids grow with time. */
@@ -81,9 +74,9 @@ export class XAdapter extends BasePlatformAdapter {
   private sinceId: string | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private polling = false;
-  private readonly seen = new Set<string>();
+  private readonly seen = new SeenIds(MEMORY);
   /** Mention tweets that were delivered; the only tweets a reply may go to. */
-  private readonly answerable = new Set<string>();
+  private readonly answerable = new SeenIds(MEMORY);
   /** The latest delivered mention of each conversation: where `sendMessage` replies. */
   private readonly latest = new Map<string, string>();
 
@@ -163,14 +156,13 @@ export class XAdapter extends BasePlatformAdapter {
 
   private async dispatch(tweet: XTweet, page: XPage): Promise<boolean> {
     const authorId = tweet.author_id ?? "";
-    if (authorId === "" || authorId === this.opts.userId || this.seen.has(tweet.id)) return false;
-    remember(this.seen, tweet.id);
+    if (authorId === "" || authorId === this.opts.userId || !this.seen.add(tweet.id)) return false;
     const username = page.users.get(authorId)?.username ?? "";
     const verdict = this.policy.decide(authorId, username, this.now());
     if (verdict === "refused") return false;
     const event = await this.toEvent(tweet, page, username, verdict === "guest");
     const conversationId = event.channel.id;
-    remember(this.answerable, tweet.id);
+    this.answerable.add(tweet.id);
     this.latest.set(conversationId, tweet.id);
     if (this.latest.size > MEMORY) {
       const oldest = this.latest.keys().next().value;

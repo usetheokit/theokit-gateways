@@ -125,4 +125,26 @@ describe("RealtimeBotAdapter", () => {
     expect(got.map((e) => e.id)).toEqual(["m1"]);
     expect(got[0]?.text).toBe("hi");
   });
+
+  it("delivers a repeated id once and again after 1001 other ids", async () => {
+    const { adapter, sockets } = setup();
+    const got: GatewayMessageEvent[] = [];
+    adapter.onInbound(async (e) => {
+      got.push(e);
+    });
+    const p = adapter.connect();
+    sockets[0]?.open();
+    await p;
+    const msg = (id: string) => ({
+      type: "message.created",
+      cursor: "9",
+      payload: { message: { id, channel_id: "c1", author_user_id: "u1", body: "hi" } },
+    });
+    sockets[0]?.frame(msg("first"));
+    sockets[0]?.frame(msg("first"));
+    for (let i = 0; i < 1001; i++) sockets[0]?.frame(msg(`o${i}`));
+    sockets[0]?.frame(msg("first"));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(got.filter((e) => e.id === "first")).toHaveLength(2);
+  });
 });
