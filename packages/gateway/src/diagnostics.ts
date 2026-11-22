@@ -1,5 +1,6 @@
 import { redactSecrets } from "./security/credential-patterns.js";
 
+/** Options for {@link reportDiagnostic}. */
 export interface ReportDiagnosticOptions {
   /** A failure (as opposed to an informational line). Default false. */
   readonly failure?: boolean;
