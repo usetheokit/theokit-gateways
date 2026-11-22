@@ -14,7 +14,6 @@
  * and compares no `serviceurl` on the 2.1.x Entra path.
  */
 
-import { createVerify, type KeyObject } from "node:crypto";
 
 import { verifyRs256Jwt } from "@theokit/gateway";
 
@@ -196,26 +195,11 @@ async function refuseListedKey(
   }
   const result = await verifyRs256Jwt(rawToken, { lookup: async () => listed.publicKey });
   // The core helper decodes the payload before it checks the signature, so a token whose payload
-  // is not base64url JSON is `malformed` there. Its signature is still checked, so that the SDK
-  // is asked about every signed token and the verifier refuses what it cannot decode afterwards.
-  const verified =
-    result.ok || (result.reason === "malformed" && signatureVerifies(rawToken, listed.publicKey));
-  return verified ? undefined : refuse("invalid_token", BAD_SIGNATURE);
-}
-
-/** Whether the RS256 signature over `rawToken`'s first two segments verifies under `publicKey`. */
-function signatureVerifies(rawToken: string, publicKey: KeyObject): boolean {
-  const [header, payload, signature, ...rest] = rawToken.split(".");
-  if (header === undefined || payload === undefined || signature === undefined || rest.length > 0) {
-    return false;
-  }
-  try {
-    return createVerify("RSA-SHA256")
-      .update(`${header}.${payload}`)
-      .verify(publicKey, Buffer.from(signature, "base64url"));
-  } catch {
-    return false;
-  }
+  // is not base64url JSON is `malformed` there and its signature is not checked here. The SDK
+  // validator is still asked (it verifies signatures itself) and the verifier refuses the
+  // undecodable payload afterwards, so such a token is never accepted.
+  if (result.ok || result.reason === "malformed") return undefined;
+  return refuse("invalid_token", BAD_SIGNATURE);
 }
 
 /** {@link sdkCheck} for a token whose signature {@link admitToSdk} verified. */
