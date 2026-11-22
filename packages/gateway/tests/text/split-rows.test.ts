@@ -39,9 +39,7 @@ describe("splitKeepingRows unit option", () => {
   });
 
   it("rejects an unknown unit", () => {
-    expect(() => splitKeepingRows("abc", 2, { unit: "bytes" as never })).toThrow(
-      /RangeError|unit/,
-    );
+    expect(() => splitKeepingRows("abc", 2, { unit: "bytes" as never })).toThrow(/RangeError|unit/);
     expect(() => splitKeepingRows("abc", 2, { unit: "bytes" as never })).toThrow(RangeError);
   });
 

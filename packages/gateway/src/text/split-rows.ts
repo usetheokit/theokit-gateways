@@ -95,11 +95,15 @@ export function splitKeepingRows(
 ): string[] {
   const unit: unknown = options.unit ?? "utf16";
   if (unit !== "utf16" && unit !== "codepoint") {
-    throw new RangeError(`splitKeepingRows: unit must be "utf16" or "codepoint", got ${String(unit)}`);
+    throw new RangeError(
+      `splitKeepingRows: unit must be "utf16" or "codepoint", got ${String(unit)}`,
+    );
   }
   const codepoint = unit === "codepoint";
   if (codepoint && !(Number.isInteger(partLimit) && partLimit > 0)) {
-    throw new RangeError(`splitKeepingRows: partLimit must be a positive integer, got ${partLimit}`);
+    throw new RangeError(
+      `splitKeepingRows: partLimit must be a positive integer, got ${partLimit}`,
+    );
   }
   const segments = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text);
   const parts: string[] = [];
