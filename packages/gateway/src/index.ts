@@ -10,6 +10,12 @@ export {
   type SendErrorCode,
   type SendResult,
 } from "./adapter/base.js";
+export type {
+  JsonRpcChild,
+  RpcNotification,
+  RpcOutcome,
+} from "./adapter/json-rpc-line.js";
+export { JsonRpcLineClient } from "./adapter/json-rpc-line.js";
 export { sendErrorFromHttp } from "./adapter/send-error.js";
 export {
   WeixinAdapterBase,

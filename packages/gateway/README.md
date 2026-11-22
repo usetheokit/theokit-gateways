@@ -398,6 +398,15 @@ running at that moment does not store its result. A failed fetch rejects every w
 is not cached. The signal passed to `get` reaches `fetchToken` only for the caller that starts the
 fetch. `now` replaces the clock in tests.
 
+## Talking JSON-RPC to a child process
+
+`JsonRpcLineClient` speaks line-framed JSON-RPC 2.0 over a child's stdio. `request(method, params, timeoutMs)` always resolves an `RpcOutcome` (`result`, `error` with `code`, `message` and optional `data`, `timeout`, or `disconnected`) and never rejects. Messages with a method and no id go to `onNotification`; non-JSON and non-object lines are skipped. When the child closes or errors, every pending request settles as `disconnected` and `onClosed` fires once. `close(reason)` does the same without killing the child.
+
+```ts
+const rpc = new JsonRpcLineClient(child, "my-adapter", onNotification, onClosed);
+const outcome = await rpc.request("version", {}, 5_000);
+```
+
 ## Architecture (5 pieces)
 
 | Module | Responsibility |

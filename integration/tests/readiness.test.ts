@@ -243,6 +243,9 @@ describe("live-test readiness", () => {
       createTokenCache:
         "an in-memory cache around a caller-supplied fetch function, no I/O of its own. Covered by " +
         "packages/gateway/tests/auth/token-cache.test.ts",
+      JsonRpcLineClient:
+        "a JSON-RPC client over a caller-supplied child's stdio; a live run needs a real child " +
+        "process. Covered by packages/gateway/tests/adapter/json-rpc-line.test.ts",
       WeixinAdapterBase:
         "the shared flow of the WeChat and WeCom adapters. Both have their own unit suites that " +
         "drive it end to end against a faked fetch; a live run needs a real Official Account or " +
