@@ -9,6 +9,7 @@ import {
   channelRendering,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
+  ReconnectBackoff,
   SeenIds,
   type SendResult,
 } from "@theokit/gateway";
@@ -18,6 +19,7 @@ import type { RealtimeBotOptions, RealtimeSocket } from "./types.js";
 const CONNECT_TIMEOUT_MS = 30_000;
 const SEND_TIMEOUT_MS = 30_000;
 const DEFAULT_RECONNECT_MS = 2000;
+const MAX_RECONNECT_MS = 30_000;
 
 /** What differs between the platforms that share this core. */
 export interface RealtimeBotSpec {
@@ -46,6 +48,7 @@ export abstract class RealtimeBotAdapter extends BasePlatformAdapter {
   private generation = 0;
   private cursor = "";
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly backoff: ReconnectBackoff;
   private readonly seen = new SeenIds();
   private warnedAboutHtml = false;
 
@@ -53,6 +56,10 @@ export abstract class RealtimeBotAdapter extends BasePlatformAdapter {
   protected constructor(opts: RealtimeBotOptions, spec: RealtimeBotSpec) {
     super();
     this.spec = spec;
+    this.backoff = new ReconnectBackoff({
+      initialDelayMs: opts?.reconnectDelayMs ?? DEFAULT_RECONNECT_MS,
+      maxDelayMs: MAX_RECONNECT_MS,
+    });
     for (const key of ["baseUrl", "token", "workspaceId", "botUserId"] as const) {
       if (typeof opts?.[key] !== "string" || opts[key] === "") {
         throw new Error(`${this.spec.label}: ${key} is required`);
@@ -78,6 +85,7 @@ export abstract class RealtimeBotAdapter extends BasePlatformAdapter {
     this.connecting = undefined;
     clearTimeout(this.reconnectTimer);
     this.reconnectTimer = undefined;
+    this.backoff.reset();
     this.closeSocket();
   }
 
@@ -203,7 +211,10 @@ export abstract class RealtimeBotAdapter extends BasePlatformAdapter {
       const factory = this.opts.socket ?? defaultSocket;
       const socket = factory(url, headers);
       this.socket = socket;
-      socket.addEventListener("open", () => resolve(true));
+      socket.addEventListener("open", () => {
+        this.backoff.opened();
+        resolve(true);
+      });
       socket.addEventListener("message", (event) => this.onFrame(event.data));
       socket.addEventListener("error", (err) => {
         process.stderr.write(`[${this.spec.label}] socket error: ${messageOf(err)}\n`);
@@ -223,11 +234,13 @@ export abstract class RealtimeBotAdapter extends BasePlatformAdapter {
   }
 
   private scheduleReconnect(generation: number): void {
-    const delay = this.opts.reconnectDelayMs ?? DEFAULT_RECONNECT_MS;
-    if (delay <= 0) return;
+    if ((this.opts.reconnectDelayMs ?? DEFAULT_RECONNECT_MS) <= 0) return;
     // One pending retry at most: a failed reconnect reaches here from both its close event and its result.
-    clearTimeout(this.reconnectTimer);
+    if (this.reconnectTimer !== undefined) return;
+    const delay = this.backoff.nextDelayMs();
+    if (delay === undefined) return;
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = undefined;
       if (generation !== this.generation) return;
       this.reconnect(generation).catch(() => undefined);
     }, delay);

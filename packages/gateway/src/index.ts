@@ -10,6 +10,12 @@ export {
   type SendErrorCode,
   type SendResult,
 } from "./adapter/base.js";
+export type {
+  JsonRpcChild,
+  RpcNotification,
+  RpcOutcome,
+} from "./adapter/json-rpc-line.js";
+export { JsonRpcLineClient } from "./adapter/json-rpc-line.js";
 export { sendErrorFromHttp } from "./adapter/send-error.js";
 export {
   WeixinAdapterBase,
@@ -56,12 +62,14 @@ export {
   type CreateChannelsResult,
   createChannels,
 } from "./channel/create-channels.js";
+export { refuseUnsupportedAttachments } from "./delivery/attachments.js";
 // Delivery
 export {
   type DeliveryRequest,
   DeliveryRouter,
   type DeliveryTarget,
 } from "./delivery/router.js";
+export { type ReportDiagnosticOptions, reportDiagnostic } from "./diagnostics.js";
 // Errors
 export {
   GatewayConfigurationError,
@@ -211,3 +219,10 @@ export {
   rawBodyCapture,
 } from "./webhook/express-server.js";
 export { createWebhookHandler, type WebhookHandlerOptions } from "./webhook/fetch-handler.js";
+export {
+  type DigestEncoding,
+  safeEqualString,
+  type VerifyHmacOptions,
+  verifyDigest,
+  verifyHmac,
+} from "./webhook/verify-signature.js";

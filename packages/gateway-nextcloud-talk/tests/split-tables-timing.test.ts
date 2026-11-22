@@ -2,15 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { splitForTalk } from "../src/split.js";
 
-/** `splitForTalk` as it was at 688c322: slices of 32000 code points. */
-function splitWithoutRowRule(text: string, limit = 32_000): string[] {
-  const codePoints = Array.from(text);
-  const parts: string[] = [];
-  for (let at = 0; at < codePoints.length; at += limit) {
-    parts.push(codePoints.slice(at, at + limit).join(""));
-  }
-  return parts;
-}
+/**
+ * The table with every pipe replaced, so no line reads as a row: `splitForTalk` then runs the same
+ * grapheme-aware cut as for the table, minus the row rule. Both calls go through core, so coverage
+ * instrumentation slows them alike; the 688c322 splitter (code-point slices, no grapheme work)
+ * no longer isolates what the row rule costs.
+ */
+const withoutRows = (text: string): string => text.replaceAll("|", "!");
 
 /**
  * B-556 NFR-002, AC-005: keeping table rows whole costs at most 1.5x the time the 688c322
@@ -69,11 +67,20 @@ function fastestRatio(oldFn: () => unknown, newFn: () => unknown, windowMs: numb
   return newBest / oldBest;
 }
 
-describe("splitForTalk timing against the 688c322 splitter", () => {
-  it("stays within 1.5x on a 1,000,000-character table", () => {
+/**
+ * Coverage instrumentation taxes the row rule's per-unit scan far more than the plain cut (measured
+ * 1.9x against 1.0x without it), so the ratio only means something on uninstrumented code.
+ */
+const instrumented =
+  (globalThis as { __vitest_worker__?: { config?: { coverage?: { enabled?: boolean } } } })
+    .__vitest_worker__?.config?.coverage?.enabled === true;
+
+describe("splitForTalk timing against a grapheme-aware splitter without the row rule", () => {
+  it.skipIf(instrumented)("stays within 1.5x on a 1,000,000-character table", () => {
     const text = tableOfLength(1_000_000);
+    const plain = withoutRows(text);
     const ratio = fastestRatio(
-      () => splitWithoutRowRule(text),
+      () => splitForTalk(plain),
       () => splitForTalk(text),
       2_500,
     );

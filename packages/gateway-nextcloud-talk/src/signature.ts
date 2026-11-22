@@ -9,7 +9,9 @@
  * @public
  */
 
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac } from "node:crypto";
+
+import { verifyHmac } from "@theokit/gateway";
 
 /**
  * Hex HMAC-SHA256 of `random + payload` under `secret`.
@@ -41,8 +43,13 @@ export function verifyTalkSignature(
   if (random === undefined || random === "" || signature === undefined || signature === "") {
     return false;
   }
-  const expected = Buffer.from(talkSignature(secret, random, rawBody));
-  const received = Buffer.from(signature.toLowerCase());
-  if (expected.length !== received.length) return false;
-  return timingSafeEqual(expected, received);
+  if (secret.length === 0) return false;
+  return verifyHmac({
+    algorithm: "sha256",
+    secrets: secret,
+    message: random + rawBody,
+    signature,
+    encoding: "hex",
+    caseInsensitive: true,
+  });
 }

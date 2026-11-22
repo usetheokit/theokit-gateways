@@ -6,6 +6,8 @@
 
 import crypto from "node:crypto";
 
+import { verifyDigest } from "@theokit/gateway";
+
 export function computeZaloSignature(
   appId: string,
   rawBody: string,
@@ -33,9 +35,11 @@ export function verifyZaloSignature(
   } catch {
     return false;
   }
-  const expected = Buffer.from(
-    `mac=${computeZaloSignature(opts.appId, rawBody, timestamp, opts.oaSecretKey)}`,
-  );
-  const given = Buffer.from(header);
-  return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+  return verifyDigest({
+    algorithm: "sha256",
+    message: opts.appId + rawBody + timestamp + opts.oaSecretKey,
+    signature: header,
+    encoding: "hex",
+    prefix: "mac=",
+  });
 }

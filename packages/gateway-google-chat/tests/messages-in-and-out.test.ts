@@ -305,8 +305,98 @@ describe("outbound", () => {
       text: "hi",
     });
 
-    expect(result.error?.code).toBe("google_chat_auth_error");
+    expect(result.error?.code).toBe("platform_error");
+    expect(result.error?.platformCode).toBe("google_chat_auth_error");
     expect(google.sends).toEqual([]);
+  });
+
+  it("maps a 429 from the token endpoint to rate_limit with retryAfterMs", async () => {
+    const google = scriptedGoogle();
+    let now = NOW_MS;
+    let limited = false;
+    const adapter = await connected(google, {
+      now: () => now,
+      fetch: async (input, init) =>
+        limited && String(input).includes("oauth2")
+          ? new Response("{}", { status: 429, headers: { "retry-after": "2" } })
+          : google.fetch(input, init),
+    });
+    now += 3_600_000;
+    limited = true;
+
+    const result = await adapter.sendMessage({
+      channel: { id: "spaces/AAA", type: "group" },
+      text: "hi",
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "rate_limit", retryAfterMs: 2000, platformCode: "google_chat_auth_error" },
+    });
+  });
+
+  it("maps a rejected token fetch to network_error", async () => {
+    const google = scriptedGoogle();
+    let now = NOW_MS;
+    let down = false;
+    const adapter = await connected(google, {
+      now: () => now,
+      fetch: async (input, init) => {
+        if (down && String(input).includes("oauth2")) throw new TypeError("fetch failed");
+        return google.fetch(input, init);
+      },
+    });
+    now += 3_600_000;
+    down = true;
+
+    const result = await adapter.sendMessage({
+      channel: { id: "spaces/AAA", type: "group" },
+      text: "hi",
+    });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "network_error" } });
+  });
+
+  it("maps a 429 with Retry-After on send to rate_limit", async () => {
+    const google = scriptedGoogle();
+    const adapter = await connected(google, {
+      fetch: async (input, init) =>
+        String(input).includes("/messages")
+          ? new Response("{}", { status: 429, headers: { "retry-after": "2" } })
+          : google.fetch(input, init),
+    });
+
+    const result = await adapter.sendMessage({
+      channel: { id: "spaces/AAA", type: "group" },
+      text: "hi",
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "rate_limit", retryAfterMs: 2000, platformCode: "google_chat_http_error" },
+    });
+  });
+
+  it("maps a 500 on send to server_error and a rejected fetch to network_error", async () => {
+    const google = scriptedGoogle();
+    const adapter = await connected(google);
+    google.sendStatus = 500;
+    const out = { channel: { id: "spaces/AAA", type: "group" as const }, text: "hi" };
+    expect(await adapter.sendMessage(out)).toMatchObject({
+      ok: false,
+      error: { code: "server_error" },
+    });
+
+    const down = await connected(google, {
+      fetch: async (input, init) => {
+        if (String(input).includes("/messages")) throw new TypeError("fetch failed");
+        return google.fetch(input, init);
+      },
+    });
+    expect(await down.sendMessage(out)).toMatchObject({
+      ok: false,
+      error: { code: "network_error" },
+    });
   });
 
   it("maps a refused send to google_chat_http_error with the status", async () => {
@@ -320,7 +410,8 @@ describe("outbound", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe("google_chat_http_error");
+    expect(result.error?.code).toBe("permission_denied");
+    expect(result.error?.platformCode).toBe("google_chat_http_error");
     expect(result.error?.message).toContain("403");
   });
 

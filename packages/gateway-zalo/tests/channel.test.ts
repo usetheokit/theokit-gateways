@@ -6,7 +6,7 @@ import { describeWebhookChannel } from "../../../shared/webhook-channel-cases.js
 import { ZaloAdapter } from "../src/adapter.js";
 import { zaloChannel } from "../src/channel.js";
 import { ConfigurationError } from "../src/errors.js";
-import { computeZaloSignature } from "../src/signature.js";
+import { computeZaloSignature, verifyZaloSignature } from "../src/signature.js";
 
 const APP = "app1";
 const SECRET = "oa-secret";
@@ -29,6 +29,14 @@ function signed(event: object): { rawBody: string; headers: Record<string, strin
     headers: { "X-ZEvent-Signature": `mac=${computeZaloSignature(APP, rawBody, ts, SECRET)}` },
   };
 }
+
+describe("verifyZaloSignature empty header", () => {
+  it("refuses an empty signature without throwing", () => {
+    const opts = { appId: "app", oaSecretKey: "secret" };
+    expect(verifyZaloSignature(opts, JSON.stringify({ timestamp: "1" }), "")).toBe(false);
+    expect(verifyZaloSignature(opts, JSON.stringify({ timestamp: "1" }), "mac=")).toBe(false);
+  });
+});
 
 describe("zaloChannel descriptor", () => {
   it("declares a webhook transport and its config", () => {

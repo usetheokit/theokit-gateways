@@ -14,15 +14,10 @@
  * and compares no `serviceurl` on the 2.1.x Entra path.
  */
 
+import { verifyRs256Jwt } from "@theokit/gateway";
+
 import { readBoundedStream } from "./bounded-stream.js";
-import {
-  type KeyLookup,
-  keySet,
-  keySetUrl,
-  type PublishedKeySet,
-  tenantKeySetUrl,
-} from "./published-key-set.js";
-import { verifiesRs256 } from "./rs256-signature.js";
+import { keySet, keySetUrl, type PublishedKeySet, tenantKeySetUrl } from "./published-key-set.js";
 import {
   importSdkMiddleware,
   type Loaded,
@@ -164,9 +159,10 @@ async function admitToSdk(
   const set = keySetFor(rawToken, keySets, expected.loginEndpoint, acceptsTenantIssued);
   if ("reason" in set) return set;
   if (readTokenAlgorithm(rawToken) !== "RS256") return refuse("invalid_token", NOT_RS256);
-  const keyRefusal = refuseListedKey(
+  const keyRefusal = await refuseListedKey(
     rawToken,
-    await set.lookup(kid),
+    set,
+    kid,
     set === keySets.botFramework,
     expected.channelId,
   );
@@ -178,23 +174,31 @@ async function admitToSdk(
 }
 
 /**
- * The {@link admitToSdk} checks on the key a lookup returned, in order: a `kid` the set does not list,
- * a set that could not be read, a Bot Framework key not endorsed for the activity's `channelId`, and a
- * signature that does not verify under the key. `undefined` when the token passes all four.
+ * The {@link admitToSdk} checks on the key the set lists for `kid`, in order: a `kid` the set does
+ * not list, a set that could not be read, a Bot Framework key not endorsed for the activity's
+ * `channelId`, and a signature that does not verify under the key (the core `verifyRs256Jwt`).
+ * `undefined` when the token passes all four.
  */
-function refuseListedKey(
+async function refuseListedKey(
   rawToken: string,
-  listed: KeyLookup,
+  set: PublishedKeySet,
+  kid: string,
   isBotFrameworkKey: boolean,
   channelId: unknown,
-): Refusal | undefined {
+): Promise<Refusal | undefined> {
+  const listed = await set.lookup(kid);
   if (listed === "unlisted") return refuse("invalid_token", KEY_NOT_PUBLISHED);
   if ("unavailable" in listed) return refuse("key_set_unavailable", listed.unavailable);
   if (isBotFrameworkKey && !keyEndorsesChannel(listed.endorsements, channelId)) {
     return refuse("invalid_token", KEY_NOT_ENDORSED);
   }
-  if (!verifiesRs256(rawToken, listed.publicKey)) return refuse("invalid_token", BAD_SIGNATURE);
-  return undefined;
+  const result = await verifyRs256Jwt(rawToken, { lookup: async () => listed.publicKey });
+  // The core helper decodes the payload before it checks the signature, so a token whose payload
+  // is not base64url JSON is `malformed` there and its signature is not checked here. The SDK
+  // validator is still asked (it verifies signatures itself) and the verifier refuses the
+  // undecodable payload afterwards, so such a token is never accepted.
+  if (result.ok || result.reason === "malformed") return undefined;
+  return refuse("invalid_token", BAD_SIGNATURE);
 }
 
 /** {@link sdkCheck} for a token whose signature {@link admitToSdk} verified. */

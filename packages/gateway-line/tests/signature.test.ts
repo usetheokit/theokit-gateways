@@ -37,3 +37,10 @@ describe("signature (D408)", () => {
     expect(verifyLineSignature("s", "body", "AAA")).toBe(false);
   });
 });
+
+describe("verifyLineSignature with an empty secret", () => {
+  it("returns false instead of throwing", () => {
+    const sig = computeLineSignature("", "{}");
+    expect(verifyLineSignature("", "{}", sig)).toBe(false);
+  });
+});

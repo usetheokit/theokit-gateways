@@ -4,6 +4,7 @@
  * @public
  */
 
+import { reportDiagnosticLine } from "../diagnostics.js";
 import { GatewayConfigurationError } from "../errors/config-error.js";
 import { redactSecrets } from "../security/credential-patterns.js";
 import type { MessageEvent, PlatformName } from "../types/message-event.js";
@@ -69,7 +70,7 @@ export function createAccessPolicyHook(options: AccessPolicyOptions): GatewayHoo
   const allowed = check(options.allowed ?? new Set(), options.isAuthenticated);
   const clock = options.clock ?? Date.now;
   const interval = options.refusalIntervalMs ?? 3_600_000;
-  const write = options.write ?? ((line: string) => process.stderr.write(`${line}\n`));
+  const write = options.write ?? reportDiagnosticLine;
   const refusal = options.refusalText ?? DEFAULT_REFUSAL;
   const store = options.pairing;
   const refused = new Map<string, number>();

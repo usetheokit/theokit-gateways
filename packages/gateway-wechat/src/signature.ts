@@ -11,6 +11,8 @@
 
 import crypto from "node:crypto";
 
+import { verifyDigest } from "@theokit/gateway";
+
 /** How far a webhook timestamp may be from now, in seconds. */
 export const WECHAT_TOLERANCE_S = 300;
 
@@ -41,7 +43,10 @@ export function verifyWeChatSignature(
   const { signature, timestamp, nonce } = query;
   if (!signature || !timestamp || !nonce) return false;
   if (!isWeChatTimestampFresh(timestamp, nowMs)) return false;
-  const expected = Buffer.from(computeWeChatSignature(token, timestamp, nonce));
-  const given = Buffer.from(signature);
-  return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+  return verifyDigest({
+    algorithm: "sha1",
+    message: [token, timestamp, nonce].sort(byCodeUnit).join(""),
+    signature,
+    encoding: "hex",
+  });
 }

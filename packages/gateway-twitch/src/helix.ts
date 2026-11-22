@@ -2,6 +2,8 @@
  * The Twitch HTTP calls: the token validator, EventSub subscriptions and Send Chat Message.
  */
 
+import { type SendError, sendErrorFromHttp } from "@theokit/gateway";
+
 import type { FetchLike } from "./types.js";
 
 const VALIDATE_URL = "https://id.twitch.tv/oauth2/validate";
@@ -20,11 +22,7 @@ export type TokenCheck =
 /** The answer to one Send Chat Message call. */
 export type ChatSend =
   | { readonly ok: true; readonly messageId: string }
-  | {
-      readonly ok: false;
-      readonly code: "twitch_message_dropped" | "twitch_api_error";
-      readonly message: string;
-    };
+  | { readonly ok: false; readonly error: SendError };
 
 /** One message to send. */
 export interface ChatMessage {
@@ -100,27 +98,42 @@ export class HelixClient {
 
   /** Send one chat message. */
   async sendChat(message: ChatMessage, signal: AbortSignal): Promise<ChatSend> {
-    const response = await this.fetchFn(`${HELIX}/chat/messages`, {
-      method: "POST",
-      headers: this.headers(),
-      body: JSON.stringify({
-        broadcaster_id: message.broadcasterId,
-        sender_id: message.senderId,
-        message: message.text,
-        ...(message.replyTo === undefined ? {} : { reply_parent_message_id: message.replyTo }),
-      }),
-      signal,
-    });
+    let response: Response;
+    try {
+      response = await this.fetchFn(`${HELIX}/chat/messages`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({
+          broadcaster_id: message.broadcasterId,
+          sender_id: message.senderId,
+          message: message.text,
+          ...(message.replyTo === undefined ? {} : { reply_parent_message_id: message.replyTo }),
+        }),
+        signal,
+      });
+    } catch (err) {
+      const why = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: { code: "network_error", message: why } };
+    }
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined);
-      return { ok: false, code: "twitch_api_error", message: String(response.status) };
+      const { error } = sendErrorFromHttp(response.status, String(response.status), {
+        retryAfter: response.headers.get("retry-after"),
+        platformCode: "twitch_api_error",
+      });
+      return {
+        ok: false,
+        error: error ?? { code: "platform_error", message: String(response.status) },
+      };
     }
     const first = ((await response.json()) as SendBody).data?.[0];
     if (first?.is_sent === true) return { ok: true, messageId: first.message_id ?? "" };
     return {
       ok: false,
-      code: "twitch_message_dropped",
-      message: first?.drop_reason?.message ?? "Twitch did not send the message",
+      error: {
+        code: "twitch_message_dropped",
+        message: first?.drop_reason?.message ?? "Twitch did not send the message",
+      },
     };
   }
 

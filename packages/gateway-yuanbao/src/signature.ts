@@ -4,6 +4,8 @@
 
 import crypto from "node:crypto";
 
+import { verifyHmac } from "@theokit/gateway";
+
 /** How far a callback timestamp may be from now, in seconds. */
 export const YUANBAO_TOLERANCE_S = 300;
 
@@ -32,7 +34,12 @@ export function verifyYuanbaoSignature(
   if (!Number.isFinite(seconds) || Math.abs(nowMs / 1000 - seconds) > YUANBAO_TOLERANCE_S) {
     return false;
   }
-  const expected = Buffer.from(computeYuanbaoSignature(secret, timestamp, rawBody));
-  const given = Buffer.from(signature);
-  return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+  if (secret.length === 0) return false;
+  return verifyHmac({
+    algorithm: "sha256",
+    secrets: secret,
+    message: `${timestamp}.${rawBody}`,
+    signature,
+    encoding: "hex",
+  });
 }
