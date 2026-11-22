@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.28.0
+
+### Minor Changes
+
+- 483b5d9: Add `JsonRpcLineClient`, `RpcOutcome`, `RpcNotification` and `JsonRpcChild`: a line-framed JSON-RPC client for a child process, keeping the error `data` member.
+- 6ac37d3: Export `refuseUnsupportedAttachments` and add a protected `refuseAttachments` helper on `BasePlatformAdapter`, so an adapter no longer needs its own copy of the attachment refusal.
+- e1f837c: Add `reportDiagnostic(tag, message, options?)` and `ReportDiagnosticOptions`: one place that redacts a diagnostic line and writes `[tag] message` to stderr. Every diagnostic line in core now goes through it, so a handler error that echoes a token is redacted in `BasePlatformAdapter.runHandler` and the Weixin connect failure too.
+- c2e7954: Export `verifyHmac`, `verifyDigest`, `safeEqualString` and `DigestEncoding` for webhook signature checks, with secret rotation and constant-time comparison.
+
+### Patch Changes
+
+- 6f73151: Remove the two package-local copies of the line-framed JSON-RPC client: `gateway-signal` and `gateway-imessage` now use the one `JsonRpcLineClient` exported by `@theokit/gateway`, so a single implementation exists. Raises their `@theokit/gateway` peer floor to `>=0.27.0`, the first core release that exports it.
+- 03c3a2c: Use the core `JsonRpcLineClient` instead of a local copy, and raise the `@theokit/gateway` peer floor to 0.27.0.
+- 776b2a8: `splitKeepingRows` decides whether a straddled table row fits a part by reading only that row, instead of walking `partLimit` units from the row's start first. With `unit: "codepoint"` that walk cost as much again as the cut itself on every part a row straddled, which put `gateway-nextcloud-talk`'s `splitForTalk` at 1.55x to 1.7x of the plain cut on a 1,000,000-character table in CI, past its 1.5x budget. The parts are the same.
+
 ## 0.27.0
 
 ### Minor Changes

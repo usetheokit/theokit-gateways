@@ -1,5 +1,16 @@
 # @theokit/gateway-google-chat
 
+## 0.5.0
+
+### Minor Changes
+
+- ec85246: Map HTTP send failures with `sendErrorFromHttp`: 429 is now `rate_limit` with `retryAfterMs`, 401 `auth_failed`, 403 `permission_denied`, 5xx `server_error`, and a rejected fetch `network_error`. The old codes move to `platformCode`: `google_chat_auth_error`, `google_chat_http_error`, `talk_unauthorized`, `talk_bad_request`, `talk_http_error`, `synology_api_error` and `twitch_api_error` (Synology body-level errors are now `platform_error`). Raises the `@theokit/gateway` peer floor to 0.25.0.
+
+### Patch Changes
+
+- 305ddb7: Cache access tokens with the core `createTokenCache`, so concurrent sends with an empty cache make one token request. Raises the `@theokit/gateway` peer floor to `>=0.25.0`.
+- 3479b0d: Verify inbound tokens with the core `jwksKeySet` and `verifyRs256Jwt` instead of an own key-set cache and RS256 check. Both adapters now need `@theokit/gateway` >=0.26.0, which ships them.
+
 ## 0.4.0
 
 ### Minor Changes

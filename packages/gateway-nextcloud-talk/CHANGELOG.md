@@ -1,5 +1,17 @@
 # @theokit/gateway-nextcloud-talk
 
+## 0.4.0
+
+### Minor Changes
+
+- ec85246: Map HTTP send failures with `sendErrorFromHttp`: 429 is now `rate_limit` with `retryAfterMs`, 401 `auth_failed`, 403 `permission_denied`, 5xx `server_error`, and a rejected fetch `network_error`. The old codes move to `platformCode`: `google_chat_auth_error`, `google_chat_http_error`, `talk_unauthorized`, `talk_bad_request`, `talk_http_error`, `synology_api_error` and `twitch_api_error` (Synology body-level errors are now `platform_error`). Raises the `@theokit/gateway` peer floor to 0.25.0.
+
+### Patch Changes
+
+- bdf81aa: Verify webhook signatures with the core `verifyHmac`, and compare the WhatsApp verify token with `safeEqualString`; an empty expected verify token now never matches. Raises the `@theokit/gateway` peer floor to 0.26.0.
+- 4853f1b: `splitForTalk` now calls core `splitKeepingRows` with the code-point unit instead of its own copy, and the `@theokit/gateway` peer floor rises from 0.23.0 to 0.26.0. Core cuts at grapheme boundaries, the old copy cut at code points: a part that used to end inside a ZWJ emoji or a flag now ends before it.
+- ff62df5: Share the split-tables test cases of the three adapters in one module under `shared/`. Tests only; no change to the published code.
+
 ## 0.3.0
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @theokit/gateway-twitch
 
+## 0.4.0
+
+### Minor Changes
+
+- ec85246: Map HTTP send failures with `sendErrorFromHttp`: 429 is now `rate_limit` with `retryAfterMs`, 401 `auth_failed`, 403 `permission_denied`, 5xx `server_error`, and a rejected fetch `network_error`. The old codes move to `platformCode`: `google_chat_auth_error`, `google_chat_http_error`, `talk_unauthorized`, `talk_bad_request`, `talk_http_error`, `synology_api_error` and `twitch_api_error` (Synology body-level errors are now `platform_error`). Raises the `@theokit/gateway` peer floor to 0.25.0.
+
+### Patch Changes
+
+- f89ac5e: Reconnect with the core `ReconnectBackoff` (peer floor `@theokit/gateway` 0.26.0). nostr, twitch and tlon-urbit keep their delays. buzz and clickclack now treat `reconnectDelayMs` as the initial delay (default 2 s), double it per failed attempt up to 30 s and reset it after a socket stayed open for 60 s, instead of retrying every 2 s forever; `0` still disables reconnecting.
+
 ## 0.3.0
 
 ### Minor Changes

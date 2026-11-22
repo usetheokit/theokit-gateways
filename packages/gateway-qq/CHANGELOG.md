@@ -1,5 +1,17 @@
 # @theokit/gateway-qq
 
+## 0.5.0
+
+### Minor Changes
+
+- 7da088b: Send failures use the shared `SendErrorCode` values instead of `x_send_failed`, `qq_send_failed`, `zalo_send_failed` and `yuanbao_send_failed`. An HTTP failure maps by status through `sendErrorFromHttp` (429 is `rate_limit` with `retryAfterMs` from `Retry-After`, 401 is `auth_failed`, and so on); a 200 answer with a platform error code is `platform_error` with that code in `platformCode`; a rejected fetch is `network_error`. The fetch seam's response may now carry optional `headers`. The `@theokit/gateway` peer floor is now `>=0.25.0`.
+
+### Patch Changes
+
+- 305ddb7: Cache access tokens with the core `createTokenCache`, so concurrent sends with an empty cache make one token request. Raises the `@theokit/gateway` peer floor to `>=0.25.0`.
+- e517dc8: Share the HTTP failure handling (non-2xx answers, rejected fetches, send-error mapping) in one internal module instead of three copies. No behaviour change.
+- 6331c13: Share the concurrent token-request test between the adapters. Test-only change.
+
 ## 0.4.0
 
 ### Minor Changes
