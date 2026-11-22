@@ -34,6 +34,9 @@ export interface RealtimeBotOptions {
   readonly fetch?: typeof fetch;
   /** Test seam: replaces the global `WebSocket`. */
   readonly socket?: RealtimeSocketFactory;
-  /** Wait before reconnecting a dropped socket, in ms. Default 2000; `0` disables reconnecting. */
+  /**
+   * Initial wait before reconnecting a dropped socket, in ms. Default 2000. Each failed attempt
+   * doubles it, up to 30 s; a socket that stayed open for 60 s resets it. `0` disables reconnecting.
+   */
   readonly reconnectDelayMs?: number;
 }

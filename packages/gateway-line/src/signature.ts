@@ -6,10 +6,12 @@
  *
  * Carried in header `X-Line-Signature`.
  *
- * Always uses `crypto.timingSafeEqual` to prevent timing attacks.
+ * Verification goes through core `verifyHmac`, which compares in constant time.
  */
 
 import crypto from "node:crypto";
+
+import { verifyHmac } from "@theokit/gateway";
 
 export function computeLineSignature(channelSecret: string, rawBody: string): string {
   return crypto.createHmac("sha256", channelSecret).update(rawBody, "utf8").digest("base64");
@@ -27,14 +29,12 @@ export function verifyLineSignature(
   rawBody: string,
   signatureHeader: string | undefined,
 ): boolean {
-  if (signatureHeader === undefined || signatureHeader.length === 0) return false;
-  const expected = computeLineSignature(channelSecret, rawBody);
-  const a = Buffer.from(expected);
-  const b = Buffer.from(signatureHeader);
-  if (a.length !== b.length) return false;
-  try {
-    return crypto.timingSafeEqual(a, b);
-  } catch {
-    return false;
-  }
+  if (channelSecret.length === 0) return false;
+  return verifyHmac({
+    algorithm: "sha256",
+    secrets: channelSecret,
+    message: rawBody,
+    signature: signatureHeader,
+    encoding: "base64",
+  });
 }

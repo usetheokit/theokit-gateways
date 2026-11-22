@@ -8,7 +8,7 @@
  */
 
 import type { OutboundMessage } from "@theokit/gateway";
-import { DiscordAPIError, Events, Routes } from "discord.js";
+import { DiscordAPIError, Events, RateLimitError, Routes } from "discord.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DiscordAdapter } from "../src/adapter.js";
@@ -150,8 +150,8 @@ describe("DiscordAdapter.editMessage", () => {
     [10008, 404, "discord_10008"],
     [10003, 404, "discord_10003"],
     [50005, 403, "discord_50005"],
-    [50013, 403, "no_permission"],
-    [0, 429, "rate_limited"],
+    [50013, 403, "permission_denied"],
+    [0, 429, "rate_limit"],
     [50035, 400, "discord_50035"],
   ])(
     "maps a %i refusal through the send-error mapping without throwing (E4)",
@@ -165,6 +165,32 @@ describe("DiscordAdapter.editMessage", () => {
       expect(patch).toHaveBeenCalledTimes(1);
     },
   );
+
+  it("maps a discord.js RateLimitError to rate_limit with retryAfterMs", async () => {
+    patch.mockRejectedValueOnce(
+      new RateLimitError({
+        timeToReset: 1000,
+        limit: 5,
+        method: "PATCH",
+        hash: "h",
+        url: "u",
+        route: "r",
+        majorParameter: "c1",
+        global: false,
+        retryAfter: 2500,
+        sublimitTimeout: 0,
+        scope: "user",
+      }),
+    );
+    const result = await adapter.editMessage("m1", out("hello"));
+    expect(result.error).toMatchObject({ code: "rate_limit", retryAfterMs: 2500 });
+  });
+
+  it("keeps the Discord code in platformCode for a permission error", async () => {
+    patch.mockRejectedValueOnce(discordError(50013, 403));
+    const result = await adapter.editMessage("m1", out("hello"));
+    expect(result.error).toMatchObject({ code: "permission_denied", platformCode: "50013" });
+  });
 
   it("refuses empty text as empty_text with no request (E5)", async () => {
     const result = await adapter.editMessage("m1", out(""));

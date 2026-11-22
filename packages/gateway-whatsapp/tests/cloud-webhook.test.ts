@@ -316,3 +316,14 @@ describe("verifyWebhookSignature with an empty app secret", () => {
     },
   );
 });
+
+describe("verifyWebhookSubscription with an empty expected token", () => {
+  it("returns null even when the query token is empty too", () => {
+    expect(
+      verifyWebhookSubscription(
+        { "hub.mode": "subscribe", "hub.verify_token": "", "hub.challenge": "c" },
+        "",
+      ),
+    ).toBeNull();
+  });
+});

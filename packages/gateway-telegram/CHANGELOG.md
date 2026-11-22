@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.0
+
+### Minor Changes
+
+- c395723: Accept an `apiBase` option (and `TELEGRAM_API_BASE` in the channel descriptor) for the Bot API root; voice-note downloads use the same root.
+
 ## 0.11.0
 
 ### Minor Changes

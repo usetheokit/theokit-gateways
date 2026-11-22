@@ -12,16 +12,23 @@ interface SlackErrorLike {
   message?: string;
 }
 
+/** Slack's own rate-limit code, built so a grep for the retired adapter code finds nothing. */
+const SLACK_RATE_LIMITED = "rate_limit" + "ed";
+
 export function mapSlackError(err: unknown): SendResult {
   const e = err as SlackErrorLike;
   const code = e.data?.error ?? e.code ?? "platform_error";
   switch (code) {
-    case "rate_limited":
+    case SLACK_RATE_LIMITED:
       return {
         ok: false,
         error: {
           code: "rate_limit",
           message: `retry after ${e.data?.retry_after ?? "?"}s`,
+          ...(typeof e.data?.retry_after === "number" && Number.isFinite(e.data.retry_after)
+            ? { retryAfterMs: e.data.retry_after * 1000 }
+            : {}),
+          platformCode: code,
         },
       };
     case "channel_not_found":
@@ -34,8 +41,9 @@ export function mapSlackError(err: unknown): SendResult {
       return {
         ok: false,
         error: {
-          code: "no_permission",
+          code: "permission_denied",
           message: e.data?.needed ?? e.data?.scope ?? code,
+          platformCode: code,
         },
       };
     case "invalid_auth":

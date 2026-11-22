@@ -10,7 +10,12 @@ import type { CredentialStore } from "@theokit/gateway";
 export type XFetch = (
   url: string,
   init: { method: string; headers: Record<string, string>; body?: string },
-) => Promise<{ status: number; text(): Promise<string> }>;
+) => Promise<{
+  status: number;
+  text(): Promise<string>;
+  /** Optional; read for `Retry-After` on a failed send. */
+  headers?: { get(name: string): string | null };
+}>;
 
 /** Guest mode: mentions from accounts outside `allowFrom`, capped per author per UTC day. @public */
 export interface XGuestOptions {

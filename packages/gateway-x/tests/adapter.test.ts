@@ -274,3 +274,54 @@ describe("XAdapter.capabilities", () => {
     expect(events.filter((e) => e.id === "1")).toHaveLength(2);
   });
 });
+
+describe("XAdapter send failures", () => {
+  async function failing(
+    post: () => Promise<{
+      status: number;
+      text(): Promise<string>;
+      headers?: { get(n: string): string | null };
+    }>,
+  ) {
+    let round = 0;
+    const base = fake({
+      mentions: () =>
+        round++ === 0
+          ? { meta: { newest_id: "5" } }
+          : { data: [mention({ id: "9" })], includes: { users }, meta: { newest_id: "9" } },
+    });
+    const { adapter, events } = make(async (url, init) =>
+      init.method === "POST" && url.endsWith("/2/tweets") ? post() : base.fetchFake(url, init),
+    );
+    await adapter.connect();
+    await adapter.poll();
+    return adapter.sendMessage({ channel: (events[0] as MessageEvent).channel, text: "hi" });
+  }
+
+  it("maps HTTP 429 to rate_limit with retryAfterMs", async () => {
+    const r = await failing(async () => ({
+      status: 429,
+      text: async () => '{"title":"Too Many Requests"}',
+      headers: { get: (n: string) => (n === "retry-after" ? "7" : null) },
+    }));
+    expect(r).toMatchObject({ ok: false, error: { code: "rate_limit", retryAfterMs: 7000 } });
+  });
+
+  it("maps a 200 answer without a reply id to platform_error", async () => {
+    const r = await failing(async () => ({
+      status: 200,
+      text: async () => '{"errors":[{"code":187,"message":"dup"}]}',
+    }));
+    expect(r).toMatchObject({ ok: false, error: { code: "platform_error", platformCode: "187" } });
+  });
+
+  it("maps a rejected fetch to network_error", async () => {
+    const r = await failing(async () => {
+      throw new Error("socket hang up");
+    });
+    expect(r).toMatchObject({
+      ok: false,
+      error: { code: "network_error", message: "socket hang up" },
+    });
+  });
+});

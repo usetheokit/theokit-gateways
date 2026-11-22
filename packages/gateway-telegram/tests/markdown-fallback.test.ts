@@ -89,7 +89,7 @@ describe("TelegramAdapter markdown fallback", () => {
       text: "hi_",
       format: "markdown",
     });
-    expect(result).toMatchObject({ ok: false, error: { code: "no_permission" } });
+    expect(result).toMatchObject({ ok: false, error: { code: "permission_denied" } });
     expect(calls).toHaveLength(1);
   });
 });

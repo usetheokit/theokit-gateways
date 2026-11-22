@@ -82,14 +82,14 @@ The default `requireMention: true` is enforced via:
 
 Override with `requireMention: false` to make the bot respond to every message in every channel it's a member of (loud — use cautiously).
 
-## What's NOT supported in v0.1
+## What's NOT supported yet
 
 | Feature | Status | Workaround |
 |---|---|---|
-| OAuth auth | Deferred to v0.2 (D401) | Use PAT |
-| File uploads | Deferred to v0.2 (D404) | `adapter.getClient().uploadFile(...)` (escape hatch) |
-| Slash command incoming webhooks | Not supported v0.1 | — |
-| Ephemeral / hidden messages | Not supported v0.1 | — |
+| OAuth auth | Deferred (D401) | Use PAT |
+| File uploads | Deferred (D404) | `adapter.getClient().uploadFile(...)` (escape hatch) |
+| Slash command incoming webhooks | Not supported yet | — |
+| Ephemeral / hidden messages | Not supported yet | — |
 
 ## Channel descriptor
 
