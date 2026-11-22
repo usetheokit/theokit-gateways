@@ -12,6 +12,8 @@
  * @public
  */
 
+import { safeEqualString } from "@theokit/gateway";
+
 import type { WhatsAppInboundEvent, WhatsAppStatusReceipt } from "../../backend-types.js";
 import type { MetaIncomingMessage, MetaStatusUpdate, MetaWebhookEnvelope } from "./types.js";
 
@@ -66,7 +68,8 @@ export function verifyWebhookSubscription(
   const token = query["hub.verify_token"];
   const challenge = query["hub.challenge"];
   if (mode !== "subscribe") return null;
-  if (token === undefined || token !== expectedVerifyToken) return null;
+  if (expectedVerifyToken.length === 0) return null;
+  if (token === undefined || !safeEqualString(expectedVerifyToken, token)) return null;
   if (challenge === undefined || challenge.length === 0) return null;
   return challenge;
 }
