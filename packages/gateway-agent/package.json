@@ -43,7 +43,7 @@
   "peerDependencies": {
     "@theokit/gateway": ">=0.19.0 <1.0.0",
     "@theokit/presenter": ">=0.10.0 <1.0.0",
-    "@theokit/sdk": ">=5.3.0 <6"
+    "@theokit/sdk": ">=5.3.0 <9"
   },
   "devDependencies": {
     "@theokit/agents": "16.5.0",
