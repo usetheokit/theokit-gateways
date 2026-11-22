@@ -12,6 +12,7 @@ import {
   type OutboundMessage,
   SeenIds,
   type SendResult,
+  sendErrorFromHttp,
 } from "@theokit/gateway";
 
 import { type ChatAnswer, SynologyChatClient } from "./client.js";
@@ -134,7 +135,19 @@ export class SynologyChatAdapter extends BasePlatformAdapter implements Synology
       };
     }
     if (answer.ok) return { ok: true };
-    return { ok: false, error: { code: "synology_api_error", message: answer.reason } };
+    if (answer.network === true) {
+      return { ok: false, error: { code: "network_error", message: answer.reason } };
+    }
+    if (answer.status !== undefined) {
+      return sendErrorFromHttp(answer.status, answer.reason, {
+        retryAfter: answer.retryAfter ?? null,
+        platformCode: "synology_api_error",
+      });
+    }
+    return {
+      ok: false,
+      error: { code: "platform_error", message: answer.reason, platformCode: "synology_api_error" },
+    };
   }
 
   onInbound(handler: (event: GatewayMessageEvent) => Promise<void>): () => void {

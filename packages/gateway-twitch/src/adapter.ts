@@ -169,7 +169,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
         },
         signal,
       );
-      if (!sent.ok) return { ok: false, error: { code: sent.code, message: sent.message } };
+      if (!sent.ok) return sent;
       messageId = sent.messageId;
     }
     return { ok: true, messageId };
