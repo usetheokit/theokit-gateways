@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
+/** Text encoding of a digest as sent in a webhook header. */
 export type DigestEncoding = "hex" | "base64" | "base64url";
 
 /** Constant-time string compare; false (never a throw) on length mismatch or an empty side. */
@@ -12,6 +13,7 @@ export function safeEqualString(expected: string, received: string): boolean {
   return timingSafeEqual(a, b);
 }
 
+/** Options for {@link verifyHmac}. */
 export interface VerifyHmacOptions {
   readonly algorithm: "sha256" | "sha1";
   /** One secret, or several to accept during rotation. An empty secret throws RangeError. */
@@ -38,6 +40,7 @@ function normalize(value: string, encoding: DigestEncoding, caseInsensitive: boo
   return encoding === "hex" && caseInsensitive ? value.toLowerCase() : value;
 }
 
+/** Verify an HMAC webhook signature in constant time, accepting any of the given secrets. */
 export function verifyHmac(opts: VerifyHmacOptions): boolean {
   const secrets = typeof opts.secrets === "string" ? [opts.secrets] : [...opts.secrets];
   if (secrets.length === 0 || secrets.some((s) => typeof s !== "string" || s.length === 0)) {
