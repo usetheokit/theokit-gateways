@@ -225,6 +225,12 @@ describe("live-test readiness", () => {
     // That exact mistake was made once in this repository and caught only
     // because the check was run against a deliberately broken input.
     const NOT_DRIVEN_LIVE: Record<string, string> = {
+      verifyHmac:
+        "pure signature check, no I/O. Covered by packages/gateway/tests/verify-signature.test.ts",
+      verifyDigest:
+        "pure signature check, no I/O. Covered by packages/gateway/tests/verify-signature.test.ts",
+      safeEqualString:
+        "pure string compare, no I/O. Covered by packages/gateway/tests/verify-signature.test.ts",
       decodeJwt:
         "pure JWT/JWKS handling, no I/O of its own beyond an injected fetch. Covered by " +
         "packages/gateway/tests/auth/jwks.test.ts",
