@@ -25,7 +25,7 @@ function setup() {
     (r) => closed.push(r),
   );
   const send = (line: string) => stdout.write(`${line}\n`);
-  return { client, events, send, notes, closed, written };
+  return { client, events, send, notes, closed, written, stdin };
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 5));
@@ -97,7 +97,7 @@ describe("JsonRpcLineClient", () => {
 
     const u = setup();
     const b = u.client.request("b", {}, 1000);
-    (u.client as unknown as { child: JsonRpcChild }).child.stdin.emit("error", new Error("EPIPE"));
+    u.stdin.emit("error", new Error("EPIPE"));
     expect(await b).toEqual({ kind: "disconnected" });
     expect(u.closed).toEqual(["stdin: EPIPE"]);
   });
