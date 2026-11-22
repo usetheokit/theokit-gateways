@@ -1,5 +1,12 @@
 # @theokit/gateway-wechat
 
+## 0.3.1
+
+### Patch Changes
+
+- a9940a8: Compare webhook signatures and callback tokens with the core `verifyDigest` and `safeEqualString` instead of local `timingSafeEqual` copies. Raises the `@theokit/gateway` peer floor to `>=0.26.0`.
+- 9fb0994: Share the adapter test cases between WeCom and WeChat. Test-only change.
+
 ## 0.3.0
 
 ### Minor Changes

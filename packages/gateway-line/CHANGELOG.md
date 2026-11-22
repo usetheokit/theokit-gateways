@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.3
+
+### Patch Changes
+
+- bdf81aa: Verify webhook signatures with the core `verifyHmac`, and compare the WhatsApp verify token with `safeEqualString`; an empty expected verify token now never matches. Raises the `@theokit/gateway` peer floor to 0.26.0.
+- ff62df5: Share the split-tables test cases of the three adapters in one module under `shared/`. Tests only; no change to the published code.
+
 ## 0.7.2
 
 ### Patch Changes
