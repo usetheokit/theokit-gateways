@@ -16,6 +16,17 @@ export {
   type WeixinWebhookAnswer,
 } from "./adapter/weixin-base.js";
 export { parseFlatXml } from "./adapter/weixin-xml.js";
+// A JWKS key-set cache and RS256 JWT signature verification (claims stay with the caller).
+export {
+  type DecodedJwt,
+  decodeJwt,
+  type JwksKeySet,
+  type JwksKeySetOptions,
+  type JwksLookup,
+  jwksKeySet,
+  type VerifyJwtResult,
+  verifyRs256Jwt,
+} from "./auth/jwks.js";
 export {
   type ChannelConfigInput,
   type ChannelConfigReaders,
