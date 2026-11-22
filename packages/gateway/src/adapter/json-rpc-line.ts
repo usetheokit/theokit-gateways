@@ -55,37 +55,11 @@ interface RpcMessage {
   readonly error?: { readonly code?: number; readonly message?: string; readonly data?: unknown };
 }
 
-/** Parse one stdout line into a message object, or `undefined` for anything else. */
-function parseMessage(line: string, onSkip: (excerpt: string) => void): RpcMessage | undefined {
-  if (line.trim() === "") return undefined;
-  let value: unknown;
-  try {
-    value = JSON.parse(line);
-  } catch {
-    onSkip(line.slice(0, 120));
-    return undefined;
-  }
-  const isObject = typeof value === "object" && value !== null && !Array.isArray(value);
-  return isObject ? (value as RpcMessage) : undefined;
-}
-
-/** Map a response message to the outcome it carries. */
-function outcomeOf(message: RpcMessage): RpcOutcome {
-  const { error } = message;
-  if (error === undefined) return { kind: "result", result: message.result };
-  return {
-    kind: "error",
-    code: error.code ?? 0,
-    message: error.message ?? "unknown JSON-RPC error",
-    ...(error.data === undefined ? {} : { data: error.data }),
-  };
-}
-
 /** Line-framed JSON-RPC over one child. Dead once the child exits or `close()` is called. */
 export class JsonRpcLineClient {
-  private counter = 0;
+  private nextId = 1;
   private readonly pending = new Map<number, Pending>();
-  private alive = true;
+  private open = true;
 
   /**
    * @param child - the running child; the client attaches to its pipes and events
@@ -99,27 +73,28 @@ export class JsonRpcLineClient {
     private readonly onNotification: (notification: RpcNotification) => void,
     private readonly onClosed: (reason: string) => void,
   ) {
-    const lines = createInterface({ input: child.stdout, crlfDelay: Number.POSITIVE_INFINITY });
-    lines.on("line", (line) => this.handleLine(line));
+    createInterface({ input: child.stdout, crlfDelay: Number.POSITIVE_INFINITY }).on(
+      "line",
+      (line) => this.onLine(line),
+    );
     child.stderr.resume();
-    const fail = (reason: string) => () => this.close(reason);
-    child.stdin.on("error", (err: Error) => fail(`stdin: ${err.message}`)());
-    child.on("error", (err: Error) => fail(err.message)());
+    child.stdin.on("error", (err: Error) => this.close(`stdin: ${err.message}`));
+    child.on("error", (err: Error) => this.close(err.message));
     // `close`, not `exit`: `exit` can fire before stdout has drained, which would settle a request
     // whose answer is still in the pipe as `disconnected`.
-    child.on("close", (code, signal) => fail(`exited with ${signal ?? `code ${code}`}`)());
+    child.on("close", (code, signal) => this.close(`exited with ${signal ?? `code ${code}`}`));
   }
 
   /** Send `method` and wait for its answer, at most `timeoutMs`. */
   request(method: string, params: unknown, timeoutMs: number): Promise<RpcOutcome> {
-    if (!this.alive || !this.child.stdin.writable) return Promise.resolve({ kind: "disconnected" });
-    this.counter += 1;
-    const id = this.counter;
-    const frame = `${JSON.stringify({ jsonrpc: "2.0", method, params, id })}\n`;
+    if (!this.open || !this.child.stdin.writable) return Promise.resolve({ kind: "disconnected" });
+    const id = this.nextId;
+    this.nextId += 1;
     return new Promise<RpcOutcome>((resolve) => {
       const timer = setTimeout(() => this.settle(id, { kind: "timeout" }), timeoutMs);
       this.pending.set(id, { settle: resolve, timer });
-      this.child.stdin.write(frame, (err) => {
+      const line = `${JSON.stringify({ jsonrpc: "2.0", method, params, id })}\n`;
+      this.child.stdin.write(line, (err) => {
         if (err) this.close(`stdin: ${err.message}`);
       });
     });
@@ -127,31 +102,50 @@ export class JsonRpcLineClient {
 
   /** Settle every pending request as `disconnected` and stop accepting new ones. Idempotent. */
   close(reason: string): void {
-    if (!this.alive) return;
-    this.alive = false;
-    for (const id of Array.from(this.pending.keys())) this.settle(id, { kind: "disconnected" });
+    if (!this.open) return;
+    this.open = false;
+    for (const id of [...this.pending.keys()]) this.settle(id, { kind: "disconnected" });
     this.onClosed(reason);
   }
 
   private settle(id: number, outcome: RpcOutcome): void {
     const entry = this.pending.get(id);
     if (entry === undefined) return;
-    clearTimeout(entry.timer);
     this.pending.delete(id);
+    clearTimeout(entry.timer);
     entry.settle(outcome);
   }
 
-  private handleLine(line: string): void {
-    if (!this.alive) return;
-    const message = parseMessage(line, (excerpt) => {
-      process.stderr.write(`[${this.label}] skipped a stdout line that is not JSON: ${excerpt}\n`);
-    });
-    if (message === undefined) return;
-    const { id, method } = message;
-    if (typeof method === "string" && (id === undefined || id === null)) {
-      this.onNotification({ method, params: message.params });
-    } else if (typeof id === "number") {
-      this.settle(id, outcomeOf(message));
+  private onLine(line: string): void {
+    if (!this.open || line.trim() === "") return;
+    let message: RpcMessage;
+    try {
+      message = JSON.parse(line) as RpcMessage;
+    } catch {
+      process.stderr.write(
+        `[${this.label}] skipped a stdout line that is not JSON: ${line.slice(0, 120)}\n`,
+      );
+      return;
     }
+    if (message === null || typeof message !== "object" || Array.isArray(message)) return;
+    this.onMessage(message);
+  }
+
+  private onMessage(message: RpcMessage): void {
+    if (typeof message.method === "string" && (message.id === undefined || message.id === null)) {
+      this.onNotification({ method: message.method, params: message.params });
+      return;
+    }
+    if (typeof message.id !== "number") return;
+    if (message.error !== undefined) {
+      this.settle(message.id, {
+        kind: "error",
+        code: message.error.code ?? 0,
+        message: message.error.message ?? "unknown JSON-RPC error",
+        ...(message.error.data !== undefined ? { data: message.error.data } : {}),
+      });
+      return;
+    }
+    this.settle(message.id, { kind: "result", result: message.result });
   }
 }
