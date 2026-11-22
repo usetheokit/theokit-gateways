@@ -18,5 +18,15 @@ export function reportDiagnostic(
   message: string,
   _options: ReportDiagnosticOptions = {},
 ): void {
-  process.stderr.write(`[${tag}] ${redactSecrets(message)}\n`);
+  reportDiagnosticLine(`[${tag}] ${message}`);
+}
+
+/**
+ * Redact and write one already-formatted line. For the default sink of a `write` option that takes
+ * a whole line; not part of the public API, use {@link reportDiagnostic}.
+ *
+ * @internal
+ */
+export function reportDiagnosticLine(line: string): void {
+  process.stderr.write(`${redactSecrets(line)}\n`);
 }
