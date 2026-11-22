@@ -14,16 +14,12 @@
  * and compares no `serviceurl` on the 2.1.x Entra path.
  */
 
-import { type JwksKeySet, verifyRs256Jwt } from "@theokit/gateway";
+import { createVerify, type KeyObject } from "node:crypto";
+
+import { verifyRs256Jwt } from "@theokit/gateway";
 
 import { readBoundedStream } from "./bounded-stream.js";
-import {
-  type KeyLookup,
-  keySet,
-  keySetUrl,
-  type PublishedKeySet,
-  tenantKeySetUrl,
-} from "./published-key-set.js";
+import { keySet, keySetUrl, type PublishedKeySet, tenantKeySetUrl } from "./published-key-set.js";
 import {
   importSdkMiddleware,
   type Loaded,
@@ -192,33 +188,34 @@ async function refuseListedKey(
   isBotFrameworkKey: boolean,
   channelId: unknown,
 ): Promise<Refusal | undefined> {
-  const seen: { listed?: KeyLookup } = {};
-  let notEndorsed = false;
-  // The endorsement check sits between the lookup and the signature check, so it runs inside the
-  // lookup the core helper makes: a key not endorsed for the channel is reported as unlisted.
-  const lookup: JwksKeySet = {
-    async lookup() {
-      const listed = await set.lookup(kid);
-      seen.listed = listed;
-      if (listed === "unlisted" || "unavailable" in listed) return listed;
-      if (isBotFrameworkKey && !keyEndorsesChannel(listed.endorsements, channelId)) {
-        notEndorsed = true;
-        return "unlisted";
-      }
-      return listed.publicKey;
-    },
-  };
-  const result = await verifyRs256Jwt(rawToken, lookup);
-  if (result.ok) return undefined;
-  if (notEndorsed) return refuse("invalid_token", KEY_NOT_ENDORSED);
-  if (result.reason === "unknown_kid") return refuse("invalid_token", KEY_NOT_PUBLISHED);
-  if (result.reason === "keys_unavailable") {
-    const { listed } = seen;
-    if (listed !== undefined && typeof listed === "object" && "unavailable" in listed) {
-      return refuse("key_set_unavailable", listed.unavailable);
-    }
+  const listed = await set.lookup(kid);
+  if (listed === "unlisted") return refuse("invalid_token", KEY_NOT_PUBLISHED);
+  if ("unavailable" in listed) return refuse("key_set_unavailable", listed.unavailable);
+  if (isBotFrameworkKey && !keyEndorsesChannel(listed.endorsements, channelId)) {
+    return refuse("invalid_token", KEY_NOT_ENDORSED);
   }
-  return refuse("invalid_token", BAD_SIGNATURE);
+  const result = await verifyRs256Jwt(rawToken, { lookup: async () => listed.publicKey });
+  // The core helper decodes the payload before it checks the signature, so a token whose payload
+  // is not base64url JSON is `malformed` there. Its signature is still checked, so that the SDK
+  // is asked about every signed token and the verifier refuses what it cannot decode afterwards.
+  const verified =
+    result.ok || (result.reason === "malformed" && signatureVerifies(rawToken, listed.publicKey));
+  return verified ? undefined : refuse("invalid_token", BAD_SIGNATURE);
+}
+
+/** Whether the RS256 signature over `rawToken`'s first two segments verifies under `publicKey`. */
+function signatureVerifies(rawToken: string, publicKey: KeyObject): boolean {
+  const [header, payload, signature, ...rest] = rawToken.split(".");
+  if (header === undefined || payload === undefined || signature === undefined || rest.length > 0) {
+    return false;
+  }
+  try {
+    return createVerify("RSA-SHA256")
+      .update(`${header}.${payload}`)
+      .verify(publicKey, Buffer.from(signature, "base64url"));
+  } catch {
+    return false;
+  }
 }
 
 /** {@link sdkCheck} for a token whose signature {@link admitToSdk} verified. */
