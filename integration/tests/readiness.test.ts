@@ -238,6 +238,9 @@ describe("live-test readiness", () => {
       channelConfigReaders:
         "pure config validation, no I/O. Covered by " +
         "packages/gateway/tests/channel/channel-config-readers.test.ts and the LINE channel tests",
+      reportDiagnostic:
+        "writes one redacted line to stderr, no network or platform I/O. Covered by " +
+        "packages/gateway/tests/diagnostics.test.ts",
       ReconnectBackoff:
         "pure delay arithmetic with an injectable clock, no I/O. Covered by " +
         "packages/gateway/tests/runner/reconnect-backoff.test.ts and the runner reconnect tests",
