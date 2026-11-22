@@ -97,6 +97,7 @@ export {
   type MediaUnderstandingOptions,
   withMediaUnderstanding,
 } from "./runner/media-understanding.js";
+export { ReconnectBackoff, type ReconnectBackoffOptions } from "./runner/reconnect-backoff.js";
 export type { CoveredShape, UncoveredShape } from "./security/credential-patterns.js";
 export {
   CREDENTIAL_SHAPES,
