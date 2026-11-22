@@ -68,8 +68,32 @@ function rowSafeCut(
   const lineStart = lineStartBefore(text, cut, partStart);
   if (lineStart <= partStart || lineStart === cut) return cut;
   if (isLineEnd(text[cut]) || !startsTableRow(text, lineStart)) return cut;
-  const bound = advance(text, lineStart, partLimit, codepoint);
-  return lineEndFrom(text, cut, bound) <= bound ? lineStart : cut;
+  return rowFits(text, lineStart, cut, partLimit, codepoint) ? lineStart : cut;
+}
+
+/**
+ * Whether the line from `lineStart` (which holds `cut`) is at most `partLimit` units long without
+ * its line ending. It reads only that line: walking `partLimit` code points on from `lineStart`
+ * first, as `advance` does, cost as much again as the cut itself on every part a row straddles.
+ * A line of at most `partLimit` code points spans at most twice as many UTF-16 units.
+ */
+function rowFits(
+  text: string,
+  lineStart: number,
+  cut: number,
+  partLimit: number,
+  codepoint: boolean,
+): boolean {
+  const window = lineStart + (codepoint ? 2 * partLimit : partLimit);
+  const end = lineEndFrom(text, cut, window);
+  if (end > window) return false;
+  if (!codepoint) return true;
+  let units = 0;
+  for (let at = lineStart; at < end; units += 1) {
+    if (units >= partLimit) return false;
+    at += (text.codePointAt(at) ?? 0) > 0xffff ? 2 : 1;
+  }
+  return true;
 }
 
 /**
