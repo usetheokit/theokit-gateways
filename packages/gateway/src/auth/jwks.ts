@@ -8,6 +8,7 @@ import { createPublicKey, type JsonWebKey, type KeyObject, verify } from "node:c
 /** A key for a `kid`, `"unlisted"` when the key set does not list it, or why no key set is readable. */
 export type JwksLookup = KeyObject | "unlisted" | { readonly unavailable: string };
 
+/** Where a JWKS is read from, and how its cache behaves. */
 export interface JwksKeySetOptions {
   readonly url: string;
   readonly fetch?: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
@@ -18,6 +19,7 @@ export interface JwksKeySetOptions {
   readonly staleWhileRevalidate?: boolean;
 }
 
+/** A cache of the keys a JWKS publishes, looked up by `kid`. */
 export interface JwksKeySet {
   lookup(kid: string): Promise<JwksLookup>;
 }
@@ -131,6 +133,7 @@ function maxAgeMs(cacheControl: string | null): number {
   return match?.[1] ? Number(match[1]) * 1000 : 0;
 }
 
+/** A compact JWT split into its parts; nothing in it is verified yet. */
 export interface DecodedJwt {
   readonly header: Readonly<Record<string, unknown>>;
   readonly payload: Readonly<Record<string, unknown>>;
@@ -163,6 +166,7 @@ function jsonObject(segment: string): Record<string, unknown> | undefined {
   }
 }
 
+/** The outcome of checking a token's signature: its claims, or why it was refused. */
 export type VerifyJwtResult =
   | {
       readonly ok: true;
