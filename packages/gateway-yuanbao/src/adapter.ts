@@ -12,6 +12,7 @@ import {
   type OutboundMessage,
   SeenIds,
   type SendResult,
+  sendErrorFromHttp,
 } from "@theokit/gateway";
 
 import { refuseAttachments } from "./refuse-attachments.js";
@@ -39,11 +40,83 @@ interface ApiBody {
 
 const defaultFetch: YuanbaoFetch = async (url, init) => {
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-  return { status: res.status, text: () => res.text() };
+  return { status: res.status, text: () => res.text(), headers: res.headers };
 };
 
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** A non-2xx HTTP answer, with what a caller needs to retry. */
+class HttpFailure extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly retryAfter: string | undefined,
+    readonly platformCode: string | undefined,
+  ) {
+    super(message);
+  }
+}
+
+/** The fetch itself rejected, so no answer came. */
+class NetworkFailure extends Error {}
+
+/** Run the fetch and read the body; a rejection of either becomes a `NetworkFailure`. */
+async function fetchText(
+  doFetch: YuanbaoFetch,
+  url: string,
+  init: Parameters<YuanbaoFetch>[1],
+): Promise<{ status: number; retryAfter: string | undefined; text: string }> {
+  try {
+    const res = await doFetch(url, init);
+    const retryAfter = res.headers?.get("retry-after") ?? undefined;
+    return { status: res.status, retryAfter, text: await res.text() };
+  } catch (err) {
+    throw new NetworkFailure(messageOf(err));
+  }
+}
+
+/** Throw an `HttpFailure` for a non-2xx answer, keeping the body's platform code when it has one. */
+function assertHttpOk(
+  who: string,
+  res: { status: number; retryAfter: string | undefined },
+  text: string,
+  codeOf: (body: { code?: unknown; error?: unknown } | null) => unknown,
+): void {
+  if (res.status >= 200 && res.status < 300) return;
+  let code: unknown;
+  try {
+    code = codeOf(JSON.parse(text));
+  } catch {
+    code = undefined;
+  }
+  throw new HttpFailure(
+    res.status,
+    `${who} answered HTTP ${res.status}`,
+    res.retryAfter,
+    code === undefined || code === null ? undefined : String(code),
+  );
+}
+
+/** The failed `SendResult` for a thrown error: HTTP status, rejected fetch, or anything else. */
+function failureOf(err: unknown): SendResult {
+  if (err instanceof HttpFailure) {
+    return sendErrorFromHttp(err.status, err.message, {
+      ...(err.retryAfter === undefined ? {} : { retryAfter: err.retryAfter }),
+      ...(err.platformCode === undefined ? {} : { platformCode: err.platformCode }),
+    });
+  }
+  const code = err instanceof NetworkFailure ? "network_error" : "platform_error";
+  return { ok: false, error: { code, message: messageOf(err) } };
+}
+
+/**
+ * A 200 answer whose body carries a platform error code. No code is mapped to `rate_limit` or
+ * `auth_failed`: Yuanbao's documented codes were not checked, so all stay `platform_error`.
+ */
+function bodyFailure(message: string, code: unknown): SendResult {
+  return { ok: false, error: { code: "platform_error", message, platformCode: String(code) } };
 }
 
 /**
@@ -53,7 +126,7 @@ function messageOf(err: unknown): string {
  * never a throw. Inbound arrives by `handleWebhook(rawBody, signature, timestamp)`, which verifies
  * the signature, turns a text message into one direct-message event and dispatches it. Replies go
  * through the bot message API, split at 2000 characters; a refusal comes back as
- * `yuanbao_send_failed` with Yuanbao's `code`. The token is refreshed before it expires.
+ * `platform_error` with Yuanbao's `code` in `platformCode`; an HTTP failure maps by status (429 is `rate_limit`) and a rejected fetch is `network_error`. The token is refreshed before it expires.
  *
  * @public
  */
@@ -120,18 +193,12 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
           content: { text },
         });
         if (body.code !== 0) {
-          return {
-            ok: false,
-            error: {
-              code: "yuanbao_send_failed",
-              message: `Yuanbao error ${String(body.code)}: ${String(body.msg)}`,
-            },
-          };
+          return bodyFailure(`Yuanbao error ${String(body.code)}: ${String(body.msg)}`, body.code);
         }
         messageId = body.data?.message_id ?? messageId;
       }
     } catch (err) {
-      return { ok: false, error: { code: "yuanbao_send_failed", message: messageOf(err) } };
+      return failureOf(err);
     }
     return { ok: true, messageId };
   }
@@ -215,7 +282,7 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     token: string | undefined,
     payload: unknown,
   ): Promise<ApiBody> {
-    const res = await this.doFetch((this.opts.apiBase ?? DEFAULT_BASE) + path, {
+    const res = await fetchText(this.doFetch, (this.opts.apiBase ?? DEFAULT_BASE) + path, {
       method,
       headers: {
         "Content-Type": "application/json",
@@ -223,7 +290,8 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
       },
       body: JSON.stringify(payload),
     });
-    const text = await res.text();
+    const text = res.text;
+    assertHttpOk("Yuanbao", res, text, (b) => b?.code);
     try {
       return JSON.parse(text) as ApiBody;
     } catch {

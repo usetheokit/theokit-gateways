@@ -59,7 +59,7 @@ const handle = createWebhookHandler({ channels, isStarted: () => true });
   the answer is 503 so QQ redelivers.
 - Outbound: text only; markdown loses its markers; over 2000 characters goes as several messages.
   A reply to a user whose message was just received is a passive reply (`msg_id`, `msg_seq`).
-  Attachments are refused with `attachments_unsupported`. An error `code` becomes `qq_send_failed`.
+  Attachments are refused with `attachments_unsupported`. An error `code` becomes `platform_error` with that code in `platformCode`; an HTTP failure maps by status (429 is `rate_limit`) and a rejected fetch is `network_error`.
 
 ## Status
 

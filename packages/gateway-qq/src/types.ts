@@ -8,7 +8,12 @@
 export type QQFetch = (
   url: string,
   init: { method: string; headers: Record<string, string>; body?: string },
-) => Promise<{ status: number; text(): Promise<string> }>;
+) => Promise<{
+  status: number;
+  text(): Promise<string>;
+  /** Optional; read for `Retry-After` on a failed send. */
+  headers?: { get(name: string): string | null };
+}>;
 
 /** Credentials and seams for `QQAdapter`. @public */
 export interface QQAdapterOptions {
