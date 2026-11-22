@@ -89,8 +89,8 @@ describe("TelegramAdapter.editMessage", () => {
 
   it.each([
     [400, "Bad Request: message to edit not found", "telegram_400"],
-    [429, "Too Many Requests: retry after 5", "rate_limited"],
-    [403, "Forbidden: bot was blocked by the user", "no_permission"],
+    [429, "Too Many Requests: retry after 5", "rate_limit"],
+    [403, "Forbidden: bot was blocked by the user", "permission_denied"],
   ])(
     "maps a %i refusal through the send-error mapping without throwing (E4)",
     async (status, description, code) => {

@@ -244,10 +244,21 @@ function mapGrammyError(err: GrammyError): SendResult {
   const message = err.description ?? err.message;
   const description = message.toLowerCase();
   if (description.includes("rate limit") || err.error_code === 429) {
-    return { ok: false, error: { code: "rate_limited", message } };
+    const retryAfter = err.parameters?.retry_after;
+    return {
+      ok: false,
+      error: {
+        code: "rate_limit",
+        message,
+        ...(typeof retryAfter === "number" ? { retryAfterMs: retryAfter * 1000 } : {}),
+      },
+    };
   }
   if (description.includes("forbidden") || err.error_code === 403) {
-    return { ok: false, error: { code: "no_permission", message } };
+    return {
+      ok: false,
+      error: { code: "permission_denied", message, platformCode: String(err.error_code) },
+    };
   }
   if (description.includes("parse")) {
     return { ok: false, error: { code: "markdown_error", message } };

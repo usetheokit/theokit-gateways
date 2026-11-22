@@ -3,19 +3,19 @@
  * tweets, and posting a reply.
  */
 
+import { createTokenCache, type TokenCache } from "@theokit/gateway";
+
 import type { XAdapterOptions, XFetch, XTweet, XUser } from "./types.js";
 
 const DEFAULT_BASE = "https://api.x.com";
 const REQUEST_TIMEOUT_MS = 30_000;
-/** Refresh this long before the token's stated expiry. */
-const TOKEN_MARGIN_MS = 60_000;
 
 const TWEET_FIELDS = "author_id,conversation_id,created_at,referenced_tweets,text";
 const EXPANSIONS = "author_id,referenced_tweets.id,referenced_tweets.id.author_id";
 
 const defaultFetch: XFetch = async (url, init) => {
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-  return { status: res.status, text: () => res.text() };
+  return { status: res.status, text: () => res.text(), headers: res.headers };
 };
 
 /** A page of tweets with the objects they expand. */
@@ -37,7 +37,7 @@ interface Body {
   detail?: string;
   error?: string;
   error_description?: string;
-  errors?: { message?: string }[];
+  errors?: { message?: string; code?: string | number }[];
 }
 
 /** An error answer from X, with its HTTP status. */
@@ -45,9 +45,33 @@ export class XApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** The raw `Retry-After` header, when X sent one. */
+    readonly retryAfter?: string,
+    /** The error code in X's body, when it carried one. */
+    readonly platformCode?: string,
   ) {
     super(message);
   }
+}
+
+/** The request itself failed: the fetch rejected, so X gave no answer. */
+export class XNetworkError extends Error {}
+
+function bodyCode(body: Body | undefined): string | undefined {
+  const code = body?.error ?? body?.errors?.[0]?.code;
+  return code === undefined ? undefined : String(code);
+}
+
+function failure(
+  res: { status: number; body: Body | undefined; retryAfter?: string },
+  why?: string,
+) {
+  return new XApiError(
+    res.status,
+    why ?? describe(res.status, res.body),
+    res.retryAfter,
+    bodyCode(res.body),
+  );
 }
 
 function describe(status: number, body: Body | undefined): string {
@@ -65,9 +89,8 @@ function describe(status: number, body: Body | undefined): string {
 export class XApi {
   private readonly doFetch: XFetch;
   private readonly base: string;
-  private accessToken: { value: string; expiresAt: number } | undefined;
+  private readonly tokens: TokenCache;
   private refreshToken: string;
-  private refreshing: Promise<string> | undefined;
   private storedLoaded = false;
   /** A rotated token the store has not accepted yet; retried before any further call. */
   private unsaved: string | undefined;
@@ -76,19 +99,17 @@ export class XApi {
 
   constructor(
     private readonly opts: XAdapterOptions,
-    private readonly now: () => number,
+    now: () => number,
   ) {
     this.doFetch = opts.fetch ?? defaultFetch;
     this.base = opts.apiBase ?? DEFAULT_BASE;
     this.refreshToken = opts.refreshToken;
+    this.tokens = createTokenCache({ fetchToken: () => this.doRefresh(), now });
   }
 
   /** Exchange the refresh token for an access token, and keep the rotated refresh token. Concurrent callers share one request. */
   refresh(): Promise<string> {
-    this.refreshing ??= this.doRefresh().finally(() => {
-      this.refreshing = undefined;
-    });
-    return this.refreshing;
+    return this.tokens.get({ force: true });
   }
 
   private get credentialKey(): string {
@@ -130,7 +151,7 @@ export class XApi {
     return job;
   }
 
-  private async doRefresh(): Promise<string> {
+  private async doRefresh(): Promise<{ value: string; expiresInS?: number }> {
     await this.loadStored();
     await this.retryUnsaved();
     const basic = Buffer.from(`${this.opts.clientId}:${this.opts.clientSecret}`).toString("base64");
@@ -139,7 +160,7 @@ export class XApi {
       refresh_token: this.refreshToken,
       client_id: this.opts.clientId,
     });
-    const { status, body } = await this.request(
+    const res = await this.request(
       "POST",
       "/2/oauth2/token",
       {
@@ -148,23 +169,17 @@ export class XApi {
       },
       form.toString(),
     );
-    if (status !== 200 || !body?.access_token) throw new XApiError(status, describe(status, body));
+    const { body } = res;
+    if (res.status !== 200 || !body?.access_token) throw failure(res);
     if (body.refresh_token && body.refresh_token !== this.refreshToken) {
       await this.persist(body.refresh_token);
     }
-    this.accessToken = {
-      value: body.access_token,
-      expiresAt: this.now() + (body.expires_in ?? 7200) * 1000,
-    };
-    return body.access_token;
+    return { value: body.access_token, expiresInS: body.expires_in };
   }
 
   private async userToken(): Promise<string> {
     await this.retryUnsaved();
-    const cached = this.accessToken;
-    if (cached !== undefined && cached.expiresAt - TOKEN_MARGIN_MS > this.now())
-      return cached.value;
-    return this.refresh();
+    return this.tokens.get();
   }
 
   /** Mentions of the bot newer than `sinceId`, oldest first. */
@@ -214,14 +229,15 @@ export class XApi {
     if (res.status === 401) res = await send(await this.refresh());
     const data = res.body?.data as { id?: string } | undefined;
     if (res.status < 200 || res.status >= 300 || !data?.id) {
-      throw new XApiError(res.status, describe(res.status, res.body));
+      throw failure(res);
     }
     return data.id;
   }
 
   private async get(path: string, token: string): Promise<XPage> {
-    const { status, body } = await this.request("GET", path, { Authorization: `Bearer ${token}` });
-    if (status !== 200 || body === undefined) throw new XApiError(status, describe(status, body));
+    const res = await this.request("GET", path, { Authorization: `Bearer ${token}` });
+    const { status, body } = res;
+    if (status !== 200 || body === undefined) throw failure(res);
     const data = body.data;
     if (data !== undefined && (typeof data !== "object" || data === null)) {
       throw new XApiError(status, "X answered a malformed body");
@@ -240,17 +256,27 @@ export class XApi {
     path: string,
     headers: Record<string, string>,
     body?: string,
-  ): Promise<{ status: number; body: Body | undefined }> {
-    const res = await this.doFetch(this.base + path, {
-      method,
-      headers,
-      ...(body === undefined ? {} : { body }),
-    });
-    const text = await res.text();
+  ): Promise<{ status: number; body: Body | undefined; retryAfter?: string }> {
+    let status: number;
+    let text: string;
+    let retryAfter: string | undefined;
     try {
-      return { status: res.status, body: JSON.parse(text) as Body };
+      const res = await this.doFetch(this.base + path, {
+        method,
+        headers,
+        ...(body === undefined ? {} : { body }),
+      });
+      status = res.status;
+      retryAfter = res.headers?.get("retry-after") ?? undefined;
+      text = await res.text();
+    } catch (err) {
+      throw new XNetworkError(err instanceof Error ? err.message : String(err));
+    }
+    const meta = retryAfter === undefined ? {} : { retryAfter };
+    try {
+      return { status, body: JSON.parse(text) as Body, ...meta };
     } catch {
-      return { status: res.status, body: undefined };
+      return { status, body: undefined, ...meta };
     }
   }
 }

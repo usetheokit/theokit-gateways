@@ -94,7 +94,7 @@ describe("SlackAdapter.editMessage", () => {
   it.each([
     ["message_not_found", "platform_error"],
     ["rate_limited", "rate_limit"],
-    ["missing_scope", "no_permission"],
+    ["missing_scope", "permission_denied"],
   ])("maps a %s refusal through mapSlackError without throwing (E4)", async (slackError, code) => {
     const adapter = await connected();
     updateMock.mockRejectedValueOnce({ data: { error: slackError } });

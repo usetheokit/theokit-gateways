@@ -120,7 +120,11 @@ describe("sendMessage", () => {
     );
     await refused.connect();
     expect(await refused.sendMessage(out)).toMatchObject({
-      error: { code: "zalo_send_failed", message: expect.stringContaining("-233") },
+      error: {
+        code: "platform_error",
+        platformCode: "-233",
+        message: expect.stringContaining("-233"),
+      },
     });
   });
 });
@@ -190,5 +194,29 @@ describe("GatewayRunner drives ZaloAdapter", () => {
       recipient: { user_id: "u1" },
       message: { text: "hello back" },
     });
+  });
+
+  it("maps HTTP 429 to rate_limit, and a rejected fetch to network_error", async () => {
+    const out = { channel: { id: "u1", type: "dm" as const }, text: "y" };
+    const limited = make(async (_url, init) =>
+      init.method === "POST"
+        ? {
+            status: 429,
+            text: async () => "{}",
+            headers: { get: (n) => (n === "retry-after" ? "2" : null) },
+          }
+        : { status: 200, text: async () => '{"error":0}' },
+    );
+    await limited.connect();
+    expect(await limited.sendMessage(out)).toMatchObject({
+      ok: false,
+      error: { code: "rate_limit", retryAfterMs: 2000 },
+    });
+    const down = make(async (_url, init) => {
+      if (init.method === "POST") throw new Error("boom");
+      return { status: 200, text: async () => '{"error":0}' };
+    });
+    await down.connect();
+    expect(await down.sendMessage(out)).toMatchObject({ error: { code: "network_error" } });
   });
 });

@@ -174,7 +174,7 @@ describe("TelegramAdapter.sendMessage with an audio attachment", () => {
       out("x".repeat(CAPTION_LIMIT + 1), [audio(), audio()]),
     );
 
-    expect(result).toMatchObject({ ok: false, error: { code: "no_permission" } });
+    expect(result).toMatchObject({ ok: false, error: { code: "permission_denied" } });
     expect(sendVoice).toHaveBeenCalledTimes(1);
     expect(sendText).not.toHaveBeenCalled();
   });

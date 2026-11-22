@@ -40,8 +40,11 @@ function adapterFor(
   return adapter;
 }
 
-async function connected(talk: ScriptedTalk = scriptedTalk()): Promise<NextcloudTalkAdapter> {
-  const adapter = adapterFor(talk, { port: await freePort() });
+async function connected(
+  talk: ScriptedTalk = scriptedTalk(),
+  overrides: Partial<NextcloudTalkAdapterOptions> = {},
+): Promise<NextcloudTalkAdapter> {
+  const adapter = adapterFor(talk, { port: await freePort(), ...overrides });
   expect(await adapter.connect()).toBe(true);
   return adapter;
 }
@@ -208,11 +211,11 @@ describe("outbound", () => {
   });
 
   it.each([
-    [401, "talk_unauthorized"],
-    [400, "talk_bad_request"],
-    [413, "talk_http_error"],
-    [500, "talk_http_error"],
-  ])("answers HTTP %i with %s", async (status, code) => {
+    [401, "auth_failed", "talk_unauthorized"],
+    [400, "platform_error", "talk_bad_request"],
+    [413, "platform_error", "talk_http_error"],
+    [500, "server_error", "talk_http_error"],
+  ])("answers HTTP %i with %s (%s)", async (status, code, platformCode) => {
     const talk = scriptedTalk();
     const adapter = await connected(talk);
     talk.sendStatus = status;
@@ -221,6 +224,38 @@ describe("outbound", () => {
 
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe(code);
+    expect(result.error?.platformCode).toBe(platformCode);
+  });
+
+  it("maps a 429 with Retry-After: 2 to rate_limit with retryAfterMs 2000", async () => {
+    const talk = scriptedTalk();
+    const adapter = await connected(talk, {
+      fetch: async (input, init) =>
+        String(input).includes("/bot/")
+          ? new Response(null, { status: 429, headers: { "retry-after": "2" } })
+          : talk.fetch(input, init),
+    });
+
+    const result = await adapter.sendMessage({ channel: { id: ROOM, type: "group" }, text: "x" });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "rate_limit", retryAfterMs: 2000, platformCode: "talk_http_error" },
+    });
+  });
+
+  it("maps a rejected fetch to network_error", async () => {
+    const talk = scriptedTalk();
+    const adapter = await connected(talk, {
+      fetch: async (input, init) => {
+        if (String(input).includes("/bot/")) throw new TypeError("fetch failed");
+        return talk.fetch(input, init);
+      },
+    });
+
+    const result = await adapter.sendMessage({ channel: { id: ROOM, type: "group" }, text: "x" });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "network_error" } });
   });
 
   it("32001 code points go out as two messages", async () => {
@@ -286,7 +321,8 @@ describe("outbound", () => {
       text: "a".repeat(64_001),
     });
 
-    expect(result.error?.code).toBe("talk_http_error");
+    expect(result.error?.code).toBe("server_error");
+    expect(result.error?.platformCode).toBe("talk_http_error");
     expect(result.error?.message).toContain("part 2 of 3");
     expect(talk.sends).toHaveLength(2);
   });

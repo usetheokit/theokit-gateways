@@ -91,7 +91,55 @@ describe("YuanbaoAdapter", () => {
     );
     await refused.connect();
     const r = await refused.sendMessage({ channel: { id: "u1", type: "dm" }, text: "y" });
-    expect(r).toMatchObject({ ok: false, error: { code: "yuanbao_send_failed" } });
+    expect(r).toMatchObject({
+      ok: false,
+      error: { code: "platform_error", platformCode: "7" },
+    });
+  });
+
+  it("maps HTTP 429 to rate_limit, and a rejected fetch to network_error", async () => {
+    const token = {
+      status: 200,
+      text: async () => JSON.stringify({ code: 0, data: { access_token: "AT" } }),
+    };
+    const out = { channel: { id: "u1", type: "dm" as const }, text: "y" };
+    const limited = started(async (url) =>
+      url.endsWith("/auth/token")
+        ? token
+        : {
+            status: 429,
+            text: async () => "{}",
+            headers: { get: (n) => (n === "retry-after" ? "4" : null) },
+          },
+    );
+    await limited.connect();
+    expect(await limited.sendMessage(out)).toMatchObject({
+      ok: false,
+      error: { code: "rate_limit", retryAfterMs: 4000 },
+    });
+    const down = started(async (url) => {
+      if (url.endsWith("/auth/token")) return token;
+      throw new Error("boom");
+    });
+    await down.connect();
+    expect(await down.sendMessage(out)).toMatchObject({ error: { code: "network_error" } });
+  });
+
+  it("makes one token request for concurrent sends with an empty cache", async () => {
+    // A token inside the refresh margin is never served from the cache, so the cache stays empty.
+    const { fetch, calls } = fakeFetch((c) => {
+      const answer = ok(c) as any;
+      if (answer.access_token) answer.expires_in = "1";
+      if (answer.data?.access_token) answer.data.expires_in = 1;
+      return answer;
+    });
+    const a = started(fetch);
+    await a.connect();
+    calls.length = 0;
+    const out = { channel: { id: "u1", type: "dm" as const }, text: "hi" };
+    const results = await Promise.all([a.sendMessage(out), a.sendMessage(out)]);
+    expect(results.every((r) => r.ok)).toBe(true);
+    expect(calls.filter((c) => c.url.endsWith("/auth/token"))).toHaveLength(1);
   });
 
   it("refuses bad sends before any call", async () => {
