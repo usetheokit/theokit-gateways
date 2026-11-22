@@ -8,6 +8,7 @@
 import {
   type AdapterCapabilities,
   BasePlatformAdapter,
+  createTokenCache,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
   SeenIds,
@@ -22,8 +23,6 @@ import type { YuanbaoAdapterOptions, YuanbaoFetch, YuanbaoWebhookEvent } from ".
 const LABEL = "gateway-yuanbao";
 const DEFAULT_BASE = "https://yuanbao.tencent.com";
 const REQUEST_TIMEOUT_MS = 30_000;
-/** Refresh this long before the token's stated expiry. */
-const TOKEN_MARGIN_MS = 60_000;
 
 /** What a webhook route answers: 200 acknowledges, anything else makes Yuanbao redeliver. */
 export type YuanbaoWebhookAnswer = {
@@ -67,7 +66,7 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
   private readonly opts: YuanbaoAdapterOptions;
   private readonly doFetch: YuanbaoFetch;
   private connected = false;
-  private accessToken: { value: string; expiresAt: number } | undefined;
+  private readonly tokens = createTokenCache({ fetchToken: () => this.requestToken() });
   private readonly seen = new SeenIds();
 
   /** @throws Error when `appId`, `appSecret` or `callbackSecret` is empty */
@@ -85,7 +84,7 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
   async connect(): Promise<boolean> {
     if (this.connected) return true;
     try {
-      await this.token(true);
+      await this.tokens.get({ force: true });
       this.connected = true;
       return true;
     } catch (err) {
@@ -96,7 +95,7 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
 
   async disconnect(): Promise<void> {
     this.connected = false;
-    this.accessToken = undefined;
+    this.tokens.clear();
   }
 
   async sendMessage(out: OutboundMessage): Promise<SendResult> {
@@ -113,7 +112,7 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     let messageId = "";
     try {
       for (const text of splitForYuanbao(this.outboundText(out))) {
-        const token = await this.token(false);
+        const token = await this.tokens.get();
         const body = await this.call("POST", "/open-apis/message/send", token, {
           receive_id: out.channel.id,
           msg_type: "text",
@@ -191,11 +190,7 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     return { status: 200, reason: outcome };
   }
 
-  private async token(force: boolean): Promise<string> {
-    const cached = this.accessToken;
-    if (!force && cached !== undefined && cached.expiresAt - TOKEN_MARGIN_MS > Date.now()) {
-      return cached.value;
-    }
+  private async requestToken(): Promise<{ value: string; expiresInS?: number }> {
     const body = await this.call("POST", "/open-apis/auth/token", undefined, {
       app_id: this.opts.appId,
       app_secret: this.opts.appSecret,
@@ -205,8 +200,7 @@ export class YuanbaoAdapter extends BasePlatformAdapter {
     }
     const value = body.data?.access_token;
     if (!value) throw new Error("token answer has no access_token");
-    this.accessToken = { value, expiresAt: Date.now() + (body.data?.expires_in ?? 7200) * 1000 };
-    return value;
+    return { value, expiresInS: body.data?.expires_in };
   }
 
   private async call(

@@ -7,13 +7,13 @@
 
 import type { KeyObject } from "node:crypto";
 
+import { createTokenCache, type FetchedToken, type TokenCache } from "@theokit/gateway";
+
 import { signRs256 } from "./rs256.js";
 import type { FetchLike } from "./types.js";
 
 export const TOKEN_URL = "https://oauth2.googleapis.com/token";
 export const CHAT_BOT_SCOPE = "https://www.googleapis.com/auth/chat.bot";
-/** A held token is replaced this long before it expires. */
-const REFRESH_MARGIN_MS = 60_000;
 /** The lifetime the assertion asks for; Google accepts at most one hour. */
 const ASSERTION_LIFETIME_S = 3600;
 
@@ -24,8 +24,7 @@ export class AccessTokenError extends Error {
 
 /** Access tokens for one service account, shared by every send until shortly before expiry. */
 export class AccessTokenClient {
-  private held: { readonly token: string; readonly expiresAt: number } | undefined;
-  private pending: Promise<string> | undefined;
+  private readonly cache: TokenCache;
 
   constructor(
     private readonly opts: {
@@ -34,7 +33,12 @@ export class AccessTokenClient {
       readonly fetch: FetchLike;
       readonly now: () => number;
     },
-  ) {}
+  ) {
+    this.cache = createTokenCache({
+      fetchToken: (signal) => this.exchange(signal),
+      now: opts.now,
+    });
+  }
 
   /**
    * A token valid for at least another minute. Concurrent callers share one exchange.
@@ -42,17 +46,10 @@ export class AccessTokenClient {
    * @throws AccessTokenError when the exchange fails or `signal` aborts it
    */
   token(signal?: AbortSignal): Promise<string> {
-    const held = this.held;
-    if (held !== undefined && this.opts.now() < held.expiresAt - REFRESH_MARGIN_MS) {
-      return Promise.resolve(held.token);
-    }
-    this.pending ??= this.exchange(signal).finally(() => {
-      this.pending = undefined;
-    });
-    return this.pending;
+    return this.cache.get(signal === undefined ? undefined : { signal });
   }
 
-  private async exchange(signal: AbortSignal | undefined): Promise<string> {
+  private async exchange(signal: AbortSignal | undefined): Promise<FetchedToken> {
     const issuedAt = Math.floor(this.opts.now() / 1000);
     const assertion = signRs256(
       {
@@ -86,9 +83,10 @@ export class AccessTokenClient {
       const why = typeof answer?.error === "string" ? `: ${answer.error}` : "";
       throw new AccessTokenError(`token endpoint answered HTTP ${response.status}${why}`);
     }
-    const lifetimeS = typeof answer.expires_in === "number" ? answer.expires_in : 0;
-    this.held = { token: answer.access_token, expiresAt: this.opts.now() + lifetimeS * 1000 };
-    return answer.access_token;
+    return {
+      value: answer.access_token,
+      ...(typeof answer.expires_in === "number" ? { expiresInS: answer.expires_in } : {}),
+    };
   }
 }
 

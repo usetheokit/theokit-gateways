@@ -100,6 +100,23 @@ describe("QQAdapter", () => {
     expect(r).toMatchObject({ ok: false, error: { code: "qq_send_failed" } });
   });
 
+  it("makes one token request for concurrent sends with an empty cache", async () => {
+    // A token inside the refresh margin is never served from the cache, so the cache stays empty.
+    const { fetch, calls } = fakeFetch((c) => {
+      const answer = ok(c) as any;
+      if (answer.access_token) answer.expires_in = "1";
+      if (answer.data?.access_token) answer.data.expires_in = 1;
+      return answer;
+    });
+    const a = started(fetch);
+    await a.connect();
+    calls.length = 0;
+    const out = { channel: { id: "u1", type: "dm" as const }, text: "hi" };
+    const results = await Promise.all([a.sendMessage(out), a.sendMessage(out)]);
+    expect(results.every((r) => r.ok)).toBe(true);
+    expect(calls.filter((c) => c.url.includes("getAppAccessToken"))).toHaveLength(1);
+  });
+
   it("refuses bad sends before any call", async () => {
     const { fetch, calls } = fakeFetch(ok);
     const a = started(fetch);

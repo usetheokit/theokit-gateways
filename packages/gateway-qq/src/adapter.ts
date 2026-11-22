@@ -9,6 +9,7 @@ import {
   type AdapterCapabilities,
   BasePlatformAdapter,
   chunkByGrapheme,
+  createTokenCache,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
   SeenIds,
@@ -25,8 +26,6 @@ const LABEL = "gateway-qq";
 const DEFAULT_API = "https://api.sgroup.qq.com";
 const DEFAULT_TOKEN_URL = "https://bots.qq.com/app/getAppAccessToken";
 const REQUEST_TIMEOUT_MS = 30_000;
-/** Refresh this long before the token's stated expiry. */
-const TOKEN_MARGIN_MS = 60_000;
 /** How many users' last inbound message ids are kept for passive replies. */
 const REPLY_WINDOW_MAX = 1000;
 /** What a callback URL validation `plain_token` may contain (QQ sends short alphanumeric tokens). */
@@ -89,7 +88,7 @@ export class QQAdapter extends BasePlatformAdapter {
   private readonly opts: QQAdapterOptions;
   private readonly doFetch: QQFetch;
   private connected = false;
-  private accessToken: { value: string; expiresAt: number } | undefined;
+  private readonly tokens = createTokenCache({ fetchToken: () => this.requestToken() });
   private readonly seen = new SeenIds();
   private readonly replyWindow = new Map<string, { msgId: string; seq: number }>();
 
@@ -110,7 +109,7 @@ export class QQAdapter extends BasePlatformAdapter {
 
   /** Whether a fresh access token was obtained; a failure is logged, never thrown. */
   private async fetchToken(): Promise<boolean> {
-    return this.token(true).then(
+    return this.tokens.get({ force: true }).then(
       () => true,
       (err: unknown) => {
         process.stderr.write(`[${LABEL}] connect failed: ${messageOf(err)}\n`);
@@ -121,7 +120,7 @@ export class QQAdapter extends BasePlatformAdapter {
 
   async disconnect(): Promise<void> {
     this.connected = false;
-    this.accessToken = undefined;
+    this.tokens.clear();
     this.replyWindow.clear();
   }
 
@@ -157,7 +156,7 @@ export class QQAdapter extends BasePlatformAdapter {
   private async sendPart(openid: string, text: string): Promise<string | SendResult> {
     const url = `${this.opts.apiBase ?? DEFAULT_API}/v2/users/${encodeURIComponent(openid)}/messages`;
     const payload = { content: text, msg_type: 0, ...this.nextReplyRef(openid) };
-    const body = await this.call("POST", url, await this.token(false), payload);
+    const body = await this.call("POST", url, await this.tokens.get(), payload);
     if (body.code === undefined) return body.id ?? "";
     const message = `QQ error ${String(body.code)}: ${String(body.message)}`;
     return { ok: false, error: { code: "qq_send_failed", message } };
@@ -257,9 +256,7 @@ export class QQAdapter extends BasePlatformAdapter {
     return { msg_id: ref.msgId, msg_seq: ref.seq };
   }
 
-  private async token(force: boolean): Promise<string> {
-    const fresh = force ? undefined : this.cachedToken();
-    if (fresh !== undefined) return fresh;
+  private async requestToken(): Promise<{ value: string; expiresInS: number }> {
     const body = await this.call("POST", this.opts.tokenUrl ?? DEFAULT_TOKEN_URL, undefined, {
       appId: this.opts.appId,
       clientSecret: this.opts.appSecret,
@@ -268,18 +265,7 @@ export class QQAdapter extends BasePlatformAdapter {
       throw new Error(`token answered error ${String(body.code)}: ${String(body.message)}`);
     }
     if (!body.access_token) throw new Error("token answer has no access_token");
-    const ttl = Number(body.expires_in);
-    const seconds = Number.isFinite(ttl) && ttl > 0 ? ttl : 7200;
-    this.accessToken = { value: body.access_token, expiresAt: Date.now() + seconds * 1000 };
-    return body.access_token;
-  }
-
-  /** The cached token while it has more than the refresh margin left. */
-  private cachedToken(): string | undefined {
-    const cached = this.accessToken;
-    return cached !== undefined && cached.expiresAt - TOKEN_MARGIN_MS > Date.now()
-      ? cached.value
-      : undefined;
+    return { value: body.access_token, expiresInS: Number(body.expires_in) };
   }
 
   private async call(
