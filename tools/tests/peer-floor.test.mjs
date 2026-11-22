@@ -23,7 +23,7 @@ describe("check-peer-floor", () => {
   it("finds every adapter with a readable floor, and the twelve raised floors", () => {
     const byName = Object.fromEntries(publishableAdapters().map((a) => [a.name, a.floor]));
     for (const a of Object.values(byName)) expect(a).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(byName["@theokit/gateway-zalo"]).toBe("0.20.0");
+    expect(byName["@theokit/gateway-zalo"]).toBe("0.26.0");
     expect(byName["@theokit/gateway-qq"]).toBe("0.25.0");
     expect(byName["@theokit/gateway-buzz"]).toBe("0.21.0");
     expect(byName["@theokit/gateway-clickclack"]).toBe("0.21.0");
@@ -61,7 +61,7 @@ describe("check-peer-floor main", () => {
       },
     });
     expect(code).toBe(0);
-    expect(seen["@theokit/gateway-zalo"]).toBe("0.20.0");
+    expect(seen["@theokit/gateway-zalo"]).toBe("0.26.0");
     expect(seen["@theokit/gateway-qq"]).toBe("0.25.0");
   });
 
