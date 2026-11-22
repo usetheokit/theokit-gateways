@@ -12,12 +12,12 @@ import { spawn as nodeSpawn } from "node:child_process";
 
 import {
   BasePlatformAdapter,
-  JsonRpcLineClient,
-  type RpcNotification,
-  type RpcOutcome,
   channelRendering,
   type MessageEvent as GatewayMessageEvent,
+  JsonRpcLineClient,
   type OutboundMessage,
+  type RpcNotification,
+  type RpcOutcome,
   type SendResult,
 } from "@theokit/gateway";
 
