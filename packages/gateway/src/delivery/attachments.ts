@@ -20,8 +20,9 @@ import type {
  * The non-empty `attachments` of a request, or nothing for absent, `null` or empty. `!== 0`, not
  * `> 0`: another non-array value from a JavaScript caller has no numeric length and is carried on,
  * to be refused, rather than dropped (EC-1).
+ *
+ * @internal
  */
-/** @internal */
 export function attachmentsOf(attachments: ReadonlyArray<OutboundAttachment> | undefined): {
   attachments?: ReadonlyArray<OutboundAttachment>;
 } {
