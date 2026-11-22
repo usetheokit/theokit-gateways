@@ -25,6 +25,7 @@ import {
   GatewayIntentBits,
   type Message,
   Partials,
+  RateLimitError,
   Routes,
 } from "discord.js";
 import { refuseAttachments } from "./refuse-attachments.js";
@@ -399,16 +400,29 @@ function editPartsRefusal(partCount: number): SendResult {
 }
 
 function mapSendError(err: unknown): SendResult {
+  if (err instanceof RateLimitError) {
+    return {
+      ok: false,
+      error: {
+        code: "rate_limit",
+        message: err.message,
+        ...(Number.isFinite(err.retryAfter) ? { retryAfterMs: err.retryAfter } : {}),
+      },
+    };
+  }
   if (err instanceof DiscordAPIError) {
     const codeStr = String(err.code);
     if (codeStr === "50007") {
       return { ok: false, error: { code: "dm_blocked", message: err.message } };
     }
     if (codeStr === "50001" || codeStr === "50013") {
-      return { ok: false, error: { code: "no_permission", message: err.message } };
+      return {
+        ok: false,
+        error: { code: "permission_denied", message: err.message, platformCode: codeStr },
+      };
     }
     if (err.status === 429) {
-      return { ok: false, error: { code: "rate_limited", message: err.message } };
+      return { ok: false, error: { code: "rate_limit", message: err.message } };
     }
     return { ok: false, error: { code: `discord_${codeStr}`, message: err.message } };
   }

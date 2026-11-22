@@ -41,7 +41,7 @@
     "test:mutation": "stryker run"
   },
   "peerDependencies": {
-    "@theokit/gateway": ">=0.20.0 <1.0.0",
+    "@theokit/gateway": ">=0.26.0 <1.0.0",
     "grammy": "^1.30.0"
   },
   "devDependencies": {
