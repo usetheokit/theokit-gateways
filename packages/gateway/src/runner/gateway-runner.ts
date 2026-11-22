@@ -37,6 +37,7 @@ import type {
   SendResult,
 } from "../adapter/base.js";
 import { attachmentsOf, refuseUnsupportedAttachments } from "../delivery/attachments.js";
+import { reportDiagnostic } from "../diagnostics.js";
 import { GatewayLifecycleError } from "../errors/lifecycle-error.js";
 import { HookExecutor } from "../hooks/executor.js";
 import type { GatewayHook } from "../hooks/types.js";
@@ -243,8 +244,9 @@ async function releaseAdapters(
         await a.disconnect();
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        process.stderr.write(
-          `[gateway] adapter "${a.platform}" disconnect failed while ${during}: ${redact(message)}\n`,
+        reportDiagnostic(
+          "gateway",
+          `adapter "${a.platform}" disconnect failed while ${during}: ${redact(message)}`,
         );
       }
     }),
@@ -403,8 +405,9 @@ export class GatewayRunner {
     if (policy === undefined || this.stopped) return;
     const delay = backoff.nextDelayMs();
     if (delay === undefined) {
-      process.stderr.write(
-        `[gateway] adapter "${adapter.platform}" gave up reconnecting after ${policy.maxAttempts} attempts\n`,
+      reportDiagnostic(
+        "gateway",
+        `adapter "${adapter.platform}" gave up reconnecting after ${policy.maxAttempts} attempts`,
       );
       return;
     }
@@ -415,8 +418,9 @@ export class GatewayRunner {
     // A pending retry must not keep the process alive on its own; `stop()` clears it anyway.
     timer.unref();
     this.retryTimers.add(timer);
-    process.stderr.write(
-      `[gateway] adapter "${adapter.platform}" reconnect attempt ${attempt} in ${delay}ms\n`,
+    reportDiagnostic(
+      "gateway",
+      `adapter "${adapter.platform}" reconnect attempt ${attempt} in ${delay}ms`,
     );
     this.emitState(adapter.platform, "retrying", `reconnect attempt ${attempt} in ${delay}ms`);
   }
@@ -445,26 +449,27 @@ export class GatewayRunner {
           connected: [...prev.connected, adapter.platform],
           failed: prev.failed.filter((f) => f.platform !== adapter.platform),
         };
-        process.stderr.write(
-          `[gateway] adapter "${adapter.platform}" connected on attempt ${attempt}\n`,
+        reportDiagnostic(
+          "gateway",
+          `adapter "${adapter.platform}" connected on attempt ${attempt}`,
         );
         return;
       }
-      process.stderr.write(
-        `[gateway] adapter "${adapter.platform}" refused to connect; not retrying\n`,
-      );
+      reportDiagnostic("gateway", `adapter "${adapter.platform}" refused to connect; not retrying`);
       return;
     } catch (err) {
       const reason = connectFailureReason({ status: "rejected", reason: err }, this.redact);
       if (isTerminalConnectError(err)) {
         this.emitState(adapter.platform, "failed", reason);
-        process.stderr.write(
-          `[gateway] adapter "${adapter.platform}" credentials rejected: ${reason}; not retrying\n`,
+        reportDiagnostic(
+          "gateway",
+          `adapter "${adapter.platform}" credentials rejected: ${reason}; not retrying`,
         );
         return;
       }
-      process.stderr.write(
-        `[gateway] adapter "${adapter.platform}" reconnect attempt ${attempt} failed: ${reason}\n`,
+      reportDiagnostic(
+        "gateway",
+        `adapter "${adapter.platform}" reconnect attempt ${attempt} failed: ${reason}`,
       );
     }
     this.scheduleReconnect(adapter, attempt + 1, backoff);
@@ -662,7 +667,7 @@ export class GatewayRunner {
         await ctx.reply(decision.message).catch(async (err) => {
           const error = err as Error;
           await this.hookExecutor.fireOnError({ event, error });
-          process.stderr.write(`[gateway] auto-reply error: ${this.redact(error.message)}\n`);
+          reportDiagnostic("gateway", `auto-reply error: ${this.redact(error.message)}`);
         });
       }
       return;
@@ -683,7 +688,7 @@ export class GatewayRunner {
         await handler(event, ctx);
       } catch (err) {
         await this.hookExecutor.fireOnError({ event, error: err as Error });
-        process.stderr.write(`[gateway] handler error: ${this.redact((err as Error).message)}\n`);
+        reportDiagnostic("gateway", `handler error: ${this.redact((err as Error).message)}`);
       } finally {
         await stopTyping();
       }

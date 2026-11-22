@@ -6,6 +6,7 @@
  * @public
  */
 
+import { reportDiagnostic } from "../diagnostics.js";
 import { SeenIds } from "../text/seen-ids.js";
 import type { MessageEvent as GatewayMessageEvent } from "../types/message-event.js";
 import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "./base.js";
@@ -111,7 +112,9 @@ export abstract class WeixinAdapterBase extends BasePlatformAdapter {
       this.connected = true;
       return true;
     } catch (err) {
-      process.stderr.write(`[${this.cfg.label}] connect failed: ${weixinMessageOf(err)}\n`);
+      reportDiagnostic(this.cfg.label, `connect failed: ${weixinMessageOf(err)}`, {
+        failure: true,
+      });
       return false;
     }
   }

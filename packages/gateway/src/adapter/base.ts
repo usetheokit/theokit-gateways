@@ -11,6 +11,7 @@
  * (`TelegramAdapter`, `DiscordAdapter`, ...).
  */
 
+import { reportDiagnostic } from "../diagnostics.js";
 import { channelRendering } from "../text/channel-rendering.js";
 import type { SeenIds } from "../text/seen-ids.js";
 import type { MessageEvent as GatewayMessageEvent, PlatformName } from "../types/message-event.js";
@@ -180,7 +181,7 @@ export abstract class BasePlatformAdapter {
       await handler(event);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`[${this.platform}] handler threw: ${message}\n`);
+      reportDiagnostic(this.platform, `handler threw: ${message}`, { failure: true });
       return "handler_threw";
     }
     return "ok";
@@ -218,7 +219,7 @@ export abstract class BasePlatformAdapter {
     if (this.subscribedHandler === undefined) return "no_handler";
     seen.add(event.id);
     const outcome = await this.runHandler(this.subscribedHandler, event);
-    if (outcome === "handler_threw") process.stderr.write(`[${label}] handler threw\n`);
+    if (outcome === "handler_threw") reportDiagnostic(label, "handler threw", { failure: true });
     return outcome;
   }
 
