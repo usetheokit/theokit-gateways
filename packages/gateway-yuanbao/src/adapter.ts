@@ -125,7 +125,9 @@ function bodyFailure(message: string, code: unknown): SendResult {
  * never a throw. Inbound arrives by `handleWebhook(rawBody, signature, timestamp)`, which verifies
  * the signature, turns a text message into one direct-message event and dispatches it. Replies go
  * through the bot message API, split at 2000 characters; a refusal comes back as
- * `platform_error` with Yuanbao's `code` in `platformCode`; an HTTP failure maps by status (429 is `rate_limit`) and a rejected fetch is `network_error`. The token is refreshed before it expires.
+ * `platform_error` with Yuanbao's `code` in `platformCode`; an HTTP failure maps by status
+ * (429 is `rate_limit`) and a rejected fetch is `network_error`. The token is refreshed before it
+ * expires.
  *
  * @public
  */

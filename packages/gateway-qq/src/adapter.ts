@@ -145,7 +145,8 @@ function bodyFailure(message: string, code: unknown): SendResult {
  * the Ed25519 signature, answers the callback URL validation, turns a C2C text message into one
  * direct-message event and dispatches it. Replies go through the C2C message API, split at 2000
  * characters, as passive replies to the user's last message (`msg_id`, `msg_seq`) when one is
- * known; a refusal comes back as `platform_error` with QQ's `code` in `platformCode`; an HTTP failure maps by status (429 is `rate_limit`) and a rejected fetch is `network_error`.
+ * known; a refusal comes back as `platform_error` with QQ's `code` in `platformCode`; an HTTP
+ * failure maps by status (429 is `rate_limit`) and a rejected fetch is `network_error`.
  *
  * @public
  */

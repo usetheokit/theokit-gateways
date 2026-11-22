@@ -110,7 +110,9 @@ const defaultFetch: ZaloFetch = async (url, init) => {
  * Inbound arrives by `handleWebhook(rawBody, signatureHeader)`, which verifies the signature,
  * turns a `user_send_text` event into one event and dispatches it. A reply over 2000 characters
  * goes as several messages. A Zalo OA may message a user only within Zalo's customer-service
- * window; a refusal comes back as `platform_error` with Zalo's error code in `platformCode`; an HTTP failure maps by status (429 is `rate_limit`) and a rejected fetch is `network_error`.
+ * window; a refusal comes back as `platform_error` with Zalo's error code in `platformCode`;
+ * an HTTP failure maps by status (429 is `rate_limit`) and a rejected fetch is
+ * `network_error`.
  *
  * @public
  */
