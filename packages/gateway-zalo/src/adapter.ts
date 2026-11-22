@@ -14,82 +14,17 @@ import {
   sendErrorFromHttp,
 } from "@theokit/gateway";
 
+import {
+  assertHttpOk,
+  bodyFailure,
+  failureOf as failureWith,
+  fetchText,
+  messageOf,
+} from "../../../shared/http-send-failure.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import { verifyZaloSignature } from "./signature.js";
 import { splitForZalo, ZALO_MESSAGE_LIMIT } from "./split.js";
 import type { ZaloAdapterOptions, ZaloFetch, ZaloWebhookEvent } from "./types.js";
-
-/** A non-2xx HTTP answer, with what a caller needs to retry. */
-class HttpFailure extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-    readonly retryAfter: string | undefined,
-    readonly platformCode: string | undefined,
-  ) {
-    super(message);
-  }
-}
-
-/** The fetch itself rejected, so no answer came. */
-class NetworkFailure extends Error {}
-
-/** Run the fetch and read the body; a rejection of either becomes a `NetworkFailure`. */
-async function fetchText(
-  doFetch: ZaloFetch,
-  url: string,
-  init: Parameters<ZaloFetch>[1],
-): Promise<{ status: number; retryAfter: string | undefined; text: string }> {
-  try {
-    const res = await doFetch(url, init);
-    const retryAfter = res.headers?.get("retry-after") ?? undefined;
-    return { status: res.status, retryAfter, text: await res.text() };
-  } catch (err) {
-    throw new NetworkFailure(messageOf(err));
-  }
-}
-
-/** Throw an `HttpFailure` for a non-2xx answer, keeping the body's platform code when it has one. */
-function assertHttpOk(
-  who: string,
-  res: { status: number; retryAfter: string | undefined },
-  text: string,
-  codeOf: (body: { code?: unknown; error?: unknown } | null) => unknown,
-): void {
-  if (res.status >= 200 && res.status < 300) return;
-  let code: unknown;
-  try {
-    code = codeOf(JSON.parse(text));
-  } catch {
-    code = undefined;
-  }
-  throw new HttpFailure(
-    res.status,
-    `${who} answered HTTP ${res.status}`,
-    res.retryAfter,
-    code === undefined || code === null ? undefined : String(code),
-  );
-}
-
-/** The failed `SendResult` for a thrown error: HTTP status, rejected fetch, or anything else. */
-function failureOf(err: unknown): SendResult {
-  if (err instanceof HttpFailure) {
-    return sendErrorFromHttp(err.status, err.message, {
-      ...(err.retryAfter === undefined ? {} : { retryAfter: err.retryAfter }),
-      ...(err.platformCode === undefined ? {} : { platformCode: err.platformCode }),
-    });
-  }
-  const code = err instanceof NetworkFailure ? "network_error" : "platform_error";
-  return { ok: false, error: { code, message: messageOf(err) } };
-}
-
-/**
- * A 200 answer whose body carries a platform error code. No code is mapped to `rate_limit` or
- * `auth_failed`: Zalo's documented codes were not checked, so all stay `platform_error`.
- */
-function bodyFailure(message: string, code: unknown): SendResult {
-  return { ok: false, error: { code: "platform_error", message, platformCode: String(code) } };
-}
 
 const LABEL = "gateway-zalo";
 const DEFAULT_BASE = "https://openapi.zalo.me";
@@ -186,7 +121,7 @@ export class ZaloAdapter extends BasePlatformAdapter {
         messageId = body.data?.message_id ?? messageId;
       }
     } catch (err) {
-      return failureOf(err);
+      return failureWith(err, sendErrorFromHttp);
     }
     return { ok: true, messageId };
   }
@@ -289,8 +224,4 @@ function toMessageEvent(payload: ZaloWebhookEvent): GatewayMessageEvent | undefi
     receivedAt: Number.isFinite(ts) && ts > 0 ? ts : Date.now(),
     zalo: { messageId: msgId, userId, oaId: payload.recipient?.id ?? "", raw: payload },
   };
-}
-
-function messageOf(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
