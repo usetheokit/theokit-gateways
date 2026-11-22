@@ -14,7 +14,6 @@
  * and compares no `serviceurl` on the 2.1.x Entra path.
  */
 
-
 import { verifyRs256Jwt } from "@theokit/gateway";
 
 import { readBoundedStream } from "./bounded-stream.js";
