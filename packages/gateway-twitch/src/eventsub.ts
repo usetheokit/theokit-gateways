@@ -6,11 +6,10 @@
  * `{ metadata: { message_id, message_type, subscription_type? }, payload }`.
  */
 
+import { ReconnectBackoff } from "@theokit/gateway";
+
 import type { TwitchSocket } from "./types.js";
 
-const FIRST_RECONNECT_DELAY_MS = 1_000;
-const MAX_RECONNECT_DELAY_MS = 30_000;
-const STABLE_SESSION_MS = 60_000;
 /** Twitch's own window plus a margin, so a keepalive arriving on time never trips the watchdog. */
 const KEEPALIVE_MARGIN_MS = 5_000;
 /** How long a new socket may take to send its welcome before it counts as dropped. */
@@ -58,8 +57,11 @@ interface Envelope {
 export class EventSubSession {
   private current: Connection | undefined;
   private pending: Connection | undefined;
-  private openedAt: number | undefined;
-  private nextDelayMs = FIRST_RECONNECT_DELAY_MS;
+  private readonly backoff = new ReconnectBackoff({
+    initialDelayMs: 1_000,
+    maxDelayMs: 30_000,
+    stableAfterMs: 60_000,
+  });
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private closed = false;
 
@@ -148,7 +150,7 @@ export class EventSubSession {
       this.opts.onWelcome(sessionId, "handover");
       return;
     }
-    this.openedAt = Date.now();
+    this.backoff.opened();
     this.opts.onWelcome(sessionId, "new");
   }
 
@@ -190,12 +192,8 @@ export class EventSubSession {
   }
 
   private scheduleReconnect(): void {
-    if (this.openedAt !== undefined && Date.now() - this.openedAt >= STABLE_SESSION_MS) {
-      this.nextDelayMs = FIRST_RECONNECT_DELAY_MS;
-    }
-    this.openedAt = undefined;
-    const delay = this.nextDelayMs;
-    this.nextDelayMs = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS);
+    const delay = this.backoff.nextDelayMs();
+    if (delay === undefined) return;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
       if (!this.closed) this.current = this.dial(this.opts.url);
