@@ -141,4 +141,27 @@ describe("RaftAdapter", () => {
     const res = await adapter.sendMessage({ channel: { id: "c", type: "dm" }, text: "x" });
     expect(res.error?.code).toBe("not_connected");
   });
+
+  it("delivers a repeated wake id once and again after 1001 other ids", async () => {
+    const { adapter, spawns } = harness();
+    const events: MessageEvent[] = [];
+    const runner = new GatewayRunner({
+      adapters: [adapter],
+      handler: async (e) => {
+        events.push(e);
+      },
+    });
+    await runner.start();
+    const out = spawns[0]?.child.stdout;
+    out?.write(wake({ id: "first", from: "u1", text: "a" }));
+    out?.write(wake({ id: "first", from: "u1", text: "a" }));
+    await tick();
+    expect(events).toHaveLength(1);
+    let lines = "";
+    for (let i = 0; i < 1001; i++) lines += wake({ id: `o${i}`, from: "u1", text: "x" });
+    out?.write(lines + wake({ id: "first", from: "u1", text: "a" }));
+    await tick();
+    expect(events.filter((e) => e.id === "first")).toHaveLength(2);
+    await runner.stop();
+  });
 });

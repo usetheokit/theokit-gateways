@@ -9,6 +9,7 @@ import {
   channelRendering,
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
+  SeenIds,
   type SendResult,
 } from "@theokit/gateway";
 
@@ -45,7 +46,7 @@ export abstract class RealtimeBotAdapter extends BasePlatformAdapter {
   private generation = 0;
   private cursor = "";
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
-  private readonly seen = new Set<string>();
+  private readonly seen = new SeenIds();
   private warnedAboutHtml = false;
 
   /** @throws Error when `baseUrl`, `token`, `workspaceId` or `botUserId` is missing */
@@ -262,18 +263,10 @@ export abstract class RealtimeBotAdapter extends BasePlatformAdapter {
     if (f.cursor !== undefined && f.cursor !== null) this.cursor = String(f.cursor);
     if (f.type !== "message.created") return;
     const event = this.toMessageEvent(f);
-    if (event === undefined || this.seen.has(event.id)) return;
-    this.remember(event.id);
+    if (event === undefined || !this.seen.add(event.id)) return;
     void this.runHandler(this.handler, event).catch((err: unknown) => {
       process.stderr.write(`[${this.spec.label}] handler threw: ${messageOf(err)}\n`);
     });
-  }
-
-  private remember(id: string): void {
-    this.seen.add(id);
-    if (this.seen.size <= 1000) return;
-    const oldest = this.seen.values().next().value;
-    if (oldest !== undefined) this.seen.delete(oldest);
   }
 
   private toMessageEvent(frame: Record<string, unknown>): GatewayMessageEvent | undefined {

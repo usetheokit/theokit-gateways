@@ -155,4 +155,18 @@ describe("ZaloPersonalAdapter", () => {
     await adapter.disconnect();
     expect(api.stopped).toBe(1);
   });
+
+  it("delivers a repeated id once and again after 1001 other ids", async () => {
+    const { api, adapter } = make();
+    const events = await inbound(adapter);
+    await adapter.connect();
+    api.emit(text("a", { msgId: "first" }));
+    api.emit(text("a", { msgId: "first" }));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(events).toHaveLength(1);
+    for (let i = 0; i < 1001; i++) api.emit(text("x", { msgId: `o${i}` }));
+    api.emit(text("a", { msgId: "first" }));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(events.filter((e) => e.id === "first")).toHaveLength(2);
+  });
 });
