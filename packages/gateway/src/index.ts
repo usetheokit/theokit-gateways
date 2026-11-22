@@ -16,6 +16,8 @@ export {
   type WeixinWebhookAnswer,
 } from "./adapter/weixin-base.js";
 export { parseFlatXml } from "./adapter/weixin-xml.js";
+export type { FetchedToken, TokenCache, TokenCacheOptions } from "./auth/token-cache.js";
+export { createTokenCache } from "./auth/token-cache.js";
 export {
   type ChannelConfigInput,
   type ChannelConfigReaders,
