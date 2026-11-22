@@ -82,6 +82,22 @@ function graphemeCut(segments: Intl.Segments, start: number, limitCut: number): 
   return segment.index > start ? segment.index : segment.index + segment.segment.length;
 }
 
+/** The requested unit as a code-point flag; throws `RangeError` for a bad unit or limit. */
+function readUnit(partLimit: number, options: SplitKeepingRowsOptions): boolean {
+  const unit: unknown = options.unit ?? "utf16";
+  if (unit !== "utf16" && unit !== "codepoint") {
+    throw new RangeError(
+      `splitKeepingRows: unit must be "utf16" or "codepoint", got ${String(unit)}`,
+    );
+  }
+  if (unit === "codepoint" && !(Number.isInteger(partLimit) && partLimit > 0)) {
+    throw new RangeError(
+      `splitKeepingRows: partLimit must be a positive integer, got ${partLimit}`,
+    );
+  }
+  return unit === "codepoint";
+}
+
 /**
  * Parts of at most `partLimit` units (UTF-16 units, or code points with `unit: "codepoint"`), cut
  * at grapheme boundaries and before straddled rows. Shared by the SMS and LINE splitters (text no
@@ -93,23 +109,12 @@ export function splitKeepingRows(
   partLimit: number,
   options: SplitKeepingRowsOptions = {},
 ): string[] {
-  const unit: unknown = options.unit ?? "utf16";
-  if (unit !== "utf16" && unit !== "codepoint") {
-    throw new RangeError(
-      `splitKeepingRows: unit must be "utf16" or "codepoint", got ${String(unit)}`,
-    );
-  }
-  const codepoint = unit === "codepoint";
-  if (codepoint && !(Number.isInteger(partLimit) && partLimit > 0)) {
-    throw new RangeError(
-      `splitKeepingRows: partLimit must be a positive integer, got ${partLimit}`,
-    );
-  }
+  const codepoint = readUnit(partLimit, options);
   const segments = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text);
   const parts: string[] = [];
   let start = 0;
-  while (advance(text, start, partLimit, codepoint) < text.length) {
-    const limitCut = advance(text, start, partLimit, codepoint);
+  let limitCut = advance(text, start, partLimit, codepoint);
+  while (limitCut < text.length) {
     const grapheme = graphemeCut(segments, start, limitCut);
     if (codepoint && grapheme > limitCut) {
       throw new RangeError(
@@ -123,6 +128,7 @@ export function splitKeepingRows(
     }
     parts.push(text.slice(start, cut));
     start = cut;
+    limitCut = advance(text, start, partLimit, codepoint);
   }
   if (start < text.length) parts.push(text.slice(start));
   return parts;
