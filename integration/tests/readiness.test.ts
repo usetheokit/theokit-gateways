@@ -225,6 +225,12 @@ describe("live-test readiness", () => {
     // That exact mistake was made once in this repository and caught only
     // because the check was run against a deliberately broken input.
     const NOT_DRIVEN_LIVE: Record<string, string> = {
+      verifyHmac:
+        "pure signature check, no I/O. Covered by packages/gateway/tests/verify-signature.test.ts",
+      verifyDigest:
+        "pure signature check, no I/O. Covered by packages/gateway/tests/verify-signature.test.ts",
+      safeEqualString:
+        "pure string compare, no I/O. Covered by packages/gateway/tests/verify-signature.test.ts",
       WeixinAdapterBase:
         "the shared flow of the WeChat and WeCom adapters. Both have their own unit suites that " +
         "drive it end to end against a faked fetch; a live run needs a real Official Account or " +
