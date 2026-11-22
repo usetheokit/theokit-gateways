@@ -67,8 +67,16 @@ function fastestRatio(oldFn: () => unknown, newFn: () => unknown, windowMs: numb
   return newBest / oldBest;
 }
 
+/**
+ * Coverage instrumentation taxes the row rule's per-unit scan far more than the plain cut (measured
+ * 1.9x against 1.0x without it), so the ratio only means something on uninstrumented code.
+ */
+const instrumented =
+  (globalThis as { __vitest_worker__?: { config?: { coverage?: { enabled?: boolean } } } })
+    .__vitest_worker__?.config?.coverage?.enabled === true;
+
 describe("splitForTalk timing against a grapheme-aware splitter without the row rule", () => {
-  it("stays within 1.5x on a 1,000,000-character table", () => {
+  it.skipIf(instrumented)("stays within 1.5x on a 1,000,000-character table", () => {
     const text = tableOfLength(1_000_000);
     const plain = withoutRows(text);
     const ratio = fastestRatio(
