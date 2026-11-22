@@ -753,3 +753,7 @@ const backoff = new ReconnectBackoff({ initialDelayMs: 1000, maxDelayMs: 30_000 
 Defaults match `ReconnectPolicy` (1 s initial, 60 s cap, factor 2). A connection open for at least
 `stableAfterMs` (default 60 s) resets the delay. A negative or non-finite delay, or a `factor`
 below 1, throws a `RangeError` naming the field.
+
+### Reporting diagnostics
+
+An adapter should report a diagnostic line through `reportDiagnostic(tag, message)` rather than writing to `process.stderr` itself. It redacts credential-shaped values in `message` and writes `[tag] message` to stderr, so the redaction and any later routing live in one place. Pass `{ failure: true }` for a failure.

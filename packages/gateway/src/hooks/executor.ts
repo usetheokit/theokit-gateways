@@ -8,8 +8,8 @@
  * @public
  */
 
+import { reportDiagnostic } from "../diagnostics.js";
 import { GatewayConfigurationError } from "../errors/config-error.js";
-import { redactSecrets } from "../security/credential-patterns.js";
 
 import type {
   GatewayHook,
@@ -103,8 +103,10 @@ export class HookExecutor {
         // behaviour.
         //
         // The detail is not lost, only moved: stderr gets it, redacted.
-        process.stderr.write(
-          `[gateway] pre_inbound hook "${h.name}" threw: ${redactSecrets((err as Error).message)}\n`,
+        reportDiagnostic(
+          "gateway",
+          `pre_inbound hook "${h.name}" threw: ${(err as Error).message}`,
+          { failure: true },
         );
         return {
           block: true,
@@ -125,8 +127,10 @@ export class HookExecutor {
       try {
         await h.post_outbound(ctx);
       } catch (err) {
-        process.stderr.write(
-          `[gateway] post_outbound hook "${h.name}" threw: ${(err as Error).message}\n`,
+        reportDiagnostic(
+          "gateway",
+          `post_outbound hook "${h.name}" threw: ${(err as Error).message}`,
+          { failure: true },
         );
       }
     }
@@ -139,9 +143,9 @@ export class HookExecutor {
       try {
         await h.on_error(ctx);
       } catch (err) {
-        process.stderr.write(
-          `[gateway] on_error hook "${h.name}" threw: ${(err as Error).message}\n`,
-        );
+        reportDiagnostic("gateway", `on_error hook "${h.name}" threw: ${(err as Error).message}`, {
+          failure: true,
+        });
       }
     }
   }

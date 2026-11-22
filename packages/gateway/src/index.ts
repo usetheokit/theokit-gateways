@@ -63,6 +63,7 @@ export {
   DeliveryRouter,
   type DeliveryTarget,
 } from "./delivery/router.js";
+export { type ReportDiagnosticOptions, reportDiagnostic } from "./diagnostics.js";
 // Errors
 export {
   GatewayConfigurationError,
