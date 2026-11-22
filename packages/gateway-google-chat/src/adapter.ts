@@ -17,16 +17,18 @@ import {
   channelRendering,
   GatewayConfigurationError,
   type MessageEvent as GatewayMessageEvent,
+  type JwksKeySet,
+  jwksKeySet,
   type OutboundMessage,
   type SendResult,
+  sendErrorFromHttp,
 } from "@theokit/gateway";
 
 import { AccessTokenClient, AccessTokenError } from "./access-token.js";
-import { googleKeySet, type KeySet } from "./key-set.js";
 import { chatEventToMessageEvent, type GoogleChatEventBody } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import type { FetchLike, GoogleChatAdapterOptions } from "./types.js";
-import { type TokenVerdict, verifyChatRequest } from "./verify-token.js";
+import { GOOGLE_CERTS_URL, type TokenVerdict, verifyChatRequest } from "./verify-token.js";
 import { createWebhookServer, type WebhookServer } from "./webhook-server.js";
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
@@ -56,7 +58,7 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
   private readonly opts: GoogleChatAdapterOptions;
   private readonly fetchFn: FetchLike;
   private readonly now: () => number;
-  private readonly keySet: KeySet;
+  private readonly keySet: JwksKeySet;
   private tokens: AccessTokenClient | undefined;
   private server: WebhookServer | undefined;
   private handler: ((event: GatewayMessageEvent) => Promise<void>) | undefined;
@@ -72,7 +74,7 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
     this.opts = opts;
     this.fetchFn = opts.fetch ?? ((input, init) => fetch(input, init));
     this.now = opts.now ?? Date.now;
-    this.keySet = googleKeySet({ fetch: this.fetchFn, now: this.now });
+    this.keySet = jwksKeySet({ url: GOOGLE_CERTS_URL, fetch: this.fetchFn, now: this.now });
   }
 
   async connect(): Promise<boolean> {
@@ -128,7 +130,7 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
     try {
       token = await tokens.token();
     } catch (err) {
-      return { ok: false, error: { code: "google_chat_auth_error", message: message(err) } };
+      return tokenFailure(err);
     }
     return this.post(out.channel.id, this.textFor(out), token);
   }
@@ -224,17 +226,14 @@ export class GoogleChatAdapter extends BasePlatformAdapter implements GoogleChat
         body: JSON.stringify({ text }),
       });
     } catch (err) {
-      return { ok: false, error: { code: "google_chat_http_error", message: message(err) } };
+      return { ok: false, error: { code: "network_error", message: message(err) } };
     }
     const answer = (await response.json().catch(() => undefined)) as { name?: unknown } | undefined;
     if (!response.ok) {
-      return {
-        ok: false,
-        error: {
-          code: "google_chat_http_error",
-          message: `Chat API answered HTTP ${response.status}`,
-        },
-      };
+      return sendErrorFromHttp(response.status, `Chat API answered HTTP ${response.status}`, {
+        retryAfter: response.headers.get("retry-after"),
+        platformCode: "google_chat_http_error",
+      });
     }
     return typeof answer?.name === "string" ? { ok: true, messageId: answer.name } : { ok: true };
   }
@@ -349,4 +348,33 @@ function refuseConflictingWebhookOptions(opts: GoogleChatAdapterOptions): void {
     code: "conflicting_webhook_options",
     message: `gateway-google-chat: webhook "external" opens no listener, so ${given.join(" and ")} would be ignored; remove ${given.join(" and ")} or use webhook "listener"`,
   });
+}
+
+/** Map a failed token exchange: an HTTP refusal or a rejected fetch keeps its shared code. */
+function tokenFailure(err: unknown): SendResult {
+  const details = err instanceof AccessTokenError ? err.details : {};
+  if (details.status !== undefined) {
+    return sendErrorFromHttp(details.status, message(err), {
+      retryAfter: details.retryAfter ?? null,
+      platformCode: "google_chat_auth_error",
+    });
+  }
+  if (details.network === true) {
+    return {
+      ok: false,
+      error: {
+        code: "network_error",
+        message: message(err),
+        platformCode: "google_chat_auth_error",
+      },
+    };
+  }
+  return {
+    ok: false,
+    error: {
+      code: "platform_error",
+      message: message(err),
+      platformCode: "google_chat_auth_error",
+    },
+  };
 }

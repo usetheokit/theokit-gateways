@@ -61,9 +61,48 @@ describe("HelixClient", () => {
       client.sendChat({ broadcasterId: BROADCASTER, senderId: BOT, text: "hi" }, signal()),
     ).resolves.toEqual({
       ok: false,
-      code: "twitch_message_dropped",
-      message: "duplicate message",
+      error: { code: "twitch_message_dropped", message: "duplicate message" },
     });
+  });
+
+  it("turns a 429 with Retry-After: 2 into rate_limit with retryAfterMs 2000", async () => {
+    const helix = new FakeHelix();
+    helix.send = async () => new Response(null, { status: 429, headers: { "retry-after": "2" } });
+    const client = new HelixClient(TOKEN, helix.fetch);
+
+    await expect(
+      client.sendChat({ broadcasterId: BROADCASTER, senderId: BOT, text: "hi" }, signal()),
+    ).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "rate_limit",
+        message: "429",
+        retryAfterMs: 2000,
+        platformCode: "twitch_api_error",
+      },
+    });
+  });
+
+  it("turns a 500 into server_error", async () => {
+    const helix = new FakeHelix();
+    helix.send = async () => new Response(null, { status: 500 });
+    const client = new HelixClient(TOKEN, helix.fetch);
+
+    await expect(
+      client.sendChat({ broadcasterId: BROADCASTER, senderId: BOT, text: "hi" }, signal()),
+    ).resolves.toMatchObject({ ok: false, error: { code: "server_error" } });
+  });
+
+  it("turns a rejected fetch into network_error", async () => {
+    const helix = new FakeHelix();
+    helix.send = async () => {
+      throw new TypeError("fetch failed");
+    };
+    const client = new HelixClient(TOKEN, helix.fetch);
+
+    await expect(
+      client.sendChat({ broadcasterId: BROADCASTER, senderId: BOT, text: "hi" }, signal()),
+    ).resolves.toMatchObject({ ok: false, error: { code: "network_error" } });
   });
 
   it("turns a non-2xx answer into twitch_api_error with the status", async () => {
@@ -75,8 +114,7 @@ describe("HelixClient", () => {
       client.sendChat({ broadcasterId: BROADCASTER, senderId: BOT, text: "hi" }, signal()),
     ).resolves.toEqual({
       ok: false,
-      code: "twitch_api_error",
-      message: "429",
+      error: { code: "rate_limit", message: "429", platformCode: "twitch_api_error" },
     });
   });
 });

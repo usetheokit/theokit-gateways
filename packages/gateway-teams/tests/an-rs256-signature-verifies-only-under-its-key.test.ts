@@ -6,9 +6,13 @@
 import { Buffer } from "node:buffer";
 import { generateKeyPairSync, type KeyObject, sign } from "node:crypto";
 
+import { verifyRs256Jwt } from "@theokit/gateway";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { verifiesRs256 } from "../src/rs256-signature.js";
+async function verifiesRs256(rawToken: string, publicKey: KeyObject): Promise<boolean> {
+  const result = await verifyRs256Jwt(rawToken, { lookup: async () => publicKey });
+  return result.ok;
+}
 
 const encode = (value: unknown): string => Buffer.from(JSON.stringify(value)).toString("base64url");
 
@@ -27,34 +31,34 @@ describe("verifiesRs256", () => {
     other = generateKeyPairSync("rsa", { modulusLength: 2048 });
   });
 
-  it("verifies a token signed by the key", () => {
-    expect(verifiesRs256(signedToken(signer.privateKey), signer.publicKey)).toBe(true);
+  it("verifies a token signed by the key", async () => {
+    expect(await verifiesRs256(signedToken(signer.privateKey), signer.publicKey)).toBe(true);
   });
 
-  it("refuses a token signed by another key", () => {
-    expect(verifiesRs256(signedToken(other.privateKey), signer.publicKey)).toBe(false);
+  it("refuses a token signed by another key", async () => {
+    expect(await verifiesRs256(signedToken(other.privateKey), signer.publicKey)).toBe(false);
   });
 
-  it("refuses a token whose payload was changed after signing", () => {
+  it("refuses a token whose payload was changed after signing", async () => {
     const [header, , signature] = signedToken(signer.privateKey).split(".");
     const forged = `${header}.${encode({ aud: "another-bot" })}.${signature}`;
 
-    expect(verifiesRs256(forged, signer.publicKey)).toBe(false);
+    expect(await verifiesRs256(forged, signer.publicKey)).toBe(false);
   });
 
-  it("refuses a token with fewer than three parts", () => {
-    expect(verifiesRs256("header.payload", signer.publicKey)).toBe(false);
+  it("refuses a token with fewer than three parts", async () => {
+    expect(await verifiesRs256("header.payload", signer.publicKey)).toBe(false);
   });
 
-  it("refuses an empty signature", () => {
+  it("refuses an empty signature", async () => {
     const [header, payload] = signedToken(signer.privateKey).split(".");
 
-    expect(verifiesRs256(`${header}.${payload}.`, signer.publicKey)).toBe(false);
+    expect(await verifiesRs256(`${header}.${payload}.`, signer.publicKey)).toBe(false);
   });
 
-  it("answers false instead of throwing for a key that cannot verify RS256", () => {
+  it("answers false instead of throwing for a key that cannot verify RS256", async () => {
     const ec = generateKeyPairSync("ec", { namedCurve: "P-256" }).publicKey;
 
-    expect(verifiesRs256(signedToken(signer.privateKey), ec)).toBe(false);
+    expect(await verifiesRs256(signedToken(signer.privateKey), ec)).toBe(false);
   });
 });

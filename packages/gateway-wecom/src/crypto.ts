@@ -9,6 +9,8 @@
 
 import crypto from "node:crypto";
 
+import { verifyDigest } from "@theokit/gateway";
+
 /** Byte-order comparison, as the platform spec sorts (not locale-aware). */
 const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -33,9 +35,12 @@ export function verifyWeComSignature(
 ): boolean {
   const { msg_signature: signature, timestamp, nonce } = query;
   if (!signature || !timestamp || !nonce) return false;
-  const expected = Buffer.from(computeWeComSignature(token, timestamp, nonce, encrypted));
-  const given = Buffer.from(signature);
-  return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+  return verifyDigest({
+    algorithm: "sha1",
+    message: [token, timestamp, nonce, encrypted].sort(byCodeUnit).join(""),
+    signature,
+    encoding: "hex",
+  });
 }
 
 function keyOf(encodingAesKey: string): Buffer {

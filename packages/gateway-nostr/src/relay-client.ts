@@ -10,7 +10,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { SeenIds } from "@theokit/gateway";
+import { ReconnectBackoff, SeenIds } from "@theokit/gateway";
 import type { Filter } from "nostr-tools/filter";
 import type { NostrEvent } from "nostr-tools/pure";
 import { isEvent, messageOf, parseFrame, resubscribeFilters } from "./relay-frames.js";
@@ -18,9 +18,6 @@ import { isEvent, messageOf, parseFrame, resubscribeFilters } from "./relay-fram
 const LABEL = "gateway-nostr";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const PUBLISH_TIMEOUT_MS = 30_000;
-const FIRST_RECONNECT_DELAY_MS = 1_000;
-const MAX_RECONNECT_DELAY_MS = 30_000;
-const STABLE_CONNECTION_MS = 60_000;
 const AUTH_REQUIRED = "auth-required:";
 
 /**
@@ -96,8 +93,7 @@ interface Relay {
   readonly url: string;
   socket: NostrSocket | undefined;
   open: boolean;
-  openedAt: number | undefined;
-  nextDelayMs: number;
+  backoff: ReconnectBackoff;
   reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   challenge: string | undefined;
   authInFlight: boolean;
@@ -161,8 +157,11 @@ export class NostrRelayClient {
       url,
       socket: undefined,
       open: false,
-      openedAt: undefined,
-      nextDelayMs: FIRST_RECONNECT_DELAY_MS,
+      backoff: new ReconnectBackoff({
+        initialDelayMs: 1_000,
+        maxDelayMs: 30_000,
+        stableAfterMs: 60_000,
+      }),
       reconnectTimer: undefined,
       challenge: undefined,
       authInFlight: false,
@@ -297,7 +296,7 @@ export class NostrRelayClient {
       socket.onopen = () => {
         if (relay.socket !== socket) return;
         relay.open = true;
-        relay.openedAt = Date.now();
+        relay.backoff.opened();
         relay.authed = false;
         relay.challenge = undefined;
         for (const [id, subscription] of this.subscriptions) this.sendReq(relay, id, subscription);
@@ -326,12 +325,8 @@ export class NostrRelayClient {
   }
 
   private scheduleReconnect(relay: Relay): void {
-    if (relay.openedAt !== undefined && Date.now() - relay.openedAt >= STABLE_CONNECTION_MS) {
-      relay.nextDelayMs = FIRST_RECONNECT_DELAY_MS;
-    }
-    relay.openedAt = undefined;
-    const delay = relay.nextDelayMs;
-    relay.nextDelayMs = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS);
+    const delay = relay.backoff.nextDelayMs();
+    if (delay === undefined) return;
     relay.reconnectTimer = setTimeout(() => {
       relay.reconnectTimer = undefined;
       if (this.closed) return;

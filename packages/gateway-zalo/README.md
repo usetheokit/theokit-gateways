@@ -54,7 +54,7 @@ const handle = createWebhookHandler({ channels, isStarted: () => true });
   subscribed the answer is 503 so Zalo redelivers.
 - Outbound: text only; markdown loses its markers; over 2000 characters goes as several messages.
   Attachments are refused with `attachments_unsupported`. Zalo's non-zero `error` becomes
-  `zalo_send_failed` (for instance, the user is outside the 48-hour reply window).
+  `platform_error` with that code in `platformCode` (for instance, the user is outside the 48-hour reply window). An HTTP failure maps by status (429 is `rate_limit`); a rejected fetch is `network_error`.
 - The access token expires; this adapter does not refresh it.
 
 ## Status

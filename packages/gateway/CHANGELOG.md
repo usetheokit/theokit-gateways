@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.26.0
+
+### Minor Changes
+
+- f357dab: Export `ReconnectBackoff` and `ReconnectBackoffOptions` so adapters that hold a long-lived connection can share the runner's reconnect backoff, including a reset after a stable connection. `GatewayRunner` now uses it for its own retries.
+- 770b67f: Type `SendResult.error` as `SendError` with shared `SendErrorCode` values, `retryAfterMs` and `platformCode`, and add `sendErrorFromHttp` to map an HTTP status to a `SendResult`.
+- d7dbc27: `splitKeepingRows` takes an optional `{ unit: "utf16" | "codepoint" }` so `partLimit` can be measured in code points. `SplitKeepingRowsOptions` is exported.
+- 28d3dd5: Add `createTokenCache` for expiring access tokens with one shared refresh, and use it in `WeixinAdapterBase`.
+
 ## 0.25.0
 
 ### Minor Changes

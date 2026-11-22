@@ -13,6 +13,7 @@ import {
   type MessageEvent as GatewayMessageEvent,
   type OutboundMessage,
   type SendResult,
+  sendErrorFromHttp,
 } from "@theokit/gateway";
 
 import { type TalkWebhookBody, talkBodyToMessageEvent } from "./normalize.js";
@@ -258,12 +259,12 @@ export class NextcloudTalkAdapter extends BasePlatformAdapter implements Nextclo
         },
       );
     } catch (err) {
-      return { ok: false, error: { code: "talk_http_error", message: message(err) } };
+      return { ok: false, error: { code: "network_error", message: message(err) } };
     }
     // The answer's body is not read; release the connection it holds.
     await response.body?.cancel().catch(() => undefined);
     if (response.status === 201) return { ok: true, messageId: referenceId };
-    return { ok: false, error: sendError(response.status) };
+    return sendError(response.status, response.headers.get("retry-after"));
   }
 
   /**
@@ -352,22 +353,26 @@ export class NextcloudTalkAdapter extends BasePlatformAdapter implements Nextclo
   }
 }
 
-/** The SendResult error for a non-201 answer to a bot message. */
-function sendError(status: number): { code: string; message: string } {
+/** The failed SendResult for a non-201 answer to a bot message; the Talk code stays in `platformCode`. */
+function sendError(status: number, retryAfter: string | null): SendResult {
   if (status === 401) {
-    return {
-      code: "talk_unauthorized",
-      message:
-        "Talk refused the bot's signature (401): check that secret matches the installed bot",
-    };
+    return sendErrorFromHttp(
+      status,
+      "Talk refused the bot's signature (401): check that secret matches the installed bot",
+      { retryAfter, platformCode: "talk_unauthorized" },
+    );
   }
   if (status === 400) {
-    return {
-      code: "talk_bad_request",
-      message: "Talk refused the message (400): the room may not exist or the bot is not in it",
-    };
+    return sendErrorFromHttp(
+      status,
+      "Talk refused the message (400): the room may not exist or the bot is not in it",
+      { retryAfter, platformCode: "talk_bad_request" },
+    );
   }
-  return { code: "talk_http_error", message: `Talk answered HTTP ${status}` };
+  return sendErrorFromHttp(status, `Talk answered HTTP ${status}`, {
+    retryAfter,
+    platformCode: "talk_http_error",
+  });
 }
 
 function parseObject(rawBody: string): TalkWebhookBody | undefined {

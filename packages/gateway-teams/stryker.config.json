@@ -16,7 +16,6 @@
     "src/verifier-contract.ts",
     "src/sdk-validator.ts",
     "src/published-key-set.ts",
-    "src/rs256-signature.ts",
     "src/bounded-stream.ts",
     "src/error-kind.ts"
   ],

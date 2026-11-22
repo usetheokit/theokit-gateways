@@ -9,15 +9,14 @@
 
 import { randomUUID } from "node:crypto";
 
+import { ReconnectBackoff } from "@theokit/gateway";
+
 import { TlonAuthError } from "./errors.js";
 import { readSseFrames } from "./sse.js";
 import type { FetchLike } from "./types.js";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const POKE_TIMEOUT_MS = 30_000;
-const FIRST_RECONNECT_DELAY_MS = 1_000;
-const MAX_RECONNECT_DELAY_MS = 30_000;
-const STABLE_STREAM_MS = 60_000;
 
 /** The answer to {@link UrbitShipClient.poke}. */
 export type PokeResult =
@@ -69,8 +68,11 @@ export class UrbitShipClient {
   private subscribed: ((ok: boolean) => void) | undefined;
   private readonly pokes = new Map<number, PendingPoke>();
   private stream: AbortController | undefined;
-  private streamOpenedAt: number | undefined;
-  private nextDelayMs = FIRST_RECONNECT_DELAY_MS;
+  private readonly backoff = new ReconnectBackoff({
+    initialDelayMs: 1_000,
+    maxDelayMs: 30_000,
+    stableAfterMs: 60_000,
+  });
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private closed = false;
   /** Bumped by every `open()` and `close()`, so a session they overtook opens nothing. */
@@ -209,7 +211,7 @@ export class UrbitShipClient {
       await response.body?.cancel().catch(() => undefined);
       return response.status;
     }
-    this.streamOpenedAt = Date.now();
+    this.backoff.opened();
     const body = response.body;
     readSseFrames(body, async (frame) => this.onFrame(frame.id, frame.data))
       .catch(() => undefined)
@@ -258,16 +260,12 @@ export class UrbitShipClient {
     if (this.stream !== controller) return;
     this.stream = undefined;
     if (this.closed) return;
-    if (this.streamOpenedAt !== undefined && Date.now() - this.streamOpenedAt >= STABLE_STREAM_MS) {
-      this.nextDelayMs = FIRST_RECONNECT_DELAY_MS;
-    }
-    this.streamOpenedAt = undefined;
     this.scheduleReconnect();
   }
 
   private scheduleReconnect(): void {
-    const delay = this.nextDelayMs;
-    this.nextDelayMs = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS);
+    const delay = this.backoff.nextDelayMs();
+    if (delay === undefined) return;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
       this.boundedReconnect().catch((err: unknown) => {

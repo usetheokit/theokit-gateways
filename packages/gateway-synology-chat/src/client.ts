@@ -6,7 +6,17 @@
 import type { FetchLike } from "./types.js";
 
 /** One call's outcome. */
-export type ChatAnswer = { readonly ok: true } | { readonly ok: false; readonly reason: string };
+export type ChatAnswer =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason: string;
+      /** Set when the NAS answered with a non-success HTTP status. */
+      readonly status?: number;
+      readonly retryAfter?: string | null;
+      /** Set when the request itself failed (fetch rejected). */
+      readonly network?: true;
+    };
 
 interface ApiBody {
   readonly success?: unknown;
@@ -49,19 +59,27 @@ export class SynologyChatClient {
     } catch (err) {
       // A network error's message can quote the URL, and with it the token; only its kind is kept.
       const kind = err instanceof Error ? err.name : "error";
-      return { ok: false, reason: `${method} request failed (${kind})` };
+      return { ok: false, reason: `${method} request failed (${kind})`, network: true };
     }
+    const http = response.ok
+      ? {}
+      : { status: response.status, retryAfter: response.headers.get("retry-after") };
     let parsed: ApiBody;
     try {
       parsed = (await response.json()) as ApiBody;
     } catch {
-      return { ok: false, reason: `${method} answered HTTP ${response.status} with no JSON body` };
+      return {
+        ok: false,
+        reason: `${method} answered HTTP ${response.status} with no JSON body`,
+        ...http,
+      };
     }
     if (parsed.success === true) return { ok: true };
     const code = parsed.error?.code;
     return {
       ok: false,
       reason: `${method} answered error code ${String(code ?? response.status)}`,
+      ...http,
     };
   }
 }

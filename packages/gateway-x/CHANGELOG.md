@@ -1,5 +1,11 @@
 # @theokit/gateway-x
 
+## 0.4.1
+
+### Patch Changes
+
+- 1758ec9: Replace the hand-written bounded dedup sets with `SeenIds` from `@theokit/gateway`; behavior is unchanged.
+
 ## 0.4.0
 
 ### Minor Changes

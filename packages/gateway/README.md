@@ -144,6 +144,8 @@ if (sent.error?.code === "attachments_unsupported") {
 | `attachments_unsupported` | the adapter cannot send attachments, the outbound is an edit, or (Telegram) an attachment's `kind` is neither `image` nor `audio` |
 | `invalid_attachment` | Telegram only: `attachments` is not a list, holds more than 10 attachments, an entry has no bytes, an image is over 10 MiB, or an audio clip is over 50 MiB or its `mediaType` is not `audio/*` |
 
+An adapter that is called directly (not through `GatewayRunner` or `DeliveryRouter`) refuses attachments it cannot send with `this.refuseAttachments(out)`, a protected helper on `BasePlatformAdapter` that returns `attachments_unsupported` or `undefined`. The function behind it, `refuseUnsupportedAttachments(adapter, out)`, is exported from `@theokit/gateway`.
+
 ## Voice notes and spoken replies
 
 An inbound event may carry `audio`, an `InboundAudio`: the voice note's bytes (`data`, a
@@ -395,6 +397,15 @@ cache but still joins a fetch already in flight. `clear()` forgets the token, an
 running at that moment does not store its result. A failed fetch rejects every waiting caller and
 is not cached. The signal passed to `get` reaches `fetchToken` only for the caller that starts the
 fetch. `now` replaces the clock in tests.
+
+## Talking JSON-RPC to a child process
+
+`JsonRpcLineClient` speaks line-framed JSON-RPC 2.0 over a child's stdio. `request(method, params, timeoutMs)` always resolves an `RpcOutcome` (`result`, `error` with `code`, `message` and optional `data`, `timeout`, or `disconnected`) and never rejects. Messages with a method and no id go to `onNotification`; non-JSON and non-object lines are skipped. When the child closes or errors, every pending request settles as `disconnected` and `onClosed` fires once. `close(reason)` does the same without killing the child.
+
+```ts
+const rpc = new JsonRpcLineClient(child, "my-adapter", onNotification, onClosed);
+const outcome = await rpc.request("version", {}, 5_000);
+```
 
 ## Architecture (5 pieces)
 
@@ -684,6 +695,31 @@ assuming this one's.
 Adapters whose transport is a long-lived connection rather than a webhook own that transport and do
 not go through this seam.
 
+## Verifying webhook signatures
+
+`verifyHmac`, `verifyDigest` and `safeEqualString` do the constant-time
+signature compare that webhook adapters otherwise hand-write. They return
+`false` (never throw) for a missing, empty, malformed or wrong-prefix
+signature; an empty `secrets` value throws `RangeError`.
+
+```ts
+import { verifyHmac } from "@theokit/gateway";
+
+// WhatsApp-style: `X-Hub-Signature-256: sha256=<hex>`, over the raw body.
+const ok = verifyHmac({
+  algorithm: "sha256",
+  secrets: [currentSecret, previousSecret], // accepts either during rotation
+  message: rawBody,
+  signature: req.headers["x-hub-signature-256"] as string | undefined,
+  encoding: "hex",
+  prefix: "sha256=",
+  caseInsensitive: true,
+});
+```
+
+Timestamp windows and field sorting (WeChat, WeCom) stay with the caller; pass
+the built message to `verifyDigest` for keyless SHA-1/SHA-256 schemes.
+
 ## Verifying a JWT-signed request
 
 Platforms that sign requests with an RS256 JWT can share one key-set cache and verifier:
@@ -726,3 +762,7 @@ const backoff = new ReconnectBackoff({ initialDelayMs: 1000, maxDelayMs: 30_000 
 Defaults match `ReconnectPolicy` (1 s initial, 60 s cap, factor 2). A connection open for at least
 `stableAfterMs` (default 60 s) resets the delay. A negative or non-finite delay, or a `factor`
 below 1, throws a `RangeError` naming the field.
+
+### Reporting diagnostics
+
+An adapter should report a diagnostic line through `reportDiagnostic(tag, message)` rather than writing to `process.stderr` itself. It redacts credential-shaped values in `message` and writes `[tag] message` to stderr, so the redaction and any later routing live in one place. Pass `{ failure: true }` for a failure.

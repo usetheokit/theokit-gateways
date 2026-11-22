@@ -11,8 +11,16 @@ import {
   type OutboundMessage,
   SeenIds,
   type SendResult,
+  sendErrorFromHttp,
 } from "@theokit/gateway";
 
+import {
+  assertHttpOk,
+  bodyFailure,
+  failureOf as failureWith,
+  fetchText,
+  messageOf,
+} from "../../../shared/http-send-failure.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import { verifyZaloSignature } from "./signature.js";
 import { splitForZalo, ZALO_MESSAGE_LIMIT } from "./split.js";
@@ -27,7 +35,7 @@ export type ZaloWebhookAnswer = { readonly status: 200 | 401 | 400 | 503; readon
 
 const defaultFetch: ZaloFetch = async (url, init) => {
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-  return { status: res.status, text: () => res.text() };
+  return { status: res.status, text: () => res.text(), headers: res.headers };
 };
 
 /**
@@ -37,7 +45,9 @@ const defaultFetch: ZaloFetch = async (url, init) => {
  * Inbound arrives by `handleWebhook(rawBody, signatureHeader)`, which verifies the signature,
  * turns a `user_send_text` event into one event and dispatches it. A reply over 2000 characters
  * goes as several messages. A Zalo OA may message a user only within Zalo's customer-service
- * window; a refusal comes back as `zalo_send_failed` with Zalo's error code.
+ * window; a refusal comes back as `platform_error` with Zalo's error code in `platformCode`;
+ * an HTTP failure maps by status (429 is `rate_limit`) and a rejected fetch is
+ * `network_error`.
  *
  * @public
  */
@@ -103,18 +113,15 @@ export class ZaloAdapter extends BasePlatformAdapter {
           message: { text },
         });
         if (body.error !== 0) {
-          return {
-            ok: false,
-            error: {
-              code: "zalo_send_failed",
-              message: `Zalo error ${String(body.error)}: ${String(body.message)}`,
-            },
-          };
+          return bodyFailure(
+            `Zalo error ${String(body.error)}: ${String(body.message)}`,
+            body.error,
+          );
         }
         messageId = body.data?.message_id ?? messageId;
       }
     } catch (err) {
-      return { ok: false, error: { code: "zalo_send_failed", message: messageOf(err) } };
+      return failureWith(err, sendErrorFromHttp);
     }
     return { ok: true, messageId };
   }
@@ -181,12 +188,13 @@ export class ZaloAdapter extends BasePlatformAdapter {
   }
 
   private async call(method: "GET" | "POST", path: string, payload?: unknown) {
-    const res = await this.doFetch((this.opts.apiBase ?? DEFAULT_BASE) + path, {
+    const res = await fetchText(this.doFetch, (this.opts.apiBase ?? DEFAULT_BASE) + path, {
       method,
       headers: { access_token: this.opts.accessToken, "Content-Type": "application/json" },
       ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
     });
-    const text = await res.text();
+    const text = res.text;
+    assertHttpOk("Zalo", res, text, (b) => b?.error);
     let body: { error?: number; message?: string; data?: { message_id?: string } };
     try {
       body = JSON.parse(text) as typeof body;
@@ -216,8 +224,4 @@ function toMessageEvent(payload: ZaloWebhookEvent): GatewayMessageEvent | undefi
     receivedAt: Number.isFinite(ts) && ts > 0 ? ts : Date.now(),
     zalo: { messageId: msgId, userId, oaId: payload.recipient?.id ?? "", raw: payload },
   };
-}
-
-function messageOf(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
