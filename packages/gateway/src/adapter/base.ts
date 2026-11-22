@@ -11,6 +11,7 @@
  * (`TelegramAdapter`, `DiscordAdapter`, ...).
  */
 
+import { refuseUnsupportedAttachments } from "../delivery/attachments.js";
 import { channelRendering } from "../text/channel-rendering.js";
 import type { SeenIds } from "../text/seen-ids.js";
 import type { MessageEvent as GatewayMessageEvent, PlatformName } from "../types/message-event.js";
@@ -266,6 +267,14 @@ export abstract class BasePlatformAdapter {
     return out.format === "markdown"
       ? channelRendering(this.platform).translate(out.text)
       : out.text;
+  }
+
+  /**
+   * `attachments_unsupported` when `out` carries attachments and this adapter does not declare
+   * `supportsAttachments`, otherwise `undefined`. Call it first in `sendMessage`.
+   */
+  protected refuseAttachments(out: OutboundMessage): SendResult | undefined {
+    return refuseUnsupportedAttachments(this, out);
   }
 
   /**

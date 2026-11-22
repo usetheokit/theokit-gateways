@@ -144,6 +144,8 @@ if (sent.error?.code === "attachments_unsupported") {
 | `attachments_unsupported` | the adapter cannot send attachments, the outbound is an edit, or (Telegram) an attachment's `kind` is neither `image` nor `audio` |
 | `invalid_attachment` | Telegram only: `attachments` is not a list, holds more than 10 attachments, an entry has no bytes, an image is over 10 MiB, or an audio clip is over 50 MiB or its `mediaType` is not `audio/*` |
 
+An adapter that is called directly (not through `GatewayRunner` or `DeliveryRouter`) refuses attachments it cannot send with `this.refuseAttachments(out)`, a protected helper on `BasePlatformAdapter` that returns `attachments_unsupported` or `undefined`. The function behind it, `refuseUnsupportedAttachments(adapter, out)`, is exported from `@theokit/gateway`.
+
 ## Voice notes and spoken replies
 
 An inbound event may carry `audio`, an `InboundAudio`: the voice note's bytes (`data`, a

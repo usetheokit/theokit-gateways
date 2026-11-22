@@ -7,8 +7,6 @@
  * adapter written elsewhere inherits `supportsAttachments = false` and may ignore the field, sending
  * the text alone and reporting success. Refusing before the adapter is called keeps the image from
  * being dropped in silence whichever adapter receives it.
- *
- * @internal
  */
 
 import type {
@@ -22,6 +20,8 @@ import type {
  * The non-empty `attachments` of a request, or nothing for absent, `null` or empty. `!== 0`, not
  * `> 0`: another non-array value from a JavaScript caller has no numeric length and is carried on,
  * to be refused, rather than dropped (EC-1).
+ *
+ * @internal
  */
 export function attachmentsOf(attachments: ReadonlyArray<OutboundAttachment> | undefined): {
   attachments?: ReadonlyArray<OutboundAttachment>;
@@ -32,6 +32,11 @@ export function attachmentsOf(attachments: ReadonlyArray<OutboundAttachment> | u
 /**
  * `attachments_unsupported` when `outbound` carries attachments and `adapter` does not declare
  * `supportsAttachments`, otherwise `undefined`. Makes no platform call.
+ *
+ * `GatewayRunner` and `DeliveryRouter` call it before they reach an adapter; an adapter calls it
+ * (or {@link BasePlatformAdapter.refuseAttachments}) to refuse on a direct `sendMessage`. Absent,
+ * `null` and empty `attachments` pass; any other value without a zero length, such as `{}` from a
+ * JavaScript caller, is refused.
  */
 export function refuseUnsupportedAttachments(
   adapter: BasePlatformAdapter,

@@ -56,6 +56,7 @@ export {
   type CreateChannelsResult,
   createChannels,
 } from "./channel/create-channels.js";
+export { refuseUnsupportedAttachments } from "./delivery/attachments.js";
 // Delivery
 export {
   type DeliveryRequest,
