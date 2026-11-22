@@ -202,4 +202,39 @@ describe("reconnect backoff", () => {
     expect(times).toHaveLength(1);
     await adapter.disconnect();
   });
+
+  it("starts over at the initial delay after a socket stayed open for 60 s", async () => {
+    vi.useFakeTimers();
+    const times: number[] = [];
+    const made: RefusingSocket[] = [];
+    const adapter = new TestAdapter({
+      baseUrl: "https://x.test/",
+      token: "t",
+      workspaceId: "w1",
+      botUserId: "bot",
+      reconnectDelayMs: 2000,
+      socket: (url) => {
+        const s = new RefusingSocket(url);
+        made.push(s);
+        times.push(Date.now());
+        // sockets 1 and 3 open; 2 is refused
+        if (made.length === 2) queueMicrotask(() => s.fail());
+        else queueMicrotask(() => s.open());
+        return s;
+      },
+    });
+    await adapter.connect();
+    made[0]?.fail(); // delay 2 s
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(made).toHaveLength(2); // refused -> next delay 4 s
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(made).toHaveLength(3); // opens and stays open
+    await vi.advanceTimersByTimeAsync(61_000);
+    made[2]?.fail();
+    const dropped = Date.now();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(made).toHaveLength(4);
+    expect((times[3] as number) - dropped).toBe(2000);
+    await adapter.disconnect();
+  });
 });
