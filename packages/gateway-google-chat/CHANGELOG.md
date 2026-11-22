@@ -1,5 +1,11 @@
 # @theokit/gateway-google-chat
 
+## 0.4.0
+
+### Minor Changes
+
+- a0b59f4: Answer webhooks through the Fetch webhook contract: each descriptor declares `methods: ["POST"]` and a `handle`, so `createWebhookHandler` serves the route. `googleChatChannel` is now a `webhook` transport that builds its adapter with `webhook: "external"`.
+
 ## 0.3.0
 
 ### Minor Changes

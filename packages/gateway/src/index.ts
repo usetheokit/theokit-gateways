@@ -6,8 +6,11 @@ export {
   BasePlatformAdapter,
   type OutboundAttachment,
   type OutboundMessage,
+  type SendError,
+  type SendErrorCode,
   type SendResult,
 } from "./adapter/base.js";
+export { sendErrorFromHttp } from "./adapter/send-error.js";
 export {
   WeixinAdapterBase,
   type WeixinAdapterConfig,
@@ -16,6 +19,8 @@ export {
   type WeixinWebhookAnswer,
 } from "./adapter/weixin-base.js";
 export { parseFlatXml } from "./adapter/weixin-xml.js";
+export type { FetchedToken, TokenCache, TokenCacheOptions } from "./auth/token-cache.js";
+export { createTokenCache } from "./auth/token-cache.js";
 export {
   type ChannelConfigInput,
   type ChannelConfigReaders,
@@ -97,6 +102,7 @@ export {
   type MediaUnderstandingOptions,
   withMediaUnderstanding,
 } from "./runner/media-understanding.js";
+export { ReconnectBackoff, type ReconnectBackoffOptions } from "./runner/reconnect-backoff.js";
 export type { CoveredShape, UncoveredShape } from "./security/credential-patterns.js";
 export {
   CREDENTIAL_SHAPES,
@@ -135,7 +141,7 @@ export {
 export { toDialect } from "./text/dialect.js";
 export { type FenceRegion, scanFences } from "./text/fence.js";
 export { SeenIds } from "./text/seen-ids.js";
-export { splitKeepingRows } from "./text/split-rows.js";
+export { type SplitKeepingRowsOptions, splitKeepingRows } from "./text/split-rows.js";
 // Types
 export type {
   BaseMessageEvent,

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.25.0
+
+### Minor Changes
+
+- a0b59f4: `ChannelWebhook.verify` may return a `Promise<boolean>`, and `createWebhookHandler` awaits it.
+
+  `ChannelWebhook.precheck` answers a request from its method, URL and headers before the body is read.
+
 ## 0.24.0
 
 ### Minor Changes

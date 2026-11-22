@@ -254,4 +254,23 @@ describe("XAdapter.capabilities", () => {
     expect(c.maxMessageChars).toBe(X_POST_LIMIT);
     expect(c.threads).toBe(false);
   });
+
+  it("drops a repeated mention id and delivers it again after 1001 other ids", async () => {
+    let round = 0;
+    const ids = Array.from({ length: 1001 }, (_, i) => String(1001 - i)); // newest first
+    const { fetchFake } = fake({
+      mentions: () => {
+        round += 1;
+        if (round === 1) return { meta: { newest_id: "1" } };
+        const wanted = round === 2 ? ids : ["1"];
+        return { data: wanted.map((id) => mention({ id })), includes: { users } };
+      },
+    });
+    const { adapter, events } = make(fetchFake);
+    await adapter.connect();
+    expect(await adapter.poll()).toBe(1001);
+    expect(await adapter.poll()).toBe(1);
+    expect(await adapter.poll()).toBe(0);
+    expect(events.filter((e) => e.id === "1")).toHaveLength(2);
+  });
 });
