@@ -1,5 +1,5 @@
 import type { MessageEvent as GatewayMessageEvent, OutboundMessage } from "@theokit/gateway";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   RealtimeBotAdapter,
@@ -146,5 +146,60 @@ describe("RealtimeBotAdapter", () => {
     sockets[0]?.frame(msg("first"));
     await new Promise((r) => setTimeout(r, 0));
     expect(got.filter((e) => e.id === "first")).toHaveLength(2);
+  });
+});
+
+describe("reconnect backoff", () => {
+  afterEach(() => vi.useRealTimers());
+
+  class RefusingSocket extends FakeSocket {
+    fail(): void {
+      (this.listeners2().get("close") as (e: object) => void)({});
+    }
+    private listeners2(): Map<string, Listener> {
+      return (this as unknown as { listeners: Map<string, Listener> }).listeners;
+    }
+  }
+
+  function refusing(reconnectDelayMs: number) {
+    const times: number[] = [];
+    const adapter = new TestAdapter({
+      baseUrl: "https://x.test/",
+      token: "t",
+      workspaceId: "w1",
+      botUserId: "bot",
+      reconnectDelayMs,
+      socket: (url) => {
+        const s = new RefusingSocket(url);
+        times.push(Date.now());
+        if (times.length === 1) queueMicrotask(() => s.open());
+        else queueMicrotask(() => s.fail());
+        return s;
+      },
+    });
+    return { adapter, times };
+  }
+
+  it("retries a refusing server at 2, 4, 8, 16, 30, 30 s", async () => {
+    vi.useFakeTimers();
+    const { adapter, times } = refusing(2000);
+    await adapter.connect();
+    const dropped = times[0] as number;
+    // drop the first (open) socket
+    (adapter as unknown as { socket: RefusingSocket }).socket.fail();
+    await vi.advanceTimersByTimeAsync(130_000);
+    const gaps = times.slice(1).map((t, i) => t - (i === 0 ? dropped : (times[i] as number)));
+    expect(gaps.slice(0, 6)).toEqual([2000, 4000, 8000, 16000, 30000, 30000]);
+    await adapter.disconnect();
+  });
+
+  it("makes no reconnect attempt when reconnectDelayMs is 0", async () => {
+    vi.useFakeTimers();
+    const { adapter, times } = refusing(0);
+    await adapter.connect();
+    (adapter as unknown as { socket: RefusingSocket }).socket.fail();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(times).toHaveLength(1);
+    await adapter.disconnect();
   });
 });
