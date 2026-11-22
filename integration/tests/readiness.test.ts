@@ -238,6 +238,9 @@ describe("live-test readiness", () => {
       channelConfigReaders:
         "pure config validation, no I/O. Covered by " +
         "packages/gateway/tests/channel/channel-config-readers.test.ts and the LINE channel tests",
+      refuseUnsupportedAttachments:
+        "pure check, no I/O and no platform call. Covered by " +
+        "packages/gateway/tests/adapter/base.test.ts",
       statusForDeliver:
         "pure outcomes -> status, no I/O. Covered by packages/gateway/tests/deliver-status.test.ts",
       parseFlatXml:
