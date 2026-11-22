@@ -12,8 +12,8 @@ import { spawn as nodeSpawn } from "node:child_process";
 
 import {
   BasePlatformAdapter,
-  JsonRpcLineClient,
   type MessageEvent as GatewayMessageEvent,
+  JsonRpcLineClient,
   type OutboundMessage,
   type RpcNotification,
   type RpcOutcome,
