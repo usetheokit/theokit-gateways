@@ -92,6 +92,12 @@ export type SenderIdentity =
   /** Why the sender id can be forged, for error messages. */
   | { readonly unauthenticated: string };
 
+/**
+ * Runtime dependencies an app hands to a descriptor's `create`: objects that are not configuration
+ * (a credential store, a QR sink). Each descriptor documents the keys it reads and ignores the rest.
+ */
+export type ChannelDeps = Readonly<Record<string, unknown>>;
+
 interface ChannelDescriptorBase<TAdapter extends BasePlatformAdapter> {
   /** The platform the built adapter reports as its `platform`. */
   readonly platform: PlatformName;
@@ -101,7 +107,7 @@ interface ChannelDescriptorBase<TAdapter extends BasePlatformAdapter> {
    * Build the adapter. Throws a `GatewayConfigurationError` (or a subclass) for a value it refuses,
    * which `createChannels` reports as a rejected channel; it performs no network call.
    */
-  create(config: Readonly<Record<string, unknown>>): TAdapter;
+  create(config: Readonly<Record<string, unknown>>, deps?: ChannelDeps): TAdapter;
   /**
    * Whether `sender.id` is authenticated. Absent means unknown and is treated as not
    * authenticated (fail closed); it is optional only so descriptors in other packages keep compiling.

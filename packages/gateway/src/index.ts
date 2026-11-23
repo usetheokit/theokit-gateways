@@ -46,6 +46,7 @@ export {
 // Channels described as data (B-018)
 export type {
   ChannelConfigField,
+  ChannelDeps,
   ChannelDescriptor,
   ChannelWebhook,
   IngestResult,
@@ -54,7 +55,12 @@ export type {
   WebhookRequest,
 } from "./channel/channel-descriptor.js";
 export { isAuthenticatedSender } from "./channel/channel-descriptor.js";
-export { configFromEnv, type EnvConfig, selectVariant } from "./channel/config-from-env.js";
+export {
+  configFromEnv,
+  type EnvConfig,
+  type EnvOptions,
+  selectVariant,
+} from "./channel/config-from-env.js";
 export {
   type BuiltChannel,
   type ChannelEntry,

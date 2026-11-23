@@ -6,13 +6,19 @@
  * is structurally a `ChannelDescriptor`; the integration package assigns it to one.
  */
 
-import { channelConfigReaders } from "@theokit/gateway";
+import { type CredentialStore, channelConfigReaders } from "@theokit/gateway";
 
 import { type ConfigField, field } from "../../../shared/channel-config-field.js";
 import { XAdapter } from "./adapter.js";
 import type { XAdapterOptions } from "./types.js";
 
 type Config = Readonly<Record<string, unknown>>;
+
+/** Runtime dependencies `xChannel.create` reads as its second argument. */
+export interface XChannelDeps {
+  /** Where the rotating refresh token is kept; see `XAdapterOptions.credentialStore`. */
+  readonly credentialStore?: CredentialStore;
+}
 
 const { invalid, readString, requiredString } = channelConfigReaders("gateway-x");
 
@@ -86,7 +92,7 @@ export const xChannel = {
   transport: "socket" as const,
   senderIdentity: "authenticated" as const,
   config: CONFIG,
-  create(config: Config): XAdapter {
+  create(config: Config, deps?: XChannelDeps): XAdapter {
     const str = (key: string) => requiredString(config, key);
     // `null` is a wrong shape here, not an absent value (configFromEnv never yields it).
     if (config.bearerToken === null) throw invalid("bearerToken", "a string");
@@ -100,6 +106,7 @@ export const xChannel = {
       refreshToken: str("refreshToken"),
       allowFrom: readAllowFrom(config),
       ...(bearerToken === undefined ? {} : { bearerToken }),
+      ...(deps?.credentialStore === undefined ? {} : { credentialStore: deps.credentialStore }),
       ...(guestDailyLimit === undefined ? {} : { guest: { dailyLimit: guestDailyLimit } }),
     };
     return new XAdapter(options);

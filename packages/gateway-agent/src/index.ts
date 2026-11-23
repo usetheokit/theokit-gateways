@@ -6,6 +6,12 @@ export {
   type TurnOutcome,
 } from "./agent-handler.js";
 export {
+  type BroadcastGroupConfig,
+  type BroadcastGroups,
+  type BroadcastMember,
+  createBroadcastGroups,
+} from "./broadcast-groups.js";
+export {
   type ApprovalAnswer,
   type ChatApprover,
   type ChatApproverOptions,
@@ -19,6 +25,7 @@ export {
 export { deliverText } from "./deliver-text.js";
 export { AgentTurnError } from "./errors.js";
 export { frameUntrusted } from "./frame-untrusted.js";
+export { type ProgressOverrides, progressFor } from "./progress.js";
 export {
   type AgentTextResult,
   runAgentText,
@@ -26,4 +33,12 @@ export {
   type TurnRun,
   type TurnUsage,
 } from "./run-agent-text.js";
-export { createTrigger, type Trigger, type TriggerOptions, type TriggerVerify } from "./trigger.js";
+export {
+  createEventRun,
+  createTrigger,
+  type EventRun,
+  type EventRunOptions,
+  type Trigger,
+  type TriggerOptions,
+  type TriggerVerify,
+} from "./trigger.js";

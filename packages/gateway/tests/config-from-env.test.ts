@@ -23,6 +23,37 @@ const field = (key: string, env: string | undefined, required: boolean, secret: 
   description: key,
 });
 
+describe("configFromEnv options", () => {
+  const d = make([field("token", "TOKEN", false, true), field("nick", "NICK", false, false)]);
+
+  it("reads a renamed field from its own variable name", () => {
+    const r = configFromEnv(
+      d,
+      { MY_TOKEN: "t", APP_NICK: "n", APP_TOKEN: "x" },
+      {
+        prefix: "APP_",
+        rename: { token: "MY_TOKEN" },
+      },
+    );
+    expect(r.config).toEqual({ token: "t", nick: "n" });
+    expect(r.secrets).toEqual(["t"]);
+    expect(r.enabled).toBeUndefined();
+  });
+
+  it("requires extra keys and names the variable that is missing", () => {
+    const r = configFromEnv(d, {}, { prefix: "APP_", require: ["nick"], rename: { token: "T" } });
+    expect(r.missing).toEqual(["APP_NICK"]);
+  });
+
+  it("reports enabled from the enabledBy flag", () => {
+    expect(configFromEnv(d, { ON: " true " }, { enabledBy: "ON" }).enabled).toBe(true);
+    expect(configFromEnv(d, { ON: "1" }, { enabledBy: "ON" }).enabled).toBe(true);
+    expect(configFromEnv(d, { ON: "TRUE" }, { enabledBy: "ON" }).enabled).toBe(true);
+    expect(configFromEnv(d, { ON: "no" }, { enabledBy: "ON" }).enabled).toBe(false);
+    expect(configFromEnv(d, {}, { enabledBy: "ON" }).enabled).toBe(false);
+  });
+});
+
 describe("configFromEnv", () => {
   it("trims a secret value and collects it", () => {
     const d = make([field("token", "X_TOKEN", true, true)]);
