@@ -134,6 +134,22 @@ const trigger = createTrigger({
 await trigger.idle(); // on shutdown
 ```
 
+### `createEventRun(options)`
+
+The part of `createTrigger` after verification, for an event that did not arrive over HTTP (inbox mail, an MCP event). `run(body, attributes?)` frames the body with `frameUntrusted(frameTag, body, attributes)` (default tag `event`), runs one turn of a fresh agent, masks `secrets` and sends one message to `deliverTo()`, read when the run starts. It resolves when that run has ended and never rejects; a failure, or an undefined adapter, is written as one line holding a code. `idle()` resolves once every started run, including its lease release, has ended. The package cannot check the agent: `agent()` must return one configured without tools.
+
+```ts
+const mail = createEventRun({
+  name: "inbox",
+  frameTag: "email",
+  instructions: "Summarise this email in two sentences.",
+  deliverTo: () => ({ adapter: telegramAdapter, channelId: "42" }),
+  agent: async () => ({ agent, release: async () => {} }),
+});
+void mail.run(body, { from: sender });
+await mail.idle(); // on shutdown
+```
+
 ## `createChatApprover(options)`
 
 Asks an owner in the chat to approve a tool call and waits for `/approve`, `/approve always` or `/deny`.

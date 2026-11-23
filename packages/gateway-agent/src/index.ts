@@ -27,4 +27,12 @@ export {
   type TurnRun,
   type TurnUsage,
 } from "./run-agent-text.js";
-export { createTrigger, type Trigger, type TriggerOptions, type TriggerVerify } from "./trigger.js";
+export {
+  createEventRun,
+  createTrigger,
+  type EventRun,
+  type EventRunOptions,
+  type Trigger,
+  type TriggerOptions,
+  type TriggerVerify,
+} from "./trigger.js";
