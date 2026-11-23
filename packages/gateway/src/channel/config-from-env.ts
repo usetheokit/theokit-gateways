@@ -16,7 +16,7 @@ export interface EnvConfig {
   readonly missing: readonly string[];
   /** Values of present fields marked secret, for a log mask. Never logged. */
   readonly secrets: readonly string[];
-  /** Present only when `enabledBy` was given: whether that variable is `"true"` or `"1"`. */
+  /** Present only when `enabledBy` was given: whether that variable is `"true"` (any case) or `"1"`. */
   readonly enabled?: boolean;
 }
 
@@ -28,7 +28,7 @@ export interface EnvOptions {
   readonly rename?: Readonly<Record<string, string>>;
   /** Config keys that are required in addition to the fields marked required. */
   readonly require?: readonly string[];
-  /** Full name of a flag variable; `enabled` is true when it is `"true"` or `"1"`. */
+  /** Full name of a flag variable; `enabled` is true when it is `"true"` (any case) or `"1"`. */
   readonly enabledBy?: string;
 }
 

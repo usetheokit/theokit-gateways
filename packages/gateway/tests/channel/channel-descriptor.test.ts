@@ -197,3 +197,22 @@ describe("createChannels", () => {
     expect(createChannels([])).toEqual({ adapters: [], channels: [], rejected: [] });
   });
 });
+
+describe("createChannels deps", () => {
+  it("passes the entry's deps to create as its second argument", () => {
+    const create = vi.fn((_config: unknown, _deps?: unknown) => new MockAdapter("telegram"));
+    const deps = { store: {} };
+    createChannels([
+      { descriptor: { ...socketDescriptor("telegram"), create }, config: { token: "t" }, deps },
+    ]);
+    expect(create.mock.calls[0]?.[1]).toBe(deps);
+  });
+
+  it("passes undefined deps for an entry without any", () => {
+    const create = vi.fn((_config: unknown, _deps?: unknown) => new MockAdapter("telegram"));
+    createChannels([
+      { descriptor: { ...socketDescriptor("telegram"), create }, config: { token: "t" } },
+    ]);
+    expect(create.mock.calls[0]?.[1]).toBeUndefined();
+  });
+});

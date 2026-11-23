@@ -48,6 +48,7 @@ describe("configFromEnv options", () => {
   it("reports enabled from the enabledBy flag", () => {
     expect(configFromEnv(d, { ON: " true " }, { enabledBy: "ON" }).enabled).toBe(true);
     expect(configFromEnv(d, { ON: "1" }, { enabledBy: "ON" }).enabled).toBe(true);
+    expect(configFromEnv(d, { ON: "TRUE" }, { enabledBy: "ON" }).enabled).toBe(true);
     expect(configFromEnv(d, { ON: "no" }, { enabledBy: "ON" }).enabled).toBe(false);
     expect(configFromEnv(d, {}, { enabledBy: "ON" }).enabled).toBe(false);
   });

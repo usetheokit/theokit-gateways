@@ -33,14 +33,3 @@ describe("createChannels envPrefix", () => {
     );
   });
 });
-
-describe("createChannels deps", () => {
-  it("passes entry deps to create as its second argument", () => {
-    const fn = vi.fn((_config: unknown, _deps?: unknown) => new MockAdapter("telegram"));
-    const deps = { store: {} };
-    createChannels([
-      { descriptor: { ...descriptor, create: fn }, config: { token: "t", nick: "n" }, deps },
-    ]);
-    expect(fn.mock.calls[0]?.[1]).toBe(deps);
-  });
-});
