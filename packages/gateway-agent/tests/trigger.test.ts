@@ -1,7 +1,12 @@
 import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
-import { createEventRun, createTrigger, type TriggerOptions, type TurnAgent } from "../src/index.js";
+import {
+  createEventRun,
+  createTrigger,
+  type TriggerOptions,
+  type TurnAgent,
+} from "../src/index.js";
 
 class FakeAdapter extends BasePlatformAdapter {
   readonly platform = "telegram" as const;

@@ -186,11 +186,14 @@ function createRunner(
 
   return {
     start(body, attributes, target) {
-      const task: Promise<void> = execute(body, attributes, target.adapter, target.channelId).finally(
-        () => {
-          runs.delete(task);
-        },
-      );
+      const task: Promise<void> = execute(
+        body,
+        attributes,
+        target.adapter,
+        target.channelId,
+      ).finally(() => {
+        runs.delete(task);
+      });
       runs.add(task);
       return task;
     },
