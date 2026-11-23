@@ -32,8 +32,16 @@ export interface VoiceCallHandlerOptions {
   readonly greeting?: string;
   /** Said before hanging up. Default `"Goodbye."` */
   readonly goodbyeText?: string;
-  /** Silent turns in a row before hanging up. Default 2. */
+  /**
+   * Silent turns in a row (the caller was prompted and said nothing) before hanging up. The first
+   * request of a call only greets and does not count. Default 2.
+   */
   readonly maxSilence?: number;
+  /**
+   * Milliseconds without a request after which a call's state is dropped. Twilio does not tell
+   * the gather action when a caller hangs up mid-call. Default one hour.
+   */
+  readonly stateTtlMs?: number;
 }
 
 function form(body: string): URLSearchParams {
@@ -60,8 +68,9 @@ function isGoodbye(g: VoiceCallHandlerOptions["goodbye"], text: string): boolean
 export function createVoiceCallHandler(
   opts: VoiceCallHandlerOptions,
 ): (request: Request) => Promise<Response> {
-  const silences = new Map<string, number>();
+  const silences = new Map<string, { count: number; at: number }>();
   const maxSilence = opts.maxSilence ?? 2;
+  const ttl = opts.stateTtlMs ?? 3_600_000;
   const bye = opts.goodbyeText ?? "Goodbye.";
   const gather = (action: string, prompt: string): Response =>
     xml(
@@ -75,42 +84,68 @@ export function createVoiceCallHandler(
         }),
       ),
     );
-  const end = (callSid: string | null, say?: string): Response => {
-    if (callSid) silences.delete(callSid);
+  const end = (callSid: string, say?: string): Response => {
+    silences.delete(callSid);
     return xml(twiml.response(...(say === undefined ? [] : [twiml.say(say)]), twiml.hangup()));
   };
+  const sweep = (now: number): void => {
+    for (const [sid, st] of silences) if (now - st.at > ttl) silences.delete(sid);
+  };
 
-  const converse = async (action: string, t: VoiceTurn | null, callSid: string) => {
-    if (t === null) {
-      const n = (silences.get(callSid) ?? -1) + 1;
-      if (n > maxSilence) return end(callSid, bye);
-      silences.set(callSid, n);
+  const silent = (action: string, callSid: string, now: number): Response => {
+    const prev = silences.get(callSid);
+    if (prev === undefined) {
+      silences.set(callSid, { count: 0, at: now });
       return gather(action, opts.greeting ?? "Hello.");
     }
-    silences.set(callSid, 0);
-    if (isGoodbye(opts.goodbye, t.text)) return end(callSid, bye);
+    const count = prev.count + 1;
+    if (count >= maxSilence) return end(callSid, bye);
+    silences.set(callSid, { count, at: now });
+    return gather(action, opts.greeting ?? "Hello.");
+  };
+
+  const spoken = async (action: string, t: VoiceTurn, now: number): Promise<Response> => {
+    silences.set(t.callSid, { count: 0, at: now });
+    if (isGoodbye(opts.goodbye, t.text)) return end(t.callSid, bye);
     return gather(action, await opts.turn(t));
   };
 
-  const parse = async (request: Request, action: string): Promise<Response | VoiceTurn> => {
-    const body = await request.text();
-    const signature = request.headers.get("x-twilio-signature") ?? undefined;
-    if (!verifyTwilioSignature(opts.authToken, action, body, signature)) {
-      return new Response("invalid signature", { status: 403 });
-    }
-    const p = form(body);
+  type Parsed =
+    | { kind: "reply"; response: Response }
+    | { kind: "end"; callSid: string }
+    | { kind: "silence"; callSid: string }
+    | { kind: "turn"; turn: VoiceTurn };
+
+  const classify = (p: URLSearchParams): Parsed => {
     const from = p.get("From");
     const callSid = p.get("CallSid");
-    if (!from || !callSid) return new Response("missing From or CallSid", { status: 400 });
-    const over = p.get("CallStatus") === "completed" || !opts.allowed.includes(from);
-    return { from, callSid, text: over ? "\u0000end" : (p.get("SpeechResult")?.trim() ?? "") };
+    if (!from || !callSid) {
+      return { kind: "reply", response: new Response("missing From or CallSid", { status: 400 }) };
+    }
+    if (p.get("CallStatus") === "completed" || !opts.allowed.includes(from)) {
+      return { kind: "end", callSid };
+    }
+    const text = p.get("SpeechResult")?.trim() ?? "";
+    return text === ""
+      ? { kind: "silence", callSid }
+      : { kind: "turn", turn: { from, callSid, text } };
+  };
+
+  const parse = async (request: Request, action: string): Promise<Parsed> => {
+    const body = await request.text();
+    const signature = request.headers.get("x-twilio-signature") ?? undefined;
+    if (verifyTwilioSignature(opts.authToken, action, body, signature)) return classify(form(body));
+    return { kind: "reply", response: new Response("invalid signature", { status: 403 }) };
   };
 
   return async (request) => {
     const action = opts.publicUrl ?? request.url;
-    const t = await parse(request, action);
-    if (t instanceof Response) return t;
-    if (t.text === "\u0000end") return end(t.callSid);
-    return converse(action, t.text === "" ? null : t, t.callSid);
+    const parsed = await parse(request, action);
+    const now = Date.now();
+    sweep(now);
+    if (parsed.kind === "reply") return parsed.response;
+    if (parsed.kind === "end") return end(parsed.callSid);
+    if (parsed.kind === "silence") return silent(action, parsed.callSid, now);
+    return spoken(action, parsed.turn, now);
   };
 }

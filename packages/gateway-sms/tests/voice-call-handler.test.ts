@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createVoiceCallHandler } from "../src/voice-call-handler.js";
 
@@ -17,6 +17,8 @@ function signed(fields: Record<string, string>, bad = false): Request {
     body: p.toString(),
   });
 }
+
+afterEach(() => vi.useRealTimers());
 
 function make() {
   const turns: string[] = [];
@@ -62,9 +64,42 @@ describe("createVoiceCallHandler", () => {
   });
   it("hangs up after too much silence", async () => {
     const { handler } = make();
-    await handler(signed(call));
     expect(await (await handler(signed(call))).text()).toContain("<Gather");
     expect(await (await handler(signed(call))).text()).toContain("<Hangup/>");
+  });
+  it("allows exactly maxSilence silent turns before hanging up", async () => {
+    const handler = createVoiceCallHandler({
+      authToken: TOKEN,
+      allowed: ["+1555"],
+      turn: () => "x",
+      maxSilence: 2,
+    });
+    await handler(signed(call)); // greeting, not a silent turn
+    expect(await (await handler(signed(call))).text()).toContain("<Gather"); // silent 1
+    expect(await (await handler(signed(call))).text()).toContain("<Hangup/>"); // silent 2
+  });
+  it("drops the state of an abandoned call", async () => {
+    vi.useFakeTimers();
+    const { handler } = make(); // maxSilence 1
+    await handler(signed(call)); // greeting, state stored
+    vi.setSystemTime(Date.now() + 2 * 3_600_000);
+    // another call triggers the sweep
+    await handler(signed({ ...call, CallSid: "CA2" }));
+    // CA1 comes back: its state is gone, so it is greeted again instead of hung up on
+    expect(await (await handler(signed(call))).text()).toContain("<Gather");
+  });
+  it("a completed status clears state and hangs up", async () => {
+    const { handler } = make();
+    await handler(signed(call));
+    const xml = await (await handler(signed({ ...call, CallStatus: "completed" }))).text();
+    expect(xml).toContain("<Hangup/>");
+    // state gone: next silent request greets again rather than hanging up
+    expect(await (await handler(signed(call))).text()).toContain("<Gather");
+  });
+  it("returns 400 without From or CallSid", async () => {
+    const { handler } = make();
+    expect((await handler(signed({ CallSid: "CA1" }))).status).toBe(400);
+    expect((await handler(signed({ From: "+1555" }))).status).toBe(400);
   });
   it("rejects a bad signature", async () => {
     const { handler } = make();
