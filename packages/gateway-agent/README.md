@@ -173,3 +173,13 @@ function permissionPluginFor(conversation: string, engine: PermissionEngine) {
 
 `canUseTool` is only consulted when the permission engine's verdict is `ask`. `/approve always`
 answers `always`; remembering it (for example by adding an allow rule to the engine) is up to the app.
+
+## `progressFor(capabilities, overrides?)`
+
+Returns a function for `createAgentHandler`'s `progress` option. The amount of progress comes from `capabilities.edit`: an adapter that can edit a message shows a line per tool call, one that cannot shows none. Reasoning and status lines are off by default.
+
+```ts
+createAgentHandler({ ..., progress: progressFor(adapter.capabilities, { reasoning: true }) });
+```
+
+`overrides` takes a boolean per event kind (`"tool-call"`, `reasoning`, `status`) and wins over the derived default. Note that `createAgentHandler` sends each line as its own reply; `edit` only decides how many lines are shown.

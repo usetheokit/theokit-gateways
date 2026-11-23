@@ -19,6 +19,7 @@ export {
 export { deliverText } from "./deliver-text.js";
 export { AgentTurnError } from "./errors.js";
 export { frameUntrusted } from "./frame-untrusted.js";
+export { type ProgressOverrides, progressFor } from "./progress.js";
 export {
   type AgentTextResult,
   runAgentText,
