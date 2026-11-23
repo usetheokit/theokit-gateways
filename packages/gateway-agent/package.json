@@ -1,6 +1,6 @@
 {
   "name": "@theokit/gateway-agent",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Agent bridge for @theokit/gateway: run a TheoKit SDK agent turn to text and deliver text to a channel rendered for its platform.",
   "license": "Apache-2.0",
   "repository": {
