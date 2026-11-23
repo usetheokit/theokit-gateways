@@ -148,13 +148,15 @@ An adapter that is called directly (not through `GatewayRunner` or `DeliveryRout
 
 ## Voice notes and spoken replies
 
-An inbound event may carry `audio`, an `InboundAudio`: the voice note's bytes (`data`, a
-`Uint8Array`), their `mediaType` (such as `audio/ogg`) and `durationSeconds`, a whole number the
-platform reported (0 when it reported none). The field is optional and absent on every message
-without a voice note. Only the Telegram adapter fills it today, and only for updates it polls: a
-voice arriving through a webhook is not read. A voice the adapter could not read leaves `audio`
-absent and writes one stderr line naming the reason, so an empty `text` with no `audio` can mean
-either; the message is delivered in both cases. The bytes reach `post_inbound` hooks by reference.
+An inbound event may carry `audio`, an `InboundAudio`: `read()`, which returns the voice note's
+bytes as a `Uint8Array`, `size` (the length in bytes the platform reported, absent when it
+reported none), `mediaType` (such as `audio/ogg`) and `durationSeconds`, a whole number the
+platform reported (0 when it reported none). The bytes are fetched on the first `read()` and
+cached, so a `pre_inbound` hook that refuses a sender causes no download. `read()` rejects when
+the bytes cannot be fetched; the message never carries a credential. The field is optional and
+absent on every message without a voice note. Only the Telegram adapter fills it today, and only
+for updates it polls: a voice arriving through a webhook is not read. Migrating from `audio.data`:
+`const data = await event.audio.read()`.
 
 To answer with speech, attach an audio clip: `{ kind: "audio", mediaType: "audio/ogg", data }`.
 `OutboundAttachment` is a union of the image and the audio member, told apart by `kind`; code
@@ -166,7 +168,7 @@ const runner = new GatewayRunner({
   adapters: [adapter],
   handler: async (event, ctx) => {
     if (event.audio === undefined) return;
-    const text = await transcribe(event.audio.data, event.audio.mediaType);
+    const text = await transcribe(await event.audio.read(), event.audio.mediaType);
     const speech = await synthesize(await answer(text));
     await ctx.reply(text, { attachments: [{ kind: "audio", mediaType: "audio/ogg", data: speech }] });
   },
@@ -177,9 +179,8 @@ const runner = new GatewayRunner({
 
 A voice note's `text` is empty, so the agent would see nothing. `withMediaUnderstanding` wraps a
 handler and appends one line per item to `text`: `[Audio transcript: ...]`, or
-`[Attachment of type audio/ogg could not be understood]` when the function throws or the payload
-exceeds `maxBytes` (default 20 MiB), or `[Attachment of type audio/ogg not understood]` when no
-function is configured. The media type is sanitized to `[\w/.+-]`, the event keeps `audio`, and
+`[Attachment of type audio/ogg could not be understood]` when the function throws, or its `read()` rejects, or the payload (`size`, or the bytes read) exceeds `maxBytes` (default 20 MiB), or `[Attachment of type audio/ogg not understood]` when no
+function is configured; the audio is read only when a function is configured. The media type is sanitized to `[\w/.+-]`, the event keeps `audio`, and
 the handler always runs once. `write` receives one line per failure with the type and error name
 only. The gateway makes no network call; pass plugin-voice's `transcribe`:
 
@@ -377,6 +378,18 @@ const router = new SessionRouter(
 );
 ```
 
+### Adopting the strategy with stored sessions
+
+An app that already stored sessions under its own keys can keep them with `keys`, which replaces the `main` key and the linked-peer key. `peer` gets the raw peer name. Match your existing encoding exactly, and keep the keys distinct from every other key the strategy produces, or conversations will merge. Unlinked senders, groups and threads keep the default keys.
+
+```ts
+scopedStrategy({
+  dmScope: "per-peer",
+  peerLinks,
+  keys: { main: "main", peer: (name) => `peer-${name}` },
+});
+```
+
 Creation throws `GatewayConfigurationError` with code `invalid_session_scope` for `per-account-channel-peer` without a non-empty `accountLabel`, or for an empty peer name. It never throws per event.
 
 ## Keeping a credential across restarts
@@ -520,7 +533,10 @@ else {
   ignored under `"rollback"`. `secrets: [...]` masks those exact values (longest first) with
   `[redacted]` in every reason and log line before `redactSecrets` runs (`maskSecrets` is exported).
 - `runner.adapter(platform)` returns the registered adapter, connected or not, or `undefined`;
-  `runner.connected` is the live set of connected platforms, updated by retries and `stop()`.
+  `runner.connected()` returns the adapters started now, updated by retries and `stop()`.
+- `reconnect: { retryFalse: true }` retries a `connect()` that resolves `false` like a throw, on the
+  same backoff. A connect abandoned by `connectTimeoutMs` that rejects later is reported once
+  through `onAdapterState` as `failed`, redacted.
 - `connectFailure` defaults to `"rollback"`: one failed connect disconnects the adapters that did
   connect and rejects `start()`, as before. Under `"isolate"`, `start()` resolves even when every
   adapter failed, so check `connected` before you rely on the runner.

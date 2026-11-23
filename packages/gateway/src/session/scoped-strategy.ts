@@ -26,6 +26,15 @@ export interface ScopedStrategyOptions {
   readonly accountLabel?: string;
   /** Group key: one per channel (default) or one per channel and sender. */
   readonly groupScope?: "channel" | "channel-sender";
+  /**
+   * Overrides the `main` and linked-peer DM keys so an app can keep the keys
+   * its stored sessions already use. `peer` receives the raw (unescaped) peer
+   * name. The caller owns uniqueness: a custom key can collide with other keys.
+   */
+  readonly keys?: {
+    readonly main?: string;
+    readonly peer?: (name: string) => string;
+  };
 }
 
 const join = (...segments: readonly string[]): string => segments.map(sanitize).join("-");
@@ -45,10 +54,11 @@ function invalid(message: string, detail?: string): GatewayConfigurationError {
  * `per-account-channel-peer` → `<platform>-dm-<account>-<sender>`.
  * Groups are `<platform>-grp-<channel>[-<sender>]`, topic threads
  * `<platform>-tpc-<channel>-<topic>`. Every segment is escaped with `sanitize`.
+ * `keys` replaces the `main` and linked-peer formats. A throwing `keys.peer` throws per event.
  * Throws `GatewayConfigurationError` (`invalid_session_scope`) on bad options, never per event.
  */
 export function scopedStrategy(options: ScopedStrategyOptions): AgentIdStrategy {
-  const { dmScope, peerLinks, accountLabel, groupScope = "channel" } = options;
+  const { dmScope, peerLinks, accountLabel, groupScope = "channel", keys } = options;
   if (
     dmScope === "per-account-channel-peer" &&
     (accountLabel === undefined || accountLabel === "")
@@ -64,10 +74,11 @@ export function scopedStrategy(options: ScopedStrategyOptions): AgentIdStrategy 
   const dmKey = (platform: string, senderId: string): string => {
     switch (dmScope) {
       case "main":
-        return "_m-dm";
+        return keys?.main ?? "_m-dm";
       case "per-peer": {
         const peer = peerLinks?.get(`${platform}:${senderId}`);
-        return peer === undefined ? join(platform, "dm", senderId) : `_p-dm-${sanitize(peer)}`;
+        if (peer === undefined) return join(platform, "dm", senderId);
+        return keys?.peer === undefined ? `_p-dm-${sanitize(peer)}` : keys.peer(peer);
       }
       case "per-channel-peer":
         return join(platform, "dm", senderId);

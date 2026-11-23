@@ -5,9 +5,10 @@
  * path, then a download from `<apiBase>/file/bot<token>/<path>` (`https://api.telegram.org` by default). Only the polled
  * path holds the token, so the webhook `parseInbound` does not read voice notes.
  *
- * A failure is returned as a reason, never thrown: the caller delivers the event without audio and
- * writes the reason to stderr, so an unreadable voice leaves today's behaviour. No reason carries
- * the download URL, which contains the bot token.
+ * The read is deferred (`deferVoice`): the event reaches the hooks with metadata only, and no
+ * request leaves until a hook or the handler calls `audio.read()`. A failure rejects that call with
+ * a `VoiceReadError` naming a reason, and writes the reason to stderr. No reason carries the
+ * download URL, which contains the bot token.
  */
 
 import type { InboundAudio } from "@theokit/gateway";
@@ -24,7 +25,7 @@ const DEFAULT_API_BASE = "https://api.telegram.org";
 const DEFAULT_MEDIA_TYPE = "audio/ogg";
 
 /** What a read produced: the audio, or why there is none. */
-type VoiceRead = { readonly audio: InboundAudio } | { readonly reason: string };
+type VoiceRead = { readonly audio: { readonly data: Uint8Array } } | { readonly reason: string };
 
 /** The `fetch` this module calls; injected in tests so nothing reaches api.telegram.org. */
 type FetchLike = (url: string, init: { signal: AbortSignal }) => Promise<Response>;
@@ -42,6 +43,43 @@ interface VoiceFields {
 
 /** A failure, named by the reason the caller writes to stderr. */
 type Failure = { readonly reason: string };
+
+/** Why a deferred read failed; the message holds a reason and never the download URL. */
+export class VoiceReadError extends Error {
+  override readonly name = "VoiceReadError";
+  constructor(readonly reason: string) {
+    super(`voice not read: ${reason}`);
+  }
+}
+
+/**
+ * The audio of `ctx.message`'s voice note, with nothing fetched yet. `read()` downloads on its
+ * first call and returns the same bytes after; a failure is cached too, and is reported through
+ * `onFailure` once.
+ */
+export function deferVoice(
+  ctx: Context,
+  token: string,
+  onFailure: (reason: string) => void,
+  fetchImpl: FetchLike = fetch,
+  apiBase = DEFAULT_API_BASE,
+): InboundAudio {
+  const voice = (ctx.message?.voice ?? {}) as VoiceFields;
+  let pending: Promise<Uint8Array> | undefined;
+  const fetchBytes = async (): Promise<Uint8Array> => {
+    const result = await readVoice(ctx, token, fetchImpl, apiBase);
+    if ("reason" in result) {
+      onFailure(result.reason);
+      throw new VoiceReadError(result.reason);
+    }
+    return result.audio.data;
+  };
+  return {
+    read: () => (pending ??= fetchBytes()),
+    ...(typeof voice.file_size === "number" ? { size: voice.file_size } : {}),
+    ...voiceDetails(voice),
+  };
+}
 
 /**
  * Read the voice note of `ctx.message`. The caller calls this only when the message has a `voice`.
@@ -67,7 +105,7 @@ export async function readVoice(
     const url = `${apiBase}/file/bot${token}/${path}`;
     const bytes = await download(url, fetchImpl, controller.signal);
     if (!(bytes instanceof Uint8Array)) return bytes;
-    return { audio: { data: bytes, ...voiceDetails(voice) } };
+    return { audio: { data: bytes } };
   } finally {
     clearTimeout(timer);
   }

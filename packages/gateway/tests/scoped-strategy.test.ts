@@ -127,4 +127,17 @@ describe("scopedStrategy", () => {
       expect(() => st(ev("slack", bad, "thread", bad, bad))).not.toThrow();
     }
   });
+
+  it("keeps legacy main and peer keys through `keys`", () => {
+    const keys = { main: "main", peer: (n: string) => `peer-${n}` };
+    expect(scopedStrategy({ dmScope: "main", keys })(ev("slack", "U1"))).toBe("main");
+    const links = new Map([["slack:U1", "a-b"]]);
+    const st = scopedStrategy({ dmScope: "per-peer", peerLinks: links, keys });
+    expect(st(ev("slack", "U1"))).toBe("peer-a-b");
+    expect(st(ev("slack", "U2"))).toBe("slack-dm-U2");
+    expect(st(ev("slack", "U1", "group"))).toBe("slack-grp-C1");
+    expect(scopedStrategy({ dmScope: "main", keys: { peer: (n) => n } })(ev("slack", "U1"))).toBe(
+      "_m-dm",
+    );
+  });
 });

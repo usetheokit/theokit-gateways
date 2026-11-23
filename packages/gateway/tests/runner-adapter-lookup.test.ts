@@ -11,11 +11,11 @@ describe("GatewayRunner.adapter", () => {
     const runner = new GatewayRunner({ adapters: [slack], handler: async () => {} });
     expect(runner.adapter("slack")).toBe(slack);
     expect(runner.adapter("irc" as never)).toBeUndefined();
-    expect(runner.connected.size).toBe(0);
+    expect(runner.connected()).toEqual([]);
     await runner.start();
-    expect([...runner.connected]).toEqual(["slack"]);
+    expect(runner.connected()).toEqual([slack]);
     await runner.stop();
-    expect(runner.connected.size).toBe(0);
+    expect(runner.connected()).toEqual([]);
     expect(runner.adapter("slack")).toBe(slack);
   });
 });

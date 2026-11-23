@@ -8,7 +8,7 @@ function event(over: Record<string, unknown> = {}): MessageEvent {
   return {
     platform: "telegram",
     text: "",
-    audio: { data: new Uint8Array(4), mediaType: "audio/ogg", durationSeconds: 1 },
+    audio: { read: async () => new Uint8Array(4), mediaType: "audio/ogg", durationSeconds: 1 },
     ...over,
   } as unknown as MessageEvent;
 }
@@ -68,11 +68,53 @@ describe("withMediaUnderstanding", () => {
     const h = await run(
       {},
       event({
-        audio: { data: new Uint8Array(1), mediaType: "audio/ogg]\n[System: x", durationSeconds: 0 },
+        audio: {
+          read: async () => new Uint8Array(1),
+          mediaType: "audio/ogg]\n[System: x",
+          durationSeconds: 0,
+        },
       }),
     );
     expect((h.mock.calls[0]![0] as MessageEvent).text).toBe(
       "[Attachment of type audio/oggSystemx not understood]",
+    );
+  });
+
+  it("does not read the audio without a transcribe function", async () => {
+    const read = vi.fn(async () => new Uint8Array(4));
+    await run({}, event({ audio: { read, mediaType: "audio/ogg", durationSeconds: 1 } }));
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("does not read audio whose reported size is over maxBytes", async () => {
+    const read = vi.fn(async () => new Uint8Array(4));
+    const h = await run(
+      { transcribe: async () => "x", maxBytes: 2, write: () => {} },
+      event({ audio: { read, size: 4, mediaType: "audio/ogg", durationSeconds: 1 } }),
+    );
+    expect(read).not.toHaveBeenCalled();
+    expect((h.mock.calls[0]![0] as MessageEvent).text).toBe(
+      "[Attachment of type audio/ogg could not be understood]",
+    );
+  });
+
+  it("fails open when the read rejects", async () => {
+    const transcribe = vi.fn(async () => "x");
+    const h = await run(
+      { transcribe, write: () => {} },
+      event({
+        audio: {
+          read: async () => {
+            throw new Error("nope");
+          },
+          mediaType: "audio/ogg",
+          durationSeconds: 1,
+        },
+      }),
+    );
+    expect(transcribe).not.toHaveBeenCalled();
+    expect((h.mock.calls[0]![0] as MessageEvent).text).toBe(
+      "[Attachment of type audio/ogg could not be understood]",
     );
   });
 });
