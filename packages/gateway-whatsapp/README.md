@@ -231,6 +231,15 @@ descriptor itself is the `cloud` shape.
 check. The `cloud` descriptor declares `transport: "webhook"` with `methods: ["GET", "POST"]`;
 `baileys` stays `"socket"`.
 
+The `baileys` variant also reads runtime dependencies from the entry's `deps`: `onQr` (where the pairing QR
+goes) and `connectTimeoutMs`.
+
+```ts
+createChannels([
+  { descriptor: selectVariant(whatsappChannel, "baileys"), config, deps: { onQr, connectTimeoutMs: 60_000 } },
+]);
+```
+
 ### Mounting the route
 
 GET answers the subscription check (200 with `hub.challenge` as `text/plain`, else 403). POST checks

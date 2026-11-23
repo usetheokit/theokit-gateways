@@ -134,6 +134,22 @@ const trigger = createTrigger({
 await trigger.idle(); // on shutdown
 ```
 
+### `createEventRun(options)`
+
+The part of `createTrigger` after verification, for an event that did not arrive over HTTP (inbox mail, an MCP event). `run(body, attributes?)` frames the body with `frameUntrusted(frameTag, body, attributes)` (default tag `event`), runs one turn of a fresh agent, masks `secrets` and sends one message to `deliverTo()`, read when the run starts. It resolves when that run has ended and never rejects; a failure, or an undefined adapter, is written as one line holding a code. `idle()` resolves once every started run, including its lease release, has ended. The package cannot check the agent: `agent()` must return one configured without tools.
+
+```ts
+const mail = createEventRun({
+  name: "inbox",
+  frameTag: "email",
+  instructions: "Summarise this email in two sentences.",
+  deliverTo: () => ({ adapter: telegramAdapter, channelId: "42" }),
+  agent: async () => ({ agent, release: async () => {} }),
+});
+void mail.run(body, { from: sender });
+await mail.idle(); // on shutdown
+```
+
 ## `createChatApprover(options)`
 
 Asks an owner in the chat to approve a tool call and waits for `/approve`, `/approve always` or `/deny`.
@@ -173,3 +189,29 @@ function permissionPluginFor(conversation: string, engine: PermissionEngine) {
 
 `canUseTool` is only consulted when the permission engine's verdict is `ask`. `/approve always`
 answers `always`; remembering it (for example by adding an allow rule to the engine) is up to the app.
+
+## `progressFor(capabilities, overrides?)`
+
+Returns a function for `createAgentHandler`'s `progress` option. The amount of progress comes from `capabilities.edit`: an adapter that can edit a message shows a line per tool call, one that cannot shows none. Reasoning and status lines are off by default.
+
+```ts
+createAgentHandler({ ..., progress: progressFor(adapter.capabilities, { reasoning: true }) });
+```
+
+`overrides` takes a boolean per event kind (`"tool-call"`, `reasoning`, `status`) and wins over the derived default. Note that `createAgentHandler` sends each line as its own reply; `edit` only decides how many lines are shown.
+
+## `createBroadcastGroups(configs)`
+
+Answers several channels as one conversation (for example Slack and Telegram). Each config has
+an `id`, `members` (`{ adapter, channelId, channelType? }`) and optional `maxTurns` (default 10)
+and `maxChars` (default 4000) bounds on the shared transcript. A channel may be in one group only.
+
+```ts
+const groups = createBroadcastGroups([{ id: "team", members: [{ adapter: slack, channelId: "C1" }, { adapter: telegram, channelId: "42" }] }]);
+const handler = groups.wrap(createAgentHandler({ agentFor, prompt: groups.prompt, onTurnEnd: groups.onTurnEnd }));
+```
+
+Turns of one group run one after the other. A successful answer is sent to the group's other
+channels (best effort; one failed delivery does not stop the rest). Failed turns are neither
+recorded nor forwarded. The transcript is in memory and starts empty after a restart. If you
+already use `prompt` or `onTurnEnd`, call the group's functions from yours.

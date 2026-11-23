@@ -86,6 +86,13 @@ const { adapters, rejected } = createChannels([
 Pass the same prefix as `envPrefix` to `createChannels`: a missing required value is then rejected with
 `missing_required_config` naming the full variable (for example `APP_X_USER_ID`).
 
+Objects that are not configuration go in `deps`, the entry's second `create` argument: `{ credentialStore }` keeps
+the rotated refresh token (see above).
+
+```ts
+createChannels([{ descriptor: xChannel, config, deps: { credentialStore } }]);
+```
+
 An empty `allowFrom` answers nobody, so `create` refuses it; `X_GUEST_DAILY_LIMIT` must be a positive integer.
 
 `create` refuses a value of the wrong type with a `GatewayConfigurationError` (`invalid_config`,

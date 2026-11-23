@@ -76,4 +76,14 @@ vitest.describe("xChannel options", () => {
       expect(error.message).toContain("allowFrom");
     },
   );
+
+  it("hands the credential store from deps to the adapter", () => {
+    const store = { get: vitest.vi.fn(async () => undefined), set: vitest.vi.fn(async () => {}) };
+    const adapter = xChannel.create(VALUES, { credentialStore: store });
+    // biome-ignore lint/suspicious/noExplicitAny: reads a private field
+    const opts = (adapter as any).api.opts;
+    expect(opts.credentialStore).toBe(store);
+    // biome-ignore lint/suspicious/noExplicitAny: reads a private field
+    expect((xChannel.create(VALUES) as any).api.opts.credentialStore).toBeUndefined();
+  });
 });

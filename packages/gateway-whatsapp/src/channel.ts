@@ -138,10 +138,23 @@ function createCloud(config: Config): WhatsAppAdapter {
   return adapter;
 }
 
-function createBaileys(config: Config): WhatsAppAdapter {
+/** Runtime dependencies the `baileys` variant's `create` reads as its second argument. */
+export interface BaileysChannelDeps {
+  /** Where the pairing QR goes; see `BaileysOptions.onQr`. */
+  readonly onQr?: (qr: string) => void;
+  /** Connect timeout in milliseconds; see `BaileysOptions.connectTimeoutMs`. */
+  readonly connectTimeoutMs?: number;
+}
+
+function createBaileys(config: Config, deps?: BaileysChannelDeps): WhatsAppAdapter {
   const sessionDir = requiredString(config, "sessionDir");
   const opts = common(config);
-  return WhatsAppAdapter.from({ backend: "baileys", baileys: { sessionDir } }, opts);
+  const baileys = {
+    sessionDir,
+    ...(deps?.onQr === undefined ? {} : { onQr: deps.onQr }),
+    ...(deps?.connectTimeoutMs === undefined ? {} : { connectTimeoutMs: deps.connectTimeoutMs }),
+  };
+  return WhatsAppAdapter.from({ backend: "baileys", baileys }, opts);
 }
 
 const cloudChannel = {
