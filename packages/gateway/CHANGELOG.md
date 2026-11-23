@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.30.0
+
+### Minor Changes
+
+- 9dba293: `createAccessPolicyHook` takes an optional `messages` option (`pairingCode`, `invalidCode`, `failedSave`, `paired`, `pairingOff`) so an app can keep its own reply texts. Each entry defaults to the current wording.
+
 ## 0.29.0
 
 ### Minor Changes
