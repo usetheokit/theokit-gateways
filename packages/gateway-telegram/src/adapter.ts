@@ -23,7 +23,7 @@ import {
 import { Bot, type Context, GrammyError } from "grammy";
 import { type PolicyInput, shouldRespond } from "./group-policy.js";
 import { buildEvent } from "./parse-inbound.js";
-import { readVoice } from "./read-voice.js";
+import { deferVoice } from "./read-voice.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import {
   hasAttachments,
@@ -326,7 +326,7 @@ export class TelegramAdapter extends BasePlatformAdapter {
     const event = normalizeEvent(ctx);
     if (event === undefined) return;
     if (!this.passesMentionGate(event)) return;
-    await this.dispatchEvent(await this.withVoice(ctx, event));
+    await this.dispatchEvent(this.withVoice(ctx, event));
   }
 
   /** The `requireMention` gate, shared by the polled and webhook paths. */
@@ -353,18 +353,23 @@ export class TelegramAdapter extends BasePlatformAdapter {
   /**
    * The event with the voice note's audio when the message has one (B-715, ADR D1).
    *
-   * An unreadable voice leaves the event as it was and writes the reason to stderr: the message is
-   * delivered either way, as it was before voice notes were read.
+   * The audio is deferred: no request leaves here, so a `pre_inbound` hook that refuses the event
+   * costs no download. An unreadable voice rejects `audio.read()` and writes the reason to stderr.
    */
-  private async withVoice(
-    ctx: Context,
-    event: TelegramMessageEvent,
-  ): Promise<TelegramMessageEvent> {
-    if (ctx.message?.voice === undefined) return event;
-    const read = await readVoice(ctx, this.bot.token, undefined, this.apiBase);
-    if ("audio" in read) return { ...event, audio: read.audio };
-    process.stderr.write(`[telegram] voice not read: ${read.reason}\n`);
-    return event;
+  private withVoice(ctx: Context, event: TelegramMessageEvent): TelegramMessageEvent {
+    const voice = ctx.message?.voice;
+    if (voice === undefined || typeof voice.file_id !== "string") {
+      if (voice !== undefined) process.stderr.write("[telegram] voice not read: no_file_id\n");
+      return event;
+    }
+    const audio = deferVoice(
+      ctx,
+      this.bot.token,
+      (reason) => process.stderr.write(`[telegram] voice not read: ${reason}\n`),
+      undefined,
+      this.apiBase,
+    );
+    return { ...event, audio };
   }
 
   /**
