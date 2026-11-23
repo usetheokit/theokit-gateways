@@ -1,5 +1,11 @@
 # @theokit/gateway-agent
 
+## 0.4.0
+
+### Minor Changes
+
+- b047f80: `createAgentHandler` gains `decorateReply`, `onTurnEnd` and `onTurnStart`: append text to the single reply, observe each turn's final text, failure and usage, and reach the running turn by session.
+
 ## 0.3.2
 
 ### Patch Changes
