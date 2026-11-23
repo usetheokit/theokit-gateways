@@ -152,4 +152,18 @@ describe("whatsappChannel", () => {
     expect(await run({ botPhoneId: "5511999999999" }, "hey team")).toBe(0);
     expect(await run({}, "@5511999999999 hi")).toBe(0);
   });
+
+  it("builds the baileys adapter from create(config, deps) with the QR sink and timeout", () => {
+    const onQr = vi.fn();
+    const spy = vi.spyOn(WhatsAppAdapter, "fromBaileys");
+    descriptor("baileys").create({ sessionDir: "/tmp/wa" }, { onQr, connectTimeoutMs: 1234 });
+    expect(spy.mock.calls[0]?.[0]).toEqual({
+      sessionDir: "/tmp/wa",
+      onQr,
+      connectTimeoutMs: 1234,
+    });
+    descriptor("baileys").create({ sessionDir: "/tmp/wa" });
+    expect(spy.mock.calls[1]?.[0]).toEqual({ sessionDir: "/tmp/wa" });
+    spy.mockRestore();
+  });
 });
