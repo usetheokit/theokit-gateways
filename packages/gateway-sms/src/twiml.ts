@@ -40,8 +40,18 @@ export const twiml = {
     input?: "speech" | "dtmf";
     timeoutSeconds?: number;
     prompt?: string;
+    /** Seconds of silence that end speech capture, or `"auto"`. */
+    speechTimeout?: number | "auto";
+    /** HTTP method Twilio uses for `action`. */
+    method?: "GET" | "POST";
   }): string {
-    const a = attrs({ action: opts.action, input: opts.input, timeout: opts.timeoutSeconds });
+    const a = attrs({
+      action: opts.action,
+      input: opts.input,
+      timeout: opts.timeoutSeconds,
+      speechTimeout: opts.speechTimeout,
+      method: opts.method,
+    });
     return opts.prompt === undefined
       ? `<Gather${a}/>`
       : `<Gather${a}>${twiml.say(opts.prompt)}</Gather>`;
