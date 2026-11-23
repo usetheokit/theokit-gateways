@@ -92,8 +92,7 @@ export function createVoiceCallHandler(
     return gather(action, await opts.turn(t));
   };
 
-  return async (request) => {
-    const action = opts.publicUrl ?? request.url;
+  const parse = async (request: Request, action: string): Promise<Response | VoiceTurn> => {
     const body = await request.text();
     const signature = request.headers.get("x-twilio-signature") ?? undefined;
     if (!verifyTwilioSignature(opts.authToken, action, body, signature)) {
@@ -103,8 +102,15 @@ export function createVoiceCallHandler(
     const from = p.get("From");
     const callSid = p.get("CallSid");
     if (!from || !callSid) return new Response("missing From or CallSid", { status: 400 });
-    if (p.get("CallStatus") === "completed" || !opts.allowed.includes(from)) return end(callSid);
-    const text = p.get("SpeechResult")?.trim() ?? "";
-    return converse(action, text === "" ? null : { from, callSid, text }, callSid);
+    const over = p.get("CallStatus") === "completed" || !opts.allowed.includes(from);
+    return { from, callSid, text: over ? "\u0000end" : (p.get("SpeechResult")?.trim() ?? "") };
+  };
+
+  return async (request) => {
+    const action = opts.publicUrl ?? request.url;
+    const t = await parse(request, action);
+    if (t instanceof Response) return t;
+    if (t.text === "\u0000end") return end(t.callSid);
+    return converse(action, t.text === "" ? null : t, t.callSid);
   };
 }
