@@ -6,13 +6,28 @@ import { type AgentOutputEvent, fromSdkMessage, type SdkMessage } from "@theokit
  * @public
  */
 export interface TurnAgent {
-  send(
-    prompt: string,
-    options?: Record<string, unknown>,
-  ): Promise<{
-    stream(): AsyncIterable<{ readonly type: string }>;
-    wait(): Promise<{ status: string; error?: { code?: string } }>;
-  }>;
+  send(prompt: string, options?: Record<string, unknown>): Promise<TurnRun>;
+}
+
+/**
+ * Token usage of one run, when the SDK reports it.
+ *
+ * @public
+ */
+export interface TurnUsage {
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+}
+
+/**
+ * The part of an SDK Run this package uses. `cancel` and `usage` are optional so fakes stay small.
+ *
+ * @public
+ */
+export interface TurnRun {
+  stream(): AsyncIterable<{ readonly type: string }>;
+  wait(): Promise<{ status: string; error?: { code?: string }; usage?: TurnUsage }>;
+  cancel?(): void | Promise<void>;
 }
 
 /**
