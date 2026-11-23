@@ -13,6 +13,20 @@ import type { GatewayHook, HookDecision } from "./types.js";
 
 export type DmPolicy = "pairing" | "allowlist" | "open" | "disabled";
 
+/** Every reply text the access policy sends. Omitted entries keep their default. */
+export interface AccessPolicyMessages {
+  /** Reply to a stranger in `pairing` mode; receives the issued code. */
+  readonly pairingCode?: (code: string) => string;
+  /** Owner sent `/approve` with an unknown or expired code. */
+  readonly invalidCode?: string;
+  /** Owner sent `/approve` and the pairing could not be saved. */
+  readonly failedSave?: string;
+  /** Owner's `/approve` succeeded. */
+  readonly paired?: string;
+  /** Owner sent `/approve` while pairing is off. */
+  readonly pairingOff?: string;
+}
+
 /** Options for {@link createAccessPolicyHook}. */
 export interface AccessPolicyOptions {
   /** `<platform>:<senderId>` keys. */
@@ -26,6 +40,8 @@ export interface AccessPolicyOptions {
   /** Required when dm is "pairing". */
   readonly pairing?: PairingStore;
   readonly refusalText?: string;
+  /** Reply texts; each entry defaults to the built-in wording. */
+  readonly messages?: AccessPolicyMessages;
   readonly refusalIntervalMs?: number;
   /** Let a message through untouched. */
   readonly passThrough?: (event: MessageEvent) => boolean;
@@ -36,9 +52,23 @@ export interface AccessPolicyOptions {
 const SILENT: HookDecision = { block: true };
 const DEFAULT_REFUSAL = "Sorry, you are not authorized to use this assistant.";
 
+const DEFAULT_MESSAGES: Required<AccessPolicyMessages> = {
+  pairingCode: (code) => `Your pairing code is ${code}. Ask the owner to send /approve ${code}.`,
+  invalidCode: "Unknown or expired code.",
+  failedSave: "Saving the pairing failed. Check the storage and send the code again.",
+  paired: "Paired.",
+  pairingOff: "Pairing is not enabled.",
+};
+
 function normalize(key: string): string {
   const i = key.indexOf(":");
   return i < 0 ? key : senderKey(key.slice(0, i), key.slice(i + 1));
+}
+
+function stripUndefined(m: AccessPolicyMessages | undefined): AccessPolicyMessages {
+  return Object.fromEntries(
+    Object.entries(m ?? {}).filter(([, v]) => v !== undefined),
+  ) as AccessPolicyMessages;
 }
 
 function check(keys: ReadonlySet<string>, isAuth: (p: PlatformName) => boolean): Set<string> {
@@ -72,6 +102,7 @@ export function createAccessPolicyHook(options: AccessPolicyOptions): GatewayHoo
   const interval = options.refusalIntervalMs ?? 3_600_000;
   const write = options.write ?? reportDiagnosticLine;
   const refusal = options.refusalText ?? DEFAULT_REFUSAL;
+  const msg = { ...DEFAULT_MESSAGES, ...stripUndefined(options.messages) };
   const store = options.pairing;
   const refused = new Map<string, number>();
 
@@ -87,7 +118,7 @@ export function createAccessPolicyHook(options: AccessPolicyOptions): GatewayHoo
     const code = (store as PairingStore).issue(event.platform, event.sender.id);
     return {
       block: true,
-      message: `Your pairing code is ${code}. Ask the owner to send /approve ${code}.`,
+      message: msg.pairingCode(code),
     };
   };
 
@@ -105,15 +136,12 @@ export function createAccessPolicyHook(options: AccessPolicyOptions): GatewayHoo
   const ownerMessage = async (text: string): Promise<HookDecision | undefined> => {
     const m = /^\/approve\s+(\d{6})\s*$/.exec(text.trim());
     if (!m?.[1]) return undefined;
-    if (!store) return { block: true, message: "Pairing is not enabled." };
+    if (!store) return { block: true, message: msg.pairingOff };
     const r = await store.approve(m[1]);
-    if (r.ok) return { block: true, message: "Paired." };
+    if (r.ok) return { block: true, message: msg.paired };
     return {
       block: true,
-      message:
-        r.reason === "write_failed"
-          ? "Saving the pairing failed. Check the storage and send the code again."
-          : "Unknown or expired code.",
+      message: r.reason === "write_failed" ? msg.failedSave : msg.invalidCode,
     };
   };
 
