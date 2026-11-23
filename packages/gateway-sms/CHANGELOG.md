@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+
+### Minor Changes
+
+- 05cf222: Voice: `twiml.gather` takes `speechTimeout` and `method`, `placeCall` starts an outbound Twilio call and returns its SID, and `createVoiceCallHandler` runs the verified speech conversation loop with a caller allow-list and goodbye detection.
+
 ## 0.6.2
 
 ### Patch Changes
