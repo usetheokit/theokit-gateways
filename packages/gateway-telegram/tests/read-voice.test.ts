@@ -7,6 +7,7 @@
  */
 
 import type { MessageEvent } from "@theokit/gateway";
+import { GatewayRunner } from "@theokit/gateway";
 import type { Update } from "grammy/types";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
@@ -111,9 +112,12 @@ describe("TelegramAdapter reads a polled voice note", () => {
     const audio = events[0]?.audio;
     expect(audio?.mediaType).toBe("audio/ogg");
     expect(audio?.durationSeconds).toBe(3);
-    expect(audio?.data).toBeInstanceOf(Uint8Array);
-    expect(audio?.data.length).toBe(9000);
-    expect(audio?.data).toEqual(new Uint8Array(9000).fill(7));
+    expect(audio?.size).toBe(9000);
+    expect(getFile).not.toHaveBeenCalled();
+    const data = await audio?.read();
+    expect(data).toBeInstanceOf(Uint8Array);
+    expect(data).toEqual(new Uint8Array(9000).fill(7));
+    expect(await audio?.read()).toBe(data);
     expect(getFile).toHaveBeenCalledWith("v1");
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(String(fetchSpy.mock.calls[0]?.[0])).toBe(
@@ -124,6 +128,7 @@ describe("TelegramAdapter reads a polled voice note", () => {
   it("downloads from the configured apiBase", async () => {
     build(undefined, "http://localhost:8081/");
     await adapter.getBot().handleUpdate(voiceUpdate({ file_id: "v1", duration: 3 }));
+    await events[0]?.audio?.read();
 
     expect(String(fetchSpy.mock.calls[0]?.[0])).toBe(
       `http://localhost:8081/file/bot${TOKEN}/voice/v1.oga`,
@@ -169,6 +174,24 @@ describe("TelegramAdapter reads a polled voice note", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("a pre_inbound hook that blocks a voice note causes zero download requests", async () => {
+    const handler = vi.fn(async () => {});
+    const runner = new GatewayRunner({
+      adapters: [adapter],
+      handler,
+      hooks: [{ name: "deny", pre_inbound: async () => ({ block: true }) }],
+    });
+    await runner.start();
+    await adapter
+      .getBot()
+      .handleUpdate(voiceUpdate({ file_id: "v1", duration: 3, file_size: 9000 }));
+    await runner.stop();
+
+    expect(handler).not.toHaveBeenCalled();
+    expect(getFile).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("the webhook parseInbound path reads no audio", () => {
     const event = parseInbound(voiceUpdate({ file_id: "v1", duration: 3 }));
 
@@ -184,7 +207,7 @@ describe("TelegramAdapter reads a polled voice note", () => {
     await adapter.getBot().handleUpdate(voiceUpdate({ file_id: "a", duration: 1 }));
     await adapter.getBot().handleUpdate(voiceUpdate({ file_id: "b", duration: 1 }));
 
-    expect(Array.from(events[0]?.audio?.data ?? [])).toEqual([1, 1]);
-    expect(Array.from(events[1]?.audio?.data ?? [])).toEqual([2, 2, 2]);
+    expect(Array.from((await events[0]?.audio?.read()) ?? [])).toEqual([1, 1]);
+    expect(Array.from((await events[1]?.audio?.read()) ?? [])).toEqual([2, 2, 2]);
   });
 });

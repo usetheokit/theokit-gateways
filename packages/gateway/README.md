@@ -148,13 +148,15 @@ An adapter that is called directly (not through `GatewayRunner` or `DeliveryRout
 
 ## Voice notes and spoken replies
 
-An inbound event may carry `audio`, an `InboundAudio`: the voice note's bytes (`data`, a
-`Uint8Array`), their `mediaType` (such as `audio/ogg`) and `durationSeconds`, a whole number the
-platform reported (0 when it reported none). The field is optional and absent on every message
-without a voice note. Only the Telegram adapter fills it today, and only for updates it polls: a
-voice arriving through a webhook is not read. A voice the adapter could not read leaves `audio`
-absent and writes one stderr line naming the reason, so an empty `text` with no `audio` can mean
-either; the message is delivered in both cases. The bytes reach `post_inbound` hooks by reference.
+An inbound event may carry `audio`, an `InboundAudio`: `read()`, which returns the voice note's
+bytes as a `Uint8Array`, `size` (the length in bytes the platform reported, absent when it
+reported none), `mediaType` (such as `audio/ogg`) and `durationSeconds`, a whole number the
+platform reported (0 when it reported none). The bytes are fetched on the first `read()` and
+cached, so a `pre_inbound` hook that refuses a sender causes no download. `read()` rejects when
+the bytes cannot be fetched; the message never carries a credential. The field is optional and
+absent on every message without a voice note. Only the Telegram adapter fills it today, and only
+for updates it polls: a voice arriving through a webhook is not read. Migrating from `audio.data`:
+`const data = await event.audio.read()`.
 
 To answer with speech, attach an audio clip: `{ kind: "audio", mediaType: "audio/ogg", data }`.
 `OutboundAttachment` is a union of the image and the audio member, told apart by `kind`; code
@@ -166,7 +168,7 @@ const runner = new GatewayRunner({
   adapters: [adapter],
   handler: async (event, ctx) => {
     if (event.audio === undefined) return;
-    const text = await transcribe(event.audio.data, event.audio.mediaType);
+    const text = await transcribe(await event.audio.read(), event.audio.mediaType);
     const speech = await synthesize(await answer(text));
     await ctx.reply(text, { attachments: [{ kind: "audio", mediaType: "audio/ogg", data: speech }] });
   },
@@ -177,9 +179,8 @@ const runner = new GatewayRunner({
 
 A voice note's `text` is empty, so the agent would see nothing. `withMediaUnderstanding` wraps a
 handler and appends one line per item to `text`: `[Audio transcript: ...]`, or
-`[Attachment of type audio/ogg could not be understood]` when the function throws or the payload
-exceeds `maxBytes` (default 20 MiB), or `[Attachment of type audio/ogg not understood]` when no
-function is configured. The media type is sanitized to `[\w/.+-]`, the event keeps `audio`, and
+`[Attachment of type audio/ogg could not be understood]` when the function throws, or its `read()` rejects, or the payload (`size`, or the bytes read) exceeds `maxBytes` (default 20 MiB), or `[Attachment of type audio/ogg not understood]` when no
+function is configured; the audio is read only when a function is configured. The media type is sanitized to `[\w/.+-]`, the event keeps `audio`, and
 the handler always runs once. `write` receives one line per failure with the type and error name
 only. The gateway makes no network call; pass plugin-voice's `transcribe`:
 

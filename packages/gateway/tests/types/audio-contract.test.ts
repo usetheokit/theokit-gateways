@@ -35,10 +35,14 @@ class AttachingMockAdapter extends MockAdapter {
 }
 
 describe("audio in the gateway contract (B-715)", () => {
-  it("an event may carry audio with bytes, media type and duration", () => {
-    const event = voiceEvent({ data: voiceBytes, mediaType: "audio/ogg", durationSeconds: 3 });
+  it("an event may carry audio read on demand, with media type and duration", async () => {
+    const event = voiceEvent({
+      read: async () => voiceBytes,
+      mediaType: "audio/ogg",
+      durationSeconds: 3,
+    });
 
-    expect(event.audio?.data).toBe(voiceBytes);
+    expect(await event.audio?.read()).toBe(voiceBytes);
     expect(event.audio?.mediaType).toBe("audio/ogg");
     expect(event.audio?.durationSeconds).toBe(3);
   });
@@ -72,7 +76,7 @@ describe("audio in the gateway contract (B-715)", () => {
     });
     await runner.start();
     await adapter.emit(
-      voiceEvent({ data: voiceBytes, mediaType: "audio/ogg", durationSeconds: 1 }),
+      voiceEvent({ read: async () => voiceBytes, mediaType: "audio/ogg", durationSeconds: 1 }),
     );
     await runner.stop();
 
@@ -97,7 +101,7 @@ describe("audio in the gateway contract (B-715)", () => {
     });
     await runner.start();
     await adapter.emit(
-      voiceEvent({ data: voiceBytes, mediaType: "audio/ogg", durationSeconds: 1 }),
+      voiceEvent({ read: async () => voiceBytes, mediaType: "audio/ogg", durationSeconds: 1 }),
     );
     await runner.stop();
 
