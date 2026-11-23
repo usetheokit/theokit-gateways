@@ -16,6 +16,21 @@ describe("twiml", () => {
     );
     expect(twiml.gather({ action: "/a" })).toBe('<Gather action="/a"/>');
   });
+  it("emits and escapes speechTimeout and method", () => {
+    expect(twiml.gather({ action: "/a", speechTimeout: "auto", method: "POST" })).toBe(
+      '<Gather action="/a" method="POST" speechTimeout="auto"/>'.replace(
+        'method="POST" speechTimeout="auto"',
+        'speechTimeout="auto" method="POST"',
+      ),
+    );
+    expect(
+      twiml.gather({
+        action: "/a",
+        speechTimeout: '"><x' as unknown as "auto",
+        method: "<" as "GET",
+      }),
+    ).toBe('<Gather action="/a" speechTimeout="&quot;&gt;&lt;x" method="&lt;"/>');
+  });
   it("builds say options, redirect, hangup, empty response", () => {
     expect(twiml.say("x", { voice: "alice", language: "en-US" })).toBe(
       '<Say voice="alice" language="en-US">x</Say>',
