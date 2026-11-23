@@ -150,6 +150,19 @@ function createRunner(
     }
   };
 
+  async function reply(
+    adapter: BasePlatformAdapter | undefined,
+    channelId: string,
+    text: string,
+  ): Promise<void> {
+    if (adapter === undefined) {
+      log("reply not delivered (not_started)");
+      return;
+    }
+    const failure = await deliverText(adapter, channelId, maskSecrets(text, secrets));
+    if (failure !== undefined) log(`reply not delivered (${trustedCode(failure)})`);
+  }
+
   async function execute(
     body: string,
     attributes: Record<string, string> | undefined,
@@ -163,16 +176,8 @@ function createRunner(
         .filter((part): part is string => part !== undefined && part !== "")
         .join("\n\n");
       const result = await runAgentText(lease.agent, prompt);
-      if (!result.ok) {
-        log(`run failed (${trustedCode(result.failure)})`);
-        return;
-      }
-      if (adapter === undefined) {
-        log("reply not delivered (not_started)");
-        return;
-      }
-      const failure = await deliverText(adapter, channelId, maskSecrets(result.text, secrets));
-      if (failure !== undefined) log(`reply not delivered (${trustedCode(failure)})`);
+      if (!result.ok) log(`run failed (${trustedCode(result.failure)})`);
+      else await reply(adapter, channelId, result.text);
     } catch {
       log("run failed (unexpected_error)");
     } finally {
