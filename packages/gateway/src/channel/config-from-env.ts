@@ -58,20 +58,32 @@ export function configFromEnv(
   const missing: string[] = [];
   const secrets: string[] = [];
   for (const field of descriptor.config) {
-    const renamed = opts.rename !== undefined && Object.hasOwn(opts.rename, field.key);
-    const name = renamed ? opts.rename?.[field.key] : envVarName(field, opts.prefix);
+    const name = variableName(field, opts);
     if (name === undefined) continue;
     const value = readValue(env, name);
     if (value === undefined) {
-      if (field.required || opts.require?.includes(field.key)) missing.push(name);
+      if (isRequired(field, opts)) missing.push(name);
       continue;
     }
     config[field.key] = value;
     recordSecret(field, value, secrets);
   }
   if (opts.enabledBy === undefined) return { config, missing, secrets };
-  const flag = readValue(env, opts.enabledBy)?.toLowerCase();
-  return { config, missing, secrets, enabled: flag === "true" || flag === "1" };
+  return { config, missing, secrets, enabled: isEnabled(env, opts.enabledBy) };
+}
+
+function variableName(field: ChannelConfigField, opts: EnvOptions): string | undefined {
+  const renamed = opts.rename !== undefined && Object.hasOwn(opts.rename, field.key);
+  return renamed ? opts.rename?.[field.key] : envVarName(field, opts.prefix);
+}
+
+function isRequired(field: ChannelConfigField, opts: EnvOptions): boolean {
+  return field.required || (opts.require?.includes(field.key) ?? false);
+}
+
+function isEnabled(env: Env, name: string): boolean {
+  const flag = readValue(env, name)?.toLowerCase();
+  return flag === "true" || flag === "1";
 }
 
 function recordSecret(field: ChannelConfigField, value: string, secrets: string[]): void {
