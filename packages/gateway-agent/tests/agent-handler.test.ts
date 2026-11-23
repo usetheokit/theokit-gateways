@@ -326,3 +326,84 @@ describe("createAgentHandler", () => {
     expect(errors).toHaveLength(1);
   });
 });
+
+describe("createAgentHandler turn hooks", () => {
+  function usageAgent(frames: unknown[], status = "finished", usage?: unknown): TurnAgent {
+    const base = agentOf(frames, status);
+    return {
+      async send(p, o) {
+        const run = await base.send(p, o);
+        return { ...run, wait: async () => ({ status, ...(usage ? { usage } : {}) }) as never };
+      },
+    };
+  }
+
+  it("sends the decorated text in the same single reply", async () => {
+    const { adapter } = await setup(
+      async () => usageAgent([text("Hi")], "finished", { outputTokens: 3 }),
+      {
+        decorateReply: (r: string, o: { usage?: { outputTokens?: number } }) =>
+          `${r}\n(${o.usage?.outputTokens} tokens)`,
+      },
+    );
+    expect(texts(adapter)).toEqual(["Hi\n(3 tokens)"]);
+  });
+
+  it("fires onTurnEnd once for success and once for failure", async () => {
+    const ends: Array<{ text: string; failed: boolean; usage?: unknown }> = [];
+    const onTurnEnd = (_e: unknown, o: { text: string; failed: boolean; usage?: unknown }) =>
+      void ends.push(o);
+    const ok = await setup(async () => usageAgent([text("Yes")], "finished", { inputTokens: 1 }), {
+      onTurnEnd,
+    });
+    expect(ends).toEqual([{ text: "Yes", failed: false, usage: { inputTokens: 1 } }]);
+    expect(texts(ok.adapter)).toEqual(["Yes"]);
+    ends.length = 0;
+    const bad = await setup(async () => agentOf([], "error", "boom"), { onTurnEnd });
+    expect(ends).toHaveLength(1);
+    expect(ends[0]?.failed).toBe(true);
+    expect(bad.errors).toHaveLength(1);
+  });
+
+  it("lets a second message reach the running turn and unregisters after", async () => {
+    const running = new Map<string, unknown>();
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const agent: TurnAgent = {
+      async send() {
+        return {
+          stream: () =>
+            (async function* () {
+              await gate;
+              yield text("done") as { type: string };
+            })(),
+          wait: async () => ({ status: "finished" }),
+          cancel: () => {},
+        };
+      },
+    };
+    const adapter = new FakeAdapter();
+    const runner = new GatewayRunner({
+      adapters: [adapter],
+      handler: createAgentHandler({
+        agentFor: async () => ({ agent, release: () => {} }),
+        onTurnStart: (_e, turn) => {
+          running.set("s", turn);
+          return () => {
+            if (running.get("s") === turn) running.delete("s");
+          };
+        },
+      }),
+    });
+    await runner.start();
+    const first = adapter.emit(EVENT);
+    await new Promise((r) => setTimeout(r, 20));
+    const reached = running.get("s");
+    expect(typeof (reached as { run: { cancel: unknown } }).run.cancel).toBe("function");
+    release();
+    await first;
+    await runner.stop();
+    expect(running.size).toBe(0);
+    expect(texts(adapter)).toEqual(["done"]);
+  });
+});

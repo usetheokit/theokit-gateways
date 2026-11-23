@@ -41,6 +41,35 @@ streamed text, including a value split across frames, and again from the final t
 starts no typing indicator: `GatewayRunner` already shows and renews one.
 `ackEmoji` reacts through `GatewayContext.react` when the context has one (a gateway release that adds it; the 0.20.x context has none). Otherwise pass `adapters` (the list you give `GatewayRunner`) and the reaction goes through the adapter for the event's platform. With neither path the reaction is skipped, a warning naming the gateway version is logged once, and the turn still runs and replies.
 
+Around the turn:
+
+- `decorateReply(reply, outcome)` returns the text to send, for example with a usage footer
+  (`outcome.usage`). It goes out in the same single reply and is masked again. A throw sends the
+  undecorated reply. It runs for successful turns only.
+- `onTurnEnd(event, outcome)` runs once per turn, after the reply attempt, with
+  `{ text, failed, code?, usage? }`. `failed` is true for an errored or cancelled run, an
+  unexpected error, or a refused reply. Errors it throws are ignored.
+- `onTurnStart(event, { agent, run })` runs once the run has started. Keep the turn in your own
+  registry under the session key (`router.sessionKey(event)`) and a later message for the same
+  session can call `run.cancel()` or your SDK's steering on `agent`. Return an unregister function;
+  it runs when the turn ends. Delete only if the entry is still yours, since a newer turn on the
+  same session may have replaced it.
+
+```ts
+const running = new Map<string, RunningTurn>();
+createAgentHandler({
+  agentFor,
+  onTurnStart: (event, turn) => {
+    const key = router.sessionKey(event);
+    running.set(key, turn);
+    return () => {
+      if (running.get(key) === turn) running.delete(key);
+    };
+  },
+  decorateReply: (reply, { usage }) => `${reply}\n\n(${usage?.outputTokens ?? "?"} tokens)`,
+});
+```
+
 ```ts
 const runner = new GatewayRunner({
   adapters: [telegram],
