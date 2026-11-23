@@ -377,6 +377,18 @@ const router = new SessionRouter(
 );
 ```
 
+### Adopting the strategy with stored sessions
+
+An app that already stored sessions under its own keys can keep them with `keys`, which replaces the `main` key and the linked-peer key. `peer` gets the raw peer name. Match your existing encoding exactly, and keep the keys distinct from every other key the strategy produces, or conversations will merge. Unlinked senders, groups and threads keep the default keys.
+
+```ts
+scopedStrategy({
+  dmScope: "per-peer",
+  peerLinks,
+  keys: { main: "main", peer: (name) => `peer-${name}` },
+});
+```
+
 Creation throws `GatewayConfigurationError` with code `invalid_session_scope` for `per-account-channel-peer` without a non-empty `accountLabel`, or for an empty peer name. It never throws per event.
 
 ## Keeping a credential across restarts
