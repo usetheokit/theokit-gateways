@@ -199,3 +199,19 @@ createAgentHandler({ ..., progress: progressFor(adapter.capabilities, { reasonin
 ```
 
 `overrides` takes a boolean per event kind (`"tool-call"`, `reasoning`, `status`) and wins over the derived default. Note that `createAgentHandler` sends each line as its own reply; `edit` only decides how many lines are shown.
+
+## `createBroadcastGroups(configs)`
+
+Answers several channels as one conversation (for example Slack and Telegram). Each config has
+an `id`, `members` (`{ adapter, channelId, channelType? }`) and optional `maxTurns` (default 10)
+and `maxChars` (default 4000) bounds on the shared transcript. A channel may be in one group only.
+
+```ts
+const groups = createBroadcastGroups([{ id: "team", members: [{ adapter: slack, channelId: "C1" }, { adapter: telegram, channelId: "42" }] }]);
+const handler = groups.wrap(createAgentHandler({ agentFor, prompt: groups.prompt, onTurnEnd: groups.onTurnEnd }));
+```
+
+Turns of one group run one after the other. A successful answer is sent to the group's other
+channels (best effort; one failed delivery does not stop the rest). Failed turns are neither
+recorded nor forwarded. The transcript is in memory and starts empty after a restart. If you
+already use `prompt` or `onTurnEnd`, call the group's functions from yours.

@@ -6,6 +6,12 @@ export {
   type TurnOutcome,
 } from "./agent-handler.js";
 export {
+  type BroadcastGroupConfig,
+  type BroadcastGroups,
+  type BroadcastMember,
+  createBroadcastGroups,
+} from "./broadcast-groups.js";
+export {
   type ApprovalAnswer,
   type ChatApprover,
   type ChatApproverOptions,
