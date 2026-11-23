@@ -12,7 +12,7 @@
 import type { BasePlatformAdapter } from "../adapter/base.js";
 import { GatewayConfigurationError } from "../errors/config-error.js";
 import type { PlatformName } from "../types/message-event.js";
-import type { ChannelDescriptor } from "./channel-descriptor.js";
+import type { ChannelDeps, ChannelDescriptor } from "./channel-descriptor.js";
 import { envVarName } from "./config-from-env.js";
 
 /** One channel to build: its descriptor and the configuration the app supplies for it. */
@@ -20,6 +20,8 @@ export interface ChannelEntry {
   readonly descriptor: ChannelDescriptor<BasePlatformAdapter>;
   /** Values keyed by the descriptor's field keys. Absent means every required field is missing. */
   readonly config?: Readonly<Record<string, unknown>>;
+  /** Runtime dependencies passed to the descriptor's `create` as its second argument. */
+  readonly deps?: ChannelDeps;
   /**
    * The prefix passed to `configFromEnv` for this entry, so a missing field's rejection names its
    * full environment variable. Defaults to `""`.
@@ -123,7 +125,7 @@ function createAdapter(
   const platform = entry.descriptor.platform;
   let adapter: BasePlatformAdapter;
   try {
-    adapter = entry.descriptor.create(values);
+    adapter = entry.descriptor.create(values, entry.deps);
   } catch (err) {
     if (!(err instanceof GatewayConfigurationError)) throw err;
     return { refusal: { platform, error: err } };
