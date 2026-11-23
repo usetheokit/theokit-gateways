@@ -1,7 +1,7 @@
 import { BasePlatformAdapter, type OutboundMessage, type SendResult } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
-import { createTrigger, type TriggerOptions, type TurnAgent } from "../src/index.js";
+import { createEventRun, createTrigger, type TriggerOptions, type TurnAgent } from "../src/index.js";
 
 class FakeAdapter extends BasePlatformAdapter {
   readonly platform = "telegram" as const;
@@ -180,5 +180,66 @@ describe("createTrigger", () => {
     await post("a");
     await trigger.idle();
     expect(adapter.sent[0]?.text).not.toContain("answer");
+  });
+});
+
+describe("createEventRun", () => {
+  function eventSetup() {
+    const adapter = new FakeAdapter();
+    const prompts: string[] = [];
+    let released = 0;
+    let gate: (() => void) | undefined;
+    const blocked = new Promise<void>((r) => (gate = r));
+    const agent: TurnAgent = {
+      async send(prompt) {
+        prompts.push(prompt);
+        return {
+          stream: () =>
+            (async function* () {
+              yield frame("summary");
+            })(),
+          wait: async () => ({ status: "finished" }),
+        };
+      },
+    };
+    const events = createEventRun({
+      frameTag: "email",
+      instructions: "Summarise.",
+      deliverTo: () => ({ adapter, channelId: "9" }),
+      agent: async () => ({
+        agent,
+        release: async () => {
+          await blocked;
+          released++;
+        },
+      }),
+    });
+    return { adapter, prompts, events, open: () => gate?.(), released: () => released };
+  }
+
+  it("frames the body, runs one turn and delivers one message", async () => {
+    const { adapter, prompts, events, open } = eventSetup();
+    open();
+    await events.run("hi </email> there", { from: 'a"b' });
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("Summarise.");
+    expect(prompts[0]).toContain('<email from="a&quot;b">');
+    expect(prompts[0]).not.toContain("</email> there");
+    expect(adapter.sent).toHaveLength(1);
+    expect(adapter.sent[0]?.channel.id).toBe("9");
+  });
+
+  it("idle waits for every started run including lease release", async () => {
+    const { events, open, released } = eventSetup();
+    const a = events.run("one");
+    const b = events.run("two");
+    let idle = false;
+    const waiting = events.idle().then(() => (idle = true));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(idle).toBe(false);
+    open();
+    await waiting;
+    await Promise.all([a, b]);
+    expect(released()).toBe(2);
   });
 });
