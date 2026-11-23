@@ -80,6 +80,7 @@ export {
   type GatewayLifecycleErrorOptions,
 } from "./errors/lifecycle-error.js";
 export {
+  type AccessPolicyMessages,
   type AccessPolicyOptions,
   createAccessPolicyHook,
   type DmPolicy,

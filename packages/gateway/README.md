@@ -324,6 +324,16 @@ unauthenticated sender is never answered. In a group a stranger gets no reply un
 The owner's `/approve <code>` is answered "Paired." and never reaches the agent. A failure inside
 the hook is logged (redacted) and becomes a silent block.
 
+`messages` overrides the replies the hook sends; each omitted key keeps its default:
+
+| Key           | Type                     | Default                                                                  |
+| ------------- | ------------------------ | ------------------------------------------------------------------------ |
+| `pairingCode` | `(code: string) => string` | ``Your pairing code is ${code}. Ask the owner to send /approve ${code}.`` |
+| `invalidCode` | `string`                 | `Unknown or expired code.`                                               |
+| `failedSave`  | `string`                 | `Saving the pairing failed. Check the storage and send the code again.`  |
+| `paired`      | `string`                 | `Paired.`                                                                |
+| `pairingOff`  | `string`                 | `Pairing is not enabled.`                                                |
+
 ```typescript
 import { createAccessPolicyHook, createFilePairingStore } from "@theokit/gateway";
 

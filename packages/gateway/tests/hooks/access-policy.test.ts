@@ -60,6 +60,43 @@ describe("access policy", () => {
       message: "no",
     });
   });
+  it("sends custom messages for all five replies", async () => {
+    const messages = {
+      pairingCode: (c: string) => `Pairing code: ${c}.`,
+      invalidCode: "bad",
+      failedSave: "nosave",
+      paired: "ok",
+      pairingOff: "off",
+    };
+    const owner = (text: string) => ({ event: ev("telegram", "1", text) });
+    const reply = async (
+      h: ReturnType<typeof createAccessPolicyHook>,
+      arg: ReturnType<typeof owner>,
+    ) => ((await h.pre_inbound?.(arg)) ?? { message: undefined }) as { message?: string };
+    const pairing = store();
+    const hook = createAccessPolicyHook({ ...base, dm: "pairing", pairing, messages });
+    const r = (await hook.pre_inbound?.({ event: ev("telegram", "2") })) as { message: string };
+    const code = /\d{6}/.exec(r.message)?.[0] as string;
+    expect(r.message).toBe(`Pairing code: ${code}.`);
+    expect((await reply(hook, owner("/approve 000000"))).message).toBe("bad");
+    expect((await reply(hook, owner(`/approve ${code}`))).message).toBe("ok");
+    const failing: PairingStore = {
+      issue: () => "1",
+      approve: async () => ({ ok: false, reason: "write_failed" }),
+      isPaired: () => false,
+    };
+    const h2 = createAccessPolicyHook({ ...base, dm: "pairing", pairing: failing, messages });
+    expect((await reply(h2, owner("/approve 123456"))).message).toBe("nosave");
+    const h3 = createAccessPolicyHook({ ...base, dm: "open", messages });
+    expect((await reply(h3, owner("/approve 123456"))).message).toBe("off");
+  });
+  it("keeps defaults for omitted message entries", async () => {
+    const hook = createAccessPolicyHook({ ...base, dm: "open", messages: { paired: undefined } });
+    const d = (await hook.pre_inbound?.({ event: ev("telegram", "1", "/approve 123456") })) as {
+      message: string;
+    };
+    expect(d.message).toBe("Pairing is not enabled.");
+  });
   it("handles groups", async () => {
     const silent = createAccessPolicyHook({ ...base, dm: "open" });
     expect(await silent.pre_inbound?.({ event: ev("telegram", "2", "x", "group") })).toEqual({
