@@ -1,5 +1,5 @@
 /**
- * An unreadable voice note fails open (B-715, AC-003): the event is delivered without `audio`, one
+ * An unreadable voice note fails open (B-715, AC-003): the event is delivered, `audio.read()` rejects, one
  * stderr line names the reason, and nothing throws.
  *
  * The delivery cases go through the adapter's own grammy bot, with `getFile` answered by an api
@@ -119,7 +119,8 @@ describe("an unreadable voice note fails open", () => {
     await adapter.getBot().handleUpdate(voiceUpdate({ file_id: "v1", duration: 3 }));
 
     expect(events).toHaveLength(1);
-    expect("audio" in (events[0] ?? {})).toBe(false);
+    expect(voiceLines()).toEqual([]);
+    await expect(events[0]?.audio?.read()).rejects.toThrow("voice not read: get_file_failed");
     expect(voiceLines()).toEqual(["[telegram] voice not read: get_file_failed\n"]);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -129,7 +130,7 @@ describe("an unreadable voice note fails open", () => {
     await adapter.getBot().handleUpdate(voiceUpdate({ file_id: "v1", duration: 3 }));
 
     expect(events).toHaveLength(1);
-    expect("audio" in (events[0] ?? {})).toBe(false);
+    await expect(events[0]?.audio?.read()).rejects.toThrow("download_status_404");
     expect(voiceLines()).toEqual(["[telegram] voice not read: download_status_404\n"]);
   });
 
@@ -139,7 +140,8 @@ describe("an unreadable voice note fails open", () => {
       .handleUpdate(voiceUpdate({ file_id: "v1", duration: 3, file_size: MAX_VOICE_BYTES + 1 }));
 
     expect(events).toHaveLength(1);
-    expect("audio" in (events[0] ?? {})).toBe(false);
+    expect(events[0]?.audio?.size).toBe(MAX_VOICE_BYTES + 1);
+    await expect(events[0]?.audio?.read()).rejects.toThrow("too_large");
     expect(getFile).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(voiceLines()).toEqual(["[telegram] voice not read: too_large\n"]);
@@ -148,6 +150,7 @@ describe("an unreadable voice note fails open", () => {
   it("the stderr line never contains the bot token", async () => {
     fetchSpy.mockRejectedValue(new TypeError(`fetch failed for /file/bot${TOKEN}/voice/v1.oga`));
     await adapter.getBot().handleUpdate(voiceUpdate({ file_id: "v1", duration: 3 }));
+    await expect(events[0]?.audio?.read()).rejects.toThrow("download_failed");
 
     expect(voiceLines()).toEqual(["[telegram] voice not read: download_failed\n"]);
     expect(stderr.join("")).not.toContain(TOKEN);
@@ -162,6 +165,7 @@ describe("an unreadable voice note fails open", () => {
     expect(events).toHaveLength(1);
     expect(events[0]?.audio?.durationSeconds).toBe(0);
     expect(events[0]?.audio?.mediaType).toBe("audio/ogg");
+    await events[0]?.audio?.read();
 
     await adapter.getBot().handleUpdate(voiceUpdate({ duration: 3 }));
 

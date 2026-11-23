@@ -48,15 +48,19 @@ import type {
 } from "./platform-events.js";
 
 /**
- * The audio of a voice note an inbound message carries (B-715): its bytes, their media type and
- * the length the platform reported.
+ * The audio of a voice note an inbound message carries (B-715): read on demand, so an app whose
+ * `pre_inbound` hook refuses a sender never downloads the sender's media.
  *
- * The bytes travel by reference, as an outbound attachment's do: hooks and the handler see the
- * same array.
+ * Nothing is fetched until `read()` is called. The first call fetches; later calls return the
+ * same bytes. `read()` rejects when the platform cannot deliver them (the error message is safe
+ * to log: it never carries a credential).
  */
 export interface InboundAudio {
-  readonly data: Uint8Array;
-  /** The media type of `data`, such as `audio/ogg`. */
+  /** The audio bytes, fetched on the first call and cached. */
+  read(): Promise<Uint8Array>;
+  /** The length in bytes the platform reported before any download; absent when it reported none. */
+  readonly size?: number;
+  /** The media type of the bytes, such as `audio/ogg`. */
   readonly mediaType: string;
   /** The length in whole seconds the platform reported; 0 when it reported none. */
   readonly durationSeconds: number;

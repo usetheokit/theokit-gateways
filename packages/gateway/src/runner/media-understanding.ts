@@ -39,18 +39,24 @@ export function withMediaUnderstanding(
 
   const understand = async (
     kind: "Audio transcript" | "Image description",
-    media: { data: Uint8Array; mediaType: string },
+    media: { read(): Promise<Uint8Array>; size?: number; mediaType: string },
     fn: ((m: { data: Uint8Array; mediaType: string }) => Promise<string>) | undefined,
   ): Promise<string> => {
     const type = sanitizeType(media.mediaType);
+    // Without a function the audio is never read: nothing is downloaded for nothing.
     if (fn === undefined) return `[Attachment of type ${type} not understood]`;
     const failed = `[Attachment of type ${type} could not be understood]`;
-    if (media.data.byteLength > maxBytes) {
+    if (media.size !== undefined && media.size > maxBytes) {
       report(type, "TooLarge");
       return failed;
     }
     try {
-      const text = await fn({ data: media.data, mediaType: media.mediaType });
+      const data = await media.read();
+      if (data.byteLength > maxBytes) {
+        report(type, "TooLarge");
+        return failed;
+      }
+      const text = await fn({ data, mediaType: media.mediaType });
       return `[${kind}: ${text}]`;
     } catch (error) {
       report(type, errorName(error));

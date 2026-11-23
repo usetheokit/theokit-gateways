@@ -76,17 +76,19 @@ An edit carrying attachments is refused as `attachments_unsupported`.
 
 ## Voice notes
 
-**Reading.** A voice note that arrives by polling reaches the handler with `event.audio` set: the
-adapter calls `getFile` for its path and downloads it from Telegram's file server with the bot
-token. The download is bounded at 20 MiB (Telegram's `getFile` limit; a voice whose declared
-`file_size` is larger is not fetched at all), and the whole read, `getFile` and download with its
-body, at 30 seconds. `mediaType` is the
-voice's `mime_type`, `audio/ogg` when it has none, and `durationSeconds` its `duration`, 0 when it
-is not a number. A blocked sender or a message without a voice triggers no request. A voice that
-cannot be read (`getFile` fails, the download answers an error status, times out, passes 20 MiB,
-or the voice has no `file_id`) is delivered without `audio`, as before this release, with one
-stderr line `[telegram] voice not read: <reason>`; the line never carries the download URL, which
-holds the token. A voice delivered through a webhook (`parseInbound`) is not read.
+**Reading.** A voice note that arrives by polling reaches hooks and the handler with `event.audio`
+set, and nothing is downloaded yet: `audio.size` is the declared `file_size`, `mediaType` the
+voice's `mime_type` (`audio/ogg` when it has none) and `durationSeconds` its `duration` (0 when it
+is not a number). The first `audio.read()` calls `getFile` for the path and downloads it from
+Telegram's file server with the bot token; later calls return the same bytes. A `pre_inbound` hook
+that blocks the message, a blocked sender, or a handler that never reads, makes no request. The
+download is bounded at 20 MiB (Telegram's `getFile` limit; a voice whose declared `file_size` is
+larger is not fetched at all) and the whole read, `getFile` and download with its body, at 30
+seconds. A read that fails (`getFile` fails, the download answers an error status, times out or
+passes 20 MiB) rejects with a `voice not read: <reason>` error and writes one stderr line
+`[telegram] voice not read: <reason>`; neither carries the download URL, which holds the token. A
+voice without a `file_id` is delivered without `audio`. A voice delivered through a webhook
+(`parseInbound`) is not read.
 
 **Sending.** An attachment with `kind: "audio"` goes out through `sendVoice`, in the same path and
 order as images: the text is the caption of the first attachment whatever its kind, under the
