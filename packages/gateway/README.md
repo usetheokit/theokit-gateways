@@ -520,7 +520,10 @@ else {
   ignored under `"rollback"`. `secrets: [...]` masks those exact values (longest first) with
   `[redacted]` in every reason and log line before `redactSecrets` runs (`maskSecrets` is exported).
 - `runner.adapter(platform)` returns the registered adapter, connected or not, or `undefined`;
-  `runner.connected` is the live set of connected platforms, updated by retries and `stop()`.
+  `runner.connected()` returns the adapters started now, updated by retries and `stop()`.
+- `reconnect: { retryFalse: true }` retries a `connect()` that resolves `false` like a throw, on the
+  same backoff. A connect abandoned by `connectTimeoutMs` that rejects later is reported once
+  through `onAdapterState` as `failed`, redacted.
 - `connectFailure` defaults to `"rollback"`: one failed connect disconnects the adapters that did
   connect and rejects `start()`, as before. Under `"isolate"`, `start()` resolves even when every
   adapter failed, so check `connected` before you rely on the runner.

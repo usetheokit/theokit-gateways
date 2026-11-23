@@ -18,6 +18,16 @@ class FlakyAdapter extends MockAdapter {
   }
 }
 
+class FalseAdapter extends MockAdapter {
+  constructor(private readonly falses: number) {
+    super("matrix");
+  }
+  override async connect(): Promise<boolean> {
+    this.connectCount += 1;
+    return this.connectCount > this.falses;
+  }
+}
+
 afterEach(() => vi.useRealTimers());
 
 function runner(adapter: MockAdapter) {
@@ -30,6 +40,33 @@ function runner(adapter: MockAdapter) {
 }
 
 describe("reconnect policy", () => {
+  it("retries a false answer with retryFalse until it connects", async () => {
+    vi.useFakeTimers();
+    const err = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const adapter = new FalseAdapter(2);
+    const r = new GatewayRunner({
+      adapters: [adapter],
+      handler: async () => {},
+      connectFailure: "isolate",
+      reconnect: { initialDelayMs: 100, maxDelayMs: 200, retryFalse: true },
+    });
+    await r.start();
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(adapter.connectCount).toBe(3);
+    expect(r.connected()).toEqual([adapter]);
+    await r.stop();
+    err.mockRestore();
+  });
+
+  it("does not retry a false answer by default", async () => {
+    vi.useFakeTimers();
+    const adapter = new FalseAdapter(1);
+    await runner(adapter).start();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(adapter.connectCount).toBe(1);
+  });
+
   it("retries a transient failure with capped backoff until it connects", async () => {
     vi.useFakeTimers();
     const err = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
