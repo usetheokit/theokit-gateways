@@ -7,16 +7,21 @@ import { MockAdapter } from "./adapter/mock-adapter.js";
 
 class HangingAdapter extends MockAdapter {
   private resolveConnect: ((ok: boolean) => void) | undefined;
+  private rejectConnect: ((err: Error) => void) | undefined;
   inboundWired = false;
   override connect(): Promise<boolean> {
     this.connectCount += 1;
-    return new Promise((r) => {
+    return new Promise((r, j) => {
       this.resolveConnect = r;
+      this.rejectConnect = j;
     });
   }
   override onInbound(handler: Parameters<MockAdapter["onInbound"]>[0]): () => void {
     this.inboundWired = true;
     return super.onInbound(handler);
+  }
+  fail(err: Error): void {
+    this.rejectConnect?.(err);
   }
   settle(ok: boolean): void {
     this.resolveConnect?.(ok);
@@ -65,7 +70,7 @@ describe("connectTimeoutMs", () => {
     expect(res.failed[0]?.platform).toBe("telegram");
     expect(states[1]?.[0]).toBe("telegram");
     expect(states[1]?.[1]).toBe("timed_out");
-    expect([...runner.connected]).toEqual(["slack"]);
+    expect(runner.connected().map((a) => a.platform)).toEqual(["slack"]);
   });
 
   it("disconnects an adapter whose connect() resolves true after the timeout", async () => {
@@ -84,7 +89,30 @@ describe("connectTimeoutMs", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(slow.disconnectCount).toBe(1);
     expect(slow.inboundWired).toBe(false);
-    expect(runner.connected.size).toBe(0);
+    expect(runner.connected()).toEqual([]);
+  });
+
+  it("reports a late rejection of an abandoned connect once, masked", async () => {
+    vi.useFakeTimers();
+    const slow = new HangingAdapter("telegram");
+    const states: Array<[string, string, string | undefined]> = [];
+    const runner = new GatewayRunner({
+      adapters: [slow],
+      handler: async () => {},
+      connectFailure: "isolate",
+      connectTimeoutMs: 100,
+      secrets: ["hunter2-token"],
+      onAdapterState: (p, s, r) => states.push([p, s, r]),
+    });
+    const started = runner.start();
+    await vi.advanceTimersByTimeAsync(100);
+    await started;
+    slow.fail(new Error("bad hunter2-token"));
+    await vi.advanceTimersByTimeAsync(0);
+    const failed = states.filter(([, s]) => s === "failed");
+    expect(failed).toHaveLength(1);
+    expect(failed[0]?.[2]).not.toContain("hunter2-token");
+    expect(runner.connected()).toEqual([]);
   });
 
   it("retries a timed-out adapter when reconnect is set", async () => {

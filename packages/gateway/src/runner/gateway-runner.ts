@@ -146,6 +146,11 @@ export interface ReconnectPolicy {
   readonly factor?: number;
   /** Give up after this many retries. Default: keep trying until `stop()`. */
   readonly maxAttempts?: number;
+  /**
+   * Treat a `connect()` that resolves `false` like one that throws a transient error: retry it on
+   * the same backoff. Default `false`, where `false` is final.
+   */
+  readonly retryFalse?: boolean;
 }
 
 /**
@@ -271,7 +276,7 @@ export class GatewayRunner {
   private startInFlight: Promise<StartResult> | undefined;
   private stopped = false;
   private readonly retryTimers = new Set<NodeJS.Timeout>();
-  private readonly connectedPlatforms = new Set<PlatformName>();
+  private readonly connectedAdapters = new Set<BasePlatformAdapter>();
   private readonly redact: Redact;
 
   constructor(private readonly opts: GatewayRunnerOptions) {
@@ -285,9 +290,9 @@ export class GatewayRunner {
     return this.opts.adapters.find((a) => a.platform === platform);
   }
 
-  /** Platforms whose adapter is connected now; updated by connects, retries and `stop()`. */
-  get connected(): ReadonlySet<PlatformName> {
-    return this.connectedPlatforms;
+  /** The adapters started now (a snapshot); updated by connects, retries and `stop()`. */
+  connected(): BasePlatformAdapter[] {
+    return [...this.connectedAdapters];
   }
 
   private emitState(platform: PlatformName, state: AdapterState, reason?: string): void {
@@ -377,12 +382,12 @@ export class GatewayRunner {
         "releasing a start that stop() overtook",
         this.redact,
       );
-      this.connectedPlatforms.clear();
+      this.connectedAdapters.clear();
       this.startResult = { connected: [], failed: result.failed };
       return this.startResult;
     }
     this.wireInbound(result.connected);
-    for (const a of result.connected) this.connectedPlatforms.add(a.platform);
+    for (const a of result.connected) this.connectedAdapters.add(a);
     this.startResult = {
       connected: result.connected.map((a) => a.platform),
       failed: result.failed,
@@ -442,7 +447,7 @@ export class GatewayRunner {
           return;
         }
         this.wireInbound([adapter]);
-        this.connectedPlatforms.add(adapter.platform);
+        this.connectedAdapters.add(adapter);
         this.emitState(adapter.platform, "connected");
         const prev = this.startResult ?? { connected: [], failed: [] };
         this.startResult = {
@@ -455,8 +460,18 @@ export class GatewayRunner {
         );
         return;
       }
-      reportDiagnostic("gateway", `adapter "${adapter.platform}" refused to connect; not retrying`);
-      return;
+      if (this.opts.reconnect?.retryFalse) {
+        reportDiagnostic(
+          "gateway",
+          `adapter "${adapter.platform}" reconnect attempt ${attempt} answered false`,
+        );
+      } else {
+        reportDiagnostic(
+          "gateway",
+          `adapter "${adapter.platform}" refused to connect; not retrying`,
+        );
+        return;
+      }
     } catch (err) {
       const reason = connectFailureReason({ status: "rejected", reason: err }, this.redact);
       if (isTerminalConnectError(err)) {
@@ -557,8 +572,12 @@ export class GatewayRunner {
     adapter: BasePlatformAdapter,
     late: PromiseSettledResult<boolean>,
   ): void {
-    if (late.status !== "fulfilled" || !late.value) return;
-    if (this.connectedPlatforms.has(adapter.platform)) return; // a retry connected it meanwhile
+    if (late.status === "rejected") {
+      this.emitState(adapter.platform, "failed", connectFailureReason(late, this.redact));
+      return;
+    }
+    if (!late.value) return;
+    if (this.connectedAdapters.has(adapter)) return; // a retry connected it meanwhile
     void releaseAdapters([adapter], "releasing a connect that timed out", this.redact);
   }
 
@@ -567,13 +586,16 @@ export class GatewayRunner {
     outcome: PromiseSettledResult<boolean>,
   ): IsolatedResult {
     if (outcome.status === "fulfilled" && outcome.value) {
-      this.connectedPlatforms.add(adapter.platform);
+      this.connectedAdapters.add(adapter);
       this.emitState(adapter.platform, "connected");
       return { adapter, failure: undefined, retry: false };
     }
     const reason = connectFailureReason(outcome, this.redact);
     this.emitState(adapter.platform, "failed", reason);
-    const retry = outcome.status === "rejected" && !isTerminalConnectError(outcome.reason);
+    const retry =
+      outcome.status === "rejected"
+        ? !isTerminalConnectError(outcome.reason)
+        : outcome.value === false && this.opts.reconnect?.retryFalse === true;
     return { adapter, failure: { platform: adapter.platform, reason }, retry };
   }
 
@@ -619,7 +641,7 @@ export class GatewayRunner {
     this.unsubs.length = 0;
     for (const t of this.retryTimers) clearTimeout(t);
     this.retryTimers.clear();
-    this.connectedPlatforms.clear();
+    this.connectedAdapters.clear();
 
     const drainMs = this.opts.drainTimeoutMs ?? DEFAULT_DRAIN_MS;
     if (this.inflight.size > 0) {
