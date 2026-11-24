@@ -1,4 +1,4 @@
-import { configFromEnv, createChannels } from "@theokit/gateway";
+import { configFromEnv, createChannels, isAuthenticatedSender } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 import { TlonUrbitAdapter } from "../src/adapter.js";
@@ -98,6 +98,7 @@ describe("tlonUrbitChannel connectTimeoutMs", () => {
   });
   it("does not claim an authenticated sender", () => {
     expect("senderIdentity" in tlonUrbitChannel).toBe(false);
+    expect(isAuthenticatedSender(tlonUrbitChannel)).toBe(false);
   });
   it("rejects anything else", () => {
     expect(() => tlonUrbitChannel.create({ ...base, connectTimeoutMs: "soon" })).toThrow(
