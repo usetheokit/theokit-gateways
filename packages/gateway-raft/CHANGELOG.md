@@ -1,5 +1,12 @@
 # @theokit/gateway-raft
 
+## 0.2.2
+
+### Patch Changes
+
+- c95cbc3: Raft channel tests assert configuration errors directly instead of through a helper copied from the iMessage tests.
+- 998ad73: SMS declares `senderIdentity` as unauthenticated ("the caller id of a text message"). iMessage, Raft and Tlon still declare none, so apps treat them as not authenticated until a maintainer confirms each; their tests now assert that.
+
 ## 0.2.1
 
 ### Patch Changes
