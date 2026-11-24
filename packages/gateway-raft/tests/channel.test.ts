@@ -2,11 +2,7 @@
  * `raftChannel` — the Raft channel described as data, bound to environment variables.
  */
 
-import {
-  configFromEnv,
-  createChannels,
-  isAuthenticatedSender,
-} from "@theokit/gateway";
+import { configFromEnv, createChannels, isAuthenticatedSender } from "@theokit/gateway";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RaftAdapter } from "../src/adapter.js";
