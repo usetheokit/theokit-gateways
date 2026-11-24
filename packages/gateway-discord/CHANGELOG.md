@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.0
+
+### Minor Changes
+
+- c0a55b8: `MessageEvent` gains an optional `addressed` flag, set by these adapters on group and thread events whether or not `requireMention` is on, and `@theokit/gateway` adds `groupActivationHook({ mode, modeFor? })`, which blocks unaddressed group messages per chat.
+
 ## 0.9.0
 
 ### Minor Changes
