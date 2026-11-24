@@ -17,13 +17,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function expectInvalidConfig(fn: () => unknown, key: string): void {
-  expect(fn).toThrow(GatewayConfigurationError);
-  expect(fn).toThrow(
-    expect.objectContaining({ code: "invalid_config", message: expect.stringContaining(key) }),
-  );
-}
-
 const ENV = {
   APP_RAFT_COMMAND: "/opt/raft",
   APP_RAFT_WAKE_ARGS: "wake, --json",
@@ -67,15 +60,18 @@ describe("raftChannel", () => {
       ["wakeArgs", 5],
       ["replyTimeoutMs", "slow"],
     ] as const) {
-      expectInvalidConfig(() => raftChannel.create({ [key]: value }), key);
+      const create = () => raftChannel.create({ [key]: value });
+      expect(create).toThrow(GatewayConfigurationError);
+      expect(create).toThrow(expect.objectContaining({ code: "invalid_config" }));
+      expect(create).toThrow(key);
     }
   });
 
   it("rejects a digit string too long to be a finite number", () => {
-    expectInvalidConfig(
-      () => raftChannel.create({ replyTimeoutMs: "9".repeat(400) }),
-      "replyTimeoutMs",
-    );
+    const create = () => raftChannel.create({ replyTimeoutMs: "9".repeat(400) });
+    expect(create).toThrow(GatewayConfigurationError);
+    expect(create).toThrow(expect.objectContaining({ code: "invalid_config" }));
+    expect(create).toThrow("replyTimeoutMs");
   });
 
   it("treats null as absent for an optional value, like the shared readers", () => {
