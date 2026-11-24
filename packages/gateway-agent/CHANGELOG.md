@@ -1,5 +1,11 @@
 # @theokit/gateway-agent
 
+## 0.6.0
+
+### Minor Changes
+
+- 32dc69c: `createEventRun` accepts `announce` (a masked line sent before the run) and `formatReply` (builds the delivered message from the answer and the event's attributes).
+
 ## 0.5.0
 
 ### Minor Changes

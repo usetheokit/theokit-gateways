@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+### Patch Changes
+
+- 4c732b1: `placeCall` accepts inline `twiml` as an alternative to `url`, times out after `timeoutMs` (default 15 000), refuses redirects, and reports Twilio's error message with the status.
+
 ## 0.7.0
 
 ### Minor Changes
