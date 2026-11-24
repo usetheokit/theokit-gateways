@@ -76,6 +76,7 @@ export const smsChannel = {
   platform: "sms" as const,
   transport: "webhook" as const,
   webhook: twilioWebhook,
+  senderIdentity: { unauthenticated: "the caller id of a text message" },
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): SMSAdapter {
     const [accountSid, authToken, fromNumber, publicUrl] = KEYS.map((k) => readString(config, k));
