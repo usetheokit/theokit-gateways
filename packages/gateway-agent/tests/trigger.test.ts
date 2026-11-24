@@ -247,4 +247,64 @@ describe("createEventRun", () => {
     await Promise.all([a, b]);
     expect(released()).toBe(2);
   });
+
+  describe("announce and formatReply", () => {
+    function hooked(extra: Partial<Parameters<typeof createEventRun>[0]>, fail = false) {
+      const adapter = new FakeAdapter();
+      const order: string[] = [];
+      const agent: TurnAgent = {
+        async send() {
+          order.push("turn");
+          return {
+            stream: () =>
+              (async function* () {
+                yield frame("found hunter2 inside");
+              })(),
+            wait: async () =>
+              fail ? { status: "error", error: { code: "x" } } : { status: "finished" },
+          };
+        },
+      };
+      const send = adapter.sendMessage.bind(adapter);
+      adapter.sendMessage = async (out) => {
+        order.push(`sent:${out.text}`);
+        return send(out);
+      };
+      const events = createEventRun({
+        deliverTo: () => ({ adapter, channelId: "9" }),
+        agent: async () => ({ agent, release: async () => {} }),
+        secrets: ["hunter2"],
+        ...extra,
+      });
+      return { adapter, order, events };
+    }
+
+    it("formats the reply and masks secrets in it", async () => {
+      const { adapter, events } = hooked({
+        formatReply: (a, attrs) => `From ${attrs?.from}:\n${a}`,
+      });
+      await events.run("b", { from: "bob" });
+      const text = adapter.sent[0]?.text ?? "";
+      expect(text.startsWith("From bob:")).toBe(true);
+      expect(text).not.toContain("hunter2");
+    });
+
+    it("sends the announcement once, before the turn, masked, even if the run fails", async () => {
+      const { order, events } = hooked(
+        { announce: (attrs) => `received from ${attrs?.server} hunter2` },
+        true,
+      );
+      await events.run("b", { server: "gh" });
+      expect(order).toHaveLength(2);
+      expect(order[0]).toMatch(/^sent:received from gh /);
+      expect(order[0]).not.toContain("hunter2");
+      expect(order[1]).toBe("turn");
+    });
+
+    it("sends no announcement when it returns undefined", async () => {
+      const { adapter, events } = hooked({ announce: () => undefined });
+      await events.run("b");
+      expect(adapter.sent).toHaveLength(1);
+    });
+  });
 });
