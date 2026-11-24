@@ -71,6 +71,7 @@ const CONFIG: ReadonlyArray<ChannelConfigField> = [
 export const raftChannel = {
   platform: "raft" as const,
   transport: "socket" as const,
+  senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Config): RaftAdapter {
     const command = readString(config, "command");

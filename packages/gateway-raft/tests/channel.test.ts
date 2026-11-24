@@ -2,7 +2,12 @@
  * `raftChannel` — the Raft channel described as data, bound to environment variables.
  */
 
-import { configFromEnv, createChannels, GatewayConfigurationError } from "@theokit/gateway";
+import {
+  configFromEnv,
+  createChannels,
+  GatewayConfigurationError,
+  isAuthenticatedSender,
+} from "@theokit/gateway";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RaftAdapter } from "../src/adapter.js";
@@ -29,6 +34,9 @@ const ENV = {
 };
 
 describe("raftChannel", () => {
+  it("declares an authenticated sender", () => {
+    expect(isAuthenticatedSender(raftChannel)).toBe(true);
+  });
   it("declares a socket transport and env names", () => {
     expect(raftChannel.platform).toBe("raft");
     expect(raftChannel.transport).toBe("socket");

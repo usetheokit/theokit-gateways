@@ -2,7 +2,12 @@
  * `imessageChannel` — the iMessage channel described as data, bound to environment variables.
  */
 
-import { configFromEnv, createChannels, GatewayConfigurationError } from "@theokit/gateway";
+import {
+  configFromEnv,
+  createChannels,
+  GatewayConfigurationError,
+  isAuthenticatedSender,
+} from "@theokit/gateway";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { IMessageAdapter } from "../src/adapter.js";
@@ -35,6 +40,9 @@ function onPlatform(name: NodeJS.Platform): void {
 }
 
 describe("imessageChannel", () => {
+  it("declares an authenticated sender", () => {
+    expect(isAuthenticatedSender(imessageChannel)).toBe(true);
+  });
   afterEach(() => {
     vi.restoreAllMocks();
     if (REAL_PLATFORM) Object.defineProperty(process, "platform", REAL_PLATFORM);

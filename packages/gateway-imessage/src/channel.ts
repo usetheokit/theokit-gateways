@@ -71,6 +71,7 @@ const CONFIG: ReadonlyArray<ChannelConfigField> = [
 export const imessageChannel = {
   platform: "imessage" as const,
   transport: "socket" as const,
+  senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Config): IMessageAdapter {
     if (process.platform !== "darwin") {
