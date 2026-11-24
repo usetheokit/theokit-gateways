@@ -20,7 +20,7 @@ import {
   type WSMessage,
 } from "./client.js";
 import { ConfigurationError } from "./errors.js";
-import { shouldRespond } from "./filters.js";
+import { isBotMentioned, shouldRespond } from "./filters.js";
 import { mapChannelType, normalizeMattermostType, postToMessageEvent } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import { MATTERMOST_MAX_POST, splitForEscapedMattermost, splitForMattermost } from "./split.js";
@@ -202,7 +202,12 @@ export class MattermostAdapter extends BasePlatformAdapter {
       typeof msg.data.sender_name === "string"
         ? (msg.data.sender_name as string).replace(/^@/, "")
         : undefined;
-    const event = postToMessageEvent(post, channel, senderUsername);
+    const event = withAddressed(
+      postToMessageEvent(post, channel, senderUsername),
+      post,
+      handle.botUserId,
+      handle.botUsername,
+    );
     if (this.inboundHandler === undefined) return;
     try {
       await this.inboundHandler(event);
@@ -222,7 +227,13 @@ export class MattermostAdapter extends BasePlatformAdapter {
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
     if (!this.passesMentionGate(event)) return "ok";
-    return this.runHandler(this.inboundHandler, event);
+    const handle = this.handle;
+    const raw = (event as { mattermost?: { raw?: MattermostPost } }).mattermost?.raw;
+    const marked =
+      handle === undefined || raw === undefined
+        ? event
+        : withAddressed(event, raw, handle.botUserId, handle.botUsername);
+    return this.runHandler(this.inboundHandler, marked);
   }
 
   /**
@@ -244,6 +255,17 @@ export class MattermostAdapter extends BasePlatformAdapter {
       requireMention: this.opts.requireMention ?? true,
     });
   }
+}
+
+/** The event with `addressed` set from the post; a direct message is left unmarked. */
+function withAddressed<E extends GatewayMessageEvent>(
+  event: E,
+  post: MattermostPost,
+  botUserId: string,
+  botUsername: string,
+): E {
+  if (event.channel.type === "dm") return event;
+  return { ...event, addressed: isBotMentioned(post, botUserId, botUsername) };
 }
 
 /**

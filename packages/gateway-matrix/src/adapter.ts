@@ -433,7 +433,7 @@ export class MatrixAdapter extends BasePlatformAdapter {
     if (!this.passesMentionGate(normalized)) return;
     if (this.inboundHandler === undefined) return;
     try {
-      await this.inboundHandler(normalized);
+      await this.inboundHandler(this.mark(normalized));
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[gateway-matrix] handler threw: ${m}\n`);
@@ -447,6 +447,18 @@ export class MatrixAdapter extends BasePlatformAdapter {
    */
   private passesMentionGate(event: GatewayMessageEvent): boolean {
     if (event.channel.type === "dm" || !(this.opts.requireMention ?? true)) return true;
+    return this.addressedOf(event);
+  }
+
+  /** The event with `addressed` set when the adapter can tell; a direct message is left unmarked. */
+  private mark(event: GatewayMessageEvent): GatewayMessageEvent {
+    if (event.channel.type === "dm") return event;
+    const addressed = this.addressedOf(event);
+    return addressed === undefined ? event : ({ ...event, addressed } as GatewayMessageEvent);
+  }
+
+  /** Whether the content mentions the bot. */
+  private addressedOf(event: GatewayMessageEvent): boolean {
     const botId = this.opts.userId;
     const raw = event.platform === "matrix" ? event.matrix.raw : undefined;
     const content = (raw as Partial<MatrixEventLike> | undefined)?.getContent?.();
@@ -485,7 +497,7 @@ export class MatrixAdapter extends BasePlatformAdapter {
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
     if (!this.passesMentionGate(event)) return "ok";
-    return this.runHandler(this.inboundHandler, event);
+    return this.runHandler(this.inboundHandler, this.mark(event));
   }
 }
 

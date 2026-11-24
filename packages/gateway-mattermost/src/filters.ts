@@ -53,6 +53,20 @@ export function shouldRespond(opts: ShouldRespondOptions): boolean {
 }
 
 /**
+ * Whether a post mentions the bot, by `metadata.mentions` or by the text with a word boundary.
+ *
+ * Independent of `requireMention` and of the loop guard.
+ */
+export function isBotMentioned(
+  post: MattermostPost,
+  botUserId: string,
+  botUsername: string,
+): boolean {
+  if (post.metadata?.mentions?.includes(botUserId) ?? false) return true;
+  return botUsername.length > 0 && hasMentionWithBoundary(post.message, botUsername);
+}
+
+/**
  * Word-boundary match for `@${botUsername}`. Word boundaries land at
  * `\b` (start/end of `\w` regions), so `@theo` at the head of `@theory`
  * does NOT match because `\b` is between `o` and `r` only when the

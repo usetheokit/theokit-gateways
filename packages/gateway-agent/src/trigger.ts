@@ -106,6 +106,16 @@ export interface EventRunOptions {
   readonly secrets?: ReadonlyArray<string>;
   /** Receives one line per failure: a code only, never the body. Default: none. */
   readonly write?: (line: string) => void;
+  /**
+   * Text sent (masked) before the run starts, e.g. "event received from github". Sent even when
+   * the run later fails. Default: nothing; returning undefined sends nothing.
+   */
+  readonly announce?: (attributes: Record<string, string> | undefined) => string | undefined;
+  /**
+   * The delivered message, from the answer and the event's attributes; masked after it runs.
+   * Default: the answer.
+   */
+  readonly formatReply?: (answer: string, attributes: Record<string, string> | undefined) => string;
 }
 
 /**
@@ -171,13 +181,18 @@ function createRunner(
   ): Promise<void> {
     let lease: AgentLease | undefined;
     try {
+      const announcement = options.announce?.(attributes);
+      if (announcement !== undefined) await reply(adapter, channelId, announcement);
       lease = await options.agent();
       const prompt = [options.instructions, notice, frameUntrusted(frameTag, body, attributes)]
         .filter((part): part is string => part !== undefined && part !== "")
         .join("\n\n");
       const result = await runAgentText(lease.agent, prompt);
       if (!result.ok) log(`run failed (${trustedCode(result.failure)})`);
-      else await reply(adapter, channelId, result.text);
+      else {
+        const text = options.formatReply?.(result.text, attributes) ?? result.text;
+        await reply(adapter, channelId, text);
+      }
     } catch {
       log("run failed (unexpected_error)");
     } finally {

@@ -611,6 +611,35 @@ describe("LineAdapter mention guard (D409)", () => {
     expect(received).toHaveLength(1);
   });
 
+  it("marks addressed true and false with requireMention off", async () => {
+    const adapter = new LineAdapter({
+      channelSecret: "s",
+      channelAccessToken: "t",
+      botUserId: "U-bot",
+      requireMention: false,
+    });
+    installMockClient(adapter, makeMockClient());
+    const received: MessageEvent[] = [];
+    adapter.onInbound(async (ev) => {
+      received.push(ev);
+    });
+    const msg = (text: string, mentionees?: string[]) => ({
+      type: "message",
+      source: { type: "group", groupId: "G-1", userId: "U-alice" },
+      replyToken: "r",
+      message: {
+        type: "text",
+        id: "m-1",
+        text,
+        ...(mentionees ? { mentionees: mentionees.map((userId) => ({ userId })) } : {}),
+      },
+    });
+    await adapter.dispatchWebhookBody({
+      events: [msg("hi @bot", ["U-bot"]), msg("hi team")],
+    } as never);
+    expect(received.map((e) => e.addressed)).toEqual([true, false]);
+  });
+
   it("Group + botUserId unset → guard disabled (dispatches all)", async () => {
     const adapter = new LineAdapter({
       channelSecret: "s",
