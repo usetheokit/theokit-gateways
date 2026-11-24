@@ -99,6 +99,14 @@ export interface BaseMessageEvent {
   /** Optional reply-target message id. */
   readonly replyTo?: string;
   /**
+   * Whether the bot was addressed: mentioned, replied to, or named by a command.
+   *
+   * Set by an adapter that can tell, independently of its `requireMention` option. `undefined`
+   * means the adapter could not tell (no bot identity, or a payload that carries only text);
+   * it is not the same as `false`.
+   */
+  readonly addressed?: boolean;
+  /**
    * The voice note's audio, when the adapter read one (B-715). Absent for a message with no voice,
    * and for a voice the adapter could not read.
    */

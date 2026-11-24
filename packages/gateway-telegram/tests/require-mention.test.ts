@@ -90,6 +90,18 @@ describe("requireMention", () => {
     });
   }
 
+  it("marks addressed on delivered events with requireMention off", async () => {
+    const events: Array<boolean | undefined> = [];
+    const c = make();
+    c.adapter.onInbound(async (e) => {
+      events.push(e.addressed);
+    });
+    await polled(c.bot, message("group", "hi @theobot"));
+    await polled(c.bot, message("group", "hello"));
+    await polled(c.bot, message("private", "plain"));
+    expect(events).toEqual([true, false, undefined]);
+  });
+
   it("channel config rejects a non-boolean requireMention", () => {
     let err: unknown;
     try {

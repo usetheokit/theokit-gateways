@@ -51,6 +51,22 @@ describe("TeamsAdapter.deliver mention gating (FR-001 to FR-003, FR-006)", () =>
     expect(received).toHaveLength(0);
   });
 
+  it("marks addressed true, false and unknown with requireMention off", async () => {
+    const { adapter, received } = build(false);
+    await adapter.deliver(activity("groupChat", [mentionOf(BOT_ID)]));
+    await adapter.deliver(activity("groupChat", []));
+    await adapter.deliver(
+      normalizeTeamsActivity({
+        type: "message",
+        id: "act-2",
+        text: "hello",
+        conversation: { id: "conv-1", conversationType: "groupChat" },
+        from: { id: "u1" },
+      }),
+    );
+    expect(received.map((e) => e.addressed)).toEqual([true, false, undefined]);
+  });
+
   it("delivers the same event once when requireMention is false", async () => {
     const { adapter, received } = build(false);
     await adapter.deliver(activity("groupChat", []));

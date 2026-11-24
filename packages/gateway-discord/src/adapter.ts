@@ -266,7 +266,7 @@ export class DiscordAdapter extends BasePlatformAdapter {
     if (msg.author.bot) return;
     const event = normalizeEvent(msg);
     if (!this.passesMentionGate(event)) return;
-    await this.dispatchEvent(event);
+    await this.dispatchEvent(this.mark(event));
   }
 
   /**
@@ -276,11 +276,25 @@ export class DiscordAdapter extends BasePlatformAdapter {
    */
   private passesMentionGate(event: GatewayMessageEvent): boolean {
     if (event.channel.type === "dm" || !this.requireMention) return true;
-    const botId = this.client.user?.id;
-    if (botId === undefined) {
+    const addressed = this.addressedOf(event);
+    if (addressed === undefined) {
       this.warnMissingBotIdOnce();
       return false;
     }
+    return addressed;
+  }
+
+  /** The event with `addressed` set when the adapter can tell; a direct message is left unmarked. */
+  private mark(event: GatewayMessageEvent): GatewayMessageEvent {
+    if (event.channel.type === "dm") return event;
+    const addressed = this.addressedOf(event);
+    return addressed === undefined ? event : ({ ...event, addressed } as GatewayMessageEvent);
+  }
+
+  /** Whether the message mentions the bot; `undefined` until the bot user id is known. */
+  private addressedOf(event: GatewayMessageEvent): boolean | undefined {
+    const botId = this.client.user?.id;
+    if (botId === undefined) return undefined;
     const raw = event.platform === "discord" ? event.discord.raw : undefined;
     const mentionedUsers = (raw as { mentions?: { users?: { has?: unknown } } } | undefined)
       ?.mentions?.users;
@@ -338,7 +352,7 @@ export class DiscordAdapter extends BasePlatformAdapter {
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
     if (!this.passesMentionGate(event)) return "ok";
-    return this.runHandler(this.handler, event);
+    return this.runHandler(this.handler, this.mark(event));
   }
 }
 

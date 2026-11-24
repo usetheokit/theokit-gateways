@@ -42,7 +42,7 @@ import {
 } from "@theokit/gateway";
 
 import { mapSlackError } from "./errors.js";
-import { type BoltMessageBody, normalizeSlackEvent } from "./normalize.js";
+import { type BoltMessageBody, isMentioned, normalizeSlackEvent } from "./normalize.js";
 import { refuseAttachments } from "./refuse-attachments.js";
 import { SLACK_MAX_TEXT, splitForSlack } from "./split.js";
 
@@ -385,7 +385,14 @@ export class SlackAdapter extends BasePlatformAdapter {
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
     if (!this.passesMentionGate(event)) return "ok";
     this.rememberThread(event);
-    return this.runHandler(this.handler, event);
+    return this.runHandler(this.handler, this.withAddressed(event));
+  }
+
+  /** The event with `addressed` filled in when the producer left it out and the bot id is known. */
+  private withAddressed(event: GatewayMessageEvent): GatewayMessageEvent {
+    if (event.addressed !== undefined || event.channel.type === "dm") return event;
+    const addressed = isMentioned(event.text, this.botUserId);
+    return addressed === undefined ? event : ({ ...event, addressed } as GatewayMessageEvent);
   }
 
   /**
