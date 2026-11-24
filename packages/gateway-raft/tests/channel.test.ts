@@ -17,16 +17,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function errorOf(fn: () => unknown): GatewayConfigurationError {
-  try {
-    fn();
-  } catch (err) {
-    expect(err).toBeInstanceOf(GatewayConfigurationError);
-    return err as GatewayConfigurationError;
-  }
-  throw new Error("expected a configuration error");
-}
-
 const ENV = {
   APP_RAFT_COMMAND: "/opt/raft",
   APP_RAFT_WAKE_ARGS: "wake, --json",
@@ -38,6 +28,7 @@ describe("raftChannel", () => {
     expect("senderIdentity" in raftChannel).toBe(false);
     expect(isAuthenticatedSender(raftChannel)).toBe(false);
   });
+
   it("declares a socket transport and env names", () => {
     expect(raftChannel.platform).toBe("raft");
     expect(raftChannel.transport).toBe("socket");
@@ -69,16 +60,18 @@ describe("raftChannel", () => {
       ["wakeArgs", 5],
       ["replyTimeoutMs", "slow"],
     ] as const) {
-      const error = errorOf(() => raftChannel.create({ [key]: value }));
-      expect(error.code).toBe("invalid_config");
-      expect(error.message).toContain(key);
+      const create = () => raftChannel.create({ [key]: value });
+      expect(create).toThrow(GatewayConfigurationError);
+      expect(create).toThrow(expect.objectContaining({ code: "invalid_config" }));
+      expect(create).toThrow(key);
     }
   });
 
   it("rejects a digit string too long to be a finite number", () => {
-    const error = errorOf(() => raftChannel.create({ replyTimeoutMs: "9".repeat(400) }));
-    expect(error.code).toBe("invalid_config");
-    expect(error.message).toContain("replyTimeoutMs");
+    const create = () => raftChannel.create({ replyTimeoutMs: "9".repeat(400) });
+    expect(create).toThrow(GatewayConfigurationError);
+    expect(create).toThrow(expect.objectContaining({ code: "invalid_config" }));
+    expect(create).toThrow("replyTimeoutMs");
   });
 
   it("treats null as absent for an optional value, like the shared readers", () => {
