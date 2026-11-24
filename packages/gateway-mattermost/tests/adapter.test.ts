@@ -493,4 +493,10 @@ describe("MattermostAdapter.deliver — the requireMention gate", () => {
   it("delivers everything when requireMention is false", async () => {
     expect(await run(post, false)).toHaveLength(1);
   });
+  it("marks addressed true and false with requireMention off", async () => {
+    const [yes] = await run({ ...post, message: "hi @theo" }, false);
+    const [no] = await run(post, false);
+    expect(yes?.addressed).toBe(true);
+    expect(no?.addressed).toBe(false);
+  });
 });

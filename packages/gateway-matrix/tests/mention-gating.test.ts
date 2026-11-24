@@ -56,6 +56,14 @@ describe("MatrixAdapter.deliver mention gating (FR-001 to FR-003, FR-005)", () =
     expect(received).toHaveLength(0);
   });
 
+  it("marks addressed true and false with requireMention off", async () => {
+    const { adapter, received } = build(false);
+    await adapter.deliver(matrixEvent({ body: "hi", "m.mentions": { user_ids: [BOT] } }, 5));
+    await adapter.deliver(matrixEvent({ body: "hello" }, 5));
+    await adapter.deliver(matrixEvent({ body: "hello" }, 2));
+    expect(received.map((e) => e.addressed)).toEqual([true, false, undefined]);
+  });
+
   it("delivers the same event once when requireMention is false", async () => {
     const { adapter, received } = build(false);
     await adapter.deliver(matrixEvent({ body: "hello" }, 5));

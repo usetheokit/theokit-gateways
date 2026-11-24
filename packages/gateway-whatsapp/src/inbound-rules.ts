@@ -116,10 +116,20 @@ function shouldDropGroupMessage(
     );
     return true;
   }
-  return !phoneRuns(inbound.text).some((run) => run.includes(botPhoneId));
+  return !mentionsBot(inbound, botPhoneId);
 }
 
-function toMessageEvent(inbound: WhatsAppInboundEvent): WhatsAppMessageEvent {
+function mentionsBot(inbound: WhatsAppInboundEvent, botPhoneId: string): boolean {
+  return phoneRuns(inbound.text).some((run) => run.includes(botPhoneId));
+}
+
+/** `addressed` for a group message; unset for a direct message or when `botPhoneId` is unset. */
+function addressedOf(inbound: WhatsAppInboundEvent, botPhoneId: string): { addressed?: boolean } {
+  if (inbound.conversationType !== "group" || botPhoneId.length === 0) return {};
+  return { addressed: mentionsBot(inbound, botPhoneId) };
+}
+
+function toMessageEvent(inbound: WhatsAppInboundEvent, botPhoneId: string): WhatsAppMessageEvent {
   return {
     id: inbound.wamid,
     platform: "whatsapp",
@@ -127,6 +137,7 @@ function toMessageEvent(inbound: WhatsAppInboundEvent): WhatsAppMessageEvent {
     channel: { id: inbound.channelId, type: inbound.conversationType },
     text: inbound.text,
     receivedAt: inbound.receivedAt,
+    ...addressedOf(inbound, botPhoneId),
     whatsapp: {
       wamid: inbound.wamid,
       phoneNumberId: inbound.phoneNumberId,
@@ -150,5 +161,5 @@ export function decideInbound(
 ): WhatsAppMessageEvent | undefined {
   if (isRefusedBySenderAllowlist(inbound, rules.allowedSenders)) return undefined;
   if (shouldDropGroupMessage(inbound, rules.requireMention, rules.botPhoneId)) return undefined;
-  return toMessageEvent(inbound);
+  return toMessageEvent(inbound, rules.botPhoneId);
 }

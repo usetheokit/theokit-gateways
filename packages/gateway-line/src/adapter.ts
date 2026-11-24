@@ -209,7 +209,7 @@ export class LineAdapter extends BasePlatformAdapter {
     if (!this.passesMentionGuard(normalized)) return;
     if (handler === undefined) return;
     try {
-      await handler(normalized);
+      await handler(this.mark(normalized));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[gateway-line] handler threw: ${msg}\n`);
@@ -223,6 +223,14 @@ export class LineAdapter extends BasePlatformAdapter {
     if (event.channel.type === "dm") return true;
     if (this.opts.botUserId === undefined) return true; // guard disabled
     return event.line.mentionees.includes(this.opts.botUserId);
+  }
+
+  /** The event with `addressed` set for a group or room message when the bot's id is configured. */
+  private mark(event: GatewayMessageEvent): GatewayMessageEvent {
+    if (event.platform !== "line" || event.channel.type === "dm") return event;
+    if (this.opts.botUserId === undefined) return event;
+    const addressed = event.line.mentionees.includes(this.opts.botUserId);
+    return { ...event, addressed };
   }
 
   /** Expose channel secret for the webhook server (signature middleware). */
@@ -246,7 +254,7 @@ export class LineAdapter extends BasePlatformAdapter {
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
     // The webhook path applies the same guard (D409); a dropped event is acknowledged, not delivered.
     if (!this.passesMentionGuard(event)) return "ok";
-    return this.runHandler(this.inboundHandler, event);
+    return this.runHandler(this.inboundHandler, this.mark(event));
   }
 }
 

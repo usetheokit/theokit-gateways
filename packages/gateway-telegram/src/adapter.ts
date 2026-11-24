@@ -323,15 +323,20 @@ export class TelegramAdapter extends BasePlatformAdapter {
       const senderId = String(ctx.from?.id ?? "");
       if (!this.allowedUsers.has(senderId)) return;
     }
-    const event = normalizeEvent(ctx);
+    const normalized = normalizeEvent(ctx);
+    if (normalized === undefined) return;
+    const event = this.gateMention(normalized);
     if (event === undefined) return;
-    if (!this.passesMentionGate(event)) return;
-    await this.dispatchEvent(this.withVoice(ctx, event));
+    await this.dispatchEvent(this.withVoice(ctx, event as TelegramMessageEvent));
   }
 
-  /** The `requireMention` gate, shared by the polled and webhook paths. */
-  private passesMentionGate(event: GatewayMessageEvent): boolean {
-    if (!this.requireMention || event.channel.type === "dm") return true;
+  /**
+   * Marks whether the bot was addressed and applies the `requireMention` gate, shared by the
+   * polled and webhook paths. Returns `undefined` when the gate drops the event. A direct message
+   * is left unmarked; `addressed` stays unset while the bot's identity is not known.
+   */
+  private gateMention(event: GatewayMessageEvent): GatewayMessageEvent | undefined {
+    if (event.channel.type === "dm") return event;
     let me: { id: number; username?: string } | undefined;
     try {
       me = this.bot.botInfo;
@@ -339,15 +344,18 @@ export class TelegramAdapter extends BasePlatformAdapter {
       me = undefined;
     }
     if (me?.username === undefined) {
+      if (!this.requireMention) return event;
       if (!this.warnedNoIdentity) {
         this.warnedNoIdentity = true;
         process.stderr.write(
           "[telegram] requireMention: bot identity not known yet; dropping group message\n",
         );
       }
-      return false;
+      return undefined;
     }
-    return shouldRespond(policyInput(event), { botUsername: me.username, botId: me.id });
+    const addressed = shouldRespond(policyInput(event), { botUsername: me.username, botId: me.id });
+    if (this.requireMention && !addressed) return undefined;
+    return { ...event, addressed } as GatewayMessageEvent;
   }
 
   /**
@@ -409,8 +417,9 @@ export class TelegramAdapter extends BasePlatformAdapter {
   override async deliver(
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
-    if (!this.passesMentionGate(event)) return "ok";
-    return this.runHandler(this.handler, event);
+    const gated = this.gateMention(event);
+    if (gated === undefined) return "ok";
+    return this.runHandler(this.handler, gated);
   }
 }
 

@@ -65,6 +65,23 @@ function resolveChannelType(e: BoltMessageBody["event"]): "dm" | "group" | "thre
   return "group";
 }
 
+/** Whether the text mentions the bot; `undefined` while the bot's id is not known. */
+export function isMentioned(
+  text: string | undefined,
+  botUserId: string | undefined,
+): boolean | undefined {
+  return botUserId === undefined ? undefined : (text ?? "").includes(`<@${botUserId}>`);
+}
+
+function addressedField(
+  channelType: "dm" | "group" | "thread",
+  text: string | undefined,
+  botUserId: string | undefined,
+): { addressed?: boolean } {
+  const addressed = channelType === "dm" ? undefined : isMentioned(text, botUserId);
+  return addressed === undefined ? {} : { addressed };
+}
+
 function isMentionGated(
   e: BoltMessageBody["event"],
   channelType: "dm" | "group" | "thread",
@@ -111,6 +128,7 @@ export function normalizeSlackEvent(
     },
     text: e.text ?? "",
     receivedAt: Math.floor(Number(e.ts) * 1000),
+    ...addressedField(channelType, e.text, botUserId),
     slack: {
       teamId: body.team_id,
       channelId: e.channel,

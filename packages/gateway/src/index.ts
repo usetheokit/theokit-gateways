@@ -101,6 +101,11 @@ export {
 } from "./hooks/chat-command.js";
 export { HookExecutor } from "./hooks/executor.js";
 export {
+  type GroupActivationMode,
+  type GroupActivationOptions,
+  groupActivationHook,
+} from "./hooks/group-activation.js";
+export {
   createFilePairingStore,
   type PairingStore,
   senderKey,
