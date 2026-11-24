@@ -1,4 +1,4 @@
-import { configFromEnv, createChannels } from "@theokit/gateway";
+import { configFromEnv, createChannels, isAuthenticatedSender } from "@theokit/gateway";
 import { describe, expect, it } from "vitest";
 
 import { SMSAdapter } from "../src/adapter.js";
@@ -28,6 +28,12 @@ function withPrefix(env: Record<string, string>): Record<string, string> {
 }
 
 describe("smsChannel", () => {
+  it("declares an unauthenticated sender with a reason", () => {
+    expect(isAuthenticatedSender(smsChannel)).toBe(false);
+    expect(smsChannel.senderIdentity).toEqual({
+      unauthenticated: "the caller id of a text message",
+    });
+  });
   it("declares webhook transport and a POST-only webhook part", () => {
     expect(smsChannel.transport).toBe("webhook");
     expect(smsChannel.webhook.methods).toEqual(["POST"]);
