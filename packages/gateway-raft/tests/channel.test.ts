@@ -34,8 +34,9 @@ const ENV = {
 };
 
 describe("raftChannel", () => {
-  it("declares an authenticated sender", () => {
-    expect(isAuthenticatedSender(raftChannel)).toBe(true);
+  it("does not claim an authenticated sender until a maintainer confirms it", () => {
+    expect("senderIdentity" in raftChannel).toBe(false);
+    expect(isAuthenticatedSender(raftChannel)).toBe(false);
   });
   it("declares a socket transport and env names", () => {
     expect(raftChannel.platform).toBe("raft");

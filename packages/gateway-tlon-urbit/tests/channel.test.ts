@@ -96,8 +96,9 @@ describe("tlonUrbitChannel connectTimeoutMs", () => {
       /connectTimeoutMs/,
     );
   });
-  it("declares an authenticated sender", () => {
-    expect(isAuthenticatedSender(tlonUrbitChannel)).toBe(true);
+  it("does not claim an authenticated sender", () => {
+    expect("senderIdentity" in tlonUrbitChannel).toBe(false);
+    expect(isAuthenticatedSender(tlonUrbitChannel)).toBe(false);
   });
   it("rejects anything else", () => {
     expect(() => tlonUrbitChannel.create({ ...base, connectTimeoutMs: "soon" })).toThrow(

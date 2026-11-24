@@ -95,7 +95,6 @@ const CONFIG: ReadonlyArray<ConfigField> = [
 export const tlonUrbitChannel = {
   platform: "tlon_urbit" as const,
   transport: "socket" as const,
-  senderIdentity: "authenticated" as const,
   config: CONFIG,
   create(config: Readonly<Record<string, unknown>>): TlonUrbitAdapter {
     const shipUrl = readString(config, "shipUrl");

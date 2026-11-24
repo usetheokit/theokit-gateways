@@ -40,8 +40,9 @@ function onPlatform(name: NodeJS.Platform): void {
 }
 
 describe("imessageChannel", () => {
-  it("declares an authenticated sender", () => {
-    expect(isAuthenticatedSender(imessageChannel)).toBe(true);
+  it("does not claim an authenticated sender until a maintainer confirms it", () => {
+    expect("senderIdentity" in imessageChannel).toBe(false);
+    expect(isAuthenticatedSender(imessageChannel)).toBe(false);
   });
   afterEach(() => {
     vi.restoreAllMocks();
