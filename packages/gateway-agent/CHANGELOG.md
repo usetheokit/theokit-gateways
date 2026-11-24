@@ -1,5 +1,13 @@
 # @theokit/gateway-agent
 
+## 0.5.0
+
+### Minor Changes
+
+- 99fa568: New `createBroadcastGroups`: several channels answer as one conversation, with a bounded shared transcript, turns serialized per group, and the answer delivered to every other member.
+- ca5aeb5: `progressFor(capabilities, overrides?)` returns an `AgentHandlerOptions.progress` function that picks how much progress to show from `capabilities.edit`, with per-event-kind overrides.
+- f5f4835: New `createEventRun`: run an agent with no tools on an event that did not arrive over HTTP, frame the body with `frameUntrusted`, and deliver the summary to a chat. `createTrigger` now uses it.
+
 ## 0.4.0
 
 ### Minor Changes

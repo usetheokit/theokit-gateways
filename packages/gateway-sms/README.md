@@ -179,5 +179,5 @@ const handle = createWebhookHandler({ channels, isStarted: () => true });
 ## Voice calls
 
 - `twiml.gather({ action, input: "speech", speechTimeout: "auto", method: "POST" })` emits both attributes (escaped).
-- `placeCall({ to, from, url, credentials: { accountSid, authToken } })` posts to Twilio's `Calls.json` and returns the call SID; it throws on a non-2xx answer.
+- `placeCall({ to, from, url | twiml, credentials: { accountSid, authToken }, timeoutMs? })` posts to Twilio's `Calls.json` and returns the call SID. Pass exactly one of `url` and inline `twiml` (otherwise a `ConfigurationError` is thrown before any request). The request times out after `timeoutMs` (default 15 000), refuses redirects, and a non-2xx answer throws with the status and Twilio's `message` (credentials redacted).
 - `createVoiceCallHandler({ authToken, publicUrl, turn, allowed, goodbye })` returns a `Request => Response` handler: it verifies `X-Twilio-Signature`, hangs up on callers not exactly listed in `allowed`, calls `turn({ from, callSid, text })` for each utterance and ends on `goodbye` or after `maxSilence` silent turns in a row (the greeting does not count). Silence counts live in memory, so route one call to one instance; state idle for `stateTtlMs` (default one hour) is dropped, since Twilio does not tell the action when a caller hangs up.
