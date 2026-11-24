@@ -5,7 +5,6 @@
 import {
   configFromEnv,
   createChannels,
-  GatewayConfigurationError,
   isAuthenticatedSender,
 } from "@theokit/gateway";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -17,14 +16,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function errorOf(fn: () => unknown): GatewayConfigurationError {
-  try {
-    fn();
-  } catch (err) {
-    expect(err).toBeInstanceOf(GatewayConfigurationError);
-    return err as GatewayConfigurationError;
-  }
-  throw new Error("expected a configuration error");
+function invalidConfig(key: string) {
+  return expect.objectContaining({
+    code: "invalid_config",
+    message: expect.stringContaining(key),
+  });
 }
 
 const ENV = {
@@ -34,11 +30,9 @@ const ENV = {
 };
 
 describe("raftChannel", () => {
-  it("does not claim an authenticated sender until a maintainer confirms it", () => {
+  it("declares a socket transport and env names, and no authenticated sender", () => {
     expect("senderIdentity" in raftChannel).toBe(false);
     expect(isAuthenticatedSender(raftChannel)).toBe(false);
-  });
-  it("declares a socket transport and env names", () => {
     expect(raftChannel.platform).toBe("raft");
     expect(raftChannel.transport).toBe("socket");
     expect(raftChannel.config.map((f) => f.env)).toContain("RAFT_COMMAND");
@@ -69,16 +63,14 @@ describe("raftChannel", () => {
       ["wakeArgs", 5],
       ["replyTimeoutMs", "slow"],
     ] as const) {
-      const error = errorOf(() => raftChannel.create({ [key]: value }));
-      expect(error.code).toBe("invalid_config");
-      expect(error.message).toContain(key);
+      expect(() => raftChannel.create({ [key]: value })).toThrow(invalidConfig(key));
     }
   });
 
   it("rejects a digit string too long to be a finite number", () => {
-    const error = errorOf(() => raftChannel.create({ replyTimeoutMs: "9".repeat(400) }));
-    expect(error.code).toBe("invalid_config");
-    expect(error.message).toContain("replyTimeoutMs");
+    expect(() => raftChannel.create({ replyTimeoutMs: "9".repeat(400) })).toThrow(
+      invalidConfig("replyTimeoutMs"),
+    );
   });
 
   it("treats null as absent for an optional value, like the shared readers", () => {
