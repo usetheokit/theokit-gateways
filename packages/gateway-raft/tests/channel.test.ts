@@ -2,7 +2,12 @@
  * `raftChannel` — the Raft channel described as data, bound to environment variables.
  */
 
-import { configFromEnv, createChannels, isAuthenticatedSender } from "@theokit/gateway";
+import {
+  configFromEnv,
+  createChannels,
+  GatewayConfigurationError,
+  isAuthenticatedSender,
+} from "@theokit/gateway";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RaftAdapter } from "../src/adapter.js";
@@ -12,11 +17,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function invalidConfig(key: string) {
-  return expect.objectContaining({
-    code: "invalid_config",
-    message: expect.stringContaining(key),
-  });
+function expectInvalidConfig(fn: () => unknown, key: string): void {
+  expect(fn).toThrow(GatewayConfigurationError);
+  expect(fn).toThrow(
+    expect.objectContaining({ code: "invalid_config", message: expect.stringContaining(key) }),
+  );
 }
 
 const ENV = {
@@ -26,9 +31,12 @@ const ENV = {
 };
 
 describe("raftChannel", () => {
-  it("declares a socket transport and env names, and no authenticated sender", () => {
+  it("does not claim an authenticated sender until a maintainer confirms it", () => {
     expect("senderIdentity" in raftChannel).toBe(false);
     expect(isAuthenticatedSender(raftChannel)).toBe(false);
+  });
+
+  it("declares a socket transport and env names", () => {
     expect(raftChannel.platform).toBe("raft");
     expect(raftChannel.transport).toBe("socket");
     expect(raftChannel.config.map((f) => f.env)).toContain("RAFT_COMMAND");
@@ -59,13 +67,14 @@ describe("raftChannel", () => {
       ["wakeArgs", 5],
       ["replyTimeoutMs", "slow"],
     ] as const) {
-      expect(() => raftChannel.create({ [key]: value })).toThrow(invalidConfig(key));
+      expectInvalidConfig(() => raftChannel.create({ [key]: value }), key);
     }
   });
 
   it("rejects a digit string too long to be a finite number", () => {
-    expect(() => raftChannel.create({ replyTimeoutMs: "9".repeat(400) })).toThrow(
-      invalidConfig("replyTimeoutMs"),
+    expectInvalidConfig(
+      () => raftChannel.create({ replyTimeoutMs: "9".repeat(400) }),
+      "replyTimeoutMs",
     );
   });
 
