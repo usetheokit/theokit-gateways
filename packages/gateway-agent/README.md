@@ -136,13 +136,14 @@ await trigger.idle(); // on shutdown
 
 ### `createEventRun(options)`
 
-The part of `createTrigger` after verification, for an event that did not arrive over HTTP (inbox mail, an MCP event). `run(body, attributes?)` frames the body with `frameUntrusted(frameTag, body, attributes)` (default tag `event`), runs one turn of a fresh agent, masks `secrets` and sends one message to `deliverTo()`, read when the run starts. It resolves when that run has ended and never rejects; a failure, or an undefined adapter, is written as one line holding a code. `idle()` resolves once every started run, including its lease release, has ended. The package cannot check the agent: `agent()` must return one configured without tools.
+The part of `createTrigger` after verification, for an event that did not arrive over HTTP (inbox mail, an MCP event). `run(body, attributes?)` frames the body with `frameUntrusted(frameTag, body, attributes)` (default tag `event`), runs one turn of a fresh agent, masks `secrets` and sends one message to `deliverTo()`, read when the run starts. Optional `formatReply(answer, attributes)` builds that message (e.g. heads it with the sender) and `announce(attributes)` returns a line sent, masked, before the run starts (also when the run later fails; `undefined` sends nothing). It resolves when that run has ended and never rejects; a failure, or an undefined adapter, is written as one line holding a code. `idle()` resolves once every started run, including its lease release, has ended. The package cannot check the agent: `agent()` must return one configured without tools.
 
 ```ts
 const mail = createEventRun({
   name: "inbox",
   frameTag: "email",
   instructions: "Summarise this email in two sentences.",
+  formatReply: (answer, attributes) => `E-mail from ${attributes?.from}:\n${answer}`,
   deliverTo: () => ({ adapter: telegramAdapter, channelId: "42" }),
   agent: async () => ({ agent, release: async () => {} }),
 });

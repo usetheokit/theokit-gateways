@@ -138,6 +138,15 @@ describe("decideInbound", () => {
     const groupMessage = (text: string) =>
       inboundFrom("5511888888888", { conversationType: "group", channelId: "g@g.us", text });
 
+    it("decideInbound marks addressed true and false with requireMention off", () => {
+      const off = { ...groupRules("5511777777777"), requireMention: false };
+      expect(decideInbound(groupMessage("5511777777777 hi"), off)?.addressed).toBe(true);
+      expect(decideInbound(groupMessage("hello"), off)?.addressed).toBe(false);
+      expect(decideInbound(groupMessage("hello"), { ...off, botPhoneId: "" })?.addressed).toBe(
+        undefined,
+      );
+    });
+
     it("decideInbound keeps a group message that opens with the bot's number", () => {
       const kept = decideInbound(groupMessage("5511777777777 hi"), groupRules("5511777777777"));
       expect(kept?.text).toBe("5511777777777 hi");

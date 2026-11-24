@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { ConfigurationError } from "../src/errors.js";
 import { placeCall } from "../src/outbound-call.js";
 
 const base = {
@@ -34,5 +35,46 @@ describe("placeCall", () => {
     await expect(placeCall({ ...base, fetch: bad })).rejects.toThrow("401");
     const empty = (async () => new Response("{}", { status: 200 })) as unknown as typeof fetch;
     await expect(placeCall({ ...base, fetch: empty })).rejects.toThrow("no sid");
+  });
+
+  it("posts inline Twiml and no Url", async () => {
+    let init: RequestInit | undefined;
+    const fake = (async (_u: string, i: RequestInit) => {
+      init = i;
+      return new Response(JSON.stringify({ sid: "CA1" }), { status: 201 });
+    }) as unknown as typeof fetch;
+    const { url: _url, ...rest } = base;
+    await placeCall({ ...rest, twiml: "<Response><Say>hi</Say></Response>", fetch: fake });
+    const body = new URLSearchParams(init?.body as string);
+    expect(body.get("Twiml")).toBe("<Response><Say>hi</Say></Response>");
+    expect(body.has("Url")).toBe(false);
+    expect(init?.redirect).toBe("error");
+  });
+  it("rejects both or neither of url and twiml before any request", async () => {
+    let n = 0;
+    const fake = (async () => {
+      n++;
+      return new Response("{}");
+    }) as unknown as typeof fetch;
+    await expect(placeCall({ ...base, twiml: "<Response/>", fetch: fake })).rejects.toBeInstanceOf(
+      ConfigurationError,
+    );
+    const { url: _url, ...rest } = base;
+    await expect(placeCall({ ...rest, fetch: fake })).rejects.toBeInstanceOf(ConfigurationError);
+    expect(n).toBe(0);
+  });
+  it("rejects after timeoutMs when fetch never resolves", async () => {
+    const hang = (() => new Promise(() => {})) as unknown as typeof fetch;
+    await expect(placeCall({ ...base, fetch: hang, timeoutMs: 20 })).rejects.toThrow("timed out");
+  });
+  it("reports Twilio's message and status without the auth token", async () => {
+    const bad = (async () =>
+      new Response(JSON.stringify({ message: "x bad tok" }), {
+        status: 400,
+      })) as unknown as typeof fetch;
+    const err = await placeCall({ ...base, fetch: bad }).catch((e: Error) => e);
+    expect((err as Error).message).toContain("x");
+    expect((err as Error).message).toContain("400");
+    expect((err as Error).message).not.toContain("tok");
   });
 });

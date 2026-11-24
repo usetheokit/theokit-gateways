@@ -405,3 +405,28 @@ describe("normalizeSlackEvent — misc", () => {
     expect(r?.id).toBe("slack-T123-C1-100.1");
   });
 });
+
+describe("normalizeSlackEvent — addressed", () => {
+  const base = { ts: "100.1", channel: "C1", channel_type: "channel" as const };
+  it("is true for a mention and false for none, with requireMention off", () => {
+    const yes = normalizeSlackEvent(mkBody({ ...base, user: "U1", text: `<@${BOT}> hi` }), BOT, {
+      requireMention: false,
+    });
+    const no = normalizeSlackEvent(mkBody({ ...base, user: "U1", text: "hi" }), BOT, {
+      requireMention: false,
+    });
+    expect(yes?.addressed).toBe(true);
+    expect(no?.addressed).toBe(false);
+  });
+  it("is unset without a bot id and for a DM", () => {
+    const noId = normalizeSlackEvent(mkBody({ ...base, user: "U1", text: "hi" }), undefined, {
+      requireMention: false,
+    });
+    const dm = normalizeSlackEvent(
+      mkBody({ ts: "1.1", channel: "D1", channel_type: "im", user: "U1", text: "hi" }),
+      BOT,
+    );
+    expect(noId?.addressed).toBeUndefined();
+    expect(dm?.addressed).toBeUndefined();
+  });
+});

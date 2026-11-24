@@ -292,6 +292,31 @@ describe("DiscordAdapter.capabilities", () => {
     expect(c.threads).toBe(true);
   });
 
+  it("marks addressed true and false with requireMention off", async () => {
+    const adapter = new DiscordAdapter({ token: "t", requireMention: false });
+    adapter.getBot().user = { id: "bot1" } as never;
+    const seen: Array<boolean | undefined> = [];
+    adapter.onInbound(async (event) => {
+      seen.push(event.addressed);
+    });
+    const emit = (id: string, users: Map<string, unknown>) =>
+      adapter.getBot().emit(Events.MessageCreate, {
+        id,
+        channelId: "c1",
+        guildId: "g1",
+        content: "hi",
+        createdTimestamp: 1,
+        reference: null,
+        author: { id: "u1", bot: false, username: "alice", globalName: null },
+        channel: { id: "c1", isThread: () => false },
+        mentions: { users },
+      } as never);
+    emit("m1", new Map([["bot1", {}]]));
+    emit("m2", new Map());
+    await vi.waitFor(() => expect(seen).toHaveLength(2));
+    expect(seen).toEqual([true, false]);
+  });
+
   it("normalizes a thread message to channel.type thread with a topicId", async () => {
     const adapter = new DiscordAdapter({ token: "t", requireMention: false });
     const seen: { channel: { type: string; topicId?: string } }[] = [];

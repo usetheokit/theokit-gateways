@@ -443,7 +443,7 @@ export class TeamsAdapter extends BasePlatformAdapter {
     if (!this.passesMentionGate(event)) return;
     this.trackConversation(activity.conversation?.id);
     try {
-      await this.handler(event);
+      await this.handler(this.mark(event));
     } catch (err) {
       // A handler is user code: it may throw, and that is not the adapter's failure nor the
       // platform's. Contain it, name it, and keep the connection delivering.
@@ -463,6 +463,19 @@ export class TeamsAdapter extends BasePlatformAdapter {
     return verdict === "mentioned";
   }
 
+  /** The event with `addressed` set when the adapter can tell; a direct message is left unmarked. */
+  private mark(event: GatewayMessageEvent): GatewayMessageEvent {
+    if (event.channel.type === "dm") return event;
+    const addressed = this.addressedOf(event);
+    return addressed === undefined ? event : ({ ...event, addressed } as GatewayMessageEvent);
+  }
+
+  /** Whether the activity mentions its recipient; `undefined` when it names no recipient. */
+  private addressedOf(event: GatewayMessageEvent): boolean | undefined {
+    const verdict = readBotMention(event.platform === "teams" ? event.teams.raw : undefined);
+    return verdict === "no_recipient" ? undefined : verdict === "mentioned";
+  }
+
   /** Test seam — current seen-conversation count. @internal */
   get _seenConversationsSize(): number {
     return this.seenConversations.size;
@@ -476,7 +489,7 @@ export class TeamsAdapter extends BasePlatformAdapter {
     event: GatewayMessageEvent,
   ): Promise<"ok" | "no_handler" | "handler_threw"> {
     if (!this.passesMentionGate(event)) return "ok";
-    return this.runHandler(this.handler, event);
+    return this.runHandler(this.handler, this.mark(event));
   }
 }
 

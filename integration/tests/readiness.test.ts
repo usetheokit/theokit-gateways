@@ -323,6 +323,9 @@ describe("live-test readiness", () => {
       commandHook:
         "a pre_inbound hook that makes no network call; it only decides on the event text. " +
         "Covered by packages/gateway/tests/hooks/chat-command.test.ts",
+      groupActivationHook:
+        "a pre_inbound hook that makes no network call; it only decides on event.addressed. " +
+        "Covered by packages/gateway/tests/hooks/group-activation.test.ts",
       helpText:
         "pure function, no I/O. Covered by packages/gateway/tests/hooks/chat-command.test.ts",
       scopedStrategy:
