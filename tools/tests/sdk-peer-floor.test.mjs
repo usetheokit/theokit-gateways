@@ -21,9 +21,9 @@ function atLeast(version, minimum) {
 
 describe("@theokit/sdk peer ceiling", () => {
   it.each([
-    ["gateway", ">=4.62.0 <10"],
+    ["gateway", ">=4.62.0 <16"],
     ["gateway-agent", ">=5.3.0 <10"],
-  ])("%s admits sdk majors up to 9", (pkg, range) => {
+  ])("%s admits the sdk majors its range names", (pkg, range) => {
     expect(read(pkg).peerDependencies["@theokit/sdk"]).toBe(range);
   });
 });
