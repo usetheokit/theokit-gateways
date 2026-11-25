@@ -41,13 +41,13 @@
     "test:mutation": "stryker run"
   },
   "peerDependencies": {
-    "@theokit/sdk": ">=4.62.0 <10"
+    "@theokit/sdk": ">=4.62.0 <16"
   },
   "devDependencies": {
     "@stryker-mutator/core": "10",
     "@stryker-mutator/vitest-runner": "10",
     "@theokit/presenter": "^0.10.0",
-    "@theokit/sdk": "^5.9.0",
+    "@theokit/sdk": "^15.0.0",
     "tsup": "^8.5.0",
     "typescript": "5.9.3",
     "vitest": "^4.1.11",
